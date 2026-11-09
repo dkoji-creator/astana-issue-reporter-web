@@ -11,14 +11,17 @@ import sys
 import time
 import uuid
 from http.cookies import SimpleCookie
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import mailer
+
 BASE = Path(__file__).parent
-DB_FILE = BASE / "app.db"
+# Final: every setting can come from the environment, so the same file runs on the laptop
+# and on the public host (see README, "Public hosting")
+DB_FILE = Path(os.environ.get("APP_DB", BASE / "app.db"))
 PAGE_FILE = BASE / "index.html"
-UPLOADS = BASE / "uploads"
-UPLOADS.mkdir(exist_ok=True)
+UPLOADS = Path(os.environ.get("APP_UPLOADS", BASE / "uploads"))
 STATIC = BASE / "static"          # logo, icons, map, sound, video (Assignment 4)
 MEDIA_SRC = BASE / "media_src"    # full-size originals, used only by the /before page
 
@@ -45,30 +48,42 @@ STATUSES = {"under_review": "Under review", "in_progress": "In progress", "resol
 MAX_FAILED_LOGINS = 5            # Assignment 3, C1: lock the account after 5 wrong passwords
 LOCK_SECONDS = 15 * 60           # ... for 15 minutes
 MAX_REPORTS_PER_10_MIN = 5       # Assignment 3, C1: rate limit on the report form
-FAILED_LOGINS = {}               # email -> [number of wrong passwords, locked until (unix time)]
+SESSION_DAYS = 30
 USE_HTTPS = "--https" in sys.argv
-SESSIONS = {}  # токен сессии -> id пользователя (хранится в памяти, сбрасывается при перезапуске)
-
-
-NOTIFICATIONS_SQL = """
-CREATE TABLE IF NOT EXISTS notifications (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
-  message TEXT NOT NULL,
-  is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-)"""
+# behind a host that ends HTTPS for us (PythonAnywhere, Render): cookies get the Secure flag
+# and HSTS is sent, although Python itself talks plain HTTP to the host's proxy
+PUBLIC_HTTPS = USE_HTTPS or os.environ.get("PUBLIC_HTTPS") == "1"
+HOST = os.environ.get("HOST", "127.0.0.1")
+PORT = int(os.environ.get("PORT", "8000"))
 
 
 def get_db():
-    db = sqlite3.connect(DB_FILE)
+    db = sqlite3.connect(DB_FILE, timeout=10)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     return db
 
 
-# тот же формат хеша, что и в seed.py
+def column_exists(db, table, column):
+    return any(row["name"] == column for row in db.execute(f"PRAGMA table_info({table})"))
+
+
+# Brings any older app.db (Assignment 3, 4, Stage 2) up to the final schema, and creates
+# a database with test data on the very first start (an empty public host has no app.db).
+def prepare_database():
+    if not DB_FILE.exists():
+        import seed
+        seed.build(DB_FILE)
+    db = get_db()
+    db.executescript((BASE / "migrations.sql").read_text(encoding="utf-8"))
+    if not column_exists(db, "notifications", "email_status"):
+        db.execute("ALTER TABLE notifications ADD COLUMN email_status TEXT")
+    db.execute("DELETE FROM sessions WHERE expires_at < datetime('now')")
+    db.commit()
+    db.close()
+
+
+# the same hash format as in seed.py
 def hash_password(password):
     salt = os.urandom(16)
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, 100_000)
@@ -90,7 +105,7 @@ class Handler(BaseHTTPRequestHandler):
         for name, value in (headers or {}).items():
             self.send_header(name, value)
         self.send_header("X-Content-Type-Options", "nosniff")
-        if USE_HTTPS:
+        if PUBLIC_HTTPS:
             self.send_header("Strict-Transport-Security", "max-age=31536000")
         self.end_headers()
         self.wfile.write(body)
@@ -139,21 +154,34 @@ class Handler(BaseHTTPRequestHandler):
         cookie = SimpleCookie(self.headers.get("Cookie", ""))
         return cookie["session"].value if "session" in cookie else None
 
-    # кто сейчас вошёл: строка из users или None
+    # who is logged in: a row from users, or None.
+    # Final: sessions live in the table sessions (Stage 2 kept them in memory, so a restart
+    # logged everybody out). The cookie holds a random token; the table holds only its
+    # SHA-256 hash, so a copy of app.db does not let anyone log in as another user.
     def current_user(self):
-        user_id = SESSIONS.get(self.session_token())
-        if user_id is None:
+        token = self.session_token()
+        if not token:
             return None
         db = get_db()
-        user = db.execute("SELECT id, email, display_name, role FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = db.execute(
+            "SELECT u.id, u.email, u.display_name, u.role FROM sessions s JOIN users u ON u.id = s.user_id "
+            "WHERE s.token_hash = ? AND s.expires_at > datetime('now')",
+            (hashlib.sha256(token.encode()).hexdigest(),),
+        ).fetchone()
         db.close()
         return user
 
     def start_session(self, user):
         token = secrets.token_hex(32)
-        SESSIONS[token] = user["id"]
-        cookie = f"session={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=2592000"
-        if USE_HTTPS:
+        db = get_db()
+        db.execute(
+            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, datetime('now', ?))",
+            (hashlib.sha256(token.encode()).hexdigest(), user["id"], f"+{SESSION_DAYS} days"),
+        )
+        db.commit()
+        db.close()
+        cookie = f"session={token}; HttpOnly; SameSite=Lax; Path=/; Max-Age={SESSION_DAYS * 86400}"
+        if PUBLIC_HTTPS:
             cookie += "; Secure"   # the browser sends the cookie only over HTTPS
         self.send_json(200, {"id": user["id"], "email": user["email"],
                              "display_name": user["display_name"], "role": user["role"]},
@@ -233,7 +261,13 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path == "/api/login":
             self.login()
         elif self.path == "/api/logout":
-            SESSIONS.pop(self.session_token(), None)
+            token = self.session_token()
+            if token:
+                db = get_db()
+                db.execute("DELETE FROM sessions WHERE token_hash = ?",
+                           (hashlib.sha256(token.encode()).hexdigest(),))
+                db.commit()
+                db.close()
             self.send_json(200, {"ok": True},
                            {"Set-Cookie": "session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0"})
         elif self.path == "/api/reports":
@@ -287,26 +321,38 @@ class Handler(BaseHTTPRequestHandler):
         except (KeyError, ValueError, TypeError, OverflowError):
             self.send_json(400, {"error": "invalid data"})
             return
-        failed, locked_until = FAILED_LOGINS.get(email, [0, 0])
+        # Final: the counter of wrong passwords is a table (login_attempts), so a restart
+        # of the server no longer resets the lock
+        db = get_db()
+        attempt = db.execute("SELECT failed, locked_until FROM login_attempts WHERE email = ?",
+                             (email,)).fetchone()
+        failed, locked_until = (attempt["failed"], attempt["locked_until"]) if attempt else (0, 0)
         if locked_until > time.time():
+            db.close()
             minutes = int((locked_until - time.time()) // 60) + 1
             self.send_json(429, {"error": f"too many wrong passwords, try again in {minutes} min"})
             return
-        db = get_db()
         user = db.execute(
             "SELECT id, email, password_hash, display_name, role FROM users WHERE email = ?", (email,)
         ).fetchone()
-        db.close()
         if user is None or not verify_password(password, user["password_hash"]):
             failed += 1
-            if failed >= MAX_FAILED_LOGINS:
-                FAILED_LOGINS[email] = [0, time.time() + LOCK_SECONDS]
+            locked = failed >= MAX_FAILED_LOGINS
+            db.execute(
+                "INSERT INTO login_attempts (email, failed, locked_until) VALUES (?, ?, ?) "
+                "ON CONFLICT(email) DO UPDATE SET failed = excluded.failed, locked_until = excluded.locked_until",
+                (email, 0 if locked else failed, time.time() + LOCK_SECONDS if locked else 0),
+            )
+            db.commit()
+            db.close()
+            if locked:
                 self.send_json(429, {"error": "too many wrong passwords, account locked for 15 min"})
             else:
-                FAILED_LOGINS[email] = [failed, 0]
                 self.send_json(401, {"error": "wrong email or password"})
             return
-        FAILED_LOGINS.pop(email, None)
+        db.execute("DELETE FROM login_attempts WHERE email = ?", (email,))
+        db.commit()
+        db.close()
         self.start_session(user)
 
     def create_report(self):
@@ -406,17 +452,23 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "report not found"})
                 return
             if report["status"] != new_status:
+                message = f"Your report #{report_id} is now: {STATUSES[new_status]}"
                 db.execute("UPDATE reports SET status = ? WHERE id = ?", (new_status, report_id))
                 db.execute(
                     "INSERT INTO status_log (report_id, changed_by, old_status, new_status) VALUES (?, ?, ?, ?)",
                     (report_id, user["id"], report["status"], new_status),
                 )
-                db.execute(
+                cur = db.execute(
                     "INSERT INTO notifications (user_id, report_id, message) VALUES (?, ?, ?)",
-                    (report["user_id"], report_id,
-                     f"Your report #{report_id} is now: {STATUSES[new_status]}"),
+                    (report["user_id"], report_id, message),
                 )
                 db.commit()
+                # R8 (final): the same message also goes to the author's e-mail, in the background,
+                # so a slow mail server never delays the admin's answer
+                author = db.execute("SELECT email, display_name FROM users WHERE id = ?",
+                                    (report["user_id"],)).fetchone()
+                mailer.send_in_background(DB_FILE, cur.lastrowid, author["email"], author["display_name"],
+                                          report_id, message)
             self.send_json(200, {"id": report_id, "status": new_status})
         finally:
             db.close()
@@ -433,19 +485,25 @@ class Handler(BaseHTTPRequestHandler):
         self.send_json(200, {"ok": True})
 
 
-# an app.db from Assignment 4 gets the new table automatically
-_db = get_db()
-_db.execute(NOTIFICATIONS_SQL)
-_db.close()
+UPLOADS.mkdir(parents=True, exist_ok=True)
+prepare_database()
 
-server = HTTPServer(("127.0.0.1", 8000), Handler)
-if USE_HTTPS:
-    # python3 server.py --https   needs cert.pem and key.pem (see README: one openssl command)
-    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    context.minimum_version = ssl.TLSVersion.TLSv1_2
-    context.load_cert_chain(BASE / "cert.pem", BASE / "key.pem")
-    server.socket = context.wrap_socket(server.socket, server_side=True)
-    print("Server started: open https://127.0.0.1:8000 in your browser")
-else:
-    print("Server started: open http://127.0.0.1:8000 in your browser")
-server.serve_forever()
+
+def main():
+    # ThreadingHTTPServer: one slow client (a big photo on a weak 4G line) does not block the others
+    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    scheme = "http"
+    if USE_HTTPS:
+        # python3 server.py --https   needs cert.pem and key.pem (see README: one openssl command)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        context.load_cert_chain(BASE / "cert.pem", BASE / "key.pem")
+        server.socket = context.wrap_socket(server.socket, server_side=True)
+        scheme = "https"
+    shown = "127.0.0.1" if HOST in ("0.0.0.0", "") else HOST
+    print(f"Server started: open {scheme}://{shown}:{PORT} in your browser")
+    server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()

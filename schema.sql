@@ -49,5 +49,21 @@ CREATE TABLE notifications (
   report_id INTEGER NOT NULL REFERENCES reports(id) ON DELETE CASCADE,
   message TEXT NOT NULL,
   is_read INTEGER NOT NULL DEFAULT 0 CHECK (is_read IN (0, 1)),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  -- Final (R8): what happened to the e-mail copy: sent, saved (to outbox/), failed
+  email_status TEXT
+);
+
+-- Final: sessions and the login lock are kept in the database (see migrations.sql)
+CREATE TABLE sessions (
+  token_hash TEXT PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expires_at TEXT NOT NULL
+);
+
+CREATE TABLE login_attempts (
+  email TEXT PRIMARY KEY,
+  failed INTEGER NOT NULL DEFAULT 0,
+  locked_until REAL NOT NULL DEFAULT 0
 );
