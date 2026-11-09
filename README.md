@@ -8,8 +8,8 @@ Astana, adds a category, a description and a photo, and follows its status. City
 see the open problems sorted by the number of likes and change their status; the author gets a
 notification in the app and by e-mail.
 
-- **Public link:** see the line "Public link" in the final report (PythonAnywhere, HTTPS).
-  How it is deployed: [docs/DEPLOY.md](docs/DEPLOY.md).
+- **Public link:** not hosted publicly; run it locally (below). Public hosting is prepared:
+  `wsgi.py` and [docs/DEPLOY.md](docs/DEPLOY.md) (PythonAnywhere, about 10 minutes).
 - **Stack:** Python 3 standard library only (`http.server`, `sqlite3`, `hashlib`, `smtplib`),
   SQLite database, one `index.html` page (HTML, CSS, JavaScript), no frameworks.
 
