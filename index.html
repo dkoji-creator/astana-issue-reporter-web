@@ -1,0 +1,659 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Astana Issue Reporter</title>
+  <link rel="icon" href="/static/img/logo.svg" type="image/svg+xml">
+  <style>
+    [hidden] { display: none !important; }
+    body { font: 16px system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #1c2733; }
+    main { max-width: 420px; margin: 0 auto; padding: 12px; }
+    header { display: flex; align-items: center; gap: 10px; margin: 4px 0 10px; }
+    header img { width: 36px; height: 36px; }
+    h1 { font-size: 20px; margin: 0; flex: 1; }
+    .icon { width: 20px; height: 20px; flex: none; vertical-align: middle; }
+    #soundToggle {
+      font: inherit; font-size: 14px; display: flex; align-items: center; gap: 4px;
+      min-height: 44px; padding: 0 10px; border: 1px solid #1b3a5f; border-radius: 8px;
+      background: #fff; color: #1b3a5f; cursor: pointer;
+    }
+    /* the map picture is a raster WebP; markers are positioned over it in percent */
+    #map {
+      position: relative; width: 100%; aspect-ratio: 0.878;
+      border-radius: 12px; cursor: crosshair; overflow: hidden; background: #eceee9;
+    }
+    #map > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    /* text on top of the map: solid dark background, so contrast does not depend on the picture */
+    .map-label {
+      position: absolute; z-index: 1; left: 8px; top: 8px; padding: 6px 10px; font-size: 14px;
+      border-radius: 8px; background: rgba(27, 58, 95, 0.92); color: #fff; pointer-events: none;
+    }
+    .map-credit {
+      position: absolute; z-index: 1; right: 6px; bottom: 6px; padding: 2px 6px; font-size: 12px; pointer-events: none;
+      border-radius: 4px; background: rgba(255, 255, 255, 0.9); color: #1c2733;
+    }
+    .marker {
+      position: absolute; width: 24px; height: 24px; margin: -12px 0 0 -12px;
+      border-radius: 50%; border: 2px solid #fff; padding: 2px; cursor: pointer; color: #fff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+    .marker svg { width: 100%; height: 100%; display: block; }
+    /* the chosen point pulses, so it is easy to find on a busy map */
+    #pin {
+      position: absolute; display: none; width: 18px; height: 18px; margin: -9px 0 0 -9px;
+      border-radius: 50%; background: #1b3a5f; border: 3px solid #fff; pointer-events: none;
+      animation: pulse 1.6s ease-out infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(27, 58, 95, 0.6); }
+      100% { box-shadow: 0 0 0 18px rgba(27, 58, 95, 0); }
+    }
+    /* message after sending: slides in, and stays on screen (the sound is only an extra) */
+    #toast {
+      display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 10px 12px;
+      border-radius: 8px; background: #237a4c; color: #fff; font-weight: 600;
+      animation: slide-in 0.35s ease-out;
+    }
+    @keyframes slide-in { from { transform: translateY(12px); opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) {
+      #pin, #toast { animation: none; }
+    }
+    .card { background: #fff; border-radius: 12px; padding: 12px; margin-top: 10px; }
+    #detailText { white-space: pre-line; }
+    #detailHead { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+    #detailPhoto { width: 100%; height: auto; border-radius: 8px; margin-top: 8px; }
+    video {
+      display: block; width: auto; height: auto; max-width: 100%; max-height: 480px;
+      margin: 0 auto; border-radius: 8px; background: #1c2733;
+    }
+    details summary { cursor: pointer; font-weight: 600; min-height: 32px; }
+    #top li { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+    #top { padding-left: 0; list-style: none; }
+    label { display: block; font-weight: 600; margin: 10px 0 4px; }
+    select, textarea, .auth input {
+      font: inherit; width: 100%; box-sizing: border-box; padding: 10px;
+      border: 1px solid #cbd3da; border-radius: 8px;
+    }
+    #send, #authSubmit {
+      font: inherit; width: 100%; min-height: 44px; margin-top: 12px; border: 0;
+      border-radius: 8px; background: #1b3a5f; color: #fff; cursor: pointer;
+    }
+    #send:disabled { opacity: 0.45; cursor: not-allowed; }
+    .tabs { display: flex; gap: 6px; }
+    .tabs button, #logout {
+      font: inherit; flex: 1; min-height: 36px; border: 1px solid #1b3a5f;
+      border-radius: 8px; background: #fff; color: #1b3a5f; cursor: pointer;
+    }
+    .tabs button.active { background: #1b3a5f; color: #fff; }
+    #logout { flex: none; padding: 0 12px; }
+    #userBar {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      padding: 8px 0; margin-bottom: 4px;
+    }
+    #authScreen {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 80vh; text-align: center;
+    }
+    #authScreen .card { width: 100%; max-width: 360px; text-align: left; }
+    #authScreen .auth-logo { width: 64px; height: 64px; margin-bottom: 8px; }
+    #authScreen h2 { font-size: 22px; margin: 0 0 4px; }
+    #authScreen .auth-sub { color: #5f6d7a; font-size: 14px; margin-bottom: 16px; }
+    #appContent[hidden] { display: none !important; }
+    #authMsg { margin-top: 8px; font-weight: 600; color: #c0392b; }
+    #msg { margin-top: 8px; font-weight: 600; }
+    .legend { font-size: 14px; margin-top: 8px; }
+    .legend i {
+      display: inline-block; width: 12px; height: 12px; border-radius: 50%;
+      margin: 0 4px 0 10px; vertical-align: middle;
+    }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 13px; font-weight: 600;
+    }
+    .badge.under_review { background: #fde4e0; color: #8f2617; }
+    .badge.in_progress { background: #fbefcf; color: #6b4a00; }
+    .badge.resolved { background: #dcefe3; color: #1d5e3b; }
+    .role { font-size: 12px; padding: 1px 6px; border-radius: 6px; background: #1b3a5f; color: #fff; margin-left: 4px; }
+    .row-btn {
+      font: inherit; font-size: 15px; width: 100%; text-align: left; display: flex; align-items: center; gap: 6px;
+      min-height: 44px; padding: 6px 8px; margin: 4px 0; border: 1px solid #dfe5ea; border-radius: 8px;
+      background: #fff; color: inherit; cursor: pointer;
+    }
+    .row-btn .grow { flex: 1; }
+    .small-btn, #bell {
+      font: inherit; font-size: 15px; min-height: 44px; padding: 0 12px; border: 1px solid #1b3a5f;
+      border-radius: 8px; background: #fff; color: #1b3a5f; cursor: pointer;
+    }
+    .small-btn.on { background: #1b3a5f; color: #fff; }
+    #bell.unread { background: #c0392b; border-color: #c0392b; color: #fff; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; align-items: center; }
+    .actions select { width: auto; flex: 1; padding: 9px; }
+    #notifList { padding-left: 18px; margin: 6px 0 0; }
+    #notifList li.new { font-weight: 600; }
+    .muted { color: #5f6d7a; font-size: 14px; }
+    #adminStats { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <!-- decorative: the name is already written next to it, so alt is empty -->
+    <img src="/static/img/logo.svg" alt="" width="36" height="36">
+    <h1>Astana Issue Reporter</h1>
+    <button id="soundToggle" aria-pressed="false" title="Play a sound when a report is sent">
+      <svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#sound-off"></use></svg>
+      <span>Sound off</span>
+    </button>
+  </header>
+
+  <div id="authScreen">
+    <img src="/static/img/logo.svg" alt="" width="64" height="64" class="auth-logo">
+    <h2>Astana Issue Reporter</h2>
+    <p class="auth-sub">Log in or sign up to report city issues</p>
+    <div class="card auth">
+      <div id="authForm">
+        <div class="tabs">
+          <button id="tabLogin" class="active">Log in</button>
+          <button id="tabRegister">Sign up</button>
+        </div>
+        <div id="nameField" hidden>
+          <label for="authName">Name</label>
+          <input id="authName" maxlength="50" autocomplete="name">
+        </div>
+        <label for="authEmail">Email</label>
+        <input id="authEmail" type="email" autocomplete="email">
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password" autocomplete="current-password">
+        <button id="authSubmit">Log in</button>
+        <div id="authMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="appContent" hidden>
+  <div id="userBar">
+    <span>Logged in as <b id="userName"></b><span id="roleTag" class="role" hidden>Admin</span></span>
+    <button id="bell" aria-label="Notifications">Alerts <span id="bellCount">0</span></button>
+    <button id="logout">Log out</button>
+  </div>
+  <div id="notifCard" class="card" hidden>
+    <b>Notifications</b>
+    <ul id="notifList"></ul>
+  </div>
+
+  <div id="map">
+    <img src="/static/img/map-840.webp"
+         srcset="/static/img/map-420.webp 420w, /static/img/map-840.webp 840w"
+         sizes="(max-width: 444px) calc(100vw - 24px), 420px" width="840" height="957"
+         alt="Schematic map of central Astana with the Esil river, main avenues and parks. Coloured circles are reported issues.">
+    <div class="map-label" id="mapLabel">Tap the map to choose a location</div>
+    <div class="map-credit">Map: schematic, own work</div>
+    <div id="pin"></div>
+  </div>
+  <div class="legend">
+    <i style="background:#e5533d"></i>Under review
+    <i style="background:#e8b030"></i>In progress
+    <i style="background:#2f8f5b"></i>Resolved
+  </div>
+
+  <div id="detail" class="card" aria-live="polite">
+    <div id="detailHead" hidden></div>
+    <div id="detailText">Tap a marker to see the report.</div>
+    <img id="detailPhoto" hidden alt="" loading="lazy" decoding="async">
+    <div class="actions" id="detailActions" hidden>
+      <button id="voteBtn" class="small-btn">Like (+1)</button>
+      <span id="adminTools" hidden style="display:contents">
+        <select id="statusSelect" aria-label="New status">
+          <option value="under_review">Under review</option>
+          <option value="in_progress">In progress</option>
+          <option value="resolved">Resolved</option>
+        </select>
+        <button id="statusBtn" class="small-btn on">Save status</button>
+      </span>
+    </div>
+    <div id="detailMsg" class="muted" role="status"></div>
+  </div>
+
+  <div id="adminCard" class="card" hidden>
+    <h2 style="font-size:18px; margin:0 0 6px">City service dashboard</h2>
+    <div id="adminStats"></div>
+    <label for="adminFilter" style="margin-top:4px">Show</label>
+    <select id="adminFilter">
+      <option value="open">Open (under review + in progress)</option>
+      <option value="under_review">Under review</option>
+      <option value="in_progress">In progress</option>
+      <option value="resolved">Resolved</option>
+      <option value="all">All</option>
+    </select>
+    <label for="adminSort">Sort by</label>
+    <select id="adminSort">
+      <option value="votes">Most votes first (priority)</option>
+      <option value="new">Newest first</option>
+    </select>
+    <p class="muted">Tap a row to open the report and change its status.</p>
+    <div id="adminList"></div>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:18px; margin:0 0 6px">Report an issue</h2>
+    <div id="loc">Tap the map to choose a location</div>
+    <label for="cat">Category</label>
+    <select id="cat"></select>
+    <label for="desc">Description</label>
+    <textarea id="desc" rows="4" maxlength="500" placeholder="Describe the problem (min 5 characters)"></textarea>
+    <label for="photo">Photo (jpg/png/webp, made smaller automatically)</label>
+    <input type="file" id="photo" accept="image/jpeg,image/png,image/webp">
+    <div id="photoInfo" aria-live="polite"></div>
+    <button id="send" disabled>Submit Report</button>
+    <div id="msg" role="status"></div>
+    <div id="toast" role="status" hidden>
+      <svg class="icon" aria-hidden="true"><use href="/static/img/icons.svg#check"></use></svg>
+      <span id="toastText"></span>
+    </div>
+    <audio id="notify" src="/static/media/notify.mp3" preload="none"></audio>
+  </div>
+
+  <div class="card" id="myCard">
+    <b>My reports</b>
+    <div id="myList"><p class="muted">You have not sent any reports yet.</p></div>
+  </div>
+
+  <div class="card">
+    <b>Top reports by votes</b>
+    <ul id="top"></ul>
+  </div>
+
+  <div class="card">
+    <h2 style="font-size:18px; margin:0 0 6px">How to report an issue</h2>
+    <!-- 10-second screen recording without sound; nothing plays until the user presses Play -->
+    <video controls preload="none" playsinline width="720" height="1280"
+           poster="/static/media/howto-poster.webp">
+      <source src="/static/media/howto.mp4" type="video/mp4">
+      <track kind="captions" src="/static/media/howto.en.vtt" srclang="en" label="English" default>
+      Your browser cannot play this video. The steps are written below.
+    </video>
+    <details>
+      <summary>Text version of the video</summary>
+      <ol>
+        <li>Log in with your email and password.</li>
+        <li>Tap the map where the problem is. A blue pin shows the chosen point.</li>
+        <li>Choose a category and describe the problem in a few words.</li>
+        <li>Add a photo if you have one, then press Submit Report.</li>
+        <li>A green message confirms the report, and a new marker appears on the map.</li>
+      </ol>
+    </details>
+  </div>
+  </div><!-- #appContent -->
+</main>
+
+<script>
+  // Map area: the rectangle of Astana that our map shows
+  const BOUNDS = { latMin: 51.09, latMax: 51.19, lngMin: 71.36, lngMax: 71.50 };
+  const COLORS = { under_review: "#e5533d", in_progress: "#e8b030", resolved: "#2f8f5b" };
+  const LABELS = { under_review: "Under review", in_progress: "In progress", resolved: "Resolved" };
+  // icon colour inside a marker: dark on yellow, white on red and green (contrast at least 3:1)
+  const ICON_COLORS = { under_review: "#fff", in_progress: "#1c2733", resolved: "#fff" };
+  // category name -> icon id in /static/img/icons.svg
+  const ICONS = { "Roads & Potholes": "road", "Lighting": "lighting", "Landscaping": "landscaping", "Trash": "trash" };
+  const PHOTO_MAX = 960;   // longest side of a photo after resizing, in pixels
+
+  let selected = null;   // the point chosen on the map: { lat, lng }
+  let photo = null;      // the chosen photo as text (base64), or null
+  let user = null;       // the logged-in user, or null
+  let authMode = "login";  // "login" or "register"
+  let soundOn = false;     // sound is off until the user turns it on
+  let reports = [];        // all reports from /api/reports (sorted by votes)
+  let current = null;      // id of the report open in the details card
+
+  const $ = (id) => document.getElementById(id);
+
+  // <svg><use href="icons.svg#road"></use></svg> - one icon from the sprite
+  function icon(name, cls) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("aria-hidden", "true");
+    if (cls) svg.setAttribute("class", cls);
+    const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+    use.setAttribute("href", "/static/img/icons.svg#" + (ICONS[name] || name));
+    svg.appendChild(use);
+    return svg;
+  }
+
+  // latitude/longitude -> position on the map in percent
+  function toPercent(lat, lng) {
+    const x = (lng - BOUNDS.lngMin) / (BOUNDS.lngMax - BOUNDS.lngMin) * 100;
+    const y = (BOUNDS.latMax - lat) / (BOUNDS.latMax - BOUNDS.latMin) * 100;
+    return [x, y];
+  }
+
+  // the Submit button works only when a point is chosen and the description is long enough
+  function updateButton() {
+    $("send").disabled = !(user && selected && $("desc").value.trim().length >= 5);
+  }
+
+  // show "Logged in as ..." or the login/sign-up form
+  function showUser() {
+    $("authScreen").hidden = !!user;
+    $("appContent").hidden = !user;
+    if (user) {
+      $("userName").textContent = user.display_name;
+      $("roleTag").hidden = user.role !== "admin";
+      $("adminCard").hidden = user.role !== "admin";
+      $("myCard").hidden = user.role === "admin";
+      loadNotifications();
+    }
+    $("notifCard").hidden = true;
+    updateButton();
+  }
+
+  function setAuthMode(mode) {
+    authMode = mode;
+    $("tabLogin").classList.toggle("active", mode === "login");
+    $("tabRegister").classList.toggle("active", mode === "register");
+    $("nameField").hidden = mode !== "register";
+    $("authSubmit").textContent = mode === "login" ? "Log in" : "Sign up";
+    $("authPassword").autocomplete = mode === "login" ? "current-password" : "new-password";
+    $("authMsg").textContent = "";
+  }
+
+  $("tabLogin").onclick = () => setAuthMode("login");
+  $("tabRegister").onclick = () => setAuthMode("register");
+
+  $("authSubmit").onclick = async () => {
+    const body = { email: $("authEmail").value, password: $("authPassword").value };
+    if (authMode === "register") body.display_name = $("authName").value;
+    const response = await fetch("/api/" + authMode, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await response.json();
+    if (response.ok) {
+      user = result;
+      $("authPassword").value = "";
+      showUser();
+      load();
+    } else {
+      $("authMsg").textContent = "Error: " + result.error;
+    }
+  };
+
+  $("logout").onclick = async () => {
+    await fetch("/api/logout", { method: "POST" });
+    user = null;
+    current = null;
+    setAuthMode("login");
+    $("authEmail").value = "";
+    $("authPassword").value = "";
+    showUser();
+  };
+
+  async function loadUser() {
+    user = await fetch("/api/me").then((r) => r.json());
+    showUser();
+  }
+
+  function badge(status) {
+    const b = document.createElement("span");
+    b.className = "badge " + status;
+    b.textContent = LABELS[status];
+    return b;
+  }
+
+  // R3, R6, R7: details card with the status badge, the Like button and (admin only) the status form
+  function showDetails(r) {
+    current = r.id;
+    $("detailActions").hidden = !user;
+    $("voteBtn").textContent = r.voted ? "Liked ✓ (" + r.votes + ")" : "Like (+1) · " + r.votes;
+    $("voteBtn").classList.toggle("on", !!r.voted);
+    $("voteBtn").setAttribute("aria-pressed", !!r.voted);
+    $("adminTools").hidden = !(user && user.role === "admin");
+    $("statusSelect").value = r.status;
+    $("detailMsg").textContent = "";
+    $("detailHead").replaceChildren(icon(r.category, "icon"), "#" + r.id + " " + r.category + " ", badge(r.status));
+    $("detailHead").hidden = false;
+    $("detailText").textContent =
+      r.votes + " votes · sent " + r.created_at + (r.mine ? " · your report" : "") + "\n" + r.description;
+    if (r.photo_path) {
+      $("detailPhoto").src = "/uploads/" + r.photo_path;
+      $("detailPhoto").alt = "Photo from the report: " + r.description;
+      $("detailPhoto").hidden = false;
+    } else {
+      $("detailPhoto").hidden = true;
+    }
+  }
+
+  // READ: get categories and reports from the server, draw markers and the top list
+  async function load() {
+    let categories;
+    [categories, reports] = await Promise.all([
+      fetch("/api/categories").then((r) => r.json()),
+      fetch("/api/reports").then((r) => r.json()),
+    ]);
+
+    if ($("cat").options.length === 0) {
+      for (const c of categories) {
+        const option = document.createElement("option");
+        option.value = c.id;
+        option.textContent = c.name;
+        $("cat").appendChild(option);
+      }
+    }
+
+    document.querySelectorAll(".marker").forEach((m) => m.remove());
+    for (const r of reports) {
+      const marker = document.createElement("button");
+      marker.className = "marker";
+      const [x, y] = toPercent(r.lat, r.lng);
+      marker.style.left = x + "%";
+      marker.style.top = y + "%";
+      marker.style.background = COLORS[r.status];
+      marker.style.color = ICON_COLORS[r.status];
+      marker.title = r.category;
+      // a screen reader reads this instead of the colour
+      marker.setAttribute("aria-label", r.category + ", " + LABELS[r.status] + ", " + r.votes + " votes");
+      marker.appendChild(icon(r.category));
+      marker.onclick = (e) => {
+        e.stopPropagation();   // do not treat this click as "choose a new point"
+        showDetails(r);
+      };
+      $("map").appendChild(marker);
+    }
+
+    $("top").textContent = "";
+    for (const r of reports.slice(0, 5)) {
+      const li = document.createElement("li");
+      li.append(icon(r.category, "icon"), r.category + " — " + r.votes + " votes — " + LABELS[r.status]);
+      $("top").appendChild(li);
+    }
+
+    // My reports (resident): track the status of everything I sent
+    const mine = reports.filter((r) => r.mine).sort((a, b) => b.id - a.id);
+    if (mine.length) $("myList").replaceChildren(...mine.map(row));
+    renderAdmin();
+    if (current) {
+      const r = reports.find((x) => x.id === current);
+      if (r) showDetails(r);
+    }
+  }
+
+  // one clickable line: icon, #id category, votes, status badge
+  function row(r) {
+    const b = document.createElement("button");
+    b.className = "row-btn";
+    const text = document.createElement("span");
+    text.className = "grow";
+    text.textContent = "#" + r.id + " " + r.category + " · " + r.votes + " votes";
+    b.append(icon(r.category, "icon"), text, badge(r.status));
+    b.onclick = () => {
+      showDetails(r);
+      $("detail").scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+    return b;
+  }
+
+  // R7: the city service dashboard - reports sorted by votes, filtered by status
+  function renderAdmin() {
+    if (!user || user.role !== "admin") return;
+    const f = $("adminFilter").value;
+    const list = reports.filter((r) =>
+      f === "all" || (f === "open" ? r.status !== "resolved" : r.status === f));
+    if ($("adminSort").value === "new") list.sort((a, b) => b.id - a.id);  // otherwise: server order = votes
+    const count = (s) => reports.filter((r) => r.status === s).length;
+    $("adminStats").replaceChildren(
+      ...["under_review", "in_progress", "resolved"].map((s) => {
+        const b = badge(s);
+        b.textContent += ": " + count(s);
+        return b;
+      }));
+    $("adminList").replaceChildren(...list.slice(0, 10).map(row));
+    if (list.length > 10) {
+      const more = document.createElement("p");
+      more.className = "muted";
+      more.textContent = "… and " + (list.length - 10) + " more (" + list.length + " in total)";
+      $("adminList").appendChild(more);
+    }
+  }
+  $("adminFilter").onchange = renderAdmin;
+  $("adminSort").onchange = renderAdmin;
+
+  // R3: like / unlike
+  $("voteBtn").onclick = async () => {
+    const response = await fetch("/api/reports/" + current + "/vote", { method: "POST" });
+    const result = await response.json();
+    if (!response.ok) { $("detailMsg").textContent = "Error: " + result.error; return; }
+    await load();
+    $("detailMsg").textContent = result.voted ? "Thank you, your like was saved." : "Your like was removed.";
+  };
+
+  // R7: the admin saves a new status (the server checks the role again)
+  $("statusBtn").onclick = async () => {
+    const response = await fetch("/api/reports/" + current + "/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: $("statusSelect").value }),
+    });
+    const result = await response.json();
+    if (!response.ok) { $("detailMsg").textContent = "Error: " + result.error; return; }
+    await load();
+    $("detailMsg").textContent = "Status saved: " + LABELS[result.status] + ". The author was notified.";
+  };
+
+  // R8: in-app notifications for the author
+  async function loadNotifications() {
+    if (!user) return;
+    const response = await fetch("/api/notifications");
+    if (!response.ok) return;
+    const items = await response.json();
+    const unread = items.filter((n) => !n.is_read).length;
+    $("bellCount").textContent = unread;
+    $("bell").classList.toggle("unread", unread > 0);
+    $("bell").setAttribute("aria-label", "Notifications, " + unread + " new");
+    $("notifList").replaceChildren(...(items.length ? items.map((n) => {
+      const li = document.createElement("li");
+      li.textContent = n.message + " (" + n.created_at + ")";
+      if (!n.is_read) li.className = "new";
+      return li;
+    }) : [Object.assign(document.createElement("li"), { textContent: "No notifications yet." })]));
+  }
+  $("bell").onclick = async () => {
+    $("notifCard").hidden = !$("notifCard").hidden;
+    if (!$("notifCard").hidden && $("bellCount").textContent !== "0") {
+      await fetch("/api/notifications/read", { method: "POST" });
+      $("bellCount").textContent = "0";
+      $("bell").classList.remove("unread");
+    }
+  };
+  setInterval(() => { loadNotifications(); }, 20000);
+
+  // click on the map -> convert the click position back to latitude/longitude
+  $("map").onclick = (e) => {
+    const rect = $("map").getBoundingClientRect();
+    const fx = (e.clientX - rect.left) / rect.width;
+    const fy = (e.clientY - rect.top) / rect.height;
+    selected = {
+      lat: Number((BOUNDS.latMax - fy * (BOUNDS.latMax - BOUNDS.latMin)).toFixed(6)),
+      lng: Number((BOUNDS.lngMin + fx * (BOUNDS.lngMax - BOUNDS.lngMin)).toFixed(6)),
+    };
+    $("pin").style.display = "block";
+    $("pin").style.left = fx * 100 + "%";
+    $("pin").style.top = fy * 100 + "%";
+    $("loc").textContent = "Selected: " + selected.lat + ", " + selected.lng;
+    $("mapLabel").textContent = "Point chosen — fill in the form below";
+    updateButton();
+  };
+
+  $("desc").oninput = updateButton;
+
+  // the browser makes the photo smaller (max 960 px, WebP) and turns it into text for JSON:
+  // a 4 MB phone photo becomes about 100 KB, so it uploads and opens fast
+  $("photo").onchange = async (e) => {
+    const file = e.target.files[0];
+    photo = null;
+    $("photoInfo").textContent = "";
+    if (!file) return;
+    if (file.size > 20000000) {
+      $("photoInfo").textContent = "This file is too big (max 20 MB).";
+      e.target.value = "";
+      return;
+    }
+    const picture = await createImageBitmap(file);
+    const scale = Math.min(1, PHOTO_MAX / Math.max(picture.width, picture.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(picture.width * scale);
+    canvas.height = Math.round(picture.height * scale);
+    canvas.getContext("2d").drawImage(picture, 0, 0, canvas.width, canvas.height);
+    photo = canvas.toDataURL("image/webp", 0.8);
+    if (!photo.startsWith("data:image/webp")) photo = canvas.toDataURL("image/jpeg", 0.8);  // old Safari
+    const kb = Math.round(photo.length * 3 / 4 / 1024);
+    $("photoInfo").textContent = "Photo ready: " + canvas.width + " × " + canvas.height + " px, " + kb + " KB" +
+      " (was " + Math.round(file.size / 1024) + " KB)";
+  };
+
+  // sound is an extra: the same news is always shown as text in #toast
+  $("soundToggle").onclick = () => {
+    soundOn = !soundOn;
+    $("soundToggle").setAttribute("aria-pressed", soundOn);
+    $("soundToggle").querySelector("use").setAttribute("href", "/static/img/icons.svg#" + (soundOn ? "sound-on" : "sound-off"));
+    $("soundToggle").querySelector("span").textContent = soundOn ? "Sound on" : "Sound off";
+  };
+
+  // WRITE: send the form to the server
+  $("send").onclick = async () => {
+    const response = await fetch("/api/reports", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        category_id: Number($("cat").value),
+        description: $("desc").value,
+        lat: selected.lat,
+        lng: selected.lng,
+        photo: photo,
+      }),
+    });
+    const result = await response.json();
+    if (response.ok) {
+      $("msg").textContent = "";
+      $("toastText").textContent = "Report #" + result.id + " submitted. Thank you!";
+      $("toast").hidden = false;
+      if (soundOn) $("notify").play();
+      $("desc").value = "";
+      $("photo").value = "";
+      $("photoInfo").textContent = "";
+      photo = null;
+      selected = null;
+      $("pin").style.display = "none";
+      $("loc").textContent = "Tap the map to choose a location";
+      $("mapLabel").textContent = "Tap the map to choose a location";
+      updateButton();
+      load();
+    } else {
+      $("toast").hidden = true;
+      $("msg").textContent = "Error: " + result.error;
+    }
+  };
+
+  loadUser();
+  load();
+</script>
+</body>
+</html>

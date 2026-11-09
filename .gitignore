@@ -1,0 +1,11 @@
+app.db
+app.db-journal
+uploads/*
+!uploads/.gitkeep
+outbox/
+backups/
+cert.pem
+key.pem
+__pycache__/
+*.pyc
+.env

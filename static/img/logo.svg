@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Astana Issue Reporter logo: a map pin with a warning mark. Own work. -->
+  <rect width="64" height="64" rx="14" fill="#1b3a5f"/>
+  <path d="M32 9c-9.4 0-17 7.4-17 16.6C15 38 32 55 32 55s17-17 17-29.4C49 16.4 41.4 9 32 9z" fill="#fff"/>
+  <path d="M32 15.5l10.5 18.5h-21z" fill="#e8b030" stroke="#e8b030" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="30.4" y="21" width="3.2" height="7.4" rx="1.6" fill="#1b3a5f"/>
+  <circle cx="32" cy="31" r="1.8" fill="#1b3a5f"/>
+</svg>
