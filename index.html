@@ -58,7 +58,7 @@
     /* the chosen point pulses, so it is easy to find on a busy map */
     #pin {
       position: absolute; display: none; width: 18px; height: 18px; margin: -9px 0 0 -9px;
-      border-radius: 50%; background: #1b3a5f; border: 3px solid #fff; pointer-events: none;
+      border-radius: 50%; background: #1b3a5f; border: 3px solid #fff; pointer-events: none; z-index: 1;
       animation: pulse 1.6s ease-out infinite;
     }
     @keyframes pulse {
@@ -91,6 +91,25 @@
       font: inherit; width: 100%; box-sizing: border-box; padding: 10px;
       border: 1px solid #cbd3da; border-radius: 8px;
     }
+    /* Final (usability findings B2): bigger touch targets in the form, at least 48 px high */
+    #cat { min-height: 48px; font-size: 16px; }
+    #cat:invalid { color: #5f6d7a; }
+    .loc-row { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+    .loc-row #loc { flex: 1; }
+    #cancelPoint {
+      font: inherit; font-size: 15px; min-height: 44px; padding: 0 12px; border: 1px solid #8f2617;
+      border-radius: 8px; background: #fff; color: #8f2617; cursor: pointer;
+    }
+    #descCount { font-size: 14px; margin-top: 4px; color: #5f6d7a; }
+    #descCount.short { color: #8f2617; font-weight: 600; }
+    .photo-buttons { display: flex; gap: 8px; }
+    .photo-buttons label {
+      flex: 1; display: flex; align-items: center; justify-content: center; min-height: 48px; margin: 0;
+      border: 1px solid #1b3a5f; border-radius: 8px; background: #fff; color: #1b3a5f; cursor: pointer;
+      font-weight: 600;
+    }
+    .photo-buttons input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+    .photo-buttons input:focus-visible + span { outline: 3px solid #1b3a5f; outline-offset: 3px; }
     #send, #authSubmit {
       font: inherit; width: 100%; min-height: 44px; margin-top: 12px; border: 0;
       border-radius: 8px; background: #1b3a5f; color: #fff; cursor: pointer;
@@ -98,7 +117,7 @@
     #send:disabled { opacity: 0.45; cursor: not-allowed; }
     .tabs { display: flex; gap: 6px; }
     .tabs button, #logout {
-      font: inherit; flex: 1; min-height: 36px; border: 1px solid #1b3a5f;
+      font: inherit; flex: 1; min-height: 44px; border: 1px solid #1b3a5f;
       border-radius: 8px; background: #fff; color: #1b3a5f; cursor: pointer;
     }
     .tabs button.active { background: #1b3a5f; color: #fff; }
@@ -261,13 +280,27 @@
 
   <div class="card">
     <h2 style="font-size:18px; margin:0 0 6px">Report an issue</h2>
-    <div id="loc">Tap the map to choose a location</div>
+    <div class="loc-row">
+      <div id="loc">Tap the map to choose a location</div>
+      <!-- Final (finding B2-2, user control and freedom): take back a wrongly chosen point -->
+      <button id="cancelPoint" hidden>✕ Cancel point</button>
+    </div>
     <label for="cat">Category</label>
-    <select id="cat"></select>
+    <!-- Final (finding B2-1, error prevention): an empty choice is visible and cannot be sent -->
+    <select id="cat" required>
+      <option value="" disabled selected>Choose a category…</option>
+    </select>
     <label for="desc">Description</label>
-    <textarea id="desc" rows="4" maxlength="500" placeholder="Describe the problem (min 5 characters)"></textarea>
-    <label for="photo">Photo (jpg/png/webp, made smaller automatically)</label>
-    <input type="file" id="photo" accept="image/jpeg,image/png,image/webp">
+    <textarea id="desc" rows="4" maxlength="500" aria-describedby="descCount"
+              placeholder="What is wrong and where exactly? e.g. “Deep pothole in the right lane near the bus stop”"></textarea>
+    <!-- Final (finding B2-3): live counter, red until the text is long enough -->
+    <div id="descCount" class="short" aria-live="polite">0 / 500 · at least 5 characters</div>
+    <label>Photo (optional, made smaller automatically)</label>
+    <!-- Final (Stage 2 plan item 6): one tap opens the camera on a phone -->
+    <div class="photo-buttons">
+      <label><input type="file" id="camera" accept="image/*" capture="environment"><span>📷 Take photo</span></label>
+      <label><input type="file" id="photo" accept="image/jpeg,image/png,image/webp"><span>🖼 From gallery</span></label>
+    </div>
     <div id="photoInfo" aria-live="polite"></div>
     <button id="send" disabled>Submit Report</button>
     <div id="msg" role="status"></div>
@@ -329,6 +362,7 @@
   let soundOn = false;     // sound is off until the user turns it on
   let reports = [];        // all reports from /api/reports (sorted by votes)
   let current = null;      // id of the report open in the details card
+  let formStarted = 0;     // when the user first tapped the map for this report (performance.now())
 
   const $ = (id) => document.getElementById(id);
 
@@ -352,7 +386,10 @@
 
   // the Submit button works only when a point is chosen and the description is long enough
   function updateButton() {
-    $("send").disabled = !(user && selected && $("desc").value.trim().length >= 5);
+    const length = $("desc").value.trim().length;
+    $("descCount").textContent = length + " / 500" + (length < 5 ? " · at least 5 characters" : " ✓");
+    $("descCount").classList.toggle("short", length < 5);
+    $("send").disabled = !(user && selected && $("cat").value && length >= 5);
   }
 
   // show "Logged in as ..." or the login/sign-up form
@@ -455,7 +492,7 @@
       fetch("/api/reports").then((r) => r.json()),
     ]);
 
-    if ($("cat").options.length === 0) {
+    if ($("cat").options.length === 1) {
       for (const c of categories) {
         const option = document.createElement("option");
         option.value = c.id;
@@ -621,14 +658,27 @@
     $("pin").style.top = fy * 100 + "%";
     $("loc").textContent = "Selected: " + selected.lat + ", " + selected.lng;
     $("mapLabel").textContent = "Point chosen — fill in the form below";
+    $("cancelPoint").hidden = false;
+    if (!formStarted) formStarted = performance.now();   // final test: time from the first tap to "sent"
     updateButton();
   };
 
+  function clearPoint() {
+    selected = null;
+    $("pin").style.display = "none";
+    $("loc").textContent = "Tap the map to choose a location";
+    $("mapLabel").textContent = "Tap the map to choose a location";
+    $("cancelPoint").hidden = true;
+    updateButton();
+  }
+  $("cancelPoint").onclick = clearPoint;
+
   $("desc").oninput = updateButton;
+  $("cat").onchange = updateButton;
 
   // the browser makes the photo smaller (max 960 px, WebP) and turns it into text for JSON:
   // a 4 MB phone photo becomes about 100 KB, so it uploads and opens fast
-  $("photo").onchange = async (e) => {
+  $("camera").onchange = $("photo").onchange = async (e) => {
     const file = e.target.files[0];
     photo = null;
     $("photoInfo").textContent = "";
@@ -670,6 +720,8 @@
         lat: selected.lat,
         lng: selected.lng,
         photo: photo,
+        // success criterion 1 (under 2 minutes): measured by the page, saved with the report
+        fill_seconds: formStarted ? Math.round((performance.now() - formStarted) / 100) / 10 : null,
       }),
     });
     const result = await response.json();
@@ -680,13 +732,12 @@
       if (soundOn) $("notify").play();
       $("desc").value = "";
       $("photo").value = "";
+      $("camera").value = "";
+      $("cat").value = "";
       $("photoInfo").textContent = "";
       photo = null;
-      selected = null;
-      $("pin").style.display = "none";
-      $("loc").textContent = "Tap the map to choose a location";
-      $("mapLabel").textContent = "Tap the map to choose a location";
-      updateButton();
+      formStarted = 0;
+      clearPoint();
       load();
     } else {
       $("toast").hidden = true;

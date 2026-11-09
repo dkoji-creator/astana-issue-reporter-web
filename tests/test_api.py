@@ -154,6 +154,15 @@ class ResidentJourney(ServerTest):
         for r in reports:
             self.assertEqual(r["votes"], counted.get(r["id"], 0))
 
+    def test_fill_time_is_saved(self):
+        # final test, criterion 1: the page sends the measured seconds with the report
+        c = self.client()
+        c.login("user13@example.kz")
+        good = self.new_report(c, fill_seconds=47.3)[1]["id"]
+        bad = self.new_report(c, fill_seconds=-5)[1]["id"]
+        self.assertEqual(self.query("SELECT fill_seconds FROM reports WHERE id IN (?, ?) ORDER BY id",
+                                    (good, bad)), [(47.3,), (None,)])
+
     def test_rate_limit(self):
         c = self.client()
         c.login("user8@example.kz")

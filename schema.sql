@@ -24,7 +24,9 @@ CREATE TABLE reports (
   photo_path TEXT,
   status TEXT NOT NULL DEFAULT 'under_review'
     CHECK (status IN ('under_review', 'in_progress', 'resolved')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  -- Final test: seconds from the first tap on the map to Submit (success criterion 1)
+  fill_seconds REAL
 );
 
 CREATE TABLE votes (

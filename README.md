@@ -50,6 +50,12 @@ touched) and check every requirement that can be checked automatically: R1–R11
 success criteria where possible (sorting by votes), the security measures, and that logins and
 the password lock survive a restart.
 
+## Final user test (success criteria)
+
+The protocol is in [docs/FINAL_TEST.md](docs/FINAL_TEST.md). The page measures how long each
+tester needs from the first tap on the map to Submit; `python3 final_test.py` prints the
+results, and `node tests/check_360px.js` checks the 360 px criterion automatically.
+
 ## What each file does
 
 | Path | What it is |
@@ -64,6 +70,7 @@ the password lock survive a restart.
 | `show_db.py` | `python3 show_db.py 121` prints every row the database holds for report #121 |
 | `check_password.py`, `injection_demo.py` | Assignment 3 evidence: hashed passwords, why we use `?` in SQL |
 | `tests/test_api.py` | Automatic tests |
+| `final_test.py`, `tests/check_360px.js` | Final user test: times per tester, 360 px check |
 | `static/` | Logo, icon set, map picture, how-to video with captions, sound (Assignment 4) |
 | `media_src/` | Originals and the scripts that made every media file (all own work) |
 | `docs/` | Deployment guide |

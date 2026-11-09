@@ -78,6 +78,8 @@ def prepare_database():
     db.executescript((BASE / "migrations.sql").read_text(encoding="utf-8"))
     if not column_exists(db, "notifications", "email_status"):
         db.execute("ALTER TABLE notifications ADD COLUMN email_status TEXT")
+    if not column_exists(db, "reports", "fill_seconds"):
+        db.execute("ALTER TABLE reports ADD COLUMN fill_seconds REAL")
     db.execute("DELETE FROM sessions WHERE expires_at < datetime('now')")
     db.commit()
     db.close()
@@ -386,11 +388,17 @@ class Handler(BaseHTTPRequestHandler):
             if recent >= MAX_REPORTS_PER_10_MIN:
                 self.send_json(429, {"error": "too many reports, please wait 10 minutes"})
                 return
+            # final test (success criterion 1): seconds from the first tap on the map to Submit,
+            # measured by the page; anything outside 0-3600 s is not a real measurement
+            fill_seconds = data.get("fill_seconds")
+            fill_seconds = float(fill_seconds) if isinstance(fill_seconds, (int, float)) else None
+            if fill_seconds is not None and not 0 < fill_seconds < 3600:
+                fill_seconds = None
             cur = db.execute(
-                "INSERT INTO reports (user_id, category_id, description, lat, lng, photo_path) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO reports (user_id, category_id, description, lat, lng, photo_path, fill_seconds) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (user["id"], int(data["category_id"]), str(data["description"]).strip(),
-                 float(data["lat"]), float(data["lng"]), photo_name),
+                 float(data["lat"]), float(data["lng"]), photo_name, fill_seconds),
             )
             db.execute(
                 "INSERT INTO status_log (report_id, changed_by, old_status, new_status) "
