@@ -19,10 +19,26 @@
       background: #fff; color: #1b3a5f; cursor: pointer;
     }
     /* the map picture is a raster WebP; markers are positioned over it in percent */
-    #map {
-      position: relative; width: 100%; aspect-ratio: 0.878;
-      border-radius: 12px; cursor: crosshair; overflow: hidden; background: #eceee9;
+    /* Final: the map can be zoomed (1x / 2x / 3x) and scrolled, so 120+ markers do not overlap
+       on a 360 px screen (Stage 2 defect 4); markers keep their size, the map gets bigger */
+    #mapFrame { position: relative; }
+    #mapScroll {
+      width: 100%; aspect-ratio: 0.878; overflow: auto; border-radius: 12px; background: #eceee9;
+      -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
     }
+    #map {
+      position: relative; width: calc(var(--zoom, 1) * 100%); aspect-ratio: 0.878;
+      cursor: crosshair; overflow: hidden; background: #eceee9;
+    }
+    .zoom {
+      position: absolute; z-index: 2; right: 8px; top: 8px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .zoom button {
+      font: 600 20px system-ui, sans-serif; width: 44px; height: 44px; border: 1px solid #1b3a5f;
+      border-radius: 8px; background: #fff; color: #1b3a5f; cursor: pointer;
+    }
+    .zoom button:disabled { opacity: 0.45; cursor: default; }
+    #zoomLevel { font-size: 13px; text-align: center; background: rgba(255,255,255,0.9); border-radius: 6px; }
     #map > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
     /* text on top of the map: solid dark background, so contrast does not depend on the picture */
     .map-label {
@@ -181,14 +197,23 @@
     <ul id="notifList"></ul>
   </div>
 
-  <div id="map">
-    <img src="/static/img/map-840.webp"
-         srcset="/static/img/map-420.webp 420w, /static/img/map-840.webp 840w"
-         sizes="(max-width: 444px) calc(100vw - 24px), 420px" width="840" height="957"
-         alt="Schematic map of central Astana with the Esil river, main avenues and parks. Coloured circles are reported issues.">
+  <div id="mapFrame">
+    <div id="mapScroll">
+      <div id="map">
+        <img src="/static/img/map-840.webp"
+             srcset="/static/img/map-420.webp 420w, /static/img/map-840.webp 840w"
+             sizes="(max-width: 444px) calc(100vw - 24px), 420px" width="840" height="957"
+             alt="Schematic map of central Astana with the Esil river, main avenues and parks. Coloured circles are reported issues.">
+        <div id="pin"></div>
+      </div>
+    </div>
     <div class="map-label" id="mapLabel">Tap the map to choose a location</div>
+    <div class="zoom">
+      <button id="zoomIn" aria-label="Zoom in">+</button>
+      <div id="zoomLevel" aria-live="polite">1×</div>
+      <button id="zoomOut" aria-label="Zoom out" disabled>−</button>
+    </div>
     <div class="map-credit">Map: schematic, own work</div>
-    <div id="pin"></div>
   </div>
   <div class="legend">
     <i style="background:#e5533d"></i>Under review
@@ -564,6 +589,23 @@
     }
   };
   setInterval(() => { loadNotifications(); }, 20000);
+
+  // Final: zoom 1x / 2x / 3x; the point in the middle of the view stays in the middle
+  let zoom = 1;
+  function setZoom(next) {
+    const box = $("mapScroll");
+    const cx = (box.scrollLeft + box.clientWidth / 2) / box.scrollWidth;
+    const cy = (box.scrollTop + box.clientHeight / 2) / box.scrollHeight;
+    zoom = Math.min(3, Math.max(1, next));
+    $("map").style.setProperty("--zoom", zoom);
+    box.scrollLeft = cx * box.scrollWidth - box.clientWidth / 2;
+    box.scrollTop = cy * box.scrollHeight - box.clientHeight / 2;
+    $("zoomLevel").textContent = zoom + "×";
+    $("zoomIn").disabled = zoom === 3;
+    $("zoomOut").disabled = zoom === 1;
+  }
+  $("zoomIn").onclick = () => setZoom(zoom + 1);
+  $("zoomOut").onclick = () => setZoom(zoom - 1);
 
   // click on the map -> convert the click position back to latitude/longitude
   $("map").onclick = (e) => {
