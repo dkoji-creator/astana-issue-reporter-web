@@ -48,12 +48,18 @@ STATUSES = {"under_review": "Under review", "in_progress": "In progress", "resol
 MAX_FAILED_LOGINS = 5            # Assignment 3, C1: lock the account after 5 wrong passwords
 LOCK_SECONDS = 15 * 60           # ... for 15 minutes
 MAX_REPORTS_PER_10_MIN = 5       # Assignment 3, C1: rate limit on the report form
+SENSOR_ACCOUNT = "sensor@astana-issue-reporter.local"
+FULL_BIN = 90                    # smart bins: at 90 % full a Trash report is created ...
+EMPTY_BIN = 20                   # ... and when the bin is emptied (under 20 %) it is resolved
 SESSION_DAYS = 30
 USE_HTTPS = "--https" in sys.argv
 # behind a host that ends HTTPS for us (PythonAnywhere, Render): cookies get the Secure flag
 # and HSTS is sent, although Python itself talks plain HTTP to the host's proxy
 PUBLIC_HTTPS = USE_HTTPS or os.environ.get("PUBLIC_HTTPS") == "1"
 HOST = os.environ.get("HOST", "127.0.0.1")
+# the shared secret every sensor sends in the X-Sensor-Key header. On the public host it must
+# be set in the environment; the local test key is refused there.
+SENSOR_KEY = os.environ.get("SENSOR_KEY") or (None if PUBLIC_HTTPS else "local-test-key")
 PORT = int(os.environ.get("PORT", "8000"))
 
 
@@ -80,6 +86,8 @@ def prepare_database():
         db.execute("ALTER TABLE notifications ADD COLUMN email_status TEXT")
     if not column_exists(db, "reports", "fill_seconds"):
         db.execute("ALTER TABLE reports ADD COLUMN fill_seconds REAL")
+    if not column_exists(db, "users", "photo_consent"):
+        db.execute("ALTER TABLE users ADD COLUMN photo_consent INTEGER NOT NULL DEFAULT 1")
     db.execute("DELETE FROM sessions WHERE expires_at < datetime('now')")
     db.commit()
     db.close()
@@ -93,6 +101,8 @@ def hash_password(password):
 
 
 def verify_password(password, stored):
+    if stored.count("$") != 3:
+        return False          # e.g. "!" for the sensor account: no password can match
     algorithm, iterations, salt_hex, hash_hex = stored.split("$")
     digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt_hex), int(iterations))
     return hmac.compare_digest(digest.hex(), hash_hex)
@@ -216,7 +226,10 @@ class Handler(BaseHTTPRequestHandler):
                        r.lng,
                        r.description,
                        r.status,
-                       r.photo_path,
+                       -- privacy (final): the photo is public only if its author agreed;
+                       -- the author and the city service always see it
+                       CASE WHEN u.photo_consent = 1 OR r.user_id = ? OR ? = 'admin'
+                            THEN r.photo_path END                              AS photo_path,
                        r.created_at,
                        c.name                                                  AS category,
                        (SELECT COUNT(*) FROM votes v WHERE v.report_id = r.id) AS votes,
@@ -225,10 +238,21 @@ class Handler(BaseHTTPRequestHandler):
                        r.user_id = ?                                           AS mine
                 FROM reports r
                          JOIN categories c ON c.id = r.category_id
+                         JOIN users u ON u.id = r.user_id
                 ORDER BY votes DESC, r.created_at DESC, r.id DESC
                 """,
-                (me, me),
+                (me, user["role"] if user else "", me, me),
             ).fetchall()
+            db.close()
+            self.send_json(200, [dict(r) for r in rows])
+        elif path == "/api/bins":
+            user = self.current_user()
+            if user is None or user["role"] != "admin":
+                self.send_json(403, {"error": "only city service staff (admin) can see the sensors"})
+                return
+            db = get_db()
+            rows = db.execute("SELECT b.id, b.address, b.fill_level, b.battery, b.temperature, b.updated_at, "
+                              "b.open_report_id FROM bins b ORDER BY b.fill_level DESC, b.id").fetchall()
             db.close()
             self.send_json(200, [dict(r) for r in rows])
         elif path == "/api/categories":
@@ -280,6 +304,8 @@ class Handler(BaseHTTPRequestHandler):
             self.change_status(int(self.path.split("/")[3]))
         elif self.path == "/api/notifications/read":
             self.mark_notifications_read()
+        elif self.path == "/api/sensor/reading":
+            self.sensor_reading()
         else:
             self.send_json(404, {"error": "not found"})
 
@@ -289,6 +315,7 @@ class Handler(BaseHTTPRequestHandler):
             email = str(data["email"]).strip().lower()
             password = str(data["password"])
             name = str(data["display_name"]).strip()
+            photo_consent = 1 if data.get("photo_consent") is True else 0
         except (KeyError, ValueError, TypeError, OverflowError):
             self.send_json(400, {"error": "invalid data"})
             return
@@ -304,8 +331,8 @@ class Handler(BaseHTTPRequestHandler):
         db = get_db()
         try:
             cur = db.execute(
-                "INSERT INTO users (email, password_hash, display_name) VALUES (?, ?, ?)",
-                (email, hash_password(password), name),
+                "INSERT INTO users (email, password_hash, display_name, photo_consent) VALUES (?, ?, ?, ?)",
+                (email, hash_password(password), name, photo_consent),
             )
             db.commit()
         except sqlite3.IntegrityError:
@@ -478,6 +505,67 @@ class Handler(BaseHTTPRequestHandler):
                 mailer.send_in_background(DB_FILE, cur.lastrowid, author["email"], author["display_name"],
                                           report_id, message)
             self.send_json(200, {"id": report_id, "status": new_status})
+        finally:
+            db.close()
+
+    # Smart extension: a fill-level sensor in a trash bin sends one reading, for example
+    # {"bin_id": "B-03", "fill_level": 93, "battery": 81, "temperature": 4.5}
+    # with the header X-Sensor-Key. A full bin opens a Trash report on the map by itself;
+    # an emptied bin resolves it. Both changes are written to status_log like a human's.
+    def sensor_reading(self):
+        key = self.headers.get("X-Sensor-Key", "")
+        if SENSOR_KEY is None:
+            self.send_json(503, {"error": "sensor key is not configured on this server"})
+            return
+        if not hmac.compare_digest(key.encode(), SENSOR_KEY.encode()):   # constant-time comparison
+            self.send_json(401, {"error": "wrong sensor key"})
+            return
+        try:
+            data = self.read_json(1_000)
+            bin_id = str(data["bin_id"])
+            fill = int(data["fill_level"])
+            battery = int(data["battery"]) if data.get("battery") is not None else None
+            temperature = float(data["temperature"]) if data.get("temperature") is not None else None
+        except (KeyError, ValueError, TypeError, OverflowError):
+            self.send_json(400, {"error": "invalid data"})
+            return
+        db = get_db()
+        try:
+            bin_row = db.execute("SELECT * FROM bins WHERE id = ?", (bin_id,)).fetchone()
+            if bin_row is None:
+                self.send_json(404, {"error": "unknown bin"})
+                return
+            try:
+                db.execute("INSERT INTO sensor_readings (bin_id, fill_level, battery, temperature) VALUES (?, ?, ?, ?)",
+                           (bin_id, fill, battery, temperature))
+            except sqlite3.IntegrityError:
+                self.send_json(400, {"error": "fill_level and battery must be 0-100"})
+                return
+            db.execute("UPDATE bins SET fill_level = ?, battery = ?, temperature = ?, updated_at = datetime('now') "
+                       "WHERE id = ?", (fill, battery, temperature, bin_id))
+            sensor = db.execute("SELECT id FROM users WHERE email = ?", (SENSOR_ACCOUNT,)).fetchone()["id"]
+            report = None
+            if bin_row["open_report_id"]:
+                report = db.execute("SELECT id, status FROM reports WHERE id = ?",
+                                    (bin_row["open_report_id"],)).fetchone()
+            action = "saved"
+            if fill >= FULL_BIN and (report is None or report["status"] == "resolved"):
+                trash = db.execute("SELECT id FROM categories WHERE name = 'Trash'").fetchone()["id"]
+                cur = db.execute(
+                    "INSERT INTO reports (user_id, category_id, description, lat, lng) VALUES (?, ?, ?, ?, ?)",
+                    (sensor, trash, f"Bin {bin_id} at {bin_row['address']} is {fill}% full "
+                                    "(automatic report from the fill-level sensor)", bin_row["lat"], bin_row["lng"]))
+                db.execute("INSERT INTO status_log (report_id, changed_by, old_status, new_status) "
+                           "VALUES (?, ?, NULL, 'under_review')", (cur.lastrowid, sensor))
+                db.execute("UPDATE bins SET open_report_id = ? WHERE id = ?", (cur.lastrowid, bin_id))
+                action = f"report #{cur.lastrowid} created"
+            elif fill < EMPTY_BIN and report is not None and report["status"] != "resolved":
+                db.execute("UPDATE reports SET status = 'resolved' WHERE id = ?", (report["id"],))
+                db.execute("INSERT INTO status_log (report_id, changed_by, old_status, new_status) "
+                           "VALUES (?, ?, ?, 'resolved')", (report["id"], sensor, report["status"]))
+                action = f"report #{report['id']} resolved (bin emptied)"
+            db.commit()
+            self.send_json(200, {"bin_id": bin_id, "fill_level": fill, "action": action})
         finally:
             db.close()
 

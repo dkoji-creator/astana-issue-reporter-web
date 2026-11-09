@@ -136,6 +136,12 @@
     #authScreen .auth-sub { color: #5f6d7a; font-size: 14px; margin-bottom: 16px; }
     #appContent[hidden] { display: none !important; }
     #authMsg { margin-top: 8px; font-weight: 600; color: #c0392b; }
+    .consent { display: flex; gap: 10px; align-items: flex-start; font-weight: 400; font-size: 14px; margin-top: 12px; }
+    .consent input { width: 22px; height: 22px; flex: none; margin: 0; }
+    .bin { margin: 8px 0; font-size: 14px; }
+    .bin .bar { display: block; height: 10px; margin-top: 3px; border: 1px solid #1b3a5f; border-radius: 5px; overflow: hidden; }
+    .bin .bar i { display: block; height: 100%; background: #1b3a5f; }
+    .bin.full .bar i { background: #c0392b; }
     #msg { margin-top: 8px; font-weight: 600; }
     .legend { font-size: 14px; margin-top: 8px; }
     .legend i {
@@ -199,6 +205,12 @@
         <input id="authEmail" type="email" autocomplete="email">
         <label for="authPassword">Password</label>
         <input id="authPassword" type="password" autocomplete="current-password">
+        <!-- Final (privacy): consent to show this resident's photos to other residents -->
+        <label id="consentField" class="consent" hidden>
+          <input type="checkbox" id="authConsent">
+          Show my report photos to other residents on the public map. Without this, only you and
+          the city service see them. Do not photograph people or car number plates.
+        </label>
         <button id="authSubmit">Log in</button>
         <div id="authMsg"></div>
       </div>
@@ -276,6 +288,10 @@
     </select>
     <p class="muted">Tap a row to open the report and change its status.</p>
     <div id="adminList"></div>
+    <!-- Final, smart extension: simulated fill-level sensors in trash bins -->
+    <h3 style="font-size:16px; margin:14px 0 4px">Smart bins (simulated sensors)</h3>
+    <p class="muted" style="margin:0">A bin at 90% or more opens a Trash report by itself.</p>
+    <div id="binList"></div>
   </div>
 
   <div class="card">
@@ -412,6 +428,7 @@
     $("tabLogin").classList.toggle("active", mode === "login");
     $("tabRegister").classList.toggle("active", mode === "register");
     $("nameField").hidden = mode !== "register";
+    $("consentField").hidden = mode !== "register";
     $("authSubmit").textContent = mode === "login" ? "Log in" : "Sign up";
     $("authPassword").autocomplete = mode === "login" ? "current-password" : "new-password";
     $("authMsg").textContent = "";
@@ -422,7 +439,10 @@
 
   $("authSubmit").onclick = async () => {
     const body = { email: $("authEmail").value, password: $("authPassword").value };
-    if (authMode === "register") body.display_name = $("authName").value;
+    if (authMode === "register") {
+      body.display_name = $("authName").value;
+      body.photo_consent = $("authConsent").checked;
+    }
     const response = await fetch("/api/" + authMode, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -568,6 +588,7 @@
         return b;
       }));
     $("adminList").replaceChildren(...list.slice(0, 10).map(row));
+    loadBins();
     if (list.length > 10) {
       const more = document.createElement("p");
       more.className = "muted";
@@ -575,6 +596,27 @@
       $("adminList").appendChild(more);
     }
   }
+  // smart bins: fill level of every sensor, fullest first
+  async function loadBins() {
+    const response = await fetch("/api/bins");
+    if (!response.ok) return;
+    const bins = await response.json();
+    $("binList").replaceChildren(...bins.map((b) => {
+      const div = document.createElement("div");
+      const fill = b.fill_level ?? 0;
+      div.className = "bin" + (fill >= 90 ? " full" : "");
+      const bar = document.createElement("span");
+      bar.className = "bar";
+      bar.innerHTML = '<i style="width:' + fill + '%"></i>';
+      const text = document.createElement("span");
+      text.textContent = b.id + " " + b.address + " · " + (b.fill_level === null ? "no data" : fill + "%") +
+        (b.battery !== null ? " · battery " + b.battery + "%" : "") + (b.open_report_id ? " · #" + b.open_report_id : "");
+      div.append(text, bar);
+      div.setAttribute("aria-label", text.textContent);
+      return div;
+    }));
+  }
+
   $("adminFilter").onchange = renderAdmin;
   $("adminSort").onchange = renderAdmin;
 

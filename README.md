@@ -50,6 +50,27 @@ touched) and check every requirement that can be checked automatically: R1–R11
 success criteria where possible (sorting by votes), the security measures, and that logins and
 the password lock survive a restart.
 
+## Privacy, backups and the smart extension
+
+- **Photo consent.** At sign-up a resident chooses whether other residents may see their
+  photos. Without consent only the author and the city service see them.
+- **Backups.** `python3 backup.py` writes a checked copy of the database to `backups/` and keeps
+  the newest 14. How to run it every night (Windows Task Scheduler or the PythonAnywhere Tasks
+  tab) is written at the top of the file. Restore: stop the server, copy a backup over `app.db`.
+- **Smart bins (simulated IoT).** Six trash bins have a (simulated) fill-level sensor. Each
+  sensor sends `{"bin_id", "fill_level", "battery", "temperature"}` to `POST /api/sensor/reading`
+  with the header `X-Sensor-Key`. At 90 % the server opens a Trash report on the map by itself;
+  when the bin is emptied (under 20 %) the report is resolved. The admin sees all bins in the
+  dashboard. Try it with the server running:
+  ```
+  python3 simulate_sensor.py
+  ```
+  On the laptop the key is `local-test-key`; on the public host set `SENSOR_KEY` (a long random
+  string) in the WSGI file, otherwise the endpoint answers 503.
+- **Data analysis.** `analysis/queries.sql` holds the three questions from the report;
+  `python3 analysis/make_charts.py` (needs `pip install matplotlib`) prints the answers and draws
+  the charts in `analysis/charts/`.
+
 ## Final user test (success criteria)
 
 The protocol is in [docs/FINAL_TEST.md](docs/FINAL_TEST.md). The page measures how long each
@@ -71,6 +92,9 @@ results, and `node tests/check_360px.js` checks the 360 px criterion automatical
 | `check_password.py`, `injection_demo.py` | Assignment 3 evidence: hashed passwords, why we use `?` in SQL |
 | `tests/test_api.py` | Automatic tests |
 | `final_test.py`, `tests/check_360px.js` | Final user test: times per tester, 360 px check |
+| `backup.py` | Daily database backup with integrity check |
+| `simulate_sensor.py` | Plays six bin sensors (smart extension) |
+| `analysis/` | SQL queries and charts of the data analysis |
 | `static/` | Logo, icon set, map picture, how-to video with captions, sound (Assignment 4) |
 | `media_src/` | Originals and the scripts that made every media file (all own work) |
 | `docs/` | Deployment guide |
@@ -95,6 +119,7 @@ results, and `node tests/check_360px.js` checks the 360 px criterion automatical
 | `APP_DB`, `APP_UPLOADS` | `app.db`, `uploads/` | Database file and photo folder |
 | `PUBLIC_HTTPS` | off (`1` in `wsgi.py`) | Secure cookie and HSTS when the host serves HTTPS |
 | `SITE_URL` | `http://127.0.0.1:8000` | Link inside the e-mails |
+| `SENSOR_KEY` | `local-test-key` on the laptop, none on the host | Shared secret of the bin sensors |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `MAIL_FROM` | not set | Real e-mail; without them letters are saved to `outbox/` |
 
 ## Measuring the page (Assignment 4, R10)

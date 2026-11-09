@@ -6,7 +6,9 @@ CREATE TABLE users (
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
   role TEXT NOT NULL DEFAULT 'resident' CHECK (role IN ('resident', 'admin')),
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  -- Final (privacy): 1 = other residents may see this user's photos
+  photo_consent INTEGER NOT NULL DEFAULT 1 CHECK (photo_consent IN (0, 1))
 );
 
 CREATE TABLE categories (
@@ -68,4 +70,26 @@ CREATE TABLE login_attempts (
   email TEXT PRIMARY KEY,
   failed INTEGER NOT NULL DEFAULT 0,
   locked_until REAL NOT NULL DEFAULT 0
+);
+
+-- Final, smart extension: simulated fill-level sensors (rows for the bins: migrations.sql)
+CREATE TABLE bins (
+  id TEXT PRIMARY KEY,                       -- printed on the bin, e.g. B-01
+  address TEXT NOT NULL,
+  lat REAL NOT NULL CHECK (lat BETWEEN 51.0 AND 51.3),
+  lng REAL NOT NULL CHECK (lng BETWEEN 71.2 AND 71.7),
+  fill_level INTEGER CHECK (fill_level BETWEEN 0 AND 100),
+  battery INTEGER CHECK (battery BETWEEN 0 AND 100),
+  temperature REAL,
+  updated_at TEXT,
+  open_report_id INTEGER REFERENCES reports(id) ON DELETE SET NULL
+);
+
+CREATE TABLE sensor_readings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bin_id TEXT NOT NULL REFERENCES bins(id) ON DELETE CASCADE,
+  fill_level INTEGER NOT NULL CHECK (fill_level BETWEEN 0 AND 100),
+  battery INTEGER CHECK (battery BETWEEN 0 AND 100),
+  temperature REAL,
+  received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

@@ -221,6 +221,70 @@ class SecurityAfterRestart(ServerTest):
         self.assertEqual(self.client().login("user11@example.kz")[0], 429)       # still locked
 
 
+class PrivacyBackupAndSensors(ServerTest):
+    """Aibar's final features: photo consent, backup, smart bins."""
+
+    def sensor(self, data, key="local-test-key"):
+        request = urllib.request.Request(f"http://127.0.0.1:{self.port}/api/sensor/reading", method="POST",
+                                         data=json.dumps(data).encode(),
+                                         headers={"Content-Type": "application/json", "X-Sensor-Key": key})
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                return response.status, json.loads(response.read())
+        except urllib.error.HTTPError as error:
+            return error.code, json.loads(error.read())
+
+    def test_photo_hidden_without_consent(self):
+        pixel = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8"
+                 "/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==")
+        author = self.client()
+        author.call("POST", "/api/register", {"email": "shy@example.kz", "password": "Secret123",
+                                              "display_name": "Shy", "photo_consent": False})
+        report_id = self.new_report(author, photo=pixel)[1]["id"]
+
+        def photo_seen_by(client):
+            return next(r for r in client.call("GET", "/api/reports")[1] if r["id"] == report_id)["photo_path"]
+
+        other = self.client()
+        other.login("user3@example.kz")
+        admin = self.client()
+        admin.login("user1@example.kz")
+        self.assertIsNone(photo_seen_by(other))          # another resident: no photo
+        self.assertIsNotNone(photo_seen_by(author))      # the author sees it
+        self.assertIsNotNone(photo_seen_by(admin))       # the city service sees it
+
+    def test_backup_copy_is_complete(self):
+        backups = Path(self.tmp.name) / "backups"
+        env = dict(self.env, APP_BACKUPS=str(backups))
+        out = subprocess.run([sys.executable, str(ROOT / "backup.py")], env=env, capture_output=True, text=True)
+        self.assertIn("integrity ok", out.stdout)
+        copy = sqlite3.connect(next(backups.glob("app-*.db")))
+        self.assertEqual(copy.execute("SELECT COUNT(*) FROM users").fetchone(),
+                         tuple(self.query("SELECT COUNT(*) FROM users")[0]))
+        copy.close()
+
+    def test_full_bin_opens_and_empty_bin_resolves_report(self):
+        self.assertEqual(self.sensor({"bin_id": "B-02", "fill_level": 50}, key="wrong")[0], 401)
+        self.assertEqual(self.sensor({"bin_id": "B-99", "fill_level": 50})[0], 404)
+        self.assertEqual(self.sensor({"bin_id": "B-02", "fill_level": 150})[0], 400)
+        code, result = self.sensor({"bin_id": "B-02", "fill_level": 93, "battery": 80})
+        self.assertTrue(result["action"].startswith("report #"))
+        report_id = int(result["action"].split("#")[1].split()[0])
+        self.assertEqual(self.sensor({"bin_id": "B-02", "fill_level": 97})[1]["action"], "saved")   # no duplicate
+        row = self.query("SELECT c.name, u.email, r.status FROM reports r JOIN categories c ON c.id = r.category_id "
+                         "JOIN users u ON u.id = r.user_id WHERE r.id = ?", (report_id,))[0]
+        self.assertEqual(row, ("Trash", "sensor@astana-issue-reporter.local", "under_review"))
+        self.sensor({"bin_id": "B-02", "fill_level": 5})
+        self.assertEqual(self.query("SELECT status FROM reports WHERE id = ?", (report_id,))[0][0], "resolved")
+        self.assertEqual(self.client().login("sensor@astana-issue-reporter.local", "!")[0], 401)   # no login
+        admin = self.client()
+        admin.login("user1@example.kz")
+        self.assertEqual(admin.call("GET", "/api/bins")[0], 200)
+        resident = self.client()
+        resident.login("user4@example.kz")
+        self.assertEqual(resident.call("GET", "/api/bins")[0], 403)
+
+
 class PublicHostingEntry(ServerTest):
     """wsgi.py (PythonAnywhere) gives the same answers as server.py."""
     script = "wsgi.py"
@@ -243,6 +307,13 @@ class PublicHostingEntry(ServerTest):
             self.assertEqual(response.status, 201)
         with urllib.request.urlopen(base + "/") as response:
             self.assertIn(b"Astana Issue Reporter", response.read())
+        # the local test key for sensors is refused on the public host
+        request = urllib.request.Request(base + "/api/sensor/reading", method="POST",
+                                         data=b'{"bin_id": "B-01", "fill_level": 95}',
+                                         headers={"Content-Type": "application/json", "X-Sensor-Key": "local-test-key"})
+        with self.assertRaises(urllib.error.HTTPError) as caught:
+            urllib.request.urlopen(request)
+        self.assertEqual(caught.exception.code, 503)
 
 if __name__ == "__main__":
     unittest.main()
