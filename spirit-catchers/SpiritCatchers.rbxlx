@@ -369,6 +369,32 @@ function L.rewardText(r): string
 	return table.concat(parts, " + ")
 end
 
+------------------------------------------------------------------ рейтинг недели «Редчайший улов»
+-- очки улова = вес редкости x шанс разновидности (1 к N)
+L.RarityScore = { common = 1, uncommon = 2, rare = 5, epic = 12, legendary = 30, mythic = 80, secret = 200 }
+function L.week(t: number): number
+	return math.floor((t + 3 * 86400) / 604800) -- неделя с понедельника
+end
+
+------------------------------------------------------------------ рейд «Тысяча фонарей»
+-- над улицей появляется Великий фонарный дух. Все светят на него фонарями: каждый удар — зажжённый фонарик.
+-- Если сервер зажжёт нужное число фонариков за время рейда, все участники получают награду.
+L.Raid = {
+	first = 360, every = 900, duration = 100, -- секунды
+	perPlayer = 220, minGoal = 250, maxGoal = 1000,
+	radius = 75, hitEvery = 0.2,
+	reward = { coins = 500, dust = 25, sxp = 200 }, perLantern = 3, -- монет за каждый свой фонарик
+	failShare = 0.3, -- доля награды, если не успели
+}
+function L.raidGoal(players: number): number
+	return math.clamp(L.Raid.perPlayer * players, L.Raid.minGoal, L.Raid.maxGoal)
+end
+
+------------------------------------------------------------------ альбом редких поимок
+L.AlbumMax = 40
+L.AlbumMinRarity = "epic" -- эпические и выше всегда попадают в альбом
+L.AlbumMinOdds = 25 -- и любые разновидности от 1 к 25 (блестящий и реже)
+
 return L
 ]]></string>
           </Properties>
@@ -1948,6 +1974,8 @@ local RevealEv = remote("Reveal")
 local CatchHoldEv = remote("CatchHold")
 local CatchZoneEv = remote("CatchZone") -- мини-игра: метка духа в зоне луча
 local updateBoard -- доска рекордов (ниже)
+local startRaid -- рейд «Тысяча фонарей» (ниже)
+local RaidHitEv = remote("RaidHit")
 local EquipFn = remote("Equip", "RemoteFunction")
 local UpgradeFn = remote("Upgrade", "RemoteFunction")
 local TutorialEv = remote("TutorialDone")
@@ -2107,8 +2135,44 @@ local function chalProgress(plr, d, fn)
 end
 local RARITY_RANK = {}
 for i, k in Catalog.RarityOrder do RARITY_RANK[k] = i end
+-- рейтинг недели: лучший улов игрока за неделю (очки = редкость x шанс разновидности)
+local weekStores = {}
+local weekInfo
+pcall(function() weekInfo = DataStoreService:GetDataStore("SC_RareWeekInfo") end)
+local function weekStore(week: number)
+	if not weekStores[week] then
+		pcall(function() weekStores[week] = DataStoreService:GetOrderedDataStore("SC_RareWeek_" .. week) end)
+	end
+	return weekStores[week]
+end
+local function catchScore(kind: string, variant: string): number
+	local v = Catalog.Variants[variant]
+	local odds = variant ~= "normal" and math.floor(1 / v.chance + 0.5) or 1
+	return (Live.RarityScore[Catalog.Kinds[kind].rarity] or 1) * odds
+end
+local function weeklyCatch(plr, d, kind: string, variant: string)
+	local week = Live.week(os.time())
+	local score = catchScore(kind, variant)
+	if typeof(d.weekBest) ~= "table" or d.weekBest.week ~= week then d.weekBest = { week = week, score = 0 } end
+	if score <= d.weekBest.score then return end
+	d.weekBest = { week = week, score = score, k = kind, v = variant }
+	if d.loadFailed then return end
+	task.spawn(function()
+		local st = weekStore(week)
+		if st then pcall(function() st:SetAsync("u" .. plr.UserId, score) end) end
+		if weekInfo then pcall(function() weekInfo:SetAsync(week .. "_" .. plr.UserId, { k = kind, v = variant }) end) end
+	end)
+end
 local function liveOnCatch(plr, d, kind: string, district: string, variant: string)
 	local rar = Catalog.Kinds[kind].rarity
+	weeklyCatch(plr, d, kind, variant)
+	-- альбом редких поимок
+	local vOdds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
+	if RARITY_RANK[rar] >= RARITY_RANK[Live.AlbumMinRarity] or vOdds >= Live.AlbumMinOdds then
+		d.album = d.album or {}
+		table.insert(d.album, 1, { k = kind, v = variant, t = os.time(), d = district })
+		while #d.album > Live.AlbumMax do table.remove(d.album) end
+	end
 	addSeasonXp(d, Live.Season.catchXp[rar] or 4)
 	chalProgress(plr, d, function(c)
 		if c.type == "catch" then return 1 end
@@ -2223,7 +2287,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {},
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {},
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -2359,6 +2423,16 @@ local function migrate(raw): Profile
 			end
 		end
 		if typeof(raw.title) == "string" and d.titles[raw.title] then d.title = raw.title end
+		if typeof(raw.album) == "table" then
+			for _, e in raw.album do
+				if typeof(e) == "table" and Catalog.Kinds[e.k] and Catalog.Variants[e.v] and #d.album < Live.AlbumMax then
+					table.insert(d.album, { k = e.k, v = e.v, t = math.floor(num(e.t, 0, 1e12, 0)), d = Catalog.Districts[e.d] and e.d or "street" })
+				end
+			end
+		end
+		if typeof(raw.weekBest) == "table" and typeof(raw.weekBest.week) == "number" and typeof(raw.weekBest.score) == "number" then
+			d.weekBest = { week = raw.weekBest.week, score = raw.weekBest.score, k = raw.weekBest.k, v = raw.weekBest.v }
+		end
 	end
 	fillOrders(d)
 	return d
@@ -2449,7 +2523,7 @@ local function pushState(plr)
 			for i, c in list do t[i] = { text = Live.challengeText(c), need = c.need, have = ch.prog[i], done = ch.done[i] } end
 			return { list = t, all = ch.all }
 		end)(),
-		season = ensureSeason(d), title = d.title, titles = d.titles,
+		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -3752,6 +3826,8 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		modOverride = Live.Modifiers[idx].id
 		workspace:SetAttribute("DayMod", modOverride)
 		for _, p in Players:GetPlayers() do pushState(p) end
+	elseif cmd == "raid" then
+		startRaid()
 	elseif cmd == "season" then
 		addSeasonXp(d, Live.Season.tierXp * 3)
 	elseif cmd == "fast" then
@@ -3829,6 +3905,197 @@ task.spawn(function()
 		renderBoard()
 		task.wait(60)
 	end
+end)
+
+-- доска «Редчайший улов недели»
+local function renderRareBoard()
+	local week = Live.week(os.time())
+	local st = weekStore(week)
+	if not st then return end
+	local ok, pages = pcall(function() return st:GetSortedAsync(false, 8) end)
+	if not ok then return end
+	local list = pages:GetCurrentPage()
+	local gui = map.rareGui
+	for _, c in gui:GetChildren() do c:Destroy() end
+	local frame = Instance.new("Frame")
+	frame.Size, frame.BackgroundColor3 = UDim2.fromScale(1, 1), Color3.fromRGB(26, 22, 48)
+	frame.Parent = gui
+	local title = Instance.new("TextLabel")
+	title.Size, title.BackgroundTransparency, title.TextScaled, title.Font = UDim2.new(1, 0, 0.15, 0), 1, true, Enum.Font.GothamBlack
+	title.Text, title.TextColor3 = "РЕДЧАЙШИЙ УЛОВ НЕДЕЛИ", Color3.fromRGB(200, 160, 255)
+	title.Parent = frame
+	for i, e in list do
+		local uid = tonumber(string.sub(e.key, 2))
+		local name = uid and nameCache[uid]
+		if not name and uid then
+			local okN, n = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
+			name = okN and n or ("#" .. uid)
+			nameCache[uid] = name
+		end
+		local what = ""
+		if weekInfo and uid then
+			local okI, info = pcall(function() return weekInfo:GetAsync(week .. "_" .. uid) end)
+			if okI and typeof(info) == "table" and Catalog.Kinds[info.k] and Catalog.Variants[info.v] then
+				what = (info.v ~= "normal" and (Catalog.Variants[info.v].name .. " ") or "") .. Catalog.Kinds[info.k].name
+			end
+		end
+		local row = Instance.new("TextLabel")
+		row.Size, row.Position = UDim2.new(0.94, 0, 0.1, 0), UDim2.new(0.03, 0, 0.16 + (i - 1) * 0.105, 0)
+		row.BackgroundTransparency, row.TextScaled, row.Font = 1, true, Enum.Font.GothamBold
+		row.TextXAlignment = Enum.TextXAlignment.Left
+		row.TextColor3 = i == 1 and Color3.fromRGB(255, 220, 90) or Color3.new(1, 1, 1)
+		row.Text = ("%d. %s: %s (%d очк.)"):format(i, name or "?", what, e.value)
+		row.Parent = frame
+	end
+end
+task.spawn(function()
+	while true do
+		pcall(renderRareBoard)
+		task.wait(90)
+	end
+end)
+
+------------------------------------------------------------------ рейд «Тысяча фонарей»
+local RAID = Live.Raid
+local raid = { active = false, lit = 0, goal = 0, contrib = {}, lastHit = {}, endsAt = 0 }
+local nextRaid = os.clock() + RAID.first
+workspace:SetAttribute("RaidActive", false)
+workspace:SetAttribute("RaidNext", os.time() + RAID.first)
+local raidGiant
+local raidCenter = Vector3.new(0, 15, 72 * Catalog.Worlds.Scale)
+local function buildGiant()
+	local m = Instance.new("Model")
+	m.Name = "RaidGiant"
+	local function part(name, size, offset, color, shape, transp)
+		local p = Instance.new("Part")
+		p.Name, p.Size, p.Color, p.Material = name, size, color, Enum.Material.Neon
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+		if shape then p.Shape = shape end
+		p.Transparency = transp or 0
+		p.CFrame = CFrame.new(raidCenter + offset)
+		p.Parent = m
+		return p
+	end
+	local body = part("Body", Vector3.new(12, 14, 12), Vector3.new(), Color3.fromRGB(255, 150, 60), Enum.PartType.Ball, 0.1)
+	m.PrimaryPart = body
+	part("Cap", Vector3.new(9, 1.6, 9), Vector3.new(0, 7.4, 0), Color3.fromRGB(70, 35, 30), nil)
+	part("Bottom", Vector3.new(7, 1.4, 7), Vector3.new(0, -7.2, 0), Color3.fromRGB(70, 35, 30), nil)
+	for _, x in { -2.4, 2.4 } do
+		part("Eye", Vector3.new(1.8, 2.4, 1.8), Vector3.new(x, 1.5, -5.6), Color3.fromRGB(40, 20, 30), Enum.PartType.Ball)
+	end
+	part("Mouth", Vector3.new(3, 0.8, 1), Vector3.new(0, -1.6, -5.8), Color3.fromRGB(40, 20, 30), nil)
+	for i = 1, 6 do
+		part("Tail", Vector3.new(2.2, 2.6, 2.2), Vector3.new(0, -9 - i * 2.6, 1 + i * 1.2), Color3.fromRGB(255, 120 + i * 15, 60), Enum.PartType.Ball, 0.15)
+	end
+	local light = Instance.new("PointLight")
+	light.Range, light.Brightness, light.Color = 60, 2, Color3.fromRGB(255, 170, 90)
+	light.Parent = body
+	local pe = Instance.new("ParticleEmitter")
+	pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	pe.Color = ColorSequence.new(Color3.fromRGB(255, 220, 140), Color3.fromRGB(255, 120, 60))
+	pe.LightEmission, pe.Rate, pe.Lifetime, pe.Speed = 1, 30, NumberRange.new(2, 3), NumberRange.new(3, 6)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Size = NumberSequence.new(0.8, 0)
+	pe.Parent = body
+	m.Parent = workspace
+	return m
+end
+local function setRaidAttrs()
+	workspace:SetAttribute("RaidActive", raid.active)
+	workspace:SetAttribute("RaidLit", raid.lit)
+	workspace:SetAttribute("RaidGoal", raid.goal)
+	workspace:SetAttribute("RaidEnds", raid.endsAt)
+end
+local function endRaid()
+	if not raid.active then return end
+	raid.active = false
+	local success = raid.lit >= raid.goal
+	if raidGiant then raidGiant:Destroy() raidGiant = nil end
+	for plr, n in raid.contrib do
+		local d = data[plr]
+		if d and plr.Parent and n >= 5 then
+			local share = success and 1 or RAID.failShare
+			local coins = math.floor((RAID.reward.coins + n * RAID.perLantern) * share)
+			local dust = math.floor(RAID.reward.dust * share)
+			d.coins += coins
+			d.dust += dust
+			addSeasonXp(d, math.floor(RAID.reward.sxp * share))
+			persist(plr)
+			pushState(plr)
+			RewardEv:FireClient(plr, { coins = coins, dust = dust })
+			NoticeEv:FireClient(plr, success and ("Тысяча фонарей зажжена! Твои фонарики: %d. +%d монет"):format(n, coins)
+				or ("Не успели зажечь все фонари. Утешительная награда: +%d монет"):format(coins))
+		end
+	end
+	if success then
+		fireworks("Весь сервер")
+		-- в награду по кварталу разлетаются редкие духи
+		for _, dn in { "street", "canal", "market" } do
+			local kind = pickKind(dn)
+			if kind then newSpirit(kind, dn, false, nil, "shiny") end
+		end
+	end
+	raid.contrib, raid.lastHit = {}, {}
+	nextRaid = os.clock() + RAID.every
+	workspace:SetAttribute("RaidNext", os.time() + RAID.every)
+	setRaidAttrs()
+end
+startRaid = function()
+	if raid.active then return end
+	raid.active = true
+	raid.lit = 0
+	raid.goal = Live.raidGoal(#Players:GetPlayers())
+	raid.contrib, raid.lastHit = {}, {}
+	raid.endsAt = os.time() + RAID.duration
+	raid.endClock = os.clock() + RAID.duration
+	raidGiant = buildGiant()
+	setRaidAttrs()
+	for _, p in Players:GetPlayers() do
+		NoticeEv:FireClient(p, "Тысяча фонарей! Над улицей Великий фонарный дух. Свети на него фонарём!")
+	end
+end
+RaidHitEv.OnServerEvent:Connect(function(plr)
+	if not (raid.active and raidGiant and raidGiant.PrimaryPart) then return end
+	local root = rootOf(plr)
+	local d = data[plr]
+	if not (root and d) then return end
+	local now = os.clock()
+	if now - (raid.lastHit[plr] or 0) < RAID.hitEvery then return end
+	raid.lastHit[plr] = now
+	if (root.Position - raidGiant.PrimaryPart.Position).Magnitude > RAID.radius then return end
+	local n = 1 + math.floor((d.levels.power - 1) / 2)
+	raid.lit += n
+	raid.contrib[plr] = (raid.contrib[plr] or 0) + n
+	workspace:SetAttribute("RaidLit", raid.lit)
+	if raid.lit >= raid.goal then endRaid() end
+end)
+task.spawn(function()
+	local warned = false
+	while true do
+		task.wait(0.1)
+		local now = os.clock()
+		if raid.active then
+			if raidGiant and raidGiant.PrimaryPart then
+				local t = now * 0.25
+				local pos = raidCenter + Vector3.new(math.cos(t) * 14, math.sin(now * 1.3) * 1.5, math.sin(t) * 22)
+				raidGiant:PivotTo(CFrame.lookAt(pos, Vector3.new(0, pos.Y, 0) + map.altarPos * Vector3.new(1, 0, 1)))
+			end
+			if now >= (raid.endClock or 0) then endRaid() end
+		else
+			if not warned and nextRaid - now < 30 then
+				warned = true
+				for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, "Через 30 секунд: Тысяча фонарей над улицей!") end
+			end
+			if now >= nextRaid and #Players:GetPlayers() > 0 then
+				warned = false
+				startRaid()
+			end
+		end
+	end
+end)
+Players.PlayerRemoving:Connect(function(plr)
+	raid.contrib[plr] = nil
+	raid.lastHit[plr] = nil
 end)
 
 game:GetService("StarterPlayer").CameraMaxZoomDistance = 40
@@ -4333,6 +4600,15 @@ function Map.build()
 	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
+	-- вторая доска: «Редчайший улов недели»
+	local rareBoard = block("RareBoard", Vector3.new(14, 9, 0.6), CFrame.new(26, 6, 20) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(40, 30, 45), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(26, 3, 14), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(26, 3, 26), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	local rareGui = Instance.new("SurfaceGui")
+	rareGui.Face = Enum.NormalId.Front
+	rareGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	rareGui.PixelsPerStud = 30
+	rareGui.Parent = rareBoard
 
 	---------------------------------------------------------------- детали: бочки, ящики, лодки
 	local props = Random.new(7)
@@ -4406,6 +4682,7 @@ function Map.build()
 		habitats = habitats,
 		gates = gates,
 		boardGui = boardGui,
+		rareGui = rareGui,
 		altar = altar,
 		altarPos = sp(altarPos),
 		spawnCF = spawnCF,
@@ -4485,6 +4762,7 @@ do
 	trackKind = nil
 
 end
+local enterPhoto -- фото-режим (ниже)
 -- бонус способности спутника (доля), например compBonus("reveal") = 0.12
 local function compBonus(key)
 	local c = state.comp
@@ -4734,6 +5012,7 @@ do
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
+	local tabAlbum = K.button(atlasTabs, "Альбом", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
@@ -4785,7 +5064,47 @@ do
 			end
 		end
 	end
-	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList } }
+	-- альбом редких поимок: карточка с 3D-моделью, разновидностью, датой и районом
+	local albumPage = K.make("Frame", { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), BackgroundTransparency = 1, Visible = false }, atlasBody)
+	local albumHead = K.text(albumPage, "Сюда попадают эпические духи и редкие разновидности", { Size = UDim2.new(0.68, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextWrapped = true })
+	local photoB = K.button(albumPage, "Фото-режим", T.pink, { Size = UDim2.new(0.3, 0, 0, 34), Position = UDim2.new(0.7, 0, 0, 0), MaxText = 16 })
+	local albumGrid = K.scroll(albumPage, { Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40) })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 168), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, albumGrid)
+	local albumShown = -1
+	local function refreshAlbum()
+		local list = state.album or {}
+		local sig = #list > 0 and (#list .. ":" .. list[1].t) or "0"
+		if sig == albumShown then return end
+		albumShown = sig
+		for _, c in albumGrid:GetChildren() do
+			if c:IsA("Frame") then c:Destroy() end
+		end
+		albumHead.Text = #list == 0 and "Пока пусто: поймай эпического духа или редкую разновидность" or ("Редкие поимки: %d"):format(#list)
+		for i, e in list do
+			local info = Catalog.Kinds[e.k]
+			local vc = Catalog.Variants[e.v]
+			if info and vc then
+				local rar = Catalog.Rarity[info.rarity]
+				local f = K.panel(albumGrid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+				f:FindFirstChildOfClass("UIStroke").Color = e.v ~= "normal" and vc.color or rar.color
+				local holder = K.make("Frame", { Size = UDim2.new(1, -8, 0, 96), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+				K.corner(holder, UDim.new(0, 10))
+				K.gradient(holder, K.darken(e.v ~= "normal" and vc.color or rar.color, 0.3), K.darken(rar.color, 0.8))
+				local m = Spirits.Builders[e.k]()
+				pcall(Spirits.applyVariant, m, e.v)
+				K.viewport(holder, m)
+				K.text(f, (e.v ~= "normal" and (vc.name .. " ") or "") .. info.name, { Size = UDim2.new(1, -8, 0, 34), Position = UDim2.fromOffset(4, 102), MaxText = 15, TextWrapped = true })
+				local dn = Catalog.Districts[e.d]
+				K.text(f, os.date("%d.%m  %H:%M", e.t) .. (dn and ("\n" .. dn.name) or ""), { Size = UDim2.new(1, -8, 0, 28), Position = UDim2.fromOffset(4, 136), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextWrapped = true })
+			end
+		end
+	end
+	tabAlbum.Activated:Connect(refreshAlbum)
+	photoB.Activated:Connect(function()
+		K.close(atlasW)
+		if enterPhoto then enterPhoto() end
+	end)
+	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList }, { tabAlbum, albumPage } }
 	for _, pair in atlasPages do
 		pair[1].Activated:Connect(function()
 			for _, other in atlasPages do
@@ -4951,6 +5270,7 @@ do
 	end
 
 	refreshAtlas = function()
+		if albumPage.Visible then refreshAlbum() end
 		for _, c in cards do refreshCard(c) end
 		refreshTiers()
 		refreshAch()
@@ -5158,6 +5478,96 @@ do
 			K.recolor(row.b, on and Color3.fromRGB(80, 80, 95) or (owned and T.blue or Color3.fromRGB(60, 60, 75)))
 		end
 	end
+end
+------------------------------------------------------------------ рейд «Тысяча фонарей» и фото-режим
+do
+	local Live = Catalog.Live
+	local raidBar = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -72), Size = UDim2.fromOffset(380, 46), BackgroundColor3 = Color3.fromRGB(60, 35, 25), Visible = false }, hud)
+	K.corner(raidBar, UDim.new(0, 14))
+	K.stroke(raidBar, T.ink, 3)
+	local raidL = K.text(raidBar, "", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 3), MaxText = 17 })
+	local _, raidFill = K.bar(raidBar, Color3.fromRGB(255, 170, 60), { Size = UDim2.new(1, -16, 0, 12), Position = UDim2.fromOffset(8, 28) })
+	local lastLit = 0
+	-- летящий в небо бумажный фонарик (видит каждый игрок у себя)
+	local function skyLantern(at)
+		local p = K.make("Part", {
+			Size = Vector3.new(1.2, 1.5, 1.2), Shape = Enum.PartType.Ball, Material = Enum.Material.Neon, Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+			Color = Color3.fromHSV(0.06 + math.random() * 0.06, 0.7, 1), CFrame = CFrame.new(at + Vector3.new(math.random(-12, 12), math.random(-4, 4), math.random(-12, 12))),
+		}, workspace)
+		TweenService:Create(p, TweenInfo.new(7, Enum.EasingStyle.Sine), { CFrame = p.CFrame + Vector3.new(math.random(-6, 6), 60, math.random(-6, 6)), Transparency = 1 }):Play()
+		task.delay(7.1, function() p:Destroy() end)
+	end
+	task.spawn(function()
+		while true do
+			task.wait(0.2)
+			local active = workspace:GetAttribute("RaidActive") == true
+			local nextAt = workspace:GetAttribute("RaidNext") or 0
+			local soon = not active and nextAt - os.time() <= 60 and nextAt - os.time() > 0
+			raidBar.Visible = active or soon
+			if active then
+				local lit, goal = workspace:GetAttribute("RaidLit") or 0, math.max(workspace:GetAttribute("RaidGoal") or 1, 1)
+				local left = math.max(0, (workspace:GetAttribute("RaidEnds") or 0) - os.time())
+				raidL.Text = ("Тысяча фонарей: %d/%d   %d:%02d"):format(lit, goal, left // 60, left % 60)
+				raidFill.Size = UDim2.fromScale(math.clamp(lit / goal, 0, 1), 1)
+				local giant = workspace:FindFirstChild("RaidGiant")
+				local gp = giant and giant.PrimaryPart
+				if gp and lit > lastLit and not state.settings.reduced then
+					for _ = 1, math.min(lit - lastLit, 3) do skyLantern(gp.Position) end
+				end
+				lastLit = lit
+				-- свечу на духа: сервер сам проверит расстояние и частоту
+				local r = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+				if gp and r then
+					local d = gp.Position - r.Position
+					local flat = Vector3.new(d.X, 0, d.Z)
+					local look = r.CFrame.LookVector
+					if d.Magnitude < Live.Raid.radius and flat.Magnitude > 0.1 and flat.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.6 then
+						remotes.RaidHit:FireServer()
+					end
+				end
+			elseif soon then
+				local left = nextAt - os.time()
+				raidL.Text = ("Тысяча фонарей через %d:%02d. Иди на улицу фонарей!"):format(left // 60, left % 60)
+				raidFill.Size = UDim2.fromScale(0, 1)
+				lastLit = 0
+			else
+				lastLit = 0
+			end
+		end
+	end)
+
+	-- фото-режим: прячет интерфейс, остаются две маленькие кнопки
+	local photoGui = K.make("ScreenGui", { Name = "PhotoMode", ResetOnSpawn = false, Enabled = false, DisplayOrder = 50 }, plr:WaitForChild("PlayerGui"))
+	local shot = K.button(photoGui, "Снимок", T.pink, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -110, 1, -24), Size = UDim2.fromOffset(130, 46), MaxText = 18 })
+	local leave = K.button(photoGui, "Выйти", Color3.fromRGB(110, 110, 140), { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -250, 1, -24), Size = UDim2.fromOffset(110, 46), MaxText = 18 })
+	local hint = K.text(photoGui, "Поверни камеру и нажми «Снимок»", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(420, 30), MaxText = 18 })
+	enterPhoto = function()
+		gui.Enabled = false
+		photoGui.Enabled = true
+		hint.Visible = true
+		task.delay(3, function() hint.Visible = false end)
+	end
+	leave.Activated:Connect(function()
+		photoGui.Enabled = false
+		gui.Enabled = true
+	end)
+	shot.Activated:Connect(function()
+		shot.Visible, leave.Visible = false, false
+		task.wait(0.1)
+		local ok = pcall(function()
+			local cs = game:GetService("CaptureService")
+			cs:CaptureScreenshot(function(id)
+				pcall(function() cs:PromptSaveCapturesToGallery({ id }, function() end) end)
+			end)
+		end)
+		task.wait(0.4)
+		shot.Visible, leave.Visible = true, true
+		if not ok then
+			hint.Text = "Сделай скриншот кнопками телефона"
+			hint.Visible = true
+			task.delay(3, function() hint.Visible = false end)
+		end
+	end)
 end
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins

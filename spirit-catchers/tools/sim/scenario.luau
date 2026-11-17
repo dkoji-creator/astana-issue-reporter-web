@@ -192,6 +192,27 @@ local sr = inv("ClaimSeason", 1)
 if not (sr and sr.ok) then table.insert(SIM.errors, "награда сезона: " .. tostring(sr and sr.msg)) end
 inv("ClaimSeason", 5)
 inv("SetTitle", "")
+inv("Admin", "raid")
+frames(5)
+if not workspace:GetAttribute("RaidActive") then table.insert(SIM.errors, "рейд не начался") end
+do
+	local g = workspace:FindFirstChild("RaidGiant")
+	if g and g.PrimaryPart then
+		-- встать перед духом и смотреть на него
+		local gp = g.PrimaryPart.Position
+		local from = gp + Vector3.new(0, -10, 20)
+		plr.Character.HumanoidRootPart.CFrame = CFrame.lookAt(from, Vector3.new(gp.X, from.Y, gp.Z))
+		for _ = 1, 40 do
+			remotes.RaidHit:FireServer()
+			frames(5)
+		end
+		if (workspace:GetAttribute("RaidLit") or 0) <= 0 and workspace:GetAttribute("RaidActive") then table.insert(SIM.errors, "рейд: удары не засчитаны") end
+	else
+		table.insert(SIM.errors, "нет Великого фонарного духа")
+	end
+end
+frames(2200) -- рейд заканчивается по времени
+if workspace:GetAttribute("RaidActive") then table.insert(SIM.errors, "рейд не закончился") end
 frames(20)
 for round = 1, 1 do
 	for _, d in hud:GetDescendants() do

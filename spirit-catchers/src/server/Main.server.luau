@@ -41,6 +41,8 @@ local RevealEv = remote("Reveal")
 local CatchHoldEv = remote("CatchHold")
 local CatchZoneEv = remote("CatchZone") -- мини-игра: метка духа в зоне луча
 local updateBoard -- доска рекордов (ниже)
+local startRaid -- рейд «Тысяча фонарей» (ниже)
+local RaidHitEv = remote("RaidHit")
 local EquipFn = remote("Equip", "RemoteFunction")
 local UpgradeFn = remote("Upgrade", "RemoteFunction")
 local TutorialEv = remote("TutorialDone")
@@ -200,8 +202,44 @@ local function chalProgress(plr, d, fn)
 end
 local RARITY_RANK = {}
 for i, k in Catalog.RarityOrder do RARITY_RANK[k] = i end
+-- рейтинг недели: лучший улов игрока за неделю (очки = редкость x шанс разновидности)
+local weekStores = {}
+local weekInfo
+pcall(function() weekInfo = DataStoreService:GetDataStore("SC_RareWeekInfo") end)
+local function weekStore(week: number)
+	if not weekStores[week] then
+		pcall(function() weekStores[week] = DataStoreService:GetOrderedDataStore("SC_RareWeek_" .. week) end)
+	end
+	return weekStores[week]
+end
+local function catchScore(kind: string, variant: string): number
+	local v = Catalog.Variants[variant]
+	local odds = variant ~= "normal" and math.floor(1 / v.chance + 0.5) or 1
+	return (Live.RarityScore[Catalog.Kinds[kind].rarity] or 1) * odds
+end
+local function weeklyCatch(plr, d, kind: string, variant: string)
+	local week = Live.week(os.time())
+	local score = catchScore(kind, variant)
+	if typeof(d.weekBest) ~= "table" or d.weekBest.week ~= week then d.weekBest = { week = week, score = 0 } end
+	if score <= d.weekBest.score then return end
+	d.weekBest = { week = week, score = score, k = kind, v = variant }
+	if d.loadFailed then return end
+	task.spawn(function()
+		local st = weekStore(week)
+		if st then pcall(function() st:SetAsync("u" .. plr.UserId, score) end) end
+		if weekInfo then pcall(function() weekInfo:SetAsync(week .. "_" .. plr.UserId, { k = kind, v = variant }) end) end
+	end)
+end
 local function liveOnCatch(plr, d, kind: string, district: string, variant: string)
 	local rar = Catalog.Kinds[kind].rarity
+	weeklyCatch(plr, d, kind, variant)
+	-- альбом редких поимок
+	local vOdds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
+	if RARITY_RANK[rar] >= RARITY_RANK[Live.AlbumMinRarity] or vOdds >= Live.AlbumMinOdds then
+		d.album = d.album or {}
+		table.insert(d.album, 1, { k = kind, v = variant, t = os.time(), d = district })
+		while #d.album > Live.AlbumMax do table.remove(d.album) end
+	end
 	addSeasonXp(d, Live.Season.catchXp[rar] or 4)
 	chalProgress(plr, d, function(c)
 		if c.type == "catch" then return 1 end
@@ -316,7 +354,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {},
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {},
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -452,6 +490,16 @@ local function migrate(raw): Profile
 			end
 		end
 		if typeof(raw.title) == "string" and d.titles[raw.title] then d.title = raw.title end
+		if typeof(raw.album) == "table" then
+			for _, e in raw.album do
+				if typeof(e) == "table" and Catalog.Kinds[e.k] and Catalog.Variants[e.v] and #d.album < Live.AlbumMax then
+					table.insert(d.album, { k = e.k, v = e.v, t = math.floor(num(e.t, 0, 1e12, 0)), d = Catalog.Districts[e.d] and e.d or "street" })
+				end
+			end
+		end
+		if typeof(raw.weekBest) == "table" and typeof(raw.weekBest.week) == "number" and typeof(raw.weekBest.score) == "number" then
+			d.weekBest = { week = raw.weekBest.week, score = raw.weekBest.score, k = raw.weekBest.k, v = raw.weekBest.v }
+		end
 	end
 	fillOrders(d)
 	return d
@@ -542,7 +590,7 @@ local function pushState(plr)
 			for i, c in list do t[i] = { text = Live.challengeText(c), need = c.need, have = ch.prog[i], done = ch.done[i] } end
 			return { list = t, all = ch.all }
 		end)(),
-		season = ensureSeason(d), title = d.title, titles = d.titles,
+		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -1845,6 +1893,8 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		modOverride = Live.Modifiers[idx].id
 		workspace:SetAttribute("DayMod", modOverride)
 		for _, p in Players:GetPlayers() do pushState(p) end
+	elseif cmd == "raid" then
+		startRaid()
 	elseif cmd == "season" then
 		addSeasonXp(d, Live.Season.tierXp * 3)
 	elseif cmd == "fast" then
@@ -1922,6 +1972,197 @@ task.spawn(function()
 		renderBoard()
 		task.wait(60)
 	end
+end)
+
+-- доска «Редчайший улов недели»
+local function renderRareBoard()
+	local week = Live.week(os.time())
+	local st = weekStore(week)
+	if not st then return end
+	local ok, pages = pcall(function() return st:GetSortedAsync(false, 8) end)
+	if not ok then return end
+	local list = pages:GetCurrentPage()
+	local gui = map.rareGui
+	for _, c in gui:GetChildren() do c:Destroy() end
+	local frame = Instance.new("Frame")
+	frame.Size, frame.BackgroundColor3 = UDim2.fromScale(1, 1), Color3.fromRGB(26, 22, 48)
+	frame.Parent = gui
+	local title = Instance.new("TextLabel")
+	title.Size, title.BackgroundTransparency, title.TextScaled, title.Font = UDim2.new(1, 0, 0.15, 0), 1, true, Enum.Font.GothamBlack
+	title.Text, title.TextColor3 = "РЕДЧАЙШИЙ УЛОВ НЕДЕЛИ", Color3.fromRGB(200, 160, 255)
+	title.Parent = frame
+	for i, e in list do
+		local uid = tonumber(string.sub(e.key, 2))
+		local name = uid and nameCache[uid]
+		if not name and uid then
+			local okN, n = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
+			name = okN and n or ("#" .. uid)
+			nameCache[uid] = name
+		end
+		local what = ""
+		if weekInfo and uid then
+			local okI, info = pcall(function() return weekInfo:GetAsync(week .. "_" .. uid) end)
+			if okI and typeof(info) == "table" and Catalog.Kinds[info.k] and Catalog.Variants[info.v] then
+				what = (info.v ~= "normal" and (Catalog.Variants[info.v].name .. " ") or "") .. Catalog.Kinds[info.k].name
+			end
+		end
+		local row = Instance.new("TextLabel")
+		row.Size, row.Position = UDim2.new(0.94, 0, 0.1, 0), UDim2.new(0.03, 0, 0.16 + (i - 1) * 0.105, 0)
+		row.BackgroundTransparency, row.TextScaled, row.Font = 1, true, Enum.Font.GothamBold
+		row.TextXAlignment = Enum.TextXAlignment.Left
+		row.TextColor3 = i == 1 and Color3.fromRGB(255, 220, 90) or Color3.new(1, 1, 1)
+		row.Text = ("%d. %s: %s (%d очк.)"):format(i, name or "?", what, e.value)
+		row.Parent = frame
+	end
+end
+task.spawn(function()
+	while true do
+		pcall(renderRareBoard)
+		task.wait(90)
+	end
+end)
+
+------------------------------------------------------------------ рейд «Тысяча фонарей»
+local RAID = Live.Raid
+local raid = { active = false, lit = 0, goal = 0, contrib = {}, lastHit = {}, endsAt = 0 }
+local nextRaid = os.clock() + RAID.first
+workspace:SetAttribute("RaidActive", false)
+workspace:SetAttribute("RaidNext", os.time() + RAID.first)
+local raidGiant
+local raidCenter = Vector3.new(0, 15, 72 * Catalog.Worlds.Scale)
+local function buildGiant()
+	local m = Instance.new("Model")
+	m.Name = "RaidGiant"
+	local function part(name, size, offset, color, shape, transp)
+		local p = Instance.new("Part")
+		p.Name, p.Size, p.Color, p.Material = name, size, color, Enum.Material.Neon
+		p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+		if shape then p.Shape = shape end
+		p.Transparency = transp or 0
+		p.CFrame = CFrame.new(raidCenter + offset)
+		p.Parent = m
+		return p
+	end
+	local body = part("Body", Vector3.new(12, 14, 12), Vector3.new(), Color3.fromRGB(255, 150, 60), Enum.PartType.Ball, 0.1)
+	m.PrimaryPart = body
+	part("Cap", Vector3.new(9, 1.6, 9), Vector3.new(0, 7.4, 0), Color3.fromRGB(70, 35, 30), nil)
+	part("Bottom", Vector3.new(7, 1.4, 7), Vector3.new(0, -7.2, 0), Color3.fromRGB(70, 35, 30), nil)
+	for _, x in { -2.4, 2.4 } do
+		part("Eye", Vector3.new(1.8, 2.4, 1.8), Vector3.new(x, 1.5, -5.6), Color3.fromRGB(40, 20, 30), Enum.PartType.Ball)
+	end
+	part("Mouth", Vector3.new(3, 0.8, 1), Vector3.new(0, -1.6, -5.8), Color3.fromRGB(40, 20, 30), nil)
+	for i = 1, 6 do
+		part("Tail", Vector3.new(2.2, 2.6, 2.2), Vector3.new(0, -9 - i * 2.6, 1 + i * 1.2), Color3.fromRGB(255, 120 + i * 15, 60), Enum.PartType.Ball, 0.15)
+	end
+	local light = Instance.new("PointLight")
+	light.Range, light.Brightness, light.Color = 60, 2, Color3.fromRGB(255, 170, 90)
+	light.Parent = body
+	local pe = Instance.new("ParticleEmitter")
+	pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+	pe.Color = ColorSequence.new(Color3.fromRGB(255, 220, 140), Color3.fromRGB(255, 120, 60))
+	pe.LightEmission, pe.Rate, pe.Lifetime, pe.Speed = 1, 30, NumberRange.new(2, 3), NumberRange.new(3, 6)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Size = NumberSequence.new(0.8, 0)
+	pe.Parent = body
+	m.Parent = workspace
+	return m
+end
+local function setRaidAttrs()
+	workspace:SetAttribute("RaidActive", raid.active)
+	workspace:SetAttribute("RaidLit", raid.lit)
+	workspace:SetAttribute("RaidGoal", raid.goal)
+	workspace:SetAttribute("RaidEnds", raid.endsAt)
+end
+local function endRaid()
+	if not raid.active then return end
+	raid.active = false
+	local success = raid.lit >= raid.goal
+	if raidGiant then raidGiant:Destroy() raidGiant = nil end
+	for plr, n in raid.contrib do
+		local d = data[plr]
+		if d and plr.Parent and n >= 5 then
+			local share = success and 1 or RAID.failShare
+			local coins = math.floor((RAID.reward.coins + n * RAID.perLantern) * share)
+			local dust = math.floor(RAID.reward.dust * share)
+			d.coins += coins
+			d.dust += dust
+			addSeasonXp(d, math.floor(RAID.reward.sxp * share))
+			persist(plr)
+			pushState(plr)
+			RewardEv:FireClient(plr, { coins = coins, dust = dust })
+			NoticeEv:FireClient(plr, success and ("Тысяча фонарей зажжена! Твои фонарики: %d. +%d монет"):format(n, coins)
+				or ("Не успели зажечь все фонари. Утешительная награда: +%d монет"):format(coins))
+		end
+	end
+	if success then
+		fireworks("Весь сервер")
+		-- в награду по кварталу разлетаются редкие духи
+		for _, dn in { "street", "canal", "market" } do
+			local kind = pickKind(dn)
+			if kind then newSpirit(kind, dn, false, nil, "shiny") end
+		end
+	end
+	raid.contrib, raid.lastHit = {}, {}
+	nextRaid = os.clock() + RAID.every
+	workspace:SetAttribute("RaidNext", os.time() + RAID.every)
+	setRaidAttrs()
+end
+startRaid = function()
+	if raid.active then return end
+	raid.active = true
+	raid.lit = 0
+	raid.goal = Live.raidGoal(#Players:GetPlayers())
+	raid.contrib, raid.lastHit = {}, {}
+	raid.endsAt = os.time() + RAID.duration
+	raid.endClock = os.clock() + RAID.duration
+	raidGiant = buildGiant()
+	setRaidAttrs()
+	for _, p in Players:GetPlayers() do
+		NoticeEv:FireClient(p, "Тысяча фонарей! Над улицей Великий фонарный дух. Свети на него фонарём!")
+	end
+end
+RaidHitEv.OnServerEvent:Connect(function(plr)
+	if not (raid.active and raidGiant and raidGiant.PrimaryPart) then return end
+	local root = rootOf(plr)
+	local d = data[plr]
+	if not (root and d) then return end
+	local now = os.clock()
+	if now - (raid.lastHit[plr] or 0) < RAID.hitEvery then return end
+	raid.lastHit[plr] = now
+	if (root.Position - raidGiant.PrimaryPart.Position).Magnitude > RAID.radius then return end
+	local n = 1 + math.floor((d.levels.power - 1) / 2)
+	raid.lit += n
+	raid.contrib[plr] = (raid.contrib[plr] or 0) + n
+	workspace:SetAttribute("RaidLit", raid.lit)
+	if raid.lit >= raid.goal then endRaid() end
+end)
+task.spawn(function()
+	local warned = false
+	while true do
+		task.wait(0.1)
+		local now = os.clock()
+		if raid.active then
+			if raidGiant and raidGiant.PrimaryPart then
+				local t = now * 0.25
+				local pos = raidCenter + Vector3.new(math.cos(t) * 14, math.sin(now * 1.3) * 1.5, math.sin(t) * 22)
+				raidGiant:PivotTo(CFrame.lookAt(pos, Vector3.new(0, pos.Y, 0) + map.altarPos * Vector3.new(1, 0, 1)))
+			end
+			if now >= (raid.endClock or 0) then endRaid() end
+		else
+			if not warned and nextRaid - now < 30 then
+				warned = true
+				for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, "Через 30 секунд: Тысяча фонарей над улицей!") end
+			end
+			if now >= nextRaid and #Players:GetPlayers() > 0 then
+				warned = false
+				startRaid()
+			end
+		end
+	end
+end)
+Players.PlayerRemoving:Connect(function(plr)
+	raid.contrib[plr] = nil
+	raid.lastHit[plr] = nil
 end)
 
 game:GetService("StarterPlayer").CameraMaxZoomDistance = 40

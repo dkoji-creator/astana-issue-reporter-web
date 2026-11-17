@@ -429,6 +429,15 @@ function Map.build()
 	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
+	-- вторая доска: «Редчайший улов недели»
+	local rareBoard = block("RareBoard", Vector3.new(14, 9, 0.6), CFrame.new(26, 6, 20) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(40, 30, 45), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(26, 3, 14), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(26, 3, 26), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	local rareGui = Instance.new("SurfaceGui")
+	rareGui.Face = Enum.NormalId.Front
+	rareGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	rareGui.PixelsPerStud = 30
+	rareGui.Parent = rareBoard
 
 	---------------------------------------------------------------- детали: бочки, ящики, лодки
 	local props = Random.new(7)
@@ -502,6 +511,7 @@ function Map.build()
 		habitats = habitats,
 		gates = gates,
 		boardGui = boardGui,
+		rareGui = rareGui,
 		altar = altar,
 		altarPos = sp(altarPos),
 		spawnCF = spawnCF,

@@ -115,4 +115,30 @@ function L.rewardText(r): string
 	return table.concat(parts, " + ")
 end
 
+------------------------------------------------------------------ рейтинг недели «Редчайший улов»
+-- очки улова = вес редкости x шанс разновидности (1 к N)
+L.RarityScore = { common = 1, uncommon = 2, rare = 5, epic = 12, legendary = 30, mythic = 80, secret = 200 }
+function L.week(t: number): number
+	return math.floor((t + 3 * 86400) / 604800) -- неделя с понедельника
+end
+
+------------------------------------------------------------------ рейд «Тысяча фонарей»
+-- над улицей появляется Великий фонарный дух. Все светят на него фонарями: каждый удар — зажжённый фонарик.
+-- Если сервер зажжёт нужное число фонариков за время рейда, все участники получают награду.
+L.Raid = {
+	first = 360, every = 900, duration = 100, -- секунды
+	perPlayer = 220, minGoal = 250, maxGoal = 1000,
+	radius = 75, hitEvery = 0.2,
+	reward = { coins = 500, dust = 25, sxp = 200 }, perLantern = 3, -- монет за каждый свой фонарик
+	failShare = 0.3, -- доля награды, если не успели
+}
+function L.raidGoal(players: number): number
+	return math.clamp(L.Raid.perPlayer * players, L.Raid.minGoal, L.Raid.maxGoal)
+end
+
+------------------------------------------------------------------ альбом редких поимок
+L.AlbumMax = 40
+L.AlbumMinRarity = "epic" -- эпические и выше всегда попадают в альбом
+L.AlbumMinOdds = 25 -- и любые разновидности от 1 к 25 (блестящий и реже)
+
 return L

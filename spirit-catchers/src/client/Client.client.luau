@@ -47,6 +47,7 @@ do
 	trackKind = nil
 
 end
+local enterPhoto -- фото-режим (ниже)
 -- бонус способности спутника (доля), например compBonus("reveal") = 0.12
 local function compBonus(key)
 	local c = state.comp
@@ -296,6 +297,7 @@ do
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
+	local tabAlbum = K.button(atlasTabs, "Альбом", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
@@ -347,7 +349,47 @@ do
 			end
 		end
 	end
-	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList } }
+	-- альбом редких поимок: карточка с 3D-моделью, разновидностью, датой и районом
+	local albumPage = K.make("Frame", { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), BackgroundTransparency = 1, Visible = false }, atlasBody)
+	local albumHead = K.text(albumPage, "Сюда попадают эпические духи и редкие разновидности", { Size = UDim2.new(0.68, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextWrapped = true })
+	local photoB = K.button(albumPage, "Фото-режим", T.pink, { Size = UDim2.new(0.3, 0, 0, 34), Position = UDim2.new(0.7, 0, 0, 0), MaxText = 16 })
+	local albumGrid = K.scroll(albumPage, { Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40) })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 168), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, albumGrid)
+	local albumShown = -1
+	local function refreshAlbum()
+		local list = state.album or {}
+		local sig = #list > 0 and (#list .. ":" .. list[1].t) or "0"
+		if sig == albumShown then return end
+		albumShown = sig
+		for _, c in albumGrid:GetChildren() do
+			if c:IsA("Frame") then c:Destroy() end
+		end
+		albumHead.Text = #list == 0 and "Пока пусто: поймай эпического духа или редкую разновидность" or ("Редкие поимки: %d"):format(#list)
+		for i, e in list do
+			local info = Catalog.Kinds[e.k]
+			local vc = Catalog.Variants[e.v]
+			if info and vc then
+				local rar = Catalog.Rarity[info.rarity]
+				local f = K.panel(albumGrid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+				f:FindFirstChildOfClass("UIStroke").Color = e.v ~= "normal" and vc.color or rar.color
+				local holder = K.make("Frame", { Size = UDim2.new(1, -8, 0, 96), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+				K.corner(holder, UDim.new(0, 10))
+				K.gradient(holder, K.darken(e.v ~= "normal" and vc.color or rar.color, 0.3), K.darken(rar.color, 0.8))
+				local m = Spirits.Builders[e.k]()
+				pcall(Spirits.applyVariant, m, e.v)
+				K.viewport(holder, m)
+				K.text(f, (e.v ~= "normal" and (vc.name .. " ") or "") .. info.name, { Size = UDim2.new(1, -8, 0, 34), Position = UDim2.fromOffset(4, 102), MaxText = 15, TextWrapped = true })
+				local dn = Catalog.Districts[e.d]
+				K.text(f, os.date("%d.%m  %H:%M", e.t) .. (dn and ("\n" .. dn.name) or ""), { Size = UDim2.new(1, -8, 0, 28), Position = UDim2.fromOffset(4, 136), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextWrapped = true })
+			end
+		end
+	end
+	tabAlbum.Activated:Connect(refreshAlbum)
+	photoB.Activated:Connect(function()
+		K.close(atlasW)
+		if enterPhoto then enterPhoto() end
+	end)
+	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList }, { tabAlbum, albumPage } }
 	for _, pair in atlasPages do
 		pair[1].Activated:Connect(function()
 			for _, other in atlasPages do
@@ -513,6 +555,7 @@ do
 	end
 
 	refreshAtlas = function()
+		if albumPage.Visible then refreshAlbum() end
 		for _, c in cards do refreshCard(c) end
 		refreshTiers()
 		refreshAch()
@@ -720,6 +763,96 @@ do
 			K.recolor(row.b, on and Color3.fromRGB(80, 80, 95) or (owned and T.blue or Color3.fromRGB(60, 60, 75)))
 		end
 	end
+end
+------------------------------------------------------------------ рейд «Тысяча фонарей» и фото-режим
+do
+	local Live = Catalog.Live
+	local raidBar = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -72), Size = UDim2.fromOffset(380, 46), BackgroundColor3 = Color3.fromRGB(60, 35, 25), Visible = false }, hud)
+	K.corner(raidBar, UDim.new(0, 14))
+	K.stroke(raidBar, T.ink, 3)
+	local raidL = K.text(raidBar, "", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 3), MaxText = 17 })
+	local _, raidFill = K.bar(raidBar, Color3.fromRGB(255, 170, 60), { Size = UDim2.new(1, -16, 0, 12), Position = UDim2.fromOffset(8, 28) })
+	local lastLit = 0
+	-- летящий в небо бумажный фонарик (видит каждый игрок у себя)
+	local function skyLantern(at)
+		local p = K.make("Part", {
+			Size = Vector3.new(1.2, 1.5, 1.2), Shape = Enum.PartType.Ball, Material = Enum.Material.Neon, Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+			Color = Color3.fromHSV(0.06 + math.random() * 0.06, 0.7, 1), CFrame = CFrame.new(at + Vector3.new(math.random(-12, 12), math.random(-4, 4), math.random(-12, 12))),
+		}, workspace)
+		TweenService:Create(p, TweenInfo.new(7, Enum.EasingStyle.Sine), { CFrame = p.CFrame + Vector3.new(math.random(-6, 6), 60, math.random(-6, 6)), Transparency = 1 }):Play()
+		task.delay(7.1, function() p:Destroy() end)
+	end
+	task.spawn(function()
+		while true do
+			task.wait(0.2)
+			local active = workspace:GetAttribute("RaidActive") == true
+			local nextAt = workspace:GetAttribute("RaidNext") or 0
+			local soon = not active and nextAt - os.time() <= 60 and nextAt - os.time() > 0
+			raidBar.Visible = active or soon
+			if active then
+				local lit, goal = workspace:GetAttribute("RaidLit") or 0, math.max(workspace:GetAttribute("RaidGoal") or 1, 1)
+				local left = math.max(0, (workspace:GetAttribute("RaidEnds") or 0) - os.time())
+				raidL.Text = ("Тысяча фонарей: %d/%d   %d:%02d"):format(lit, goal, left // 60, left % 60)
+				raidFill.Size = UDim2.fromScale(math.clamp(lit / goal, 0, 1), 1)
+				local giant = workspace:FindFirstChild("RaidGiant")
+				local gp = giant and giant.PrimaryPart
+				if gp and lit > lastLit and not state.settings.reduced then
+					for _ = 1, math.min(lit - lastLit, 3) do skyLantern(gp.Position) end
+				end
+				lastLit = lit
+				-- свечу на духа: сервер сам проверит расстояние и частоту
+				local r = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+				if gp and r then
+					local d = gp.Position - r.Position
+					local flat = Vector3.new(d.X, 0, d.Z)
+					local look = r.CFrame.LookVector
+					if d.Magnitude < Live.Raid.radius and flat.Magnitude > 0.1 and flat.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.6 then
+						remotes.RaidHit:FireServer()
+					end
+				end
+			elseif soon then
+				local left = nextAt - os.time()
+				raidL.Text = ("Тысяча фонарей через %d:%02d. Иди на улицу фонарей!"):format(left // 60, left % 60)
+				raidFill.Size = UDim2.fromScale(0, 1)
+				lastLit = 0
+			else
+				lastLit = 0
+			end
+		end
+	end)
+
+	-- фото-режим: прячет интерфейс, остаются две маленькие кнопки
+	local photoGui = K.make("ScreenGui", { Name = "PhotoMode", ResetOnSpawn = false, Enabled = false, DisplayOrder = 50 }, plr:WaitForChild("PlayerGui"))
+	local shot = K.button(photoGui, "Снимок", T.pink, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -110, 1, -24), Size = UDim2.fromOffset(130, 46), MaxText = 18 })
+	local leave = K.button(photoGui, "Выйти", Color3.fromRGB(110, 110, 140), { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -250, 1, -24), Size = UDim2.fromOffset(110, 46), MaxText = 18 })
+	local hint = K.text(photoGui, "Поверни камеру и нажми «Снимок»", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(420, 30), MaxText = 18 })
+	enterPhoto = function()
+		gui.Enabled = false
+		photoGui.Enabled = true
+		hint.Visible = true
+		task.delay(3, function() hint.Visible = false end)
+	end
+	leave.Activated:Connect(function()
+		photoGui.Enabled = false
+		gui.Enabled = true
+	end)
+	shot.Activated:Connect(function()
+		shot.Visible, leave.Visible = false, false
+		task.wait(0.1)
+		local ok = pcall(function()
+			local cs = game:GetService("CaptureService")
+			cs:CaptureScreenshot(function(id)
+				pcall(function() cs:PromptSaveCapturesToGallery({ id }, function() end) end)
+			end)
+		end)
+		task.wait(0.4)
+		shot.Visible, leave.Visible = true, true
+		if not ok then
+			hint.Text = "Сделай скриншот кнопками телефона"
+			hint.Visible = true
+			task.delay(3, function() hint.Visible = false end)
+		end
+	end)
 end
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
