@@ -224,3 +224,28 @@ def news():
 
 for f in (portal, ticket, crown, news):
     f()
+
+
+def clover():
+    im = canvas(); d = ImageDraw.Draw(im)
+    for a in (45, 135, 225, 315):
+        x, y = 128 + 52 * math.cos(math.radians(a)), 120 + 52 * math.sin(math.radians(a))
+        d.ellipse((x - 54, y - 54, x + 54, y + 54), fill=(80, 210, 100), outline=OUTLINE, width=10)
+    d.line((128, 140, 160, 240), fill=OUTLINE, width=22)
+    d.line((128, 140, 160, 240), fill=(60, 160, 70), width=10)
+    d.ellipse((104, 96, 152, 144), fill=(150, 250, 150), outline=OUTLINE, width=8)
+    finish(im, "luck")
+
+
+def potion():
+    im = canvas(); d = ImageDraw.Draw(im)
+    d.ellipse((40, 90, 216, 244), fill=(90, 230, 120), outline=OUTLINE, width=12)
+    d.rectangle((100, 40, 156, 104), fill=(200, 240, 255), outline=OUTLINE, width=10)
+    d.rounded_rectangle((88, 18, 168, 50), 8, fill=(170, 110, 70), outline=OUTLINE, width=10)
+    d.ellipse((80, 130, 120, 170), fill=(200, 255, 210))
+    d.polygon(star_pts(160, 186, 28, 11), fill=(255, 240, 120), outline=OUTLINE)
+    finish(im, "potion")
+
+
+for f in (clover, potion):
+    f()

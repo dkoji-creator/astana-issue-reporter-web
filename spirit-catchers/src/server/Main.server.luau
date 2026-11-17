@@ -56,6 +56,10 @@ local TeleportFn = remote("Teleport", "RemoteFunction")
 local RedeemFn = remote("Redeem", "RemoteFunction")
 local AdminFn = remote("Admin", "RemoteFunction")
 local NewsSeenEv = remote("NewsSeen")
+local AnnounceEv = remote("Announce") -- объявления о редкой поимке
+local PotionFn = remote("BuyPotion", "RemoteFunction")
+local MessagingService = game:GetService("MessagingService")
+local HttpService = game:GetService("HttpService")
 -- админка: владелец игры (проверка только на сервере)
 local ADMINS = { [8432365972] = true }
 local function isAdmin(plr) return ADMINS[plr.UserId] == true or (game.CreatorType == Enum.CreatorType.User and plr.UserId == game.CreatorId) end
@@ -120,6 +124,26 @@ local function opened(d: Profile)
 	return t
 end
 local function hasPass(d, key) return (d.passes ~= nil and d.passes[key] == true) or (d.owned ~= nil and d.owned[key] == true) end
+-- удача игрока и из чего она сложена
+local function luckOf(d)
+	local L = Catalog.Luck
+	local parts = {}
+	local mult = 1 + math.min(L.levelCap, (d.level - 1) * L.perLevel)
+	if d.level > 1 then table.insert(parts, ("Уровень +%d%%"):format(math.floor((mult - 1) * 100 + 0.5))) end
+	if hasPass(d, "lucky") then
+		mult *= L.pass
+		table.insert(parts, ("Удача ловца x%.1f"):format(L.pass))
+	end
+	if (d.luckUntil or 0) > os.time() then
+		mult *= L.potion
+		table.insert(parts, ("Зелье x%d"):format(L.potion))
+	end
+	if workspace:GetAttribute("MoonActive") then
+		mult *= L.moon
+		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
+	end
+	return mult, parts
+end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
 local function range(d: Profile) return Catalog.upgradeValue("range", d.levels.range) end
@@ -171,7 +195,7 @@ local function migrate(raw): Profile
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
-		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0,
+		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0, luckUntil = 0,
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -220,6 +244,7 @@ local function migrate(raw): Profile
 					end
 				end
 				d.newsSeen = math.floor(num(raw.newsSeen, 0, 1000, 0))
+				d.luckUntil = math.floor(num(raw.luckUntil, 0, 1e12, 0))
 				if typeof(raw.owned) == "table" then
 					for k, v in raw.owned do
 						if Catalog.Money.Passes[k] and v == true then d.owned[k] = true end
@@ -292,6 +317,7 @@ local function pushState(plr)
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
 		newsSeen = d.newsSeen, isAdmin = isAdmin(plr), adminFast = adminFast[plr] == true,
+		luck = (luckOf(d)), luckParts = select(2, luckOf(d)), luckUntil = d.luckUntil or 0,
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
@@ -540,12 +566,32 @@ RunService.Heartbeat:Connect(function(dt)
 
 		if g and s.progress >= 1 then
 			for _, plr in g do
-				local variant = s.variant or "normal"
-				if variant == "normal" and hasPass(data[plr], "lucky") and math.random() < Money.LuckyChance then
-					variant = "shiny" -- «Удача ловца»
+				-- бросок удачи: может улучшить разновидность (каждому участнику — свой)
+				local base = s.variant or "normal"
+				local variant = base
+				local luck = luckOf(data[plr])
+				local baseRank = table.find(Catalog.VariantOrder, base) or 1
+				for vi = #Catalog.VariantOrder, baseRank + 1, -1 do
+					local key = Catalog.VariantOrder[vi]
+					local vc = Catalog.Variants[key]
+					if (not vc.moonOnly or moon.active) and math.random() < vc.chance * luck then
+						variant = key
+						break
+					end
+				end
+				local odds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
+				if odds >= Catalog.Luck.announceLocal then
+					AnnounceEv:FireAllClients({ name = plr.DisplayName, kind = s.kind, variant = variant, odds = odds })
+				end
+				if odds >= Catalog.Luck.announceGlobal then
+					task.spawn(function()
+						pcall(function()
+							MessagingService:PublishAsync("SC_Rare", { name = plr.DisplayName, kind = s.kind, variant = variant, odds = odds, job = game.JobId })
+						end)
+					end)
 				end
 				table.insert(jars[plr], { k = s.kind, v = variant })
-				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant)
+				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant, variant ~= base)
 				local d = data[plr]
 				local xp = Catalog.Progress.XP[info.rarity] or 4
 				d.xp += xp
@@ -1035,6 +1081,38 @@ task.spawn(function()
 	end
 end)
 
+------------------------------------------------------------------ удача: зелья и объявления со всех серверов
+local function addPotion(d)
+	d.luckUntil = math.max(d.luckUntil or 0, os.time()) + Catalog.Luck.potionMinutes * 60
+end
+PotionFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if d.dust < Catalog.Luck.potionDust then return { ok = false, msg = ("Нужно %d пыли"):format(Catalog.Luck.potionDust) } end
+	d.dust -= Catalog.Luck.potionDust
+	addPotion(d)
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+task.spawn(function()
+	pcall(function()
+		MessagingService:SubscribeAsync("SC_Rare", function(msg)
+			local m = msg.Data
+			if typeof(m) == "table" and m.job ~= game.JobId and Catalog.Kinds[m.kind] and Catalog.Variants[m.variant] then
+				AnnounceEv:FireAllClients({ name = tostring(m.name), kind = m.kind, variant = m.variant, odds = tonumber(m.odds) or 0, global = true })
+			end
+		end)
+	end)
+end)
+-- раз в 30 с обновляем у клиентов удачу (зелье истекает, луна меняется)
+task.spawn(function()
+	while true do
+		task.wait(30)
+		for _, plr in Players:GetPlayers() do pushState(plr) end
+	end
+end)
+
 ------------------------------------------------------------------ донат
 local function applyPassEffects(plr)
 	local d = data[plr]
@@ -1130,6 +1208,11 @@ MarketplaceService.ProcessReceipt = function(info)
 	end
 	if granted then
 		-- покупка навсегда
+	elseif info.ProductId == Money.Products.luckPotion.id then
+		addPotion(d)
+		pushState(plr)
+		NoticeEv:FireClient(plr, "Зелье удачи выпито: удача x2 на 15 минут!")
+		granted = true
 	elseif info.ProductId == Money.Products.summonMoon.id and Money.Products.summonMoon.id ~= 0 then
 		summonMoon()
 		for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, plr.Name .. " призвал Красную луну!") end

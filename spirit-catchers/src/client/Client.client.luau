@@ -111,11 +111,18 @@ btnAdmin.Visible = false
 for i, b in { btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
 
 ------------------------------------------------------------------ HUD: справа валюты и уровень
-local rightCol = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 140), BackgroundTransparency = 1 }, hud)
+local rightCol = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 190), BackgroundTransparency = 1 }, hud)
 K.make("UIListLayout", { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, rightCol)
 local coinPill, coinL = K.pill(rightCol, "coin", Color3.fromRGB(230, 170, 30), 160)
 local dustPill, dustL = K.pill(rightCol, "dust", T.purple, 160)
 coinPill.LayoutOrder, dustPill.LayoutOrder = 1, 2
+local luckPill = K.make("TextButton", { Size = UDim2.fromOffset(160, 40), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, LayoutOrder = 4 }, rightCol)
+K.corner(luckPill, UDim.new(1, 0))
+K.stroke(luckPill, T.ink, 3)
+K.gradient(luckPill, Color3.fromRGB(110, 230, 130), Color3.fromRGB(40, 130, 70))
+K.icon(luckPill, "luck", { Size = UDim2.fromOffset(46, 46), Position = UDim2.fromOffset(-12, -4) })
+local luckL = K.text(luckPill, "Удача x1", { Size = UDim2.new(1, -46, 0, 20), Position = UDim2.fromOffset(38, 2), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17 })
+local luckSub = K.text(luckPill, "", { Size = UDim2.new(1, -46, 0, 14), Position = UDim2.fromOffset(38, 22), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 11, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
 local levelPill = K.make("Frame", { Size = UDim2.fromOffset(160, 40), BackgroundColor3 = T.panel, LayoutOrder = 3 }, rightCol)
 K.corner(levelPill, UDim.new(1, 0))
 K.stroke(levelPill, T.ink, 3)
@@ -154,6 +161,12 @@ local function showToast(text, secs, color)
 		if toastSeq == my then toast.Visible = false end
 	end)
 end
+
+luckPill.Activated:Connect(function()
+	K.bounce(luckPill)
+	local parts = state.luckParts or {}
+	showToast(#parts > 0 and ("Удача: " .. table.concat(parts, ", ")) or "Удача растёт с уровнем, от зелий, Удачи ловца и в Красную луну", 4, Color3.fromRGB(40, 110, 60))
+end)
 
 ------------------------------------------------------------------ HUD: банка снизу по центру
 local jarPanel = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -12), Size = UDim2.fromOffset(320, 50), BackgroundColor3 = T.panel }, hud)
@@ -287,6 +300,19 @@ for i = #Catalog.RarityOrder, 1, -1 do
 			local v = K.text(chip, "", { Size = UDim2.new(1, -6, 0.4, -2), Position = UDim2.new(0, 3, 0.6, 0), MaxText = 10, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
 			tierChips[kind] = { chip = chip, name = l, vars = v }
 		end
+	end
+end
+do
+	local row = K.panel(tierList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = -1, BackgroundColor3 = Color3.fromRGB(30, 40, 60) })
+	K.text(row, "Шансы", { Size = UDim2.new(0, 110, 1, -10), Position = UDim2.fromOffset(8, 5), MaxText = 16, TextColor3 = T.gold })
+	local chips = K.make("Frame", { Size = UDim2.new(1, -130, 1, -10), Position = UDim2.fromOffset(124, 5), BackgroundTransparency = 1 }, row)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4), VerticalAlignment = Enum.VerticalAlignment.Center }, chips)
+	for i = 2, #Catalog.VariantOrder do
+		local vc = Catalog.Variants[Catalog.VariantOrder[i]]
+		local chip = K.make("Frame", { Size = UDim2.new(1 / (#Catalog.VariantOrder - 1), -4, 1, 0), BackgroundColor3 = K.darken(vc.color, 0.5) }, chips)
+		K.corner(chip, UDim.new(0, 8))
+		K.text(chip, vc.name, { Size = UDim2.new(1, -4, 0.55, 0), Position = UDim2.fromOffset(2, 1), MaxText = 11, StrokeThickness = 1 })
+		K.text(chip, ("1 к %d"):format(math.floor(1 / vc.chance + 0.5)), { Size = UDim2.new(1, -4, 0.4, 0), Position = UDim2.new(0, 2, 0.58, 0), MaxText = 10, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
 	end
 end
 local function refreshTiers()
@@ -539,6 +565,22 @@ for i, key in Catalog.UpgradeOrder do
 		end
 	end)
 	upRows[key] = { title = title, dots = dotList, buy = buy, buyL = buyL }
+end
+do
+	local f = K.panel(upList, { Size = UDim2.new(1, -10, 0, 84), LayoutOrder = 9, BackgroundColor3 = Color3.fromRGB(40, 70, 50) })
+	K.icon(f, "potion", { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(8, 12) })
+	K.text(f, "Зелье удачи x2", { Size = UDim2.new(0.6, -80, 0, 24), Position = UDim2.fromOffset(76, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+	K.text(f, ("Удача x2 на %d минут, время складывается"):format(Catalog.Luck.potionMinutes), { Size = UDim2.new(0.6, -80, 0, 16), Position = UDim2.fromOffset(76, 36), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local b = K.button(f, ("%d пыли"):format(Catalog.Luck.potionDust), T.green, { Size = UDim2.new(0.36, 0, 0, 50), Position = UDim2.new(0.62, 0, 0, 17), MaxText = 16 })
+	b.Activated:Connect(function()
+		local r = remotes.BuyPotion:InvokeServer()
+		if r and r.ok then
+			play("legendary")
+			showToast("Зелье выпито: удача x2!", 2.5, Color3.fromRGB(40, 120, 60))
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
 end
 local function refreshUpgrades()
 	for key, r in upRows do
@@ -858,6 +900,8 @@ local function refreshHUD()
 	levelL.Text = ("Ур. %d"):format(state.level)
 	xpFill.Size = UDim2.fromScale(math.clamp(state.xp / math.max(state.xpNext, 1), 0, 1), 1)
 	btnGift.Badge.Visible = state.dailyReady
+	luckL.Text = ("Удача x%.2f"):format(state.luck or 1)
+	luckL.Text = string.gsub(luckL.Text, "%.?0+$", "")
 	local claimable = false
 	for i, m in Prog.Milestones do
 		if not state.milestones[tostring(i)] and state.distinct >= m.need then claimable = true end
@@ -1084,28 +1128,46 @@ end
 skipBtn.Activated:Connect(finishTutorial)
 
 ------------------------------------------------------------------ стартовый экран
-local intro = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 50 }, gui)
-K.gradient(intro, Color3.fromRGB(40, 30, 80), Color3.fromRGB(10, 8, 24))
-local introVp = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(300, 220), BackgroundTransparency = 1, ZIndex = 51 }, intro)
-local _, introAngle = K.viewport(introVp, Spirits.buildPaperFox(), { ZIndex = 51 })
-K.text(intro, "SPIRIT CATCHERS", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.06, 0), Size = UDim2.fromOffset(620, 70), MaxText = 64, TextColor3 = T.gold, ZIndex = 52, StrokeThickness = 4 })
-K.text(intro, "Лови духов ночного квартала", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.06, 74), Size = UDim2.fromOffset(520, 30), MaxText = 26, ZIndex = 52 })
-local playBtn = K.button(intro, "ИГРАТЬ", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.94, 0), Size = UDim2.fromOffset(260, 66), MaxText = 34, ZIndex = 52 })
-for _, d in playBtn:GetDescendants() do
-	if d:IsA("GuiObject") then d.ZIndex = 53 end
-end
+local GuiService = game:GetService("GuiService")
+local introGui = K.make("ScreenGui", { Name = "Intro", IgnoreGuiInset = true, ResetOnSpawn = false, DisplayOrder = 100 }, plr:WaitForChild("PlayerGui"))
+K.make("UIScale", { Scale = uiScale.Scale }, introGui)
+local intro = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 8, 24) }, introGui)
+local cover = K.make("ImageLabel", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Image = K.Icons.cover or "", ScaleType = Enum.ScaleType.Crop }, intro)
+local shade = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0 }, intro)
+K.make("UIGradient", { Rotation = 90, Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.55, 0.85), NumberSequenceKeypoint.new(1, 0.15) }) }, shade)
+local playBtn = K.button(intro, "ИГРАТЬ", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -40), Size = UDim2.fromOffset(300, 76), MaxText = 40 })
+local badge = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -126), Size = UDim2.fromOffset(330, 40), BackgroundColor3 = Color3.new(1, 1, 1) }, intro)
+K.corner(badge, UDim.new(1, 0))
+K.stroke(badge, T.ink, 3)
+K.gradient(badge, Color3.fromRGB(255, 110, 110), Color3.fromRGB(190, 40, 60))
+K.text(badge, Prog.News.title, { Size = UDim2.new(1, -20, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 18 })
+-- кнопка «дышит», пока ждёт нажатия
+task.spawn(function()
+	local sc = playBtn:FindFirstChild("Bounce") or K.make("UIScale", { Name = "Bounce" }, playBtn)
+	while playBtn.Parent do
+		TweenService:Create(sc, TweenInfo.new(0.7, Enum.EasingStyle.Sine), { Scale = 1.06 }):Play()
+		task.wait(0.7)
+		TweenService:Create(sc, TweenInfo.new(0.7, Enum.EasingStyle.Sine), { Scale = 1 }):Play()
+		task.wait(0.7)
+	end
+end)
+pcall(function() GuiService.TouchControlsEnabled = false end)
+local introAngle = nil
 hud.Visible = false
 local introOpen = true
 playBtn.Activated:Connect(function()
 	if not introOpen then return end
 	introOpen = false
+	pcall(function() GuiService.TouchControlsEnabled = true end)
 	TweenService:Create(intro, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+	TweenService:Create(cover, TweenInfo.new(0.4), { ImageTransparency = 1 }):Play()
 	for _, d in intro:GetDescendants() do
 		if d:IsA("TextLabel") then TweenService:Create(d, TweenInfo.new(0.3), { TextTransparency = 1 }):Play() end
 		if d:IsA("UIStroke") then TweenService:Create(d, TweenInfo.new(0.3), { Transparency = 1 }):Play() end
+		if d:IsA("Frame") or d:IsA("TextButton") then TweenService:Create(d, TweenInfo.new(0.3), { BackgroundTransparency = 1 }):Play() end
 	end
 	task.delay(0.42, function()
-		intro:Destroy()
+		introGui:Destroy()
 		hud.Visible = true
 		if not state.tutorialDone and tut.step == 0 then setStep(1) end
 		if state.tutorialDone and (state.newsSeen or 0) < Prog.NewsVersion then
@@ -1188,7 +1250,62 @@ remotes.SaveResult.OnClientEvent:Connect(function(r)
 end)
 
 local holding = false
-remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant)
+-- рулетка разновидности: имена мелькают, замедляются и останавливаются на выпавшей
+local rollGui = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(440, 130), BackgroundColor3 = T.panel, Visible = false, ZIndex = 20 }, gui)
+K.corner(rollGui, UDim.new(0, 18))
+local rollStroke = K.stroke(rollGui, T.gold, 4)
+local rollName = K.text(rollGui, "", { Size = UDim2.new(1, -20, 0, 54), Position = UDim2.fromOffset(10, 10), MaxText = 44, ZIndex = 21 })
+local rollSub = K.text(rollGui, "", { Size = UDim2.new(1, -20, 0, 30), Position = UDim2.fromOffset(10, 70), MaxText = 22, ZIndex = 21, Font = Enum.Font.GothamBold })
+local function playRoll(kind, variant)
+	local vc = Catalog.Variants[variant]
+	local odds = math.floor(1 / vc.chance + 0.5)
+	rollGui.Visible = true
+	K.pop(rollGui)
+	local order = Catalog.VariantOrder
+	local steps = 16
+	for i = 1, steps do
+		local vk = order[(i % #order) + 1]
+		rollName.Text = Catalog.Variants[vk].name
+		rollName.TextColor3 = Catalog.Variants[vk].color
+		rollStroke.Color = Catalog.Variants[vk].color
+		rollSub.Text = "Бросок удачи..."
+		play("click")
+		task.wait(0.03 + i * i * 0.0012)
+	end
+	rollName.Text = vc.name .. "!"
+	rollName.TextColor3 = vc.color
+	rollStroke.Color = vc.color
+	rollSub.Text = ("%s   1 к %d"):format(Catalog.Kinds[kind].name, odds)
+	K.pop(rollGui)
+	play(odds >= 80 and "legendary" or "catchRare")
+	task.wait(odds >= 80 and 2.4 or 1.4)
+	rollGui.Visible = false
+end
+
+local annGui = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 152), Size = UDim2.fromOffset(520, 44), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, gui)
+K.corner(annGui, UDim.new(0, 14))
+K.stroke(annGui, T.ink, 3)
+local annGrad = K.gradient(annGui, Color3.fromRGB(255, 200, 80), Color3.fromRGB(200, 120, 20))
+local annL = K.text(annGui, "", { Size = UDim2.new(1, -20, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 18 })
+local annSeq = 0
+remotes.Announce.OnClientEvent:Connect(function(a)
+	local vc = Catalog.Variants[a.variant]
+	if not vc then return end
+	annSeq += 1
+	local my = annSeq
+	annL.Text = (a.global and "[Все сервера] " or "") .. ("%s поймал: %s %s (1 к %d)!"):format(a.name, vc.name, Catalog.Kinds[a.kind].name, a.odds)
+	annGrad.Color = ColorSequence.new(K.lighten(vc.color, 0.2), K.darken(vc.color, 0.35))
+	annGui.Visible = true
+	K.pop(annGui)
+	task.delay(5, function()
+		if annSeq == my then annGui.Visible = false end
+	end)
+end)
+
+remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled)
+	if variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25) then
+		task.spawn(playRoll, kind, variant)
+	end
 	holding = false
 	catchEffect(kind, at, coop or 1, variant)
 	if tut.step == 2 or tut.step == 1 then setStep(3) end
@@ -1400,6 +1517,10 @@ RunService.RenderStepped:Connect(function(dt)
 			if c.setAngle then c.setAngle(now * 0.7 + c.frame.LayoutOrder) end
 		end
 	end
+
+	-- удача: таймер зелья
+	local potionLeft = (state.luckUntil or 0) - workspace:GetServerTimeNow()
+	luckSub.Text = potionLeft > 0 and ("Зелье %d:%02d"):format(potionLeft // 60, potionLeft % 60) or "нажми: подробнее"
 
 	-- событие
 	local moonActive = workspace:GetAttribute("MoonActive") == true

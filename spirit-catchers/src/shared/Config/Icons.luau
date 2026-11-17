@@ -20,4 +20,7 @@ return {
 	code = "rbxassetid://128285801735878",
 	admin = "rbxassetid://100153452016284",
 	news = "rbxassetid://101968313426978",
+	luck = "rbxassetid://77839228505202",
+	potion = "rbxassetid://107430251975937",
+	cover = "rbxassetid://77493564744469",
 }

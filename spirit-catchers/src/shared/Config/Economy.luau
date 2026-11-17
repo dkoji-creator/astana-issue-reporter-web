@@ -19,7 +19,7 @@ E.Struggle = {
 }
 
 -- разновидности: выпадают при появлении духа, видны всем игрокам
-E.VariantOrder = { "normal", "giant", "shiny", "shadow", "golden", "rainbow" }
+E.VariantOrder = { "normal", "giant", "shiny", "shadow", "golden", "rainbow", "infinity" }
 E.Variants = {
 	normal = { name = "Обычный", chance = 0, mult = 1, color = Color3.fromRGB(200, 200, 210) },
 	giant = { name = "Гигант", chance = 1 / 12, mult = 2, scale = 1.6, color = Color3.fromRGB(120, 200, 255) },
@@ -27,6 +27,17 @@ E.Variants = {
 	shadow = { name = "Теневой", chance = 1 / 30, mult = 5, moonOnly = true, color = Color3.fromRGB(150, 80, 255) },
 	golden = { name = "Золотой", chance = 1 / 80, mult = 6, color = Color3.fromRGB(255, 200, 40) },
 	rainbow = { name = "Радужный", chance = 1 / 250, mult = 15, color = Color3.fromRGB(255, 100, 200) },
+	infinity = { name = "Бесконечный", chance = 1 / 5000, mult = 100, color = Color3.fromRGB(120, 230, 255) },
+}
+
+-- удача: умножает шанс редкой разновидности при поимке (бросок на сервере)
+E.Luck = {
+	perLevel = 0.02, levelCap = 1, -- +2% за уровень, максимум +100%
+	pass = 1.5, -- «Удача ловца»
+	potion = 2, potionMinutes = 15, potionDust = 40, -- зелье удачи
+	moon = 1.5, -- Красная луна
+	announceLocal = 80, -- объявить на сервере, если шанс 1 к 80 и реже
+	announceGlobal = 250, -- объявить на всех серверах
 }
 
 E.MaxLevel = 5

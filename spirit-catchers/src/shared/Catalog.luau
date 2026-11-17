@@ -16,6 +16,7 @@ C.RarityOrder = Economy.RarityOrder
 C.Struggle = Economy.Struggle
 C.Variants = Economy.Variants
 C.VariantOrder = Economy.VariantOrder
+C.Luck = Economy.Luck
 C.Upgrades = Economy.Upgrades
 C.UpgradeOrder = Economy.UpgradeOrder
 C.MaxLevel = Economy.MaxLevel

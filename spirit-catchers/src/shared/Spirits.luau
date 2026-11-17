@@ -638,12 +638,30 @@ function S.applyVariant(m: Model, variant: string?)
 					p.Material = Enum.Material.Metal
 					p.Reflectance = 0.15
 				end
+			elseif variant == "infinity" then
+				p.Color = p.Material == Enum.Material.Neon and Color3.fromRGB(150, 240, 255) or Color3.fromRGB(14, 10, 36)
+				p.Material = Enum.Material.Neon == p.Material and p.Material or Enum.Material.Glass
+				p.Reflectance = 0.3
 			elseif variant == "shadow" then
 				p.Color = p.Material == Enum.Material.Neon and Color3.fromRGB(190, 110, 255) or Color3.fromRGB(45, 25, 70):Lerp(p.Color, 0.2)
 			end
 		end
 	end
 	local root = m.PrimaryPart
+	if root and variant == "infinity" then
+		-- космическая аура: звёзды и мерцающее кольцо
+		local stars = Instance.new("ParticleEmitter")
+		stars.Name = "VariantFx"
+		stars.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		stars.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255), Color3.fromRGB(120, 200, 255))
+		stars.LightEmission, stars.Rate, stars.Lifetime = 1, 30, NumberRange.new(1, 2)
+		stars.Speed, stars.SpreadAngle = NumberRange.new(2, 5), Vector2.new(180, 180)
+		stars.Size = NumberSequence.new(0.8, 0)
+		stars.Parent = root
+		local l = Instance.new("PointLight")
+		l.Color, l.Range, l.Brightness = Color3.fromRGB(140, 220, 255), 20, 2
+		l.Parent = root
+	end
 	if root and (variant == "shiny" or variant == "rainbow" or variant == "golden" or variant == "shadow") then
 		local pe = Instance.new("ParticleEmitter")
 		pe.Name = "VariantFx"
