@@ -8,6 +8,11 @@ local Monetization = require(Config:WaitForChild("Monetization"))
 
 local C = {}
 C.Worlds = Worlds
+for _, k in SpiritCfg.Kinds or {} do
+	if k.spots then
+		for i, v in k.spots do k.spots[i] = Worlds.sp(v) end
+	end
+end
 C.Order = SpiritCfg.Order
 C.Kinds = SpiritCfg.Kinds
 C.ConditionText = SpiritCfg.ConditionText

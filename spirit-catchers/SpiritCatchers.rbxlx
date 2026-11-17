@@ -37,6 +37,11 @@ local Monetization = require(Config:WaitForChild("Monetization"))
 
 local C = {}
 C.Worlds = Worlds
+for _, k in SpiritCfg.Kinds or {} do
+	if k.spots then
+		for i, v in k.spots do k.spots[i] = Worlds.sp(v) end
+	end
+end
 C.Order = SpiritCfg.Order
 C.Kinds = SpiritCfg.Kinds
 C.ConditionText = SpiritCfg.ConditionText
@@ -108,7 +113,7 @@ return C
 -- Файлы синтезированы для игры (spirit-catchers/audio), загружаются через Open Cloud.
 return {
 	Music = {
-		lantern = "rbxassetid://111560691612542", -- тема квартала: калимба, вода, колокольчики
+		lantern = "rbxassetid://79093164547792", -- фортепианная прелюдия (Бах, BWV 846, общественное достояние)
 		moonLayer = "rbxassetid://89905665544665", -- низкий ритм Красной луны поверх той же темы
 	},
 	Sfx = {
@@ -335,18 +340,65 @@ P.Milestones = {
 	{ need = 18, coins = 6000, dust = 100 },
 }
 
--- облики фонаря: цвет фонаря, цвет луча; price = монеты; source = где получить
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden", "sea", "fog", "vip" }
+-- облики фонаря: цвет фонаря и луча + спецэффекты (частицы, шлейф, ореол), видны всем игрокам.
+-- price = монеты (dust = пыль); source = где получить; tier = ценность облика (подпись в магазине)
+-- fx: tex = sparkles | fire | smoke, colors = цвета частиц, rate/size/life/speed, up = подъём (+) или падение (-),
+--     trail = цвета шлейфа при беге, aura = большой мягкий свет вокруг игрока, burst = вспышка при поимке духа
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "golden", "fog", "ghost", "dragon", "vip" }
+local rgb = Color3.fromRGB
+P.SkinTiers = {
+	common = { name = "Обычный", color = rgb(190, 195, 215) },
+	rare = { name = "Редкий", color = rgb(90, 170, 255) },
+	epic = { name = "Эпический", color = rgb(190, 110, 255) },
+	legendary = { name = "Легендарный", color = rgb(255, 190, 60) },
+	mythic = { name = "Мифический", color = rgb(255, 80, 110) },
+	vip = { name = "VIP", color = rgb(255, 120, 220) },
+}
 P.Skins = {
-	classic = { name = "Классический", lamp = Color3.fromRGB(255, 225, 160), beam = Color3.fromRGB(255, 240, 200), price = 0 },
-	sakura = { name = "Сакура", lamp = Color3.fromRGB(255, 150, 200), beam = Color3.fromRGB(255, 200, 230), source = "Подарок 6-го дня" },
-	moon = { name = "Лунный", lamp = Color3.fromRGB(170, 210, 255), beam = Color3.fromRGB(200, 225, 255), price = 600 },
-	jade = { name = "Нефритовый", lamp = Color3.fromRGB(110, 240, 170), beam = Color3.fromRGB(170, 255, 210), source = "6 видов в Атласе" },
-	ember = { name = "Угольный", lamp = Color3.fromRGB(255, 110, 60), beam = Color3.fromRGB(255, 170, 120), price = 1200, dust = 20 },
-	golden = { name = "Золотой", lamp = Color3.fromRGB(255, 200, 60), beam = Color3.fromRGB(255, 225, 130), source = "12 видов в Атласе" },
-	sea = { name = "Морской", lamp = Color3.fromRGB(90, 220, 230), beam = Color3.fromRGB(170, 240, 255), source = "Достижение: 10 видов" },
-	fog = { name = "Туманный", lamp = Color3.fromRGB(200, 210, 230), beam = Color3.fromRGB(230, 235, 245), source = "Достижение: 1000 духов" },
-	vip = { name = "Радужный VIP", lamp = Color3.fromRGB(255, 120, 220), beam = Color3.fromRGB(200, 220, 255), source = "VIP-ловец", rainbow = true },
+	classic = { name = "Классический", tier = "common", lamp = rgb(255, 225, 160), beam = rgb(255, 240, 200), price = 0,
+		desc = "Тёплые искорки",
+		fx = { tex = "sparkles", colors = { rgb(255, 220, 150) }, rate = 3, size = 0.25, life = 1.2, speed = 0.5, up = 1 } },
+	sakura = { name = "Сакура", tier = "rare", lamp = rgb(255, 150, 200), beam = rgb(255, 200, 230), source = "Подарок 6-го дня",
+		desc = "Кружатся лепестки, розовый шлейф",
+		fx = { tex = "sparkles", colors = { rgb(255, 170, 210), rgb(255, 230, 240) }, rate = 9, size = 0.45, life = 2.5, speed = 1, up = -1.5,
+			trail = { rgb(255, 150, 200), rgb(255, 230, 240) } } },
+	moon = { name = "Лунный", tier = "rare", lamp = rgb(170, 210, 255), beam = rgb(200, 225, 255), price = 600,
+		desc = "Лунная пыль и серебристый шлейф",
+		fx = { tex = "sparkles", colors = { rgb(190, 220, 255), rgb(255, 255, 255) }, rate = 10, size = 0.35, life = 1.8, speed = 0.8, up = 0.5,
+			trail = { rgb(170, 210, 255), rgb(255, 255, 255) } } },
+	jade = { name = "Нефритовый", tier = "epic", lamp = rgb(110, 240, 170), beam = rgb(170, 255, 210), source = "6 видов в Атласе",
+		desc = "Зелёные огоньки поднимаются вверх",
+		fx = { tex = "sparkles", colors = { rgb(110, 255, 170), rgb(220, 255, 230) }, rate = 14, size = 0.4, life = 2, speed = 1.5, up = 3,
+			trail = { rgb(110, 240, 170), rgb(40, 120, 80) } } },
+	sea = { name = "Морской", tier = "epic", lamp = rgb(90, 220, 230), beam = rgb(170, 240, 255), source = "Достижение: 10 видов",
+		desc = "Пузырьки и морская волна за спиной",
+		fx = { tex = "sparkles", colors = { rgb(120, 230, 255), rgb(220, 250, 255) }, rate = 12, size = 0.5, life = 2.2, speed = 1, up = 2.5,
+			trail = { rgb(60, 200, 230), rgb(20, 80, 160) } } },
+	ember = { name = "Угольный", tier = "epic", lamp = rgb(255, 110, 60), beam = rgb(255, 170, 120), price = 1200, dust = 20,
+		desc = "Живой огонь и летящие угольки",
+		fx = { tex = "fire", colors = { rgb(255, 200, 80), rgb(255, 70, 30) }, rate = 18, size = 0.6, life = 0.9, speed = 1.5, up = 4,
+			trail = { rgb(255, 150, 50), rgb(160, 30, 20) } } },
+	golden = { name = "Золотой", tier = "legendary", lamp = rgb(255, 200, 60), beam = rgb(255, 225, 130), source = "12 видов в Атласе",
+		desc = "Золотой дождь, ореол и вспышка при поимке",
+		fx = { tex = "sparkles", colors = { rgb(255, 225, 100), rgb(255, 170, 30) }, rate = 22, size = 0.5, life = 1.6, speed = 2, up = -2,
+			trail = { rgb(255, 215, 80), rgb(200, 120, 20) }, aura = true, burst = true } },
+	fog = { name = "Туманный", tier = "legendary", lamp = rgb(200, 210, 230), beam = rgb(230, 235, 245), source = "Достижение: 1000 духов",
+		desc = "Тянет за собой клубы тумана",
+		fx = { tex = "smoke", colors = { rgb(210, 220, 235), rgb(150, 160, 190) }, rate = 8, size = 1.6, life = 3, speed = 0.6, up = 0.4,
+			trail = { rgb(220, 225, 240), rgb(120, 130, 160) }, aura = true } },
+	ghost = { name = "Призрачный", tier = "legendary", lamp = rgb(90, 255, 230), beam = rgb(150, 255, 240), price = 4000, dust = 80,
+		desc = "Бирюзовое призрачное пламя и ореол",
+		fx = { tex = "fire", colors = { rgb(120, 255, 240), rgb(40, 120, 255) }, rate = 20, size = 0.7, life = 1.1, speed = 1.2, up = 3,
+			trail = { rgb(90, 255, 230), rgb(40, 60, 200) }, aura = true, burst = true } },
+	dragon = { name = "Драконий", tier = "mythic", lamp = rgb(255, 60, 60), beam = rgb(255, 140, 90), source = "Достижение: Новая жизнь",
+		desc = "Огненный шлейф дракона и снопы искр",
+		fx = { tex = "fire", colors = { rgb(255, 230, 120), rgb(255, 40, 40) }, rate = 30, size = 0.9, life = 1, speed = 2.5, up = 5,
+			trail = { rgb(255, 200, 60), rgb(200, 20, 30) }, aura = true, burst = true } },
+	vip = { name = "Радужный VIP", tier = "vip", lamp = rgb(255, 120, 220), beam = rgb(200, 220, 255), source = "VIP-ловец", rainbow = true,
+		desc = "Радужные звёзды, радужный шлейф, ореол и салют при поимке",
+		fx = { tex = "sparkles", colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) },
+			rate = 35, size = 0.6, life = 2, speed = 3, up = 1.5,
+			trail = { rgb(255, 80, 80), rgb(255, 220, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) }, aura = true, burst = true } },
 }
 
 -- гифткоды (регистр не важен, каждый активируется один раз на аккаунт)
@@ -431,7 +483,7 @@ P.Achievements = {
 	mythic = { name = "Миф", desc = "Сдай мифического духа", type = "rarity", key = "mythic", need = 1, coins = 1500 },
 	secret = { name = "Тайна", desc = "Сдай секретного духа", type = "rarity", key = "secret", need = 1, coins = 4000 },
 	lvl25 = { name = "Ветеран", desc = "Достигни 25 уровня", type = "level", need = 25, coins = 1200 },
-	reborn = { name = "Новая жизнь", desc = "Переродись первый раз", type = "rebirths", need = 1, dust = 60 },
+	reborn = { name = "Новая жизнь", desc = "Переродись первый раз", type = "rebirths", need = 1, dust = 60, skin = "dragon" },
 }
 
 return P
@@ -681,6 +733,13 @@ return S
 -- Зона района: список прямоугольников { x = {min, max}, z = {min, max} } на уровне земли (y = 0.5).
 local W = {}
 
+-- Масштаб карты: все координаты ниже записаны «в старом размере» и умножаются на Scale по X и Z.
+-- Высота земли остаётся 0.5. Map.luau масштабирует постройки так же (Y — вокруг уровня земли).
+W.Scale = 1.6
+function W.sp(v: Vector3): Vector3
+	return Vector3.new(v.X * W.Scale, v.Y, v.Z * W.Scale)
+end
+
 W.Order = { "lantern", "mirror", "skymarket", "dreams" }
 
 W.Worlds = {
@@ -763,9 +822,25 @@ W.Districts = {
 	},
 }
 
--- район по позиции (x, z)
+-- перевод координат районов в масштаб карты
+for _, d in W.Districts do
+	for _, k in { "tp", "center", "back" } do
+		if d[k] then d[k] = W.sp(d[k]) end
+	end
+	for _, zn in d.zones do
+		zn.x = { zn.x[1] * W.Scale, zn.x[2] * W.Scale }
+		zn.z = { zn.z[1] * W.Scale, zn.z[2] * W.Scale }
+	end
+	if d.swim then
+		d.swim.center = W.sp(d.swim.center)
+		d.swim.rx *= W.Scale
+		d.swim.rz *= W.Scale
+	end
+end
+
+-- район по позиции (x, z); пороги — в старом размере
 function W.districtAt(pos: Vector3): string
-	local x, z = pos.X, pos.Z
+	local x, z = pos.X / W.Scale, pos.Z / W.Scale
 	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end
@@ -1698,6 +1773,7 @@ local TweenService = game:GetService("TweenService")
 
 local Catalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Catalog"))
 local Map = require(script.Parent:WaitForChild("Map"))
+local SC = Catalog.Worlds.Scale
 local map = Map.build()
 
 local TEST_PLACE_ID = 99980756426085
@@ -2116,6 +2192,86 @@ local function rootOf(plr)
 	return c:FindFirstChild("HumanoidRootPart")
 end
 
+------------------------------------------------------------------ спецэффекты фонаря (облик), видны всем
+local FX_TEX = {
+	sparkles = "rbxasset://textures/particles/sparkles_main.dds",
+	fire = "rbxasset://textures/particles/fire_main.dds",
+	smoke = "rbxasset://textures/particles/smoke_main.dds",
+}
+local function seq(colors)
+	if #colors == 1 then return ColorSequence.new(colors[1]) end
+	local kp = {}
+	for i, c in colors do table.insert(kp, ColorSequenceKeypoint.new((i - 1) / (#colors - 1), c)) end
+	return ColorSequence.new(kp)
+end
+local function lanternFx(lantern, skin)
+	local old = lantern:FindFirstChild("Fx")
+	if old then old:Destroy() end
+	local f = skin and skin.fx
+	if not f then return end
+	local folder = Instance.new("Folder")
+	folder.Name = "Fx"
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "Glow"
+	pe.Texture = FX_TEX[f.tex] or FX_TEX.sparkles
+	pe.Color = seq(f.colors)
+	pe.LightEmission, pe.Rate = 1, f.rate
+	pe.Lifetime = NumberRange.new(f.life * 0.7, f.life)
+	pe.Speed = NumberRange.new(f.speed * 0.5, f.speed)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Acceleration = Vector3.new(0, f.up, 0)
+	pe.Drag = 1
+	pe.RotSpeed = NumberRange.new(-90, 90)
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, f.size), NumberSequenceKeypoint.new(1, 0) })
+	pe.Transparency = NumberSequence.new(f.tex == "smoke" and 0.6 or 0.1, 1)
+	pe.Parent = lantern
+	pe.Parent = folder
+	-- шлейф при беге: два крепления сверху и снизу фонаря
+	local root = lantern.Parent and lantern.Parent:FindFirstChild("HumanoidRootPart")
+	if f.trail and root then
+		local a0 = Instance.new("Attachment")
+		a0.Name, a0.Position = "FxTrailTop", Vector3.new(0, 0.6, 0.6)
+		a0.Parent = root
+		local a1 = Instance.new("Attachment")
+		a1.Name, a1.Position = "FxTrailBottom", Vector3.new(0, -1.6, 0.6)
+		a1.Parent = root
+		local tr = Instance.new("Trail")
+		tr.Name = "Trail"
+		tr.Attachment0, tr.Attachment1 = a0, a1
+		tr.Color = seq(f.trail)
+		tr.LightEmission = 0.8
+		tr.Lifetime = 0.55
+		tr.Transparency = NumberSequence.new(0.25, 1)
+		tr.WidthScale = NumberSequence.new(1, 0.2)
+		tr.FaceCamera = true
+		tr.Parent = folder
+		a0.Parent, a1.Parent = root, root
+		-- старые крепления убираем при смене облика
+		for _, ch in root:GetChildren() do
+			if (ch.Name == "FxTrailTop" or ch.Name == "FxTrailBottom") and ch ~= a0 and ch ~= a1 then ch:Destroy() end
+		end
+	elseif root then
+		for _, ch in root:GetChildren() do
+			if ch.Name == "FxTrailTop" or ch.Name == "FxTrailBottom" then ch:Destroy() end
+		end
+	end
+	if f.aura then
+		local aura = Instance.new("PointLight")
+		aura.Name, aura.Range, aura.Brightness, aura.Color = "Aura", 14, 1.2, skin.lamp
+		aura.Shadows = false
+		aura.Parent = folder
+	end
+	folder.Parent = lantern
+end
+-- вспышка облика при поимке (золотой, призрачный, драконий, VIP)
+local function lanternBurst(plr)
+	local d = data[plr]
+	local skin = d and Catalog.Progress.Skins[d.skin]
+	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
+	local glow = lantern and lantern:FindFirstChild("Fx") and lantern.Fx:FindFirstChild("Glow")
+	if skin and skin.fx and skin.fx.burst and glow then glow:Emit(40) end
+end
+
 ------------------------------------------------------------------ фонарь игрока (виден всем)
 local function giveLantern(plr, char)
 	local root = char:WaitForChild("HumanoidRootPart", 10)
@@ -2140,7 +2296,21 @@ local function giveLantern(plr, char)
 	local att = Instance.new("Attachment")
 	att.Name = "BeamAtt"
 	att.Parent = p
+	-- тёмные крышки сверху и снизу: фонарь читается как бумажный фонарь, а не кубик
+	for _, y in { 0.48, -0.48 } do
+		local cap = Instance.new("Part")
+		cap.Name, cap.Size, cap.Color, cap.Material = "LanternCap", Vector3.new(0.7, 0.16, 0.7), Color3.fromRGB(45, 30, 30), Enum.Material.Wood
+		cap.CanCollide, cap.CanQuery, cap.CanTouch, cap.Massless = false, false, false, true
+		cap.CFrame = p.CFrame * CFrame.new(0, y, 0)
+		local cw = Instance.new("WeldConstraint")
+		cw.Part0, cw.Part1 = p, cap
+		cw.Parent = cap
+		cap.Parent = p
+	end
+	p.Shape = Enum.PartType.Ball
+	p.Size = Vector3.new(0.75, 0.85, 0.75)
 	p.Parent = char
+	lanternFx(p, skin)
 end
 
 ------------------------------------------------------------------ духи
@@ -2161,7 +2331,7 @@ local function rnd(a, b) return a + math.random() * (b - a) end
 
 local function zonePoint(district, near: Vector3?, tut: boolean?, kind: string?)
 	if tut then
-		return Vector3.new(rnd(-14, 14), 0.5, rnd(34, 62))
+		return Vector3.new(rnd(-14, 14) * SC, 0.5, rnd(34, 62) * SC)
 	end
 	local info = kind and Catalog.Kinds[kind]
 	-- логова: дух появляется и перебегает между «своими» местами района
@@ -2405,6 +2575,7 @@ RunService.Heartbeat:Connect(function(dt)
 				end
 				table.insert(jars[plr], { k = s.kind, v = variant })
 				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant, variant ~= base)
+				lanternBurst(plr)
 				local d = data[plr]
 				local xp = Catalog.Progress.XP[info.rarity] or 4
 				d.xp += xp
@@ -2564,7 +2735,7 @@ local function hitPlayer(plr)
 end
 
 local oniAnchor: Part? = nil
-local oniPos = Vector3.new(0, 0.5, 118)
+local oniPos = Vector3.new(0, 0.5, 118 * SC)
 local function oniLoop(a: Part)
 	local facing = Vector3.new(0, 0, -1)
 	local function place() a.CFrame = CFrame.lookAt(oniPos, oniPos + facing) end
@@ -2584,13 +2755,13 @@ local function oniLoop(a: Part)
 		local target, best = nil, math.huge
 		for _, plr in Players:GetPlayers() do
 			local r = rootOf(plr)
-			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 and r.Position.Y > -2 then
+			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 * SC and r.Position.Y > -2 then
 				local d = (r.Position - oniPos).Magnitude - ((jars[plr] and #jars[plr] > 0) and 40 or 0)
 				if d < best then target, best = r, d end
 			end
 		end
 		if not target then
-			walkTo(Vector3.new(rnd(-12, 12), 0.5, rnd(40, 120)), 7, 4)
+			walkTo(Vector3.new(rnd(-12, 12) * SC, 0.5, rnd(40, 120) * SC), 7, 4)
 			continue
 		end
 		-- подходит к игроку
@@ -2668,7 +2839,7 @@ local function startMoon()
 	a.Name = "Oni"
 	a.Size, a.Transparency = Vector3.new(1, 1, 1), 1
 	a.Anchored, a.CanCollide, a.CanQuery, a.CanTouch = true, false, false, false
-	oniPos = Vector3.new(0, 0.5, 118)
+	oniPos = Vector3.new(0, 0.5, 118 * SC)
 	a.CFrame = CFrame.new(oniPos)
 	a:SetAttribute("State", "walk")
 	a.Parent = workspace
@@ -2873,6 +3044,7 @@ local function applySkin(plr)
 	if lantern and skin then
 		lantern.Color = skin.lamp
 		if lantern:FindFirstChild("Beam") then lantern.Beam.Color = skin.beam end
+		lanternFx(lantern, skin)
 	end
 end
 
@@ -2944,10 +3116,10 @@ task.spawn(function()
 				local p = r.Position
 				if p.Y < -3.5 then
 					-- упал в канал: на ближайший берег
-					if p.X > 63 then
-						plr.Character:PivotTo(CFrame.new(118, 4, math.clamp(p.Z, -66, -14)))
+					if p.X > 63 * SC then
+						plr.Character:PivotTo(CFrame.new(118 * SC, 4, math.clamp(p.Z, -66 * SC, -14 * SC)))
 					else
-						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
+						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55 * SC, 55 * SC), 4, p.Z > -30 * SC and -14 * SC or -46 * SC))
 					end
 				else
 					local dn = Catalog.district(p)
@@ -3182,19 +3354,6 @@ TeleportFn.OnServerInvoke = function(plr, district)
 	if typeof(district) ~= "string" then return { ok = false } end
 	return teleportTo(plr, district)
 end
--- порталы на площади
-for _, portal in map.portals do
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "Телепорт"
-	prompt.ObjectText = Catalog.Districts[portal:GetAttribute("District")].name
-	prompt.HoldDuration, prompt.MaxActivationDistance, prompt.RequiresLineOfSight = 0, 10, false
-	prompt.Parent = portal
-	prompt.Triggered:Connect(function(plr)
-		local r = teleportTo(plr, portal:GetAttribute("District"))
-		if not r.ok and r.msg then NoticeEv:FireClient(plr, r.msg) end
-	end)
-end
-
 RedeemFn.OnServerInvoke = function(plr, code)
 	local d = data[plr]
 	if not (d and typeof(code) == "string") then return { ok = false } end
@@ -3411,10 +3570,20 @@ local TEAL = Color3.fromRGB(80, 230, 220)
 local GARDEN = Color3.fromRGB(170, 255, 170)
 local VIOLET = Color3.fromRGB(190, 130, 255)
 
+local SC = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"):WaitForChild("Worlds")).Scale
+-- весь квартал строится в «старых» координатах и равномерно растягивается в SC раз;
+-- уровень земли (y = 0.5) остаётся на месте, чтобы духи и игроки стояли там же
+local function sp(v: Vector3): Vector3
+	return Vector3.new(v.X * SC, 0.5 + (v.Y - 0.5) * SC, v.Z * SC)
+end
+local function scf(cf: CFrame): CFrame
+	return CFrame.new(sp(cf.Position)) * cf.Rotation
+end
+
 local world
 local function block(name, size, cf, color, mat, props)
 	local p = Instance.new("Part")
-	p.Name, p.Size, p.CFrame, p.Color = name, size, cf, color
+	p.Name, p.Size, p.CFrame, p.Color = name, size * SC, scf(cf), color
 	p.Anchored = true
 	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
 	p.Material = mat or Enum.Material.Slate
@@ -3430,7 +3599,7 @@ local function deco(name, size, cf, color, mat, props)
 end
 local function light(parent, color, range, brightness)
 	local l = Instance.new("PointLight")
-	l.Color, l.Range, l.Brightness = color, range, brightness
+	l.Color, l.Range, l.Brightness = color, math.min(60, range * SC), brightness
 	l.Parent = parent
 	return l
 end
@@ -3485,7 +3654,7 @@ local habitats = {}
 local function hab(district, tag, pos)
 	habitats[district] = habitats[district] or {}
 	habitats[district][tag] = habitats[district][tag] or {}
-	table.insert(habitats[district][tag], Vector3.new(pos.X, 0.5, pos.Z))
+	table.insert(habitats[district][tag], Vector3.new(pos.X * SC, 0.5, pos.Z * SC))
 end
 
 function Map.build()
@@ -3563,8 +3732,8 @@ function Map.build()
 			for _, rz in { -1, 1 } do
 				local w = Instance.new("WedgePart")
 				w.Name, w.Anchored, w.Material, w.Color = "Roof", true, Enum.Material.Slate, Color3.fromRGB(48, 44, 56)
-				w.Size = Vector3.new(16, rh, 10.5)
-				w.CFrame = CFrame.new(cx, h + rh / 2, z + rz * 5.25) * CFrame.Angles(0, rz > 0 and math.pi or 0, 0)
+				w.Size = Vector3.new(16, rh, 10.5) * SC
+				w.CFrame = scf(CFrame.new(cx, h + rh / 2, z + rz * 5.25) * CFrame.Angles(0, rz > 0 and math.pi or 0, 0))
 				w.Parent = world
 			end
 			deco("RoofRidge", Vector3.new(16.4, 0.5, 0.8), CFrame.new(cx, h + rh + 0.1, z), Color3.fromRGB(120, 35, 35), Enum.Material.Slate)
@@ -3586,7 +3755,7 @@ function Map.build()
 	billboard(great, "Улица фонарей", WARM, Vector3.new(0, 9, 0))
 
 	---------------------------------------------------------------- ПЛОЩАДЬ И АЛТАРЬ (холодный свет, луч в небо)
-	local altarPos = Vector3.new(0, 0.5, 12)
+	local altarPos = Vector3.new(0, 0.5, 12) -- в старых координатах; наружу отдаётся sp(altarPos)
 	local altar = block("Altar", Vector3.new(8, 3, 8), CFrame.new(altarPos + Vector3.new(0, 1.5, 0)), Color3.fromRGB(125, 130, 142), Enum.Material.Concrete, { Reflectance = 0 })
 	block("AltarStep", Vector3.new(14, 0.6, 14), CFrame.new(altarPos + Vector3.new(0, 0.3, 0)), Color3.fromRGB(105, 110, 122), Enum.Material.Concrete)
 	local orb = deco("AltarGlow", Vector3.new(3, 3, 3), CFrame.new(altarPos + Vector3.new(0, 5.5, 0)), COLD, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
@@ -3751,8 +3920,6 @@ function Map.build()
 	end
 	do -- барьер канала (уровень 3) и ворота порта (уровень 20)
 		local canalGate = block("CanalGate", Vector3.new(70, 13, 1), CFrame.new(0, 6.5, -8), Color3.fromRGB(80, 230, 220), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
-		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Back)
-		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Front)
 		gates.CanalGate = canalGate
 		local portGate = block("PortGate", Vector3.new(1, 13, 10), CFrame.new(62.5, 6.5, -47), Color3.fromRGB(150, 200, 230), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
 		sign(portGate, "Туманный порт", Color3.new(1, 1, 1), Enum.NormalId.Right)
@@ -3825,25 +3992,6 @@ function Map.build()
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
 
-	---------------------------------------------------------------- порталы на площади
-	local portals = {}
-	for _, p in { { -30, "grove", Color3.fromRGB(110, 240, 200) }, { -19, "garden", Color3.fromRGB(170, 255, 170) }, { 19, "canal", Color3.fromRGB(80, 230, 220) }, { 30, "market", Color3.fromRGB(255, 120, 200) }, { 9, "port", Color3.fromRGB(150, 210, 230) } } do
-		local x, col = p[1], p[3]
-		for _, dx in { -3, 3 } do
-			block("PortalPost", Vector3.new(1, 8, 1), CFrame.new(x + dx, 4.5, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
-		end
-		block("PortalTop", Vector3.new(8, 1, 1.4), CFrame.new(x, 9, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
-		local swirl = deco("Portal", Vector3.new(0.3, 7, 5.2), CFrame.new(x, 4.6, -4) * CFrame.Angles(0, math.rad(90), 0), col, Enum.Material.Neon,
-			{ Shape = Enum.PartType.Cylinder, Transparency = 0.35 })
-		swirl:SetAttribute("District", p[2])
-		local pe = Instance.new("ParticleEmitter")
-		pe.Color, pe.LightEmission, pe.Rate = ColorSequence.new(col, Color3.new(1, 1, 1)), 1, 12
-		pe.Lifetime, pe.Speed, pe.Size = NumberRange.new(0.8, 1.4), NumberRange.new(1, 2), NumberSequence.new(0.4, 0)
-		pe.Parent = swirl
-		light(swirl, col, 12, 0.8)
-		table.insert(portals, swirl)
-	end
-
 	---------------------------------------------------------------- детали: бочки, ящики, лодки
 	local props = Random.new(7)
 	for _ = 1, 26 do
@@ -3902,7 +4050,7 @@ function Map.build()
 	end
 
 	---------------------------------------------------------------- точка появления
-	local spawnCF = CFrame.new(0, 0.6, 24)
+	local spawnCF = scf(CFrame.new(0, 0.6, 24))
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Size, spawn.CFrame, spawn.Anchored, spawn.Transparency, spawn.CanCollide = Vector3.new(6, 1, 6), spawnCF, true, 1, false
 	spawn.Neutral, spawn.Duration = true, 0
@@ -3913,12 +4061,11 @@ function Map.build()
 		{ Shape = Enum.PartType.Ball, Transparency = 1 })
 
 	return {
-		portals = portals,
 		habitats = habitats,
 		gates = gates,
 		boardGui = boardGui,
 		altar = altar,
-		altarPos = altarPos,
+		altarPos = sp(altarPos),
 		spawnCF = spawnCF,
 		barrier = barrier,
 		barrierText = barrierText,
@@ -4009,7 +4156,7 @@ do
 		return s
 	end
 	local music = makeSound(Audio.Music.lantern, musicGroup, true, nil, 0.55)
-	moonLayer = makeSound(Audio.Music.moonLayer, musicGroup, true, nil, 0)
+	moonLayer = music -- в Красную луну та же прелюдия звучит медленнее и ниже
 	local sfx = {}
 	for k, id in Audio.Sfx do
 		sfx[k] = makeSound(id, sfxGroup, false, nil, 0.8)
@@ -4017,7 +4164,6 @@ do
 	task.spawn(function()
 		pcall(function() ContentProvider:PreloadAsync(allSounds) end)
 		if music then music:Play() end
-		if moonLayer then moonLayer:Play() end
 	end)
 	play = function(name)
 		local s = sfx[name]
@@ -4208,21 +4354,20 @@ local atlasW, atlasBody, _, collectFill, spiritGrid, cards, setTrack, refreshAtl
 do
 	atlasW, atlasBody = K.window(gui, "Атлас духов", "atlas", T.blue)
 	local atlasTop = K.make("Frame", { Size = UDim2.new(1, 0, 0, 62), BackgroundTransparency = 1 }, atlasBody)
-	local collectL = K.text(atlasTop, "", { Size = UDim2.new(0.38, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 20 })
-	_, collectFill = K.bar(atlasTop, T.gold, { Size = UDim2.new(0.38, 0, 0, 14), Position = UDim2.fromOffset(0, 30) })
-	local mileRow = K.make("Frame", { Position = UDim2.new(0.41, 0, 0, 0), Size = UDim2.new(0.59, 0, 1, -4), BackgroundTransparency = 1 }, atlasTop)
-	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right }, mileRow)
-	local mileBtns = {}
-	for i in Prog.Milestones do
-		local b, l = K.button(mileRow, "", T.panel2, { Size = UDim2.new(1 / #Prog.Milestones, -5, 1, 0), MaxText = 12 })
-		K.icon(b, "trophy", { Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(2, 2) })
-		l.Size, l.Position = UDim2.new(1, -6, 0.55, 0), UDim2.new(0, 3, 0.42, 0)
-		mileBtns[i] = { b = b, l = l }
-		b.Activated:Connect(function()
-			local r = remotes.ClaimMilestone:InvokeServer(i)
-			if r and not r.ok and r.msg then showToast(r.msg) end
-		end)
-	end
+	local collectL = K.text(atlasTop, "", { Size = UDim2.new(0.46, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 22 })
+	_, collectFill = K.bar(atlasTop, T.gold, { Size = UDim2.new(0.46, 0, 0, 16), Position = UDim2.fromOffset(0, 36) })
+	-- одна понятная карточка «следующая награда коллекции» вместо ряда одинаковых плашек
+	local mileCard = K.panel(atlasTop, { Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, 0, 1, -4), BackgroundColor3 = Color3.fromRGB(58, 50, 34) })
+	K.icon(mileCard, "trophy", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 7) })
+	local mileTitle = K.text(mileCard, "", { Size = UDim2.new(0.62, -56, 0, 24), Position = UDim2.fromOffset(54, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextColor3 = T.gold })
+	local mileSub = K.text(mileCard, "", { Size = UDim2.new(0.62, -56, 0, 20), Position = UDim2.fromOffset(54, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
+	local mileB, mileBL = K.button(mileCard, "", T.green, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 2, 0, 6), MaxText = 16 })
+	local mileIndex = nil
+	mileB.Activated:Connect(function()
+		if not mileIndex then return end
+		local r = remotes.ClaimMilestone:InvokeServer(mileIndex)
+		if r and not r.ok and r.msg then showToast(r.msg) end
+	end)
 	local atlasTabs = K.make("Frame", { Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, atlasBody)
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 	local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
@@ -4230,7 +4375,7 @@ do
 	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
-	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 214), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
+	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
 	local worldList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, worldList)
@@ -4242,16 +4387,16 @@ do
 	local achRows = {}
 	for i, id in Prog.AchievementOrder do
 		local a = Prog.Achievements[id]
-		local f = K.panel(achList, { Size = UDim2.new(1, -10, 0, 60), LayoutOrder = i, BackgroundColor3 = T.panel2 })
-		K.icon(f, "trophy", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(8, 8) })
-		K.text(f, a.name, { Size = UDim2.new(0.6, -64, 0, 22), Position = UDim2.fromOffset(58, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17 })
+		local f = K.panel(achList, { Size = UDim2.new(1, -10, 0, 76), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+		K.icon(f, "trophy", { Size = UDim2.fromOffset(50, 50), Position = UDim2.fromOffset(8, 12) })
+		K.text(f, a.name, { Size = UDim2.new(0.6, -66, 0, 24), Position = UDim2.fromOffset(64, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 19 })
 		local parts = {}
 		if a.coins then table.insert(parts, a.coins .. " монет") end
 		if a.dust then table.insert(parts, a.dust .. " пыли") end
 		if a.skin then table.insert(parts, "фонарь «" .. Prog.Skins[a.skin].name .. "»") end
-		K.text(f, a.desc .. "   Награда: " .. table.concat(parts, ", "), { Size = UDim2.new(0.6, -64, 0, 14), Position = UDim2.fromOffset(58, 26), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
-		local _, bar = K.bar(f, T.gold, { Size = UDim2.new(0.6, -64, 0, 8), Position = UDim2.fromOffset(58, 44) })
-		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(0.36, -8, 1, -14), Position = UDim2.new(0.62, 0, 0, 7), MaxText = 15 })
+		K.text(f, a.desc .. "   Награда: " .. table.concat(parts, ", "), { Size = UDim2.new(0.6, -66, 0, 28), Position = UDim2.fromOffset(64, 28), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
+		local _, bar = K.bar(f, T.gold, { Size = UDim2.new(0.6, -66, 0, 10), Position = UDim2.fromOffset(64, 60) })
+		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(0.36, -8, 1, -18), Position = UDim2.new(0.62, 0, 0, 9), MaxText = 18 })
 		b.Activated:Connect(function()
 			local r = remotes.ClaimAchievement:InvokeServer(id)
 			if r and r.ok then
@@ -4294,11 +4439,11 @@ do
 	for i = #Catalog.RarityOrder, 1, -1 do
 		local rk = Catalog.RarityOrder[i]
 		local rar = Catalog.Rarity[rk]
-		local row = K.panel(tierList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = #Catalog.RarityOrder - i, BackgroundColor3 = T.panel2 })
+		local row = K.panel(tierList, { Size = UDim2.new(1, -10, 0, 66), LayoutOrder = #Catalog.RarityOrder - i, BackgroundColor3 = T.panel2 })
 		local tag = K.make("Frame", { Size = UDim2.new(0, 120, 1, -10), Position = UDim2.fromOffset(5, 5), BackgroundColor3 = Color3.new(1, 1, 1) }, row)
 		K.corner(tag, UDim.new(0, 10))
 		K.gradient(tag, K.lighten(rar.color, 0.2), K.darken(rar.color, 0.25))
-		K.text(tag, rar.name, { Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4), MaxText = 16 })
+		K.text(tag, rar.name, { Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4), MaxText = 18 })
 		local chips = K.make("Frame", { Size = UDim2.new(1, -140, 1, -10), Position = UDim2.fromOffset(132, 5), BackgroundTransparency = 1 }, row)
 		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }, chips)
 		for _, kind in Catalog.Order do
@@ -4306,8 +4451,8 @@ do
 				local chip = K.make("Frame", { Size = UDim2.new(0.25, -6, 1, 0), BackgroundColor3 = Color3.fromRGB(40, 38, 60) }, chips)
 				K.corner(chip, UDim.new(0, 8))
 				K.stroke(chip, rar.color, 2)
-				local l = K.text(chip, Catalog.Kinds[kind].name, { Size = UDim2.new(1, -6, 0.6, 0), Position = UDim2.fromOffset(3, 1), MaxText = 12, StrokeThickness = 1 })
-				local v = K.text(chip, "", { Size = UDim2.new(1, -6, 0.4, -2), Position = UDim2.new(0, 3, 0.6, 0), MaxText = 10, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+				local l = K.text(chip, Catalog.Kinds[kind].name, { Size = UDim2.new(1, -6, 0.58, 0), Position = UDim2.fromOffset(3, 2), MaxText = 15, StrokeThickness = 1 })
+				local v = K.text(chip, "", { Size = UDim2.new(1, -6, 0.38, -2), Position = UDim2.new(0, 3, 0.6, 0), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
 				tierChips[kind] = { chip = chip, name = l, vars = v }
 			end
 		end
@@ -4332,7 +4477,7 @@ do
 			for _ in (state.variants and state.variants[kind]) or {} do got += 1 end
 			t.chip.BackgroundColor3 = n > 0 and K.darken(Catalog.Rarity[Catalog.Kinds[kind].rarity].color, 0.55) or Color3.fromRGB(40, 38, 60)
 			t.name.TextColor3 = n > 0 and T.text or T.sub
-			t.vars.Text = n > 0 and ("разновидностей %d/%d"):format(got, #Catalog.VariantOrder) or "не найден"
+			t.vars.Text = n > 0 and ("%d/%d вида"):format(got, #Catalog.VariantOrder) or "не найден"
 		end
 	end
 	for i, key in Catalog.Worlds.Order do
@@ -4374,25 +4519,31 @@ do
 		local f = K.panel(spiritGrid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
 		f:FindFirstChildOfClass("UIStroke").Color = rar.color
 		c.frame = f
-		local vpHolder = K.make("Frame", { Size = UDim2.new(1, -8, 0, 92), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+		local vpHolder = K.make("Frame", { Size = UDim2.new(1, -8, 0, 112), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
 		K.corner(vpHolder, UDim.new(0, 10))
-		K.gradient(vpHolder, K.darken(rar.color, 0.45), K.darken(rar.color, 0.8))
+		K.gradient(vpHolder, K.darken(rar.color, 0.35), K.darken(rar.color, 0.75))
 		c.vpHolder = vpHolder
-		c.name = K.text(f, info.name, { Size = UDim2.new(1, -10, 0, 20), Position = UDim2.fromOffset(5, 98), MaxText = 15 })
-		c.rar = K.text(f, rar.name, { Size = UDim2.new(1, -10, 0, 14), Position = UDim2.fromOffset(5, 118), MaxText = 12, TextColor3 = rar.color, StrokeThickness = 1 })
-		c.info = K.text(f, "", { Size = UDim2.new(1, -10, 0, 30), Position = UDim2.fromOffset(5, 134), MaxText = 11, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
-		-- точки собранных разновидностей
-		local dots = K.make("Frame", { Size = UDim2.new(1, -12, 0, 12), Position = UDim2.fromOffset(8, 78), BackgroundTransparency = 1, ZIndex = 3 }, f)
-		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4) }, dots)
+		-- редкость — цветной ярлык поверх превью, количество — справа
+		local rTag = K.make("Frame", { Size = UDim2.fromOffset(120, 24), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = rar.color, ZIndex = 3 }, vpHolder)
+		K.corner(rTag, UDim.new(1, 0))
+		K.stroke(rTag, T.ink, 2)
+		c.rar = K.text(rTag, rar.name, { Size = UDim2.new(1, -10, 1, -4), Position = UDim2.fromOffset(5, 2), MaxText = 14, ZIndex = 3 })
+		c.count = K.text(vpHolder, "", { Size = UDim2.fromOffset(60, 24), Position = UDim2.new(1, -66, 0, 6), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3, TextColor3 = T.gold })
+		c.name = K.text(f, info.name, { Size = UDim2.new(1, -12, 0, 26), Position = UDim2.fromOffset(6, 120), MaxText = 19 })
+		c.info = K.text(f, "", { Size = UDim2.new(1, -14, 0, 44), Position = UDim2.fromOffset(7, 148), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
+		-- разновидности: точки + понятная подпись
+		local dots = K.make("Frame", { Size = UDim2.new(0.55, 0, 0, 14), Position = UDim2.fromOffset(8, 196), BackgroundTransparency = 1 }, f)
+		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3), VerticalAlignment = Enum.VerticalAlignment.Center }, dots)
 		c.dots = {}
 		for _, vk in Catalog.VariantOrder do
-			local d = K.make("Frame", { Size = UDim2.fromOffset(12, 12), BackgroundColor3 = T.ink, ZIndex = 3 }, dots)
+			local d = K.make("Frame", { Size = UDim2.fromOffset(13, 13), BackgroundColor3 = T.ink }, dots)
 			K.corner(d, UDim.new(1, 0))
-			K.stroke(d, Color3.new(1, 1, 1), 1)
+			K.stroke(d, Color3.fromRGB(120, 120, 150), 1)
 			c.dots[vk] = d
 		end
-		local trackB, trackBL = K.button(f, "Выследить", T.orange, { Size = UDim2.new(0.5, -6, 0, 34), Position = UDim2.new(0, 4, 1, -40), MaxText = 12 })
-		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(0.5, -6, 0, 34), Position = UDim2.new(0.5, 2, 1, -40), MaxText = 12 })
+		c.varL = K.text(f, "", { Size = UDim2.new(0.45, -10, 0, 16), Position = UDim2.new(0.55, 2, 0, 195), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Right, StrokeThickness = 1 })
+		local trackB, trackBL = K.button(f, "Выследить", T.orange, { Size = UDim2.new(0.5, -7, 0, 38), Position = UDim2.new(0, 5, 1, -44), MaxText = 15 })
+		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(0.5, -7, 0, 38), Position = UDim2.new(0.5, 2, 1, -44), MaxText = 15 })
 		c.trackL, c.equip, c.equipL = trackBL, equipB, equipBL
 		trackB.Activated:Connect(function()
 			setTrack(trackKind ~= kind and kind or nil)
@@ -4417,15 +4568,19 @@ do
 			c.vp, c.setAngle = K.viewport(c.vpHolder, m)
 		end
 		c.name.TextColor3 = known and T.text or T.sub
-		c.rar.Text = Catalog.Rarity[info.rarity].name .. (known and ("  x" .. n) or "")
-		c.info.Text = known and info.habit or ("Где: " .. info.hint)
+		c.name.Text = known and info.name or "???"
+		c.count.Text = known and ("x" .. n) or ""
+		c.info.Text = known and info.habit or ("Где искать: " .. info.hint)
 		c.trackL.Text = trackKind == c.kind and "Цель" or "Выследить"
 		c.equip.Visible = known
 		c.equipL.Text = state.equipped == c.kind and "Снять" or "Спутник"
 		local got = (state.variants and state.variants[c.kind]) or {}
+		local gotN = 0
 		for vk, d in c.dots do
 			d.BackgroundColor3 = got[vk] and Catalog.Variants[vk].color or T.ink
+			if got[vk] then gotN += 1 end
 		end
+		c.varL.Text = known and ("%d/%d вида"):format(gotN, #Catalog.VariantOrder) or "не пойман"
 	end
 
 	refreshAtlas = function()
@@ -4435,12 +4590,26 @@ do
 		local total = #Catalog.Order
 		collectL.Text = ("Собрано %d/%d видов"):format(state.distinct, total)
 		collectFill.Size = UDim2.fromScale(math.clamp(state.distinct / total, 0, 1), 1)
+		mileIndex = nil
 		for i, m in Prog.Milestones do
-			local mb = mileBtns[i]
-			local claimed = state.milestones[tostring(i)]
-			local ready = not claimed and state.distinct >= m.need
-			mb.l.Text = claimed and "Есть" or (ready and "Забрать!" or ("%d видов"):format(m.need))
-			K.recolor(mb.b, ready and T.green or (claimed and Color3.fromRGB(70, 70, 90) or T.panel2))
+			if not state.milestones[tostring(i)] then mileIndex = i break end
+		end
+		if mileIndex then
+			local m = Prog.Milestones[mileIndex]
+			local parts = {}
+			if m.coins then table.insert(parts, m.coins .. " монет") end
+			if m.dust then table.insert(parts, m.dust .. " пыли") end
+			if m.skin then table.insert(parts, "фонарь") end
+			local ready = state.distinct >= m.need
+			mileTitle.Text = ("Награда за %d видов"):format(m.need)
+			mileSub.Text = table.concat(parts, " + ")
+			mileBL.Text = ready and "Забрать!" or ("%d/%d"):format(state.distinct, m.need)
+			K.recolor(mileB, ready and T.green or Color3.fromRGB(80, 80, 100))
+		else
+			mileTitle.Text = "Все награды получены"
+			mileSub.Text = "Ищи редкие разновидности"
+			mileBL.Text = "Готово"
+			K.recolor(mileB, Color3.fromRGB(80, 80, 100))
 		end
 	end
 
@@ -4494,7 +4663,7 @@ do
 	local upList = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42) })
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, upList)
 	local skinGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
-	K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 150), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
+	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
 	local donateGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 196), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
 	local shopPages = { { tabUp, upList, T.red }, { tabSkins, skinGrid, T.red }, { tabDonate, donateGrid, T.gold } }
@@ -4619,13 +4788,32 @@ do
 	local skinCards = {}
 	for i, key in Prog.SkinOrder do
 		local sk = Prog.Skins[key]
+		local tier = Prog.SkinTiers[sk.tier or "common"]
 		local f = K.panel(skinGrid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
-		local glow = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
-		K.corner(glow, UDim.new(1, 0))
+		f:FindFirstChildOfClass("UIStroke").Color = tier.color
+		local stage = K.make("Frame", { Size = UDim2.new(1, -8, 0, 84), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+		K.corner(stage, UDim.new(0, 10))
+		K.gradient(stage, K.darken(tier.color, 0.45), K.darken(sk.lamp, 0.85))
+		-- превью: светящийся фонарь с ореолом и искрами цвета облика
+		local halo = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.fromOffset(78, 78), BackgroundColor3 = sk.lamp, BackgroundTransparency = 0.75 }, stage)
+		K.corner(halo, UDim.new(1, 0))
+		local glow = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.55), Size = UDim2.fromOffset(46, 52), BackgroundColor3 = Color3.new(1, 1, 1) }, stage)
+		K.corner(glow, UDim.new(0.45, 0))
 		K.stroke(glow, T.ink, 3)
-		K.gradient(glow, K.lighten(sk.lamp, 0.5), sk.lamp)
-		K.text(f, sk.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 68), MaxText = 16 })
-		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 14 })
+		K.gradient(glow, K.lighten(sk.lamp, 0.6), sk.lamp)
+		for j, c in (sk.fx and sk.fx.colors) or {} do
+			for k = 0, 1 do
+				local dot = K.make("Frame", { Size = UDim2.fromOffset(7, 7), Position = UDim2.new(0.18 + ((j * 0.23 + k * 0.47) % 0.64), 0, 0.12 + ((j * 0.31 + k * 0.4) % 0.7), 0), BackgroundColor3 = c }, stage)
+				K.corner(dot, UDim.new(1, 0))
+			end
+		end
+		local tierTag = K.make("Frame", { Size = UDim2.fromOffset(104, 20), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = tier.color }, stage)
+		K.corner(tierTag, UDim.new(1, 0))
+		K.stroke(tierTag, T.ink, 2)
+		K.text(tierTag, tier.name, { Size = UDim2.new(1, -8, 1, -4), Position = UDim2.fromOffset(4, 2), MaxText = 13 })
+		K.text(f, sk.name, { Size = UDim2.new(1, -10, 0, 24), Position = UDim2.fromOffset(5, 92), MaxText = 18 })
+		K.text(f, sk.desc or "", { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.fromOffset(6, 118), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
+		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 42), Position = UDim2.new(0, 6, 1, -48), MaxText = 15 })
 		b.Activated:Connect(function()
 			local owned = state.skins[key]
 			local res = remotes.Skin:InvokeServer(owned and "equip" or "buy", key)
@@ -5032,11 +5220,12 @@ do
 			if gate then
 				local open = Catalog.unlocked(name, st)
 				gate.CanCollide = not open
-				gate.Transparency = open and 0.9 or 0.2
+				gate.Transparency = open and 1 or 0.2
 				for _, g in gate:GetChildren() do
 					local t = g:IsA("SurfaceGui") and g:FindFirstChildOfClass("TextLabel")
 					if t then
-						t.Text = open and (dc.name .. "\nоткрыт") or (dc.name .. " закрыт\n" .. Catalog.unlockText(name, st))
+						g.Enabled = not open -- открытые ворота без надписей: не загораживают экран
+						t.Text = dc.name .. " закрыт\n" .. Catalog.unlockText(name, st)
 					end
 				end
 			end
@@ -5679,7 +5868,7 @@ do
 			wasMoon = moonActive
 			eventGrad.Color = moonActive and ColorSequence.new(Color3.fromRGB(240, 70, 80), Color3.fromRGB(140, 20, 30)) or ColorSequence.new(Color3.fromRGB(70, 70, 110), Color3.fromRGB(40, 40, 70))
 			K.pop(eventPill)
-			if moonLayer then TweenService:Create(moonLayer, TweenInfo.new(3), { Volume = moonActive and 0.7 or 0 }):Play() end
+			if moonLayer then TweenService:Create(moonLayer, TweenInfo.new(3), { PlaybackSpeed = moonActive and 0.86 or 1 }):Play() end
 			if moonActive then showToast("Красная луна! Редкие духи вышли, но по улицам ходит они", 3.5, Color3.fromRGB(140, 30, 40)) end
 		end
 
@@ -5738,8 +5927,8 @@ do
 		updateOni(dt)
 		local beamPart = World:FindFirstChild("LighthouseBeam")
 		if beamPart then
-			local c = Vector3.new(166, 32, -66)
-			beamPart.CFrame = CFrame.new(c) * CFrame.Angles(0, now * 0.6, 0) * CFrame.new(30, 0, 0)
+			local c = Vector3.new(166 * 1.6, 0.5 + 31.5 * 1.6, -66 * 1.6)
+			beamPart.CFrame = CFrame.new(c) * CFrame.Angles(0, now * 0.6, 0) * CFrame.new(48, 0, 0)
 		end
 		if math.floor(now * 10) % 2 == 0 then
 			for _, p in Players:GetPlayers() do

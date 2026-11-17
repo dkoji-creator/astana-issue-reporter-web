@@ -8,10 +8,20 @@ local TEAL = Color3.fromRGB(80, 230, 220)
 local GARDEN = Color3.fromRGB(170, 255, 170)
 local VIOLET = Color3.fromRGB(190, 130, 255)
 
+local SC = require(game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Config"):WaitForChild("Worlds")).Scale
+-- весь квартал строится в «старых» координатах и равномерно растягивается в SC раз;
+-- уровень земли (y = 0.5) остаётся на месте, чтобы духи и игроки стояли там же
+local function sp(v: Vector3): Vector3
+	return Vector3.new(v.X * SC, 0.5 + (v.Y - 0.5) * SC, v.Z * SC)
+end
+local function scf(cf: CFrame): CFrame
+	return CFrame.new(sp(cf.Position)) * cf.Rotation
+end
+
 local world
 local function block(name, size, cf, color, mat, props)
 	local p = Instance.new("Part")
-	p.Name, p.Size, p.CFrame, p.Color = name, size, cf, color
+	p.Name, p.Size, p.CFrame, p.Color = name, size * SC, scf(cf), color
 	p.Anchored = true
 	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
 	p.Material = mat or Enum.Material.Slate
@@ -27,7 +37,7 @@ local function deco(name, size, cf, color, mat, props)
 end
 local function light(parent, color, range, brightness)
 	local l = Instance.new("PointLight")
-	l.Color, l.Range, l.Brightness = color, range, brightness
+	l.Color, l.Range, l.Brightness = color, math.min(60, range * SC), brightness
 	l.Parent = parent
 	return l
 end
@@ -82,7 +92,7 @@ local habitats = {}
 local function hab(district, tag, pos)
 	habitats[district] = habitats[district] or {}
 	habitats[district][tag] = habitats[district][tag] or {}
-	table.insert(habitats[district][tag], Vector3.new(pos.X, 0.5, pos.Z))
+	table.insert(habitats[district][tag], Vector3.new(pos.X * SC, 0.5, pos.Z * SC))
 end
 
 function Map.build()
@@ -160,8 +170,8 @@ function Map.build()
 			for _, rz in { -1, 1 } do
 				local w = Instance.new("WedgePart")
 				w.Name, w.Anchored, w.Material, w.Color = "Roof", true, Enum.Material.Slate, Color3.fromRGB(48, 44, 56)
-				w.Size = Vector3.new(16, rh, 10.5)
-				w.CFrame = CFrame.new(cx, h + rh / 2, z + rz * 5.25) * CFrame.Angles(0, rz > 0 and math.pi or 0, 0)
+				w.Size = Vector3.new(16, rh, 10.5) * SC
+				w.CFrame = scf(CFrame.new(cx, h + rh / 2, z + rz * 5.25) * CFrame.Angles(0, rz > 0 and math.pi or 0, 0))
 				w.Parent = world
 			end
 			deco("RoofRidge", Vector3.new(16.4, 0.5, 0.8), CFrame.new(cx, h + rh + 0.1, z), Color3.fromRGB(120, 35, 35), Enum.Material.Slate)
@@ -183,7 +193,7 @@ function Map.build()
 	billboard(great, "Улица фонарей", WARM, Vector3.new(0, 9, 0))
 
 	---------------------------------------------------------------- ПЛОЩАДЬ И АЛТАРЬ (холодный свет, луч в небо)
-	local altarPos = Vector3.new(0, 0.5, 12)
+	local altarPos = Vector3.new(0, 0.5, 12) -- в старых координатах; наружу отдаётся sp(altarPos)
 	local altar = block("Altar", Vector3.new(8, 3, 8), CFrame.new(altarPos + Vector3.new(0, 1.5, 0)), Color3.fromRGB(125, 130, 142), Enum.Material.Concrete, { Reflectance = 0 })
 	block("AltarStep", Vector3.new(14, 0.6, 14), CFrame.new(altarPos + Vector3.new(0, 0.3, 0)), Color3.fromRGB(105, 110, 122), Enum.Material.Concrete)
 	local orb = deco("AltarGlow", Vector3.new(3, 3, 3), CFrame.new(altarPos + Vector3.new(0, 5.5, 0)), COLD, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
@@ -348,8 +358,6 @@ function Map.build()
 	end
 	do -- барьер канала (уровень 3) и ворота порта (уровень 20)
 		local canalGate = block("CanalGate", Vector3.new(70, 13, 1), CFrame.new(0, 6.5, -8), Color3.fromRGB(80, 230, 220), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
-		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Back)
-		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Front)
 		gates.CanalGate = canalGate
 		local portGate = block("PortGate", Vector3.new(1, 13, 10), CFrame.new(62.5, 6.5, -47), Color3.fromRGB(150, 200, 230), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
 		sign(portGate, "Туманный порт", Color3.new(1, 1, 1), Enum.NormalId.Right)
@@ -422,25 +430,6 @@ function Map.build()
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
 
-	---------------------------------------------------------------- порталы на площади
-	local portals = {}
-	for _, p in { { -30, "grove", Color3.fromRGB(110, 240, 200) }, { -19, "garden", Color3.fromRGB(170, 255, 170) }, { 19, "canal", Color3.fromRGB(80, 230, 220) }, { 30, "market", Color3.fromRGB(255, 120, 200) }, { 9, "port", Color3.fromRGB(150, 210, 230) } } do
-		local x, col = p[1], p[3]
-		for _, dx in { -3, 3 } do
-			block("PortalPost", Vector3.new(1, 8, 1), CFrame.new(x + dx, 4.5, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
-		end
-		block("PortalTop", Vector3.new(8, 1, 1.4), CFrame.new(x, 9, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
-		local swirl = deco("Portal", Vector3.new(0.3, 7, 5.2), CFrame.new(x, 4.6, -4) * CFrame.Angles(0, math.rad(90), 0), col, Enum.Material.Neon,
-			{ Shape = Enum.PartType.Cylinder, Transparency = 0.35 })
-		swirl:SetAttribute("District", p[2])
-		local pe = Instance.new("ParticleEmitter")
-		pe.Color, pe.LightEmission, pe.Rate = ColorSequence.new(col, Color3.new(1, 1, 1)), 1, 12
-		pe.Lifetime, pe.Speed, pe.Size = NumberRange.new(0.8, 1.4), NumberRange.new(1, 2), NumberSequence.new(0.4, 0)
-		pe.Parent = swirl
-		light(swirl, col, 12, 0.8)
-		table.insert(portals, swirl)
-	end
-
 	---------------------------------------------------------------- детали: бочки, ящики, лодки
 	local props = Random.new(7)
 	for _ = 1, 26 do
@@ -499,7 +488,7 @@ function Map.build()
 	end
 
 	---------------------------------------------------------------- точка появления
-	local spawnCF = CFrame.new(0, 0.6, 24)
+	local spawnCF = scf(CFrame.new(0, 0.6, 24))
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Size, spawn.CFrame, spawn.Anchored, spawn.Transparency, spawn.CanCollide = Vector3.new(6, 1, 6), spawnCF, true, 1, false
 	spawn.Neutral, spawn.Duration = true, 0
@@ -510,12 +499,11 @@ function Map.build()
 		{ Shape = Enum.PartType.Ball, Transparency = 1 })
 
 	return {
-		portals = portals,
 		habitats = habitats,
 		gates = gates,
 		boardGui = boardGui,
 		altar = altar,
-		altarPos = altarPos,
+		altarPos = sp(altarPos),
 		spawnCF = spawnCF,
 		barrier = barrier,
 		barrierText = barrierText,

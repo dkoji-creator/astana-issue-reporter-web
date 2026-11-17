@@ -31,18 +31,65 @@ P.Milestones = {
 	{ need = 18, coins = 6000, dust = 100 },
 }
 
--- облики фонаря: цвет фонаря, цвет луча; price = монеты; source = где получить
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden", "sea", "fog", "vip" }
+-- облики фонаря: цвет фонаря и луча + спецэффекты (частицы, шлейф, ореол), видны всем игрокам.
+-- price = монеты (dust = пыль); source = где получить; tier = ценность облика (подпись в магазине)
+-- fx: tex = sparkles | fire | smoke, colors = цвета частиц, rate/size/life/speed, up = подъём (+) или падение (-),
+--     trail = цвета шлейфа при беге, aura = большой мягкий свет вокруг игрока, burst = вспышка при поимке духа
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "golden", "fog", "ghost", "dragon", "vip" }
+local rgb = Color3.fromRGB
+P.SkinTiers = {
+	common = { name = "Обычный", color = rgb(190, 195, 215) },
+	rare = { name = "Редкий", color = rgb(90, 170, 255) },
+	epic = { name = "Эпический", color = rgb(190, 110, 255) },
+	legendary = { name = "Легендарный", color = rgb(255, 190, 60) },
+	mythic = { name = "Мифический", color = rgb(255, 80, 110) },
+	vip = { name = "VIP", color = rgb(255, 120, 220) },
+}
 P.Skins = {
-	classic = { name = "Классический", lamp = Color3.fromRGB(255, 225, 160), beam = Color3.fromRGB(255, 240, 200), price = 0 },
-	sakura = { name = "Сакура", lamp = Color3.fromRGB(255, 150, 200), beam = Color3.fromRGB(255, 200, 230), source = "Подарок 6-го дня" },
-	moon = { name = "Лунный", lamp = Color3.fromRGB(170, 210, 255), beam = Color3.fromRGB(200, 225, 255), price = 600 },
-	jade = { name = "Нефритовый", lamp = Color3.fromRGB(110, 240, 170), beam = Color3.fromRGB(170, 255, 210), source = "6 видов в Атласе" },
-	ember = { name = "Угольный", lamp = Color3.fromRGB(255, 110, 60), beam = Color3.fromRGB(255, 170, 120), price = 1200, dust = 20 },
-	golden = { name = "Золотой", lamp = Color3.fromRGB(255, 200, 60), beam = Color3.fromRGB(255, 225, 130), source = "12 видов в Атласе" },
-	sea = { name = "Морской", lamp = Color3.fromRGB(90, 220, 230), beam = Color3.fromRGB(170, 240, 255), source = "Достижение: 10 видов" },
-	fog = { name = "Туманный", lamp = Color3.fromRGB(200, 210, 230), beam = Color3.fromRGB(230, 235, 245), source = "Достижение: 1000 духов" },
-	vip = { name = "Радужный VIP", lamp = Color3.fromRGB(255, 120, 220), beam = Color3.fromRGB(200, 220, 255), source = "VIP-ловец", rainbow = true },
+	classic = { name = "Классический", tier = "common", lamp = rgb(255, 225, 160), beam = rgb(255, 240, 200), price = 0,
+		desc = "Тёплые искорки",
+		fx = { tex = "sparkles", colors = { rgb(255, 220, 150) }, rate = 3, size = 0.25, life = 1.2, speed = 0.5, up = 1 } },
+	sakura = { name = "Сакура", tier = "rare", lamp = rgb(255, 150, 200), beam = rgb(255, 200, 230), source = "Подарок 6-го дня",
+		desc = "Кружатся лепестки, розовый шлейф",
+		fx = { tex = "sparkles", colors = { rgb(255, 170, 210), rgb(255, 230, 240) }, rate = 9, size = 0.45, life = 2.5, speed = 1, up = -1.5,
+			trail = { rgb(255, 150, 200), rgb(255, 230, 240) } } },
+	moon = { name = "Лунный", tier = "rare", lamp = rgb(170, 210, 255), beam = rgb(200, 225, 255), price = 600,
+		desc = "Лунная пыль и серебристый шлейф",
+		fx = { tex = "sparkles", colors = { rgb(190, 220, 255), rgb(255, 255, 255) }, rate = 10, size = 0.35, life = 1.8, speed = 0.8, up = 0.5,
+			trail = { rgb(170, 210, 255), rgb(255, 255, 255) } } },
+	jade = { name = "Нефритовый", tier = "epic", lamp = rgb(110, 240, 170), beam = rgb(170, 255, 210), source = "6 видов в Атласе",
+		desc = "Зелёные огоньки поднимаются вверх",
+		fx = { tex = "sparkles", colors = { rgb(110, 255, 170), rgb(220, 255, 230) }, rate = 14, size = 0.4, life = 2, speed = 1.5, up = 3,
+			trail = { rgb(110, 240, 170), rgb(40, 120, 80) } } },
+	sea = { name = "Морской", tier = "epic", lamp = rgb(90, 220, 230), beam = rgb(170, 240, 255), source = "Достижение: 10 видов",
+		desc = "Пузырьки и морская волна за спиной",
+		fx = { tex = "sparkles", colors = { rgb(120, 230, 255), rgb(220, 250, 255) }, rate = 12, size = 0.5, life = 2.2, speed = 1, up = 2.5,
+			trail = { rgb(60, 200, 230), rgb(20, 80, 160) } } },
+	ember = { name = "Угольный", tier = "epic", lamp = rgb(255, 110, 60), beam = rgb(255, 170, 120), price = 1200, dust = 20,
+		desc = "Живой огонь и летящие угольки",
+		fx = { tex = "fire", colors = { rgb(255, 200, 80), rgb(255, 70, 30) }, rate = 18, size = 0.6, life = 0.9, speed = 1.5, up = 4,
+			trail = { rgb(255, 150, 50), rgb(160, 30, 20) } } },
+	golden = { name = "Золотой", tier = "legendary", lamp = rgb(255, 200, 60), beam = rgb(255, 225, 130), source = "12 видов в Атласе",
+		desc = "Золотой дождь, ореол и вспышка при поимке",
+		fx = { tex = "sparkles", colors = { rgb(255, 225, 100), rgb(255, 170, 30) }, rate = 22, size = 0.5, life = 1.6, speed = 2, up = -2,
+			trail = { rgb(255, 215, 80), rgb(200, 120, 20) }, aura = true, burst = true } },
+	fog = { name = "Туманный", tier = "legendary", lamp = rgb(200, 210, 230), beam = rgb(230, 235, 245), source = "Достижение: 1000 духов",
+		desc = "Тянет за собой клубы тумана",
+		fx = { tex = "smoke", colors = { rgb(210, 220, 235), rgb(150, 160, 190) }, rate = 8, size = 1.6, life = 3, speed = 0.6, up = 0.4,
+			trail = { rgb(220, 225, 240), rgb(120, 130, 160) }, aura = true } },
+	ghost = { name = "Призрачный", tier = "legendary", lamp = rgb(90, 255, 230), beam = rgb(150, 255, 240), price = 4000, dust = 80,
+		desc = "Бирюзовое призрачное пламя и ореол",
+		fx = { tex = "fire", colors = { rgb(120, 255, 240), rgb(40, 120, 255) }, rate = 20, size = 0.7, life = 1.1, speed = 1.2, up = 3,
+			trail = { rgb(90, 255, 230), rgb(40, 60, 200) }, aura = true, burst = true } },
+	dragon = { name = "Драконий", tier = "mythic", lamp = rgb(255, 60, 60), beam = rgb(255, 140, 90), source = "Достижение: Новая жизнь",
+		desc = "Огненный шлейф дракона и снопы искр",
+		fx = { tex = "fire", colors = { rgb(255, 230, 120), rgb(255, 40, 40) }, rate = 30, size = 0.9, life = 1, speed = 2.5, up = 5,
+			trail = { rgb(255, 200, 60), rgb(200, 20, 30) }, aura = true, burst = true } },
+	vip = { name = "Радужный VIP", tier = "vip", lamp = rgb(255, 120, 220), beam = rgb(200, 220, 255), source = "VIP-ловец", rainbow = true,
+		desc = "Радужные звёзды, радужный шлейф, ореол и салют при поимке",
+		fx = { tex = "sparkles", colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) },
+			rate = 35, size = 0.6, life = 2, speed = 3, up = 1.5,
+			trail = { rgb(255, 80, 80), rgb(255, 220, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) }, aura = true, burst = true } },
 }
 
 -- гифткоды (регистр не важен, каждый активируется один раз на аккаунт)
@@ -127,7 +174,7 @@ P.Achievements = {
 	mythic = { name = "Миф", desc = "Сдай мифического духа", type = "rarity", key = "mythic", need = 1, coins = 1500 },
 	secret = { name = "Тайна", desc = "Сдай секретного духа", type = "rarity", key = "secret", need = 1, coins = 4000 },
 	lvl25 = { name = "Ветеран", desc = "Достигни 25 уровня", type = "level", need = 25, coins = 1200 },
-	reborn = { name = "Новая жизнь", desc = "Переродись первый раз", type = "rebirths", need = 1, dust = 60 },
+	reborn = { name = "Новая жизнь", desc = "Переродись первый раз", type = "rebirths", need = 1, dust = 60, skin = "dragon" },
 }
 
 return P

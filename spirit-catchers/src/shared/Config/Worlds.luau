@@ -2,6 +2,13 @@
 -- Зона района: список прямоугольников { x = {min, max}, z = {min, max} } на уровне земли (y = 0.5).
 local W = {}
 
+-- Масштаб карты: все координаты ниже записаны «в старом размере» и умножаются на Scale по X и Z.
+-- Высота земли остаётся 0.5. Map.luau масштабирует постройки так же (Y — вокруг уровня земли).
+W.Scale = 1.6
+function W.sp(v: Vector3): Vector3
+	return Vector3.new(v.X * W.Scale, v.Y, v.Z * W.Scale)
+end
+
 W.Order = { "lantern", "mirror", "skymarket", "dreams" }
 
 W.Worlds = {
@@ -84,9 +91,25 @@ W.Districts = {
 	},
 }
 
--- район по позиции (x, z)
+-- перевод координат районов в масштаб карты
+for _, d in W.Districts do
+	for _, k in { "tp", "center", "back" } do
+		if d[k] then d[k] = W.sp(d[k]) end
+	end
+	for _, zn in d.zones do
+		zn.x = { zn.x[1] * W.Scale, zn.x[2] * W.Scale }
+		zn.z = { zn.z[1] * W.Scale, zn.z[2] * W.Scale }
+	end
+	if d.swim then
+		d.swim.center = W.sp(d.swim.center)
+		d.swim.rx *= W.Scale
+		d.swim.rz *= W.Scale
+	end
+end
+
+-- район по позиции (x, z); пороги — в старом размере
 function W.districtAt(pos: Vector3): string
-	local x, z = pos.X, pos.Z
+	local x, z = pos.X / W.Scale, pos.Z / W.Scale
 	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end

@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 
 local Catalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Catalog"))
 local Map = require(script.Parent:WaitForChild("Map"))
+local SC = Catalog.Worlds.Scale
 local map = Map.build()
 
 local TEST_PLACE_ID = 99980756426085
@@ -426,6 +427,86 @@ local function rootOf(plr)
 	return c:FindFirstChild("HumanoidRootPart")
 end
 
+------------------------------------------------------------------ спецэффекты фонаря (облик), видны всем
+local FX_TEX = {
+	sparkles = "rbxasset://textures/particles/sparkles_main.dds",
+	fire = "rbxasset://textures/particles/fire_main.dds",
+	smoke = "rbxasset://textures/particles/smoke_main.dds",
+}
+local function seq(colors)
+	if #colors == 1 then return ColorSequence.new(colors[1]) end
+	local kp = {}
+	for i, c in colors do table.insert(kp, ColorSequenceKeypoint.new((i - 1) / (#colors - 1), c)) end
+	return ColorSequence.new(kp)
+end
+local function lanternFx(lantern, skin)
+	local old = lantern:FindFirstChild("Fx")
+	if old then old:Destroy() end
+	local f = skin and skin.fx
+	if not f then return end
+	local folder = Instance.new("Folder")
+	folder.Name = "Fx"
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "Glow"
+	pe.Texture = FX_TEX[f.tex] or FX_TEX.sparkles
+	pe.Color = seq(f.colors)
+	pe.LightEmission, pe.Rate = 1, f.rate
+	pe.Lifetime = NumberRange.new(f.life * 0.7, f.life)
+	pe.Speed = NumberRange.new(f.speed * 0.5, f.speed)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Acceleration = Vector3.new(0, f.up, 0)
+	pe.Drag = 1
+	pe.RotSpeed = NumberRange.new(-90, 90)
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, f.size), NumberSequenceKeypoint.new(1, 0) })
+	pe.Transparency = NumberSequence.new(f.tex == "smoke" and 0.6 or 0.1, 1)
+	pe.Parent = lantern
+	pe.Parent = folder
+	-- шлейф при беге: два крепления сверху и снизу фонаря
+	local root = lantern.Parent and lantern.Parent:FindFirstChild("HumanoidRootPart")
+	if f.trail and root then
+		local a0 = Instance.new("Attachment")
+		a0.Name, a0.Position = "FxTrailTop", Vector3.new(0, 0.6, 0.6)
+		a0.Parent = root
+		local a1 = Instance.new("Attachment")
+		a1.Name, a1.Position = "FxTrailBottom", Vector3.new(0, -1.6, 0.6)
+		a1.Parent = root
+		local tr = Instance.new("Trail")
+		tr.Name = "Trail"
+		tr.Attachment0, tr.Attachment1 = a0, a1
+		tr.Color = seq(f.trail)
+		tr.LightEmission = 0.8
+		tr.Lifetime = 0.55
+		tr.Transparency = NumberSequence.new(0.25, 1)
+		tr.WidthScale = NumberSequence.new(1, 0.2)
+		tr.FaceCamera = true
+		tr.Parent = folder
+		a0.Parent, a1.Parent = root, root
+		-- старые крепления убираем при смене облика
+		for _, ch in root:GetChildren() do
+			if (ch.Name == "FxTrailTop" or ch.Name == "FxTrailBottom") and ch ~= a0 and ch ~= a1 then ch:Destroy() end
+		end
+	elseif root then
+		for _, ch in root:GetChildren() do
+			if ch.Name == "FxTrailTop" or ch.Name == "FxTrailBottom" then ch:Destroy() end
+		end
+	end
+	if f.aura then
+		local aura = Instance.new("PointLight")
+		aura.Name, aura.Range, aura.Brightness, aura.Color = "Aura", 14, 1.2, skin.lamp
+		aura.Shadows = false
+		aura.Parent = folder
+	end
+	folder.Parent = lantern
+end
+-- вспышка облика при поимке (золотой, призрачный, драконий, VIP)
+local function lanternBurst(plr)
+	local d = data[plr]
+	local skin = d and Catalog.Progress.Skins[d.skin]
+	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
+	local glow = lantern and lantern:FindFirstChild("Fx") and lantern.Fx:FindFirstChild("Glow")
+	if skin and skin.fx and skin.fx.burst and glow then glow:Emit(40) end
+end
+
 ------------------------------------------------------------------ фонарь игрока (виден всем)
 local function giveLantern(plr, char)
 	local root = char:WaitForChild("HumanoidRootPart", 10)
@@ -450,7 +531,21 @@ local function giveLantern(plr, char)
 	local att = Instance.new("Attachment")
 	att.Name = "BeamAtt"
 	att.Parent = p
+	-- тёмные крышки сверху и снизу: фонарь читается как бумажный фонарь, а не кубик
+	for _, y in { 0.48, -0.48 } do
+		local cap = Instance.new("Part")
+		cap.Name, cap.Size, cap.Color, cap.Material = "LanternCap", Vector3.new(0.7, 0.16, 0.7), Color3.fromRGB(45, 30, 30), Enum.Material.Wood
+		cap.CanCollide, cap.CanQuery, cap.CanTouch, cap.Massless = false, false, false, true
+		cap.CFrame = p.CFrame * CFrame.new(0, y, 0)
+		local cw = Instance.new("WeldConstraint")
+		cw.Part0, cw.Part1 = p, cap
+		cw.Parent = cap
+		cap.Parent = p
+	end
+	p.Shape = Enum.PartType.Ball
+	p.Size = Vector3.new(0.75, 0.85, 0.75)
 	p.Parent = char
+	lanternFx(p, skin)
 end
 
 ------------------------------------------------------------------ духи
@@ -471,7 +566,7 @@ local function rnd(a, b) return a + math.random() * (b - a) end
 
 local function zonePoint(district, near: Vector3?, tut: boolean?, kind: string?)
 	if tut then
-		return Vector3.new(rnd(-14, 14), 0.5, rnd(34, 62))
+		return Vector3.new(rnd(-14, 14) * SC, 0.5, rnd(34, 62) * SC)
 	end
 	local info = kind and Catalog.Kinds[kind]
 	-- логова: дух появляется и перебегает между «своими» местами района
@@ -715,6 +810,7 @@ RunService.Heartbeat:Connect(function(dt)
 				end
 				table.insert(jars[plr], { k = s.kind, v = variant })
 				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant, variant ~= base)
+				lanternBurst(plr)
 				local d = data[plr]
 				local xp = Catalog.Progress.XP[info.rarity] or 4
 				d.xp += xp
@@ -874,7 +970,7 @@ local function hitPlayer(plr)
 end
 
 local oniAnchor: Part? = nil
-local oniPos = Vector3.new(0, 0.5, 118)
+local oniPos = Vector3.new(0, 0.5, 118 * SC)
 local function oniLoop(a: Part)
 	local facing = Vector3.new(0, 0, -1)
 	local function place() a.CFrame = CFrame.lookAt(oniPos, oniPos + facing) end
@@ -894,13 +990,13 @@ local function oniLoop(a: Part)
 		local target, best = nil, math.huge
 		for _, plr in Players:GetPlayers() do
 			local r = rootOf(plr)
-			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 and r.Position.Y > -2 then
+			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 * SC and r.Position.Y > -2 then
 				local d = (r.Position - oniPos).Magnitude - ((jars[plr] and #jars[plr] > 0) and 40 or 0)
 				if d < best then target, best = r, d end
 			end
 		end
 		if not target then
-			walkTo(Vector3.new(rnd(-12, 12), 0.5, rnd(40, 120)), 7, 4)
+			walkTo(Vector3.new(rnd(-12, 12) * SC, 0.5, rnd(40, 120) * SC), 7, 4)
 			continue
 		end
 		-- подходит к игроку
@@ -978,7 +1074,7 @@ local function startMoon()
 	a.Name = "Oni"
 	a.Size, a.Transparency = Vector3.new(1, 1, 1), 1
 	a.Anchored, a.CanCollide, a.CanQuery, a.CanTouch = true, false, false, false
-	oniPos = Vector3.new(0, 0.5, 118)
+	oniPos = Vector3.new(0, 0.5, 118 * SC)
 	a.CFrame = CFrame.new(oniPos)
 	a:SetAttribute("State", "walk")
 	a.Parent = workspace
@@ -1183,6 +1279,7 @@ local function applySkin(plr)
 	if lantern and skin then
 		lantern.Color = skin.lamp
 		if lantern:FindFirstChild("Beam") then lantern.Beam.Color = skin.beam end
+		lanternFx(lantern, skin)
 	end
 end
 
@@ -1254,10 +1351,10 @@ task.spawn(function()
 				local p = r.Position
 				if p.Y < -3.5 then
 					-- упал в канал: на ближайший берег
-					if p.X > 63 then
-						plr.Character:PivotTo(CFrame.new(118, 4, math.clamp(p.Z, -66, -14)))
+					if p.X > 63 * SC then
+						plr.Character:PivotTo(CFrame.new(118 * SC, 4, math.clamp(p.Z, -66 * SC, -14 * SC)))
 					else
-						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
+						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55 * SC, 55 * SC), 4, p.Z > -30 * SC and -14 * SC or -46 * SC))
 					end
 				else
 					local dn = Catalog.district(p)
@@ -1492,19 +1589,6 @@ TeleportFn.OnServerInvoke = function(plr, district)
 	if typeof(district) ~= "string" then return { ok = false } end
 	return teleportTo(plr, district)
 end
--- порталы на площади
-for _, portal in map.portals do
-	local prompt = Instance.new("ProximityPrompt")
-	prompt.ActionText = "Телепорт"
-	prompt.ObjectText = Catalog.Districts[portal:GetAttribute("District")].name
-	prompt.HoldDuration, prompt.MaxActivationDistance, prompt.RequiresLineOfSight = 0, 10, false
-	prompt.Parent = portal
-	prompt.Triggered:Connect(function(plr)
-		local r = teleportTo(plr, portal:GetAttribute("District"))
-		if not r.ok and r.msg then NoticeEv:FireClient(plr, r.msg) end
-	end)
-end
-
 RedeemFn.OnServerInvoke = function(plr, code)
 	local d = data[plr]
 	if not (d and typeof(code) == "string") then return { ok = false } end
