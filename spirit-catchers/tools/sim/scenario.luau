@@ -26,6 +26,7 @@ end
 local srv = folder("Server", game:GetService("ServerScriptService"))
 local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")
+mod("ModuleScript", "Social", srv, "server/Social")
 local sps = folder("StarterPlayerScripts", game:GetService("StarterPlayer"))
 local cl = folder("Client", sps)
 local clientScript = mod("LocalScript", "Client", cl, "client/Client.client")
@@ -225,6 +226,60 @@ for round = 1, 1 do
 			end
 		end
 	end
+end
+
+stage("двор, обмен, клуб")
+do
+	local yards = workspace:FindFirstChild("Yards")
+	if not yards then table.insert(SIM.errors, "нет дворов") end
+	local v = inv("VisitYard", plr.UserId)
+	if not (v and v.ok) then table.insert(SIM.errors, "свой двор: " .. tostring(v and v.msg)) end
+	frames(10)
+	-- второй игрок (без клиента): обмен и лайк
+	local p2 = SIM.makePlayer(222, "Friend")
+	Players.PlayerAdded:Fire(p2)
+	frames(5)
+	SIM.makeCharacter(p2)
+	frames(20)
+	local srvTrade = remotes.Trade.OnServerInvoke
+	local r1 = inv("Trade", "request", 222)
+	if not (r1 and r1.ok) then table.insert(SIM.errors, "запрос обмена: " .. tostring(r1 and r1.msg)) end
+	local r2 = srvTrade(p2, "respond", true)
+	if not (r2 and r2.ok) then table.insert(SIM.errors, "принять обмен: " .. tostring(r2 and r2.msg)) end
+	frames(2)
+	local give
+	for _, k in { "PaperFox", "Umbrella", "Firefly", "Kodama" } do give = give or k end
+	local before = 0
+	inv("Admin", "allSpirits")
+	inv("Admin", "allSpirits")
+	inv("Trade", "add", "PaperFox")
+	inv("Trade", "ready", true)
+	srvTrade(p2, "ready", true)
+	frames(80)
+	local p2saved = nil
+	-- проверяем через состояние: обмен закрыт
+	local r3 = inv("Trade", "cancel")
+	if r3 and r3.ok then table.insert(SIM.errors, "обмен не завершился") end
+	-- лайк двора первого игрока
+	for _, plot in yards:GetChildren() do
+		if plot:IsA("Folder") and plot:GetAttribute("Owner") == plr.UserId then
+			local sign = plot:FindFirstChild("Sign")
+			local pp = sign and sign:FindFirstChildOfClass("ProximityPrompt")
+			if pp then pp.Triggered:Fire(p2) else table.insert(SIM.errors, "нет кнопки лайка") end
+		end
+	end
+	-- клуб
+	local c1 = inv("Club", "create", "Ночные ловцы")
+	if not (c1 and c1.ok) then table.insert(SIM.errors, "клуб: " .. tostring(c1 and c1.msg)) end
+	frames(10)
+	local code = c1 and c1.msg and string.match(c1.msg, "(%w%w%w%w%w)$")
+	local srvClub = remotes.Club.OnServerInvoke
+	local j = srvClub(p2, "join", code or "")
+	if not (j and j.ok) then table.insert(SIM.errors, "вступить в клуб: " .. tostring(j and j.msg)) end
+	frames(10)
+	Players.PlayerRemoving:Fire(p2)
+	p2.Parent = nil
+	frames(10)
 end
 
 stage("достижения")

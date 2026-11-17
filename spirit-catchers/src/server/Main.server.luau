@@ -8,6 +8,7 @@ local TweenService = game:GetService("TweenService")
 
 local Catalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Catalog"))
 local Map = require(script.Parent:WaitForChild("Map"))
+local Social = require(script.Parent:WaitForChild("Social"))
 local SC = Catalog.Worlds.Scale
 local map = Map.build()
 
@@ -40,6 +41,7 @@ end
 local RevealEv = remote("Reveal")
 local CatchHoldEv = remote("CatchHold")
 local CatchZoneEv = remote("CatchZone") -- мини-игра: метка духа в зоне луча
+Social.remotes(remote)
 local updateBoard -- доска рекордов (ниже)
 local startRaid -- рейд «Тысяча фонарей» (ниже)
 local RaidHitEv = remote("RaidHit")
@@ -233,6 +235,7 @@ end
 local function liveOnCatch(plr, d, kind: string, district: string, variant: string)
 	local rar = Catalog.Kinds[kind].rarity
 	weeklyCatch(plr, d, kind, variant)
+	Social.clubCatch(plr)
 	-- альбом редких поимок
 	local vOdds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
 	if RARITY_RANK[rar] >= RARITY_RANK[Live.AlbumMinRarity] or vOdds >= Live.AlbumMinOdds then
@@ -279,6 +282,11 @@ local function luckOf(d)
 	if workspace:GetAttribute("MoonActive") then
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
+	end
+	local club = Social.clubLuck(d)
+	if club > 0 then
+		mult *= 1 + club
+		table.insert(parts, ("Клуб +%d%%"):format(math.floor(club * 100 + 0.5)))
 	end
 	local cl = compPct(d, "luck")
 	if cl > 0 then
@@ -354,7 +362,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {},
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0,
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -497,6 +505,14 @@ local function migrate(raw): Profile
 				end
 			end
 		end
+		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
+		d.yardLikes = math.floor(num(raw.yardLikes, 0, 1e9, 0))
+		if typeof(raw.likes) == "table" and typeof(raw.likes.day) == "number" and typeof(raw.likes.given) == "table" then
+			d.likes = { day = raw.likes.day, given = {} }
+			for k, v in raw.likes.given do
+				if typeof(k) == "string" and v == true then d.likes.given[k] = true end
+			end
+		end
 		if typeof(raw.weekBest) == "table" and typeof(raw.weekBest.week) == "number" and typeof(raw.weekBest.score) == "number" then
 			d.weekBest = { week = raw.weekBest.week, score = raw.weekBest.score, k = raw.weekBest.k, v = raw.weekBest.v }
 		end
@@ -510,6 +526,7 @@ local function persist(plr)
 	if not (store and d) or d.loadFailed then return false end
 	local copy = table.clone(d)
 	copy.loadFailed = nil
+	copy._clubPending = nil
 	copy.passes = nil
 	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
 	if not ok then warn("DataStore save failed:", err) end
@@ -591,6 +608,7 @@ local function pushState(plr)
 			return { list = t, all = ch.all }
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
+		club = Social.clubView(d), yardLikes = d.yardLikes or 0,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -1176,7 +1194,7 @@ local function oniLoop(a: Part)
 		local target, best = nil, math.huge
 		for _, plr in Players:GetPlayers() do
 			local r = rootOf(plr)
-			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 * SC and r.Position.Y > -2 then
+			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 * SC and r.Position.Z < 240 * SC and r.Position.Y > -2 then
 				local d = (r.Position - oniPos).Magnitude - ((jars[plr] and #jars[plr] > 0) and 40 or 0)
 				if d < best then target, best = r, d end
 			end
@@ -1392,6 +1410,8 @@ local function doSave(plr)
 	d.dust += dust
 	local kinds = table.clone(jar)
 	jars[plr] = {}
+	Social.clubSync(plr)
+	Social.refreshYard(plr)
 	local persisted = persist(plr)
 	pushState(plr)
 	updateBoard(plr)
@@ -1515,6 +1535,8 @@ EquipFn.OnServerInvoke = function(plr, kind)
 	else
 		return false
 	end
+	applySpeed(plr)
+	Social.refreshYard(plr)
 	persist(plr)
 	pushState(plr)
 	return true
@@ -2168,6 +2190,11 @@ end)
 game:GetService("StarterPlayer").CameraMaxZoomDistance = 40
 
 ------------------------------------------------------------------ игроки
+Social.init({
+	data = data, Catalog = Catalog, pushState = pushState, persist = persist, rootOf = rootOf,
+	NoticeEv = NoticeEv, stopHold = stopHold, distinct = distinct,
+})
+
 Players.PlayerAdded:Connect(function(plr)
 	plr.CameraMaxZoomDistance = 40
 	local ls = Instance.new("Folder")
@@ -2210,10 +2237,12 @@ Players.PlayerAdded:Connect(function(plr)
 	if plr.Character then giveLantern(plr, plr.Character) end
 	task.spawn(checkPasses, plr)
 	pushState(plr)
+	Social.playerReady(plr)
 	if failed then NoticeEv:FireClient(plr, "Не удалось загрузить сохранение — прогресс этой сессии не запишется") end
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
+	Social.playerLeft(plr)
 	stopHold(plr)
 	persist(plr)
 	updateBoard(plr)

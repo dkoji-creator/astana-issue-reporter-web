@@ -48,6 +48,7 @@ do
 
 end
 local enterPhoto -- фото-режим (ниже)
+local toggleWindow -- открыть одно окно, закрыть остальные (ниже)
 -- бонус способности спутника (доля), например compBonus("reveal") = 0.12
 local function compBonus(key)
 	local c = state.comp
@@ -101,9 +102,9 @@ do
 
 end
 ------------------------------------------------------------------ HUD: левая колонка
-local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason
+local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason, btnSocial
 do
-	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 18), Size = UDim2.fromOffset(136, 350), BackgroundTransparency = 1 }, hud)
+	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 22), Size = UDim2.fromOffset(136, 360), BackgroundTransparency = 1 }, hud)
 	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
 	btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 	btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
@@ -114,8 +115,9 @@ do
 	btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
 	btnPower = K.iconButton(leftCol, "level", "Сила", Color3.fromRGB(240, 180, 40))
 	btnSeason = K.iconButton(leftCol, "trophy", "Сезон", Color3.fromRGB(255, 130, 60))
+	btnSocial = K.iconButton(leftCol, "paw", "Ловцы", Color3.fromRGB(90, 190, 200))
 	btnAdmin.Visible = false
-	for i, b in { btnAtlas, btnSeason, btnPower, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
+	for i, b in { btnAtlas, btnSeason, btnPower, btnQuests, btnShop, btnSocial, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
 
 end
 ------------------------------------------------------------------ HUD: справа валюты и уровень
@@ -854,6 +856,216 @@ do
 		end
 	end)
 end
+------------------------------------------------------------------ окно: Ловцы (дворы, обмен, клуб)
+local socialW, refreshSocial
+do
+	local body
+	socialW, body = K.window(gui, "Ловцы", "paw", Color3.fromRGB(90, 190, 200), 0.84, 0.84)
+	local tabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1 }, body)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, tabs)
+	local TEAL = Color3.fromRGB(70, 170, 190)
+	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+
+	-- дворы: свой двор + список игроков сервера
+	local yardPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44) })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, yardPage)
+	local myYard = K.panel(yardPage, { Size = UDim2.new(1, -10, 0, 70), LayoutOrder = 0, BackgroundColor3 = Color3.fromRGB(45, 80, 70) })
+	local myYardL = K.text(myYard, "", { Size = UDim2.new(0.62, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextWrapped = true })
+	local goHome = K.button(myYard, "Мой двор", T.green, { Size = UDim2.new(0.36, -8, 1, -14), Position = UDim2.new(0.64, 0, 0, 7), MaxText = 17 })
+	goHome.Activated:Connect(function()
+		local r = remotes.VisitYard:InvokeServer(plr.UserId)
+		if r and r.ok then K.close(socialW) elseif r and r.msg then showToast(r.msg) end
+	end)
+	K.text(yardPage, "Во дворе гуляют твои самые редкие духи. Заходи к другим и ставь «Нравится» у таблички: тебе +10 монет, хозяину +25.",
+		{ Size = UDim2.new(1, -10, 0, 40), LayoutOrder = 1, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local playerRows = {}
+
+	-- обмен
+	local tradePage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, body)
+	local tradeList = K.scroll(tradePage, { Size = UDim2.new(1, 0, 1, 0) })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, tradeList)
+	K.text(tradeList, "Меняй дубликаты: у тебя всегда остаётся хотя бы один дух каждого вида. До 4 видов за обмен, оба нажимают «Готов».",
+		{ Size = UDim2.new(1, -10, 0, 40), LayoutOrder = 0, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local tradeRows = {}
+	-- активный обмен
+	local tradeBox = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, tradePage)
+	local tradeTitle = K.text(tradeBox, "", { Size = UDim2.new(1, 0, 0, 26), MaxText = 19 })
+	local function side(x, title)
+		local f = K.panel(tradeBox, { Position = UDim2.new(x, 0, 0, 30), Size = UDim2.new(0.49, 0, 0, 92), BackgroundColor3 = T.panel2 })
+		local t = K.text(f, title, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 2), MaxText = 16, TextXAlignment = Enum.TextXAlignment.Left })
+		local l = K.text(f, "", { Size = UDim2.new(1, -12, 1, -30), Position = UDim2.fromOffset(6, 26), MaxText = 14, Font = Enum.Font.GothamBold, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, StrokeThickness = 1 })
+		return f, t, l
+	end
+	local mineF, mineT, mineL = side(0, "Ты отдаёшь")
+	local theirsF, theirsT, theirsL = side(0.51, "Ты получаешь")
+	K.text(tradeBox, "Нажми на духа, чтобы добавить; на «-» чтобы убрать:", { Size = UDim2.new(1, 0, 0, 20), Position = UDim2.fromOffset(0, 126), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local dupGrid = K.scroll(tradeBox, { Position = UDim2.fromOffset(0, 148), Size = UDim2.new(1, 0, 1, -200) })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 44), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, dupGrid)
+	local readyB, readyL = K.button(tradeBox, "Готов", T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0.49, 0, 0, 44), MaxText = 18 })
+	local cancelB = K.button(tradeBox, "Отменить", T.red, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0.49, 0, 0, 44), MaxText = 18 })
+	local trade = nil
+	local function offerText(o)
+		local parts = {}
+		for kind, n in o or {} do table.insert(parts, ("%s x%d"):format(Catalog.Kinds[kind].name, n)) end
+		return #parts > 0 and table.concat(parts, "\n") or "пусто"
+	end
+	local function refreshTrade()
+		tradeBox.Visible = trade ~= nil
+		tradeList.Visible = trade == nil
+		if not trade then return end
+		tradeTitle.Text = "Обмен с " .. trade.other .. (trade.counting and "  -  обмен через 3 с!" or "")
+		mineL.Text = offerText(trade.mine)
+		theirsL.Text = offerText(trade.theirs)
+		mineT.Text = "Ты отдаёшь" .. (trade.readyMe and "  (готов)" or "")
+		theirsT.Text = "Ты получаешь" .. (trade.readyThem and "  (готов)" or "")
+		mineF:FindFirstChildOfClass("UIStroke").Color = trade.readyMe and T.green or T.ink
+		theirsF:FindFirstChildOfClass("UIStroke").Color = trade.readyThem and T.green or T.ink
+		readyL.Text = trade.readyMe and "Не готов" or "Готов"
+		for _, c in dupGrid:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		local i = 0
+		for _, kind in Catalog.Order do
+			local have = state.saved[kind] or 0
+			local inOffer = (trade.mine and trade.mine[kind]) or 0
+			if have - inOffer > 1 or inOffer > 0 then
+				i += 1
+				local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
+				local b = K.button(dupGrid, ("%s  %d"):format(Catalog.Kinds[kind].short, have - 1 - inOffer), K.darken(rar.color, 0.3), { LayoutOrder = i, MaxText = 14 })
+				b.Activated:Connect(function()
+					local r = remotes.Trade:InvokeServer("add", kind)
+					if r and r.msg then showToast(r.msg) end
+				end)
+				if inOffer > 0 then
+					local minus = K.button(b, "-", T.red, { Size = UDim2.fromOffset(30, 30), Position = UDim2.new(1, -24, 0, -8), MaxText = 18 })
+					minus.Activated:Connect(function() remotes.Trade:InvokeServer("remove", kind) end)
+				end
+			end
+		end
+	end
+	readyB.Activated:Connect(function()
+		if trade then remotes.Trade:InvokeServer("ready", not trade.readyMe) end
+	end)
+	cancelB.Activated:Connect(function() remotes.Trade:InvokeServer("cancel") end)
+	-- входящий запрос на обмен
+	local reqPanel = K.panel(gui, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 180), Size = UDim2.fromOffset(420, 110), Visible = false, ZIndex = 20 })
+	local reqL = K.text(reqPanel, "", { Size = UDim2.new(1, -20, 0, 44), Position = UDim2.fromOffset(10, 6), MaxText = 18, TextWrapped = true })
+	local accB = K.button(reqPanel, "Принять", T.green, { Size = UDim2.new(0.5, -15, 0, 44), Position = UDim2.new(0, 10, 1, -54), MaxText = 18 })
+	local decB = K.button(reqPanel, "Отказать", T.red, { Size = UDim2.new(0.5, -15, 0, 44), Position = UDim2.new(0.5, 5, 1, -54), MaxText = 18 })
+	accB.Activated:Connect(function()
+		reqPanel.Visible = false
+		local r = remotes.Trade:InvokeServer("respond", true)
+		if r and r.msg then showToast(r.msg) end
+	end)
+	decB.Activated:Connect(function()
+		reqPanel.Visible = false
+		remotes.Trade:InvokeServer("respond", false)
+	end)
+	remotes.TradeState.OnClientEvent:Connect(function(m)
+		if m.type == "request" then
+			reqL.Text = m.from .. " предлагает обмен духами"
+			reqPanel.Visible = true
+			K.pop(reqPanel)
+			task.delay(25, function() reqPanel.Visible = false end)
+		elseif m.type == "state" then
+			trade = m.trade
+			if not socialW.Visible then toggleWindow(socialW, refreshSocial) end
+			refreshTrade()
+		elseif m.type == "closed" then
+			trade = nil
+			refreshTrade()
+			if m.msg then showToast(m.msg, 2.5) end
+		end
+	end)
+
+	-- клуб
+	local clubPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, clubPage)
+	local noClub = K.make("Frame", { Size = UDim2.new(1, -10, 0, 220), BackgroundTransparency = 1, LayoutOrder = 1 }, clubPage)
+	K.text(noClub, "Клуб ловцов: общая коллекция с друзьями. Каждый вид в коллекции клуба даёт всем участникам +1% удачи.",
+		{ Size = UDim2.new(1, 0, 0, 44), MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local function box(y, placeholder)
+		local tb = K.make("TextBox", { Position = UDim2.fromOffset(0, y), Size = UDim2.new(0.6, -8, 0, 44), BackgroundColor3 = T.ink, Text = "", PlaceholderText = placeholder,
+			TextColor3 = T.text, PlaceholderColor3 = T.sub, Font = Enum.Font.GothamBold, TextScaled = true, ClearTextOnFocus = false }, noClub)
+		K.corner(tb, UDim.new(0, 10))
+		K.make("UITextSizeConstraint", { MaxTextSize = 18 }, tb)
+		return tb
+	end
+	local nameBox = box(54, "Название клуба")
+	local createB = K.button(noClub, "Создать (500 монет)", T.green, { Position = UDim2.new(0.6, 0, 0, 54), Size = UDim2.new(0.4, 0, 0, 44), MaxText = 16 })
+	local codeBox = box(112, "Код клуба (5 символов)")
+	local joinB = K.button(noClub, "Вступить", T.blue, { Position = UDim2.new(0.6, 0, 0, 112), Size = UDim2.new(0.4, 0, 0, 44), MaxText = 16 })
+	local inClub = K.make("Frame", { Size = UDim2.new(1, -10, 0, 300), BackgroundTransparency = 1, LayoutOrder = 2, Visible = false }, clubPage)
+	local clubName = K.text(inClub, "", { Size = UDim2.new(0.65, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 22, TextColor3 = T.gold })
+	local leaveB = K.button(inClub, "Выйти", T.red, { Position = UDim2.new(0.7, 0, 0, 0), Size = UDim2.new(0.3, 0, 0, 36), MaxText = 16 })
+	local clubInfo = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 50), Position = UDim2.fromOffset(0, 40), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16, Font = Enum.Font.GothamBold, TextWrapped = true })
+	local _, clubFill = K.bar(inClub, T.gold, { Size = UDim2.new(1, 0, 0, 14), Position = UDim2.fromOffset(0, 96) })
+	local clubMembers = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 170), Position = UDim2.fromOffset(0, 118), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true, TextColor3 = T.sub, StrokeThickness = 1 })
+	local function clubCall(action, arg)
+		local r = remotes.Club:InvokeServer(action, arg)
+		if r and r.msg then showToast(r.msg, 3) end
+	end
+	createB.Activated:Connect(function() clubCall("create", nameBox.Text) end)
+	joinB.Activated:Connect(function() clubCall("join", codeBox.Text) end)
+	leaveB.Activated:Connect(function() clubCall("leave") end)
+
+	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage } }
+	for _, pair in pages do
+		pair[1].Activated:Connect(function()
+			for _, o in pages do
+				o[2].Visible = o == pair
+				K.recolor(o[1], o == pair and TEAL or T.panel2)
+			end
+		end)
+	end
+
+	refreshSocial = function()
+		myYardL.Text = ("Твой двор: лайков %d"):format(state.yardLikes or 0)
+		-- игроки сервера: визит и обмен
+		local seen = {}
+		for _, p in Players:GetPlayers() do
+			if p ~= plr then
+				seen[p] = true
+				if not playerRows[p] then
+					local f = K.panel(yardPage, { Size = UDim2.new(1, -10, 0, 56), LayoutOrder = 10, BackgroundColor3 = T.panel2 })
+					K.text(f, p.DisplayName, { Size = UDim2.new(0.6, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+					local vb = K.button(f, "В гости", TEAL, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 0, 0, 6), MaxText = 16 })
+					vb.Activated:Connect(function()
+						local r = remotes.VisitYard:InvokeServer(p.UserId)
+						if r and r.ok then K.close(socialW) elseif r and r.msg then showToast(r.msg) end
+					end)
+					local tf = K.panel(tradeList, { Size = UDim2.new(1, -10, 0, 56), LayoutOrder = 10, BackgroundColor3 = T.panel2 })
+					K.text(tf, p.DisplayName, { Size = UDim2.new(0.6, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+					local tb = K.button(tf, "Обменяться", T.orange, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 0, 0, 6), MaxText = 16 })
+					tb.Activated:Connect(function()
+						local r = remotes.Trade:InvokeServer("request", p.UserId)
+						if r and r.msg then showToast(r.msg, 2.5) end
+					end)
+					playerRows[p] = { f, tf }
+				end
+			end
+		end
+		for p, rows in playerRows do
+			if not seen[p] then
+				rows[1]:Destroy()
+				rows[2]:Destroy()
+				playerRows[p] = nil
+			end
+		end
+		refreshTrade()
+		local c = state.club
+		noClub.Visible = c == nil
+		inClub.Visible = c ~= nil
+		if c then
+			clubName.Text = c.name
+			clubInfo.Text = ("Код для друзей: %s   Участников: %d/20\nОбщая коллекция %d/%d видов: удача +%d%%   Поймано клубом: %d"):format(c.code, c.count, c.distinct, #Catalog.Order, c.luck, c.total)
+			clubFill.Size = UDim2.fromScale(math.clamp(c.distinct / #Catalog.Order, 0, 1), 1)
+			clubMembers.Text = "Участники: " .. table.concat(c.members, ", ")
+		end
+	end
+end
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
 do
@@ -1255,7 +1467,7 @@ do
 end
 
 ------------------------------------------------------------------ навигация по окнам
-local newsW, newsBody, toggleWindow
+local newsW, newsBody
 do
 	-- Телепорт
 	local tpW, tpBody = K.window(gui, "Телепорт", "portal", T.purple, 0.62, 0.8)
@@ -1356,7 +1568,7 @@ do
 		K.close(adminW)
 	end)
 
-	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW, seasonW }
+	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW, seasonW, socialW }
 	toggleWindow = function(w, refresh)
 		local willOpen = not w.Visible
 		for _, x in allWindows do K.close(x) end
@@ -1368,6 +1580,7 @@ do
 	btnAtlas.Activated:Connect(function() toggleWindow(atlasW, refreshAtlas) end)
 	btnQuests.Activated:Connect(function() toggleWindow(questW, refreshQuests) end)
 	btnSeason.Activated:Connect(function() toggleWindow(seasonW, refreshSeason) end)
+	btnSocial.Activated:Connect(function() toggleWindow(socialW, refreshSocial) end)
 	compPill.Activated:Connect(function()
 		local res = remotes.FeedCompanion:InvokeServer()
 		if res and res.ok then
@@ -1479,6 +1692,7 @@ do
 		if giftW.Visible then refreshGift() end
 		if powerW.Visible then refreshPower() end
 		if seasonW.Visible then refreshSeason() end
+		if socialW.Visible then refreshSocial() end
 	end
 
 end
@@ -1883,7 +2097,7 @@ do
 
 end
 ------------------------------------------------------------------ визуал духов и следы
-local visFolder, visuals, dropTrail, updateFollowers, updateOni
+local visFolder, visuals, dropTrail, updateFollowers, updateOni, updateYards
 do
 	visFolder = K.make("Folder", { Name = "SpiritVisuals" }, workspace)
 	local trailFolder = K.make("Folder", { Name = "Trails" }, workspace)
@@ -1992,6 +2206,48 @@ do
 			if not p.Parent then
 				f.model:Destroy()
 				followers[p] = nil
+			end
+		end
+	end
+
+	-- дворы: духи владельца гуляют по своему участку (модели только у клиента)
+	local yardModels = {} -- [plot] = { sig, list = { {model, kind, phase} } }
+	updateYards = function(now)
+		local yards = workspace:FindFirstChild("Yards")
+		if not yards then return end
+		local cam = workspace.CurrentCamera
+		for _, plot in yards:GetChildren() do
+			if plot:IsA("Folder") then
+				local sig = plot:GetAttribute("Kinds") or ""
+				local y = yardModels[plot]
+				if not y or y.sig ~= sig then
+					if y then
+						for _, e in y.list do e.model:Destroy() end
+					end
+					y = { sig = sig, list = {} }
+					yardModels[plot] = y
+					local i = 0
+					for entry in string.gmatch(sig, "[^,]+") do
+						local kind, variant = string.match(entry, "([^:]+):?(.*)")
+						if kind and Catalog.Kinds[kind] and Spirits.Builders[kind] then
+							i += 1
+							local m = Spirits.Builders[kind]()
+							pcall(Spirits.applyVariant, m, variant ~= "" and variant or nil)
+							m.Parent = visFolder
+							table.insert(y.list, { model = m, kind = kind, phase = i * 1.7, r = 6 + (i % 3) * 5 })
+						end
+					end
+				end
+				local center = plot:GetAttribute("Center")
+				if center and cam and (cam.CFrame.Position - center).Magnitude < 170 then
+					for _, e in y.list do
+						local info = Catalog.Kinds[e.kind]
+						local a = now * 0.25 + e.phase
+						local pos = center + Vector3.new(math.cos(a) * e.r, 0.5 + (info.height or 0), math.sin(a) * e.r * 0.8)
+						local look = pos + Vector3.new(-math.sin(a), 0, math.cos(a))
+						Spirits.animate(e.model, CFrame.lookAt(pos, look), now * (info.animSpeed or 1) * 0.6)
+					end
+				end
 			end
 		end
 	end
@@ -2165,6 +2421,7 @@ do
 			end
 		end
 		updateFollowers(now)
+		updateYards(now)
 		updateOni(dt)
 		local beamPart = World:FindFirstChild("LighthouseBeam")
 		if beamPart then

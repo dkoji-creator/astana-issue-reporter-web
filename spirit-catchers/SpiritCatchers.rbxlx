@@ -941,7 +941,7 @@ W.Worlds = {
 	},
 }
 
-W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port" }
+W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "yard" }
 
 -- Районы открываются по уровню, в каждом следующем — более редкие духи и выше удача района.
 -- habitats: «логова» района (теги), где духи прячутся и между которыми перебегают (точки строит Map.luau)
@@ -980,6 +980,10 @@ W.Districts = {
 		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
 		unlock = { level = 15 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
 	},
+	yard = { -- остров дворов игроков (за улицей фонарей); координаты в старом размере
+		tp = Vector3.new(0, 3, 266), world = "lantern", name = "Дворы ловцов", max = 0, luck = 1,
+		zones = {}, tint = Color3.fromRGB(240, 245, 230), center = Vector3.new(0, 0.5, 304),
+	},
 	port = {
 		tp = Vector3.new(78, 3, -47), world = "lantern", name = "Туманный порт", max = 8, luck = 3,
 		zones = { { x = { 70, 124 }, z = { -66, -14 } } },
@@ -1009,6 +1013,7 @@ end
 -- район по позиции (x, z); пороги — в старом размере
 function W.districtAt(pos: Vector3): string
 	local x, z = pos.X / W.Scale, pos.Z / W.Scale
+	if z > 245 then return "yard" end
 	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end
@@ -1941,6 +1946,7 @@ local TweenService = game:GetService("TweenService")
 
 local Catalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Catalog"))
 local Map = require(script.Parent:WaitForChild("Map"))
+local Social = require(script.Parent:WaitForChild("Social"))
 local SC = Catalog.Worlds.Scale
 local map = Map.build()
 
@@ -1973,6 +1979,7 @@ end
 local RevealEv = remote("Reveal")
 local CatchHoldEv = remote("CatchHold")
 local CatchZoneEv = remote("CatchZone") -- мини-игра: метка духа в зоне луча
+Social.remotes(remote)
 local updateBoard -- доска рекордов (ниже)
 local startRaid -- рейд «Тысяча фонарей» (ниже)
 local RaidHitEv = remote("RaidHit")
@@ -2166,6 +2173,7 @@ end
 local function liveOnCatch(plr, d, kind: string, district: string, variant: string)
 	local rar = Catalog.Kinds[kind].rarity
 	weeklyCatch(plr, d, kind, variant)
+	Social.clubCatch(plr)
 	-- альбом редких поимок
 	local vOdds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
 	if RARITY_RANK[rar] >= RARITY_RANK[Live.AlbumMinRarity] or vOdds >= Live.AlbumMinOdds then
@@ -2212,6 +2220,11 @@ local function luckOf(d)
 	if workspace:GetAttribute("MoonActive") then
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
+	end
+	local club = Social.clubLuck(d)
+	if club > 0 then
+		mult *= 1 + club
+		table.insert(parts, ("Клуб +%d%%"):format(math.floor(club * 100 + 0.5)))
 	end
 	local cl = compPct(d, "luck")
 	if cl > 0 then
@@ -2287,7 +2300,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {},
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0,
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -2430,6 +2443,14 @@ local function migrate(raw): Profile
 				end
 			end
 		end
+		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
+		d.yardLikes = math.floor(num(raw.yardLikes, 0, 1e9, 0))
+		if typeof(raw.likes) == "table" and typeof(raw.likes.day) == "number" and typeof(raw.likes.given) == "table" then
+			d.likes = { day = raw.likes.day, given = {} }
+			for k, v in raw.likes.given do
+				if typeof(k) == "string" and v == true then d.likes.given[k] = true end
+			end
+		end
 		if typeof(raw.weekBest) == "table" and typeof(raw.weekBest.week) == "number" and typeof(raw.weekBest.score) == "number" then
 			d.weekBest = { week = raw.weekBest.week, score = raw.weekBest.score, k = raw.weekBest.k, v = raw.weekBest.v }
 		end
@@ -2443,6 +2464,7 @@ local function persist(plr)
 	if not (store and d) or d.loadFailed then return false end
 	local copy = table.clone(d)
 	copy.loadFailed = nil
+	copy._clubPending = nil
 	copy.passes = nil
 	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
 	if not ok then warn("DataStore save failed:", err) end
@@ -2524,6 +2546,7 @@ local function pushState(plr)
 			return { list = t, all = ch.all }
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
+		club = Social.clubView(d), yardLikes = d.yardLikes or 0,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -3109,7 +3132,7 @@ local function oniLoop(a: Part)
 		local target, best = nil, math.huge
 		for _, plr in Players:GetPlayers() do
 			local r = rootOf(plr)
-			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 * SC and r.Position.Y > -2 then
+			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 * SC and r.Position.Z < 240 * SC and r.Position.Y > -2 then
 				local d = (r.Position - oniPos).Magnitude - ((jars[plr] and #jars[plr] > 0) and 40 or 0)
 				if d < best then target, best = r, d end
 			end
@@ -3325,6 +3348,8 @@ local function doSave(plr)
 	d.dust += dust
 	local kinds = table.clone(jar)
 	jars[plr] = {}
+	Social.clubSync(plr)
+	Social.refreshYard(plr)
 	local persisted = persist(plr)
 	pushState(plr)
 	updateBoard(plr)
@@ -3448,6 +3473,8 @@ EquipFn.OnServerInvoke = function(plr, kind)
 	else
 		return false
 	end
+	applySpeed(plr)
+	Social.refreshYard(plr)
 	persist(plr)
 	pushState(plr)
 	return true
@@ -4101,6 +4128,11 @@ end)
 game:GetService("StarterPlayer").CameraMaxZoomDistance = 40
 
 ------------------------------------------------------------------ игроки
+Social.init({
+	data = data, Catalog = Catalog, pushState = pushState, persist = persist, rootOf = rootOf,
+	NoticeEv = NoticeEv, stopHold = stopHold, distinct = distinct,
+})
+
 Players.PlayerAdded:Connect(function(plr)
 	plr.CameraMaxZoomDistance = 40
 	local ls = Instance.new("Folder")
@@ -4143,10 +4175,12 @@ Players.PlayerAdded:Connect(function(plr)
 	if plr.Character then giveLantern(plr, plr.Character) end
 	task.spawn(checkPasses, plr)
 	pushState(plr)
+	Social.playerReady(plr)
 	if failed then NoticeEv:FireClient(plr, "Не удалось загрузить сохранение — прогресс этой сессии не запишется") end
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
+	Social.playerLeft(plr)
 	stopHold(plr)
 	persist(plr)
 	updateBoard(plr)
@@ -4696,21 +4730,586 @@ return Map
 ]]></string>
         </Properties>
       </Item>
+      <Item class="ModuleScript" referent="18">
+        <Properties>
+          <string name="Name">Social</string>
+          <string name="Source"><![CDATA[-- Социальные системы: дворы со спутниками (визиты и лайки), безопасный обмен дубликатами, клубы ловцов.
+local Players = game:GetService("Players")
+local DataStoreService = game:GetService("DataStoreService")
+
+local Social = {}
+local R = {} -- remotes
+local ctx -- данные и функции из Main
+
+-- remotes создаются сразу при загрузке Main, чтобы клиент их нашёл
+function Social.remotes(remote)
+	R.Visit = remote("VisitYard", "RemoteFunction")
+	R.Trade = remote("Trade", "RemoteFunction")
+	R.TradeEv = remote("TradeState")
+	R.Club = remote("Club", "RemoteFunction")
+end
+
+------------------------------------------------------------------ дворы
+local PLOT_X = { -96, -32, 32, 96 }
+local PLOT_Z = { 452, 522 }
+local PLOT = 56
+local plots = {} -- [i] = { folder, sign, owner }
+local plotOf = {} -- [Player] = i
+local function part(parent, name, size, cf, color, mat, props)
+	local p = Instance.new("Part")
+	p.Name, p.Size, p.CFrame, p.Color = name, size, cf, color
+	p.Anchored = true
+	p.Material = mat or Enum.Material.SmoothPlastic
+	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+	for k, v in props or {} do p[k] = v end
+	p.Parent = parent
+	return p
+end
+local function buildYards()
+	local root = Instance.new("Folder")
+	root.Name = "Yards"
+	root.Parent = workspace
+	-- общий остров дворов: площадка, дорожка, невидимые стены
+	part(root, "YardIsland", Vector3.new(280, 1, 160), CFrame.new(0, 0, 487), Color3.fromRGB(60, 78, 64), Enum.Material.Grass)
+	part(root, "YardPath", Vector3.new(14, 0.1, 150), CFrame.new(0, 0.55, 487), Color3.fromRGB(150, 135, 115), Enum.Material.Pebble, { CanCollide = false })
+	part(root, "YardPathX", Vector3.new(270, 0.1, 10), CFrame.new(0, 0.55, 487), Color3.fromRGB(150, 135, 115), Enum.Material.Pebble, { CanCollide = false })
+	for _, w in {
+		{ Vector3.new(1, 60, 160), Vector3.new(140.5, 30, 487) }, { Vector3.new(1, 60, 160), Vector3.new(-140.5, 30, 487) },
+		{ Vector3.new(280, 60, 1), Vector3.new(0, 30, 407.5) }, { Vector3.new(280, 60, 1), Vector3.new(0, 30, 567.5) },
+	} do
+		part(root, "Boundary", w[1], CFrame.new(w[2]), Color3.new(), nil, { Transparency = 1, CanQuery = false })
+	end
+	-- арка входа с фонарями
+	for _, x in { -9, 9 } do
+		part(root, "ArchPost", Vector3.new(1.6, 14, 1.6), CFrame.new(x, 7.5, 418), Color3.fromRGB(170, 50, 45), Enum.Material.Wood)
+		local l = part(root, "ArchLamp", Vector3.new(1.6, 2, 1.6), CFrame.new(x, 12, 416.5), Color3.fromRGB(255, 170, 80), Enum.Material.Neon, { Shape = Enum.PartType.Ball, CanCollide = false })
+		local pl = Instance.new("PointLight")
+		pl.Range, pl.Brightness, pl.Color = 22, 1, Color3.fromRGB(255, 180, 100)
+		pl.Parent = l
+	end
+	part(root, "ArchBeam", Vector3.new(24, 1.4, 2.2), CFrame.new(0, 15, 418), Color3.fromRGB(40, 30, 30), Enum.Material.Wood)
+	local i = 0
+	for _, z in PLOT_Z do
+		for _, x in PLOT_X do
+			i += 1
+			local f = Instance.new("Folder")
+			f.Name = "Plot" .. i
+			f:SetAttribute("Owner", 0)
+			f:SetAttribute("Kinds", "")
+			f:SetAttribute("Center", Vector3.new(x, 0.5, z))
+			part(f, "PlotGround", Vector3.new(PLOT, 0.2, PLOT), CFrame.new(x, 0.6, z), Color3.fromRGB(78, 110, 74), Enum.Material.Grass)
+			-- низкий забор
+			for _, side in { -1, 1 } do
+				part(f, "Fence", Vector3.new(PLOT, 2.2, 0.6), CFrame.new(x, 1.6, z + side * PLOT / 2), Color3.fromRGB(120, 90, 60), Enum.Material.WoodPlanks)
+				part(f, "Fence", Vector3.new(0.6, 2.2, PLOT * 0.38), CFrame.new(x + side * PLOT / 2, 1.6, z - PLOT * 0.31), Color3.fromRGB(120, 90, 60), Enum.Material.WoodPlanks)
+				part(f, "Fence", Vector3.new(0.6, 2.2, PLOT * 0.38), CFrame.new(x + side * PLOT / 2, 1.6, z + PLOT * 0.31), Color3.fromRGB(120, 90, 60), Enum.Material.WoodPlanks)
+			end
+			-- домик ловца
+			local back = z > 487 and 1 or -1
+			part(f, "Hut", Vector3.new(14, 8, 10), CFrame.new(x, 4.6, z + back * 18), Color3.fromRGB(110, 78, 55), Enum.Material.WoodPlanks)
+			part(f, "HutRoof", Vector3.new(16, 1.2, 12), CFrame.new(x, 9.2, z + back * 18), Color3.fromRGB(150, 45, 40), Enum.Material.Slate)
+			local win = part(f, "HutWindow", Vector3.new(3, 2.4, 0.2), CFrame.new(x, 5, z + back * 12.9), Color3.fromRGB(255, 190, 110), Enum.Material.Neon)
+			local wl = Instance.new("PointLight")
+			wl.Range, wl.Brightness, wl.Color = 14, 0.8, Color3.fromRGB(255, 190, 110)
+			wl.Parent = win
+			-- табличка с именем и лайками
+			local sign = part(f, "Sign", Vector3.new(10, 5, 0.6), CFrame.new(x + 14, 3.4, z - back * PLOT / 2 + back * 2) * CFrame.Angles(0, back > 0 and 0 or math.pi, 0), Color3.fromRGB(60, 40, 35), Enum.Material.Wood)
+			for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
+				local g = Instance.new("SurfaceGui")
+				g.Face = face
+				g.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+				g.PixelsPerStud = 24
+				local t = Instance.new("TextLabel")
+				t.Name = "Text"
+				t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+				t.TextColor3, t.TextStrokeTransparency = Color3.new(1, 1, 1), 0.3
+				t.Text = "Свободный двор"
+				t.Parent = g
+				g.Parent = sign
+			end
+			local prompt = Instance.new("ProximityPrompt")
+			prompt.ActionText, prompt.ObjectText = "Нравится", "Двор"
+			prompt.HoldDuration, prompt.MaxActivationDistance, prompt.RequiresLineOfSight = 0.3, 10, false
+			prompt.Enabled = false
+			prompt.Parent = sign
+			f.Parent = root
+			plots[i] = { folder = f, sign = sign, prompt = prompt, owner = nil, center = Vector3.new(x, 0.5, z), back = back }
+		end
+	end
+end
+
+local function yardKinds(d)
+	-- до 6 духов: самые редкие пойманные, с лучшей разновидностью
+	local rank = {}
+	for i, k in ctx.Catalog.RarityOrder do rank[k] = i end
+	local list = {}
+	for kind, n in d.saved do
+		if n > 0 and ctx.Catalog.Kinds[kind] then table.insert(list, kind) end
+	end
+	table.sort(list, function(a, b)
+		local ra, rb = rank[ctx.Catalog.Kinds[a].rarity], rank[ctx.Catalog.Kinds[b].rarity]
+		if ra ~= rb then return ra > rb end
+		return (d.saved[a] or 0) > (d.saved[b] or 0)
+	end)
+	local out = {}
+	for i = 1, math.min(6, #list) do
+		local kind = list[i]
+		local best = "normal"
+		local vs = d.variants[kind] or {}
+		for j = #ctx.Catalog.VariantOrder, 2, -1 do
+			if vs[ctx.Catalog.VariantOrder[j]] then
+				best = ctx.Catalog.VariantOrder[j]
+				break
+			end
+		end
+		table.insert(out, kind .. ":" .. best)
+	end
+	if d.equipped and not table.find(list, d.equipped) then table.insert(out, d.equipped .. ":normal") end
+	return table.concat(out, ",")
+end
+
+function Social.refreshYard(plr)
+	local i = plotOf[plr]
+	local d = ctx.data[plr]
+	if not (i and d) then return end
+	local p = plots[i]
+	p.folder:SetAttribute("Kinds", yardKinds(d))
+	local text = ("Двор %s\nДухов %d/%d   Лайков %d"):format(plr.DisplayName, ctx.distinct(d), #ctx.Catalog.Order, d.yardLikes or 0)
+	for _, g in p.sign:GetChildren() do
+		if g:IsA("SurfaceGui") then g.Text.Text = text end
+	end
+end
+
+local function assignPlot(plr)
+	for i, p in plots do
+		if not p.owner then
+			p.owner = plr
+			plotOf[plr] = i
+			p.folder:SetAttribute("Owner", plr.UserId)
+			p.folder:SetAttribute("OwnerName", plr.DisplayName)
+			p.prompt.Enabled = true
+			p.prompt.ObjectText = "Двор " .. plr.DisplayName
+			Social.refreshYard(plr)
+			return
+		end
+	end
+end
+local function freePlot(plr)
+	local i = plotOf[plr]
+	if not i then return end
+	local p = plots[i]
+	p.owner = nil
+	plotOf[plr] = nil
+	p.folder:SetAttribute("Owner", 0)
+	p.folder:SetAttribute("Kinds", "")
+	p.prompt.Enabled = false
+	for _, g in p.sign:GetChildren() do
+		if g:IsA("SurfaceGui") then g.Text.Text = "Свободный двор" end
+	end
+end
+
+local function onLike(liker, plotIndex)
+	local p = plots[plotIndex]
+	local owner = p and p.owner
+	if not owner or owner == liker then return end
+	local d, od = ctx.data[liker], ctx.data[owner]
+	if not (d and od) then return end
+	local day = math.floor(os.time() / 86400)
+	if typeof(d.likes) ~= "table" or d.likes.day ~= day then d.likes = { day = day, given = {} } end
+	local key = tostring(owner.UserId)
+	if d.likes.given[key] then
+		ctx.NoticeEv:FireClient(liker, "Ты уже оценил этот двор сегодня")
+		return
+	end
+	d.likes.given[key] = true
+	od.yardLikes = (od.yardLikes or 0) + 1
+	od.coins += 25
+	d.coins += 10
+	ctx.NoticeEv:FireClient(owner, liker.DisplayName .. " оценил твой двор! +25 монет")
+	ctx.NoticeEv:FireClient(liker, "Спасибо за визит! +10 монет")
+	ctx.pushState(owner)
+	ctx.pushState(liker)
+	Social.refreshYard(owner)
+end
+
+------------------------------------------------------------------ обмен дубликатами
+-- предложить можно только дубликаты (у себя остаётся хотя бы один дух вида), до 4 видов.
+-- Любое изменение снимает готовность; обмен проходит через 3 секунды после «Готов» у обоих.
+local trades = {} -- [id] = { a, b, offer = { [Player] = { [kind] = n } }, ready = { [Player] = bool }, seq }
+local tradeOf = {} -- [Player] = id
+local requests = {} -- [target] = { from = Player, at = os.clock() }
+local nextTradeId = 0
+
+local function tradeState(t, plr)
+	local other = t.a == plr and t.b or t.a
+	return {
+		id = t.id, other = other.DisplayName, mine = t.offer[plr], theirs = t.offer[other],
+		readyMe = t.ready[plr] == true, readyThem = t.ready[other] == true, counting = t.counting == true,
+	}
+end
+local function pushTrade(t)
+	for _, p in { t.a, t.b } do
+		if p.Parent then R.TradeEv:FireClient(p, { type = "state", trade = tradeState(t, p) }) end
+	end
+end
+local function closeTrade(t, msg)
+	trades[t.id] = nil
+	for _, p in { t.a, t.b } do
+		tradeOf[p] = nil
+		if p.Parent then R.TradeEv:FireClient(p, { type = "closed", msg = msg }) end
+	end
+end
+local function offerCount(o)
+	local n = 0
+	for _ in o do n += 1 end
+	return n
+end
+local function canGive(d, kind, n)
+	return (d.saved[kind] or 0) - n >= 1
+end
+local function finishTrade(t)
+	local da, db = ctx.data[t.a], ctx.data[t.b]
+	if not (da and db) then return closeTrade(t, "Обмен отменён") end
+	-- финальная проверка обеих сторон
+	for kind, n in t.offer[t.a] do
+		if not canGive(da, kind, n) then return closeTrade(t, "Обмен отменён: не хватает духов") end
+	end
+	for kind, n in t.offer[t.b] do
+		if not canGive(db, kind, n) then return closeTrade(t, "Обмен отменён: не хватает духов") end
+	end
+	local function move(from, to, offer)
+		for kind, n in offer do
+			from.saved[kind] -= n
+			to.saved[kind] = (to.saved[kind] or 0) + n
+			to.firstSaved[kind] = true
+			to.variants[kind] = to.variants[kind] or {}
+			to.variants[kind].normal = true
+		end
+	end
+	move(da, db, t.offer[t.a])
+	move(db, da, t.offer[t.b])
+	closeTrade(t, "Обмен завершён!")
+	for _, p in { t.a, t.b } do
+		ctx.persist(p)
+		ctx.pushState(p)
+		Social.refreshYard(p)
+		Social.clubSync(p)
+	end
+end
+
+local function tradeAction(plr, action, arg, n)
+	local d = ctx.data[plr]
+	if not d then return { ok = false } end
+	if action == "request" then
+		local target = typeof(arg) == "number" and Players:GetPlayerByUserId(arg)
+		if not target or target == plr or not ctx.data[target] then return { ok = false, msg = "Игрок не найден" } end
+		if tradeOf[plr] or tradeOf[target] then return { ok = false, msg = "Кто-то из вас уже обменивается" } end
+		requests[target] = { from = plr, at = os.clock() }
+		R.TradeEv:FireClient(target, { type = "request", from = plr.DisplayName, fromId = plr.UserId })
+		return { ok = true, msg = "Запрос отправлен игроку " .. target.DisplayName }
+	elseif action == "respond" then
+		local rq = requests[plr]
+		requests[plr] = nil
+		if not rq or os.clock() - rq.at > 30 or not rq.from.Parent then return { ok = false, msg = "Запрос устарел" } end
+		if arg ~= true then
+			ctx.NoticeEv:FireClient(rq.from, plr.DisplayName .. " отказался от обмена")
+			return { ok = true }
+		end
+		if tradeOf[plr] or tradeOf[rq.from] then return { ok = false, msg = "Кто-то из вас уже обменивается" } end
+		nextTradeId += 1
+		local t = { id = nextTradeId, a = rq.from, b = plr, offer = { [rq.from] = {}, [plr] = {} }, ready = {} }
+		trades[t.id] = t
+		tradeOf[plr], tradeOf[rq.from] = t.id, t.id
+		pushTrade(t)
+		return { ok = true }
+	end
+	local t = tradeOf[plr] and trades[tradeOf[plr]]
+	if not t then return { ok = false, msg = "Нет активного обмена" } end
+	if action == "cancel" then
+		closeTrade(t, plr.DisplayName .. " отменил обмен")
+		return { ok = true }
+	elseif action == "add" or action == "remove" then
+		if t.counting then return { ok = false } end
+		local kind = typeof(arg) == "string" and ctx.Catalog.Kinds[arg] and arg
+		if not kind then return { ok = false } end
+		local o = t.offer[plr]
+		local cur = o[kind] or 0
+		local want = action == "add" and cur + 1 or cur - 1
+		if want < 0 then return { ok = false } end
+		if want > 0 and not canGive(d, kind, want) then return { ok = false, msg = "Это последний дух этого вида" } end
+		if want > 0 and cur == 0 and offerCount(o) >= 4 then return { ok = false, msg = "Не больше 4 видов за обмен" } end
+		o[kind] = want > 0 and want or nil
+		t.ready = {}
+		pushTrade(t)
+		return { ok = true }
+	elseif action == "ready" then
+		t.ready[plr] = arg == true
+		pushTrade(t)
+		if t.ready[t.a] and t.ready[t.b] and not t.counting then
+			t.counting = true
+			pushTrade(t)
+			task.delay(3, function()
+				if trades[t.id] == t and t.ready[t.a] and t.ready[t.b] then
+					finishTrade(t)
+				elseif trades[t.id] == t then
+					t.counting = false
+					pushTrade(t)
+				end
+			end)
+		end
+		return { ok = true }
+	end
+	return { ok = false }
+end
+
+------------------------------------------------------------------ клубы ловцов
+-- клуб хранится в DataStore по коду; общая коллекция = все виды, которые сдали участники.
+-- Бонус клуба: удача +1% за каждый вид общей коллекции.
+local CLUB_COST, CLUB_MAX = 500, 20
+local clubStore
+pcall(function() clubStore = DataStoreService:GetDataStore("SC_Clubs") end)
+local clubs = {} -- [code] = record (кэш)
+local memClubs = {} -- если DataStore недоступен (тест), клубы живут в памяти сервера
+local CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+local function loadClub(code: string)
+	if clubs[code] then return clubs[code] end
+	local rec = memClubs[code]
+	if clubStore then
+		local ok, res = pcall(function() return clubStore:GetAsync("c_" .. code) end)
+		if ok and typeof(res) == "table" then rec = res end
+	end
+	clubs[code] = rec
+	return rec
+end
+local function saveClub(code: string, mutate)
+	local result
+	if clubStore then
+		local ok = pcall(function()
+			clubStore:UpdateAsync("c_" .. code, function(old)
+				if typeof(old) ~= "table" and not mutate.create then return nil end
+				local rec = typeof(old) == "table" and old or mutate.create
+				if mutate.fn(rec) == false then return nil end
+				result = rec
+				return rec
+			end)
+		end)
+		if not ok then result = nil end
+	end
+	if not result then
+		-- без DataStore (или при сбое) — память сервера
+		local rec = memClubs[code] or mutate.create
+		if not rec or mutate.fn(rec) == false then return nil end
+		memClubs[code] = rec
+		result = rec
+	end
+	clubs[code] = result
+	return result
+end
+local function clubCount(rec)
+	local n, k = 0, 0
+	for _ in rec.members or {} do n += 1 end
+	for _ in rec.kinds or {} do k += 1 end
+	return n, k
+end
+function Social.clubLuck(d): number
+	local rec = d.club and clubs[d.club]
+	if not rec then return 0 end
+	local _, k = clubCount(rec)
+	return k * 0.01
+end
+local function clubView(d)
+	local rec = d.club and clubs[d.club]
+	if not rec then return nil end
+	local members = {}
+	for _, name in rec.members do table.insert(members, name) end
+	table.sort(members)
+	local n, k = clubCount(rec)
+	return { name = rec.name, code = d.club, members = members, count = n, kinds = rec.kinds, distinct = k, total = rec.total or 0, luck = k }
+end
+Social.clubView = clubView
+-- добавить свои виды в общую коллекцию клуба
+function Social.clubSync(plr)
+	local d = ctx.data[plr]
+	if not (d and d.club) then return end
+	local rec = clubs[d.club]
+	local missing = false
+	for kind, n in d.saved do
+		if n > 0 and not (rec and rec.kinds and rec.kinds[kind]) then missing = true end
+	end
+	if not missing then return end
+	task.spawn(function()
+		saveClub(d.club, { fn = function(r)
+			r.kinds = r.kinds or {}
+			for kind, n in d.saved do
+				if n > 0 then r.kinds[kind] = true end
+			end
+		end })
+		for _, p in Players:GetPlayers() do
+			local pd = ctx.data[p]
+			if pd and pd.club == d.club then ctx.pushState(p) end
+		end
+	end)
+end
+function Social.clubCatch(plr)
+	local d = ctx.data[plr]
+	if not (d and d.club) then return end
+	local rec = clubs[d.club]
+	if rec then rec.total = (rec.total or 0) + 1 end
+	d._clubPending = (d._clubPending or 0) + 1
+end
+local function filterName(text: string, uid: number): string?
+	local ok, res = pcall(function()
+		local r = game:GetService("TextService"):FilterStringAsync(text, uid)
+		return r:GetNonChatStringForBroadcastAsync()
+	end)
+	if ok and typeof(res) == "string" and not string.find(res, "#") then return res end
+	return nil
+end
+local function clubAction(plr, action, arg)
+	local d = ctx.data[plr]
+	if not d then return { ok = false } end
+	if action == "create" then
+		if d.club then return { ok = false, msg = "Сначала выйди из клуба" } end
+		if d.coins < CLUB_COST then return { ok = false, msg = ("Нужно %d монет"):format(CLUB_COST) } end
+		local raw = typeof(arg) == "string" and arg or ""
+		if utf8.len(raw) == nil then return { ok = false, msg = "Название от 3 до 20 букв" } end
+		if utf8.len(raw) > 20 then raw = string.sub(raw, 1, utf8.offset(raw, 21) - 1) end
+		raw = string.gsub(raw, "^%s+", "")
+		raw = string.gsub(raw, "%s+$", "")
+		if utf8.len(raw) == nil or utf8.len(raw) < 3 then return { ok = false, msg = "Название от 3 до 20 букв" } end
+		local code = ""
+		for _ = 1, 5 do
+			local i = math.random(#CODE_CHARS)
+			code ..= string.sub(CODE_CHARS, i, i)
+		end
+		local name = filterName(raw, plr.UserId) or ("Клуб " .. code)
+		local rec = saveClub(code, { create = { name = name, owner = plr.UserId, members = {}, kinds = {}, total = 0 }, fn = function(r)
+			r.members[tostring(plr.UserId)] = plr.DisplayName
+		end })
+		if not rec then return { ok = false, msg = "Не удалось создать клуб, попробуй позже" } end
+		d.coins -= CLUB_COST
+		d.club = code
+		Social.clubSync(plr)
+		ctx.persist(plr)
+		ctx.pushState(plr)
+		return { ok = true, msg = "Клуб создан! Код для друзей: " .. code }
+	elseif action == "join" then
+		if d.club then return { ok = false, msg = "Сначала выйди из клуба" } end
+		local code = typeof(arg) == "string" and string.upper(string.gsub(arg, "%s", "")) or ""
+		if #code ~= 5 then return { ok = false, msg = "Код клуба: 5 символов" } end
+		local found = loadClub(code)
+		if not found then return { ok = false, msg = "Клуб не найден" } end
+		local full = false
+		local rec = saveClub(code, { fn = function(r)
+			local n = clubCount(r)
+			if n >= CLUB_MAX and not r.members[tostring(plr.UserId)] then
+				full = true
+				return false
+			end
+			r.members[tostring(plr.UserId)] = plr.DisplayName
+		end })
+		if full then return { ok = false, msg = "В клубе нет мест" } end
+		if not rec then return { ok = false, msg = "Не удалось вступить, попробуй позже" } end
+		d.club = code
+		Social.clubSync(plr)
+		ctx.persist(plr)
+		ctx.pushState(plr)
+		return { ok = true, msg = "Ты вступил в клуб «" .. rec.name .. "»" }
+	elseif action == "leave" then
+		if not d.club then return { ok = false } end
+		local code = d.club
+		d.club = nil
+		task.spawn(saveClub, code, { fn = function(r) r.members[tostring(plr.UserId)] = nil end })
+		ctx.persist(plr)
+		ctx.pushState(plr)
+		return { ok = true, msg = "Ты вышел из клуба" }
+	end
+	return { ok = false }
+end
+
+------------------------------------------------------------------ подключение
+function Social.init(c)
+	ctx = c
+	buildYards()
+	for _, p in plots do
+		local i = table.find(plots, p)
+		p.prompt.Triggered:Connect(function(liker) onLike(liker, i) end)
+	end
+	R.Visit.OnServerInvoke = function(plr, uid)
+		local root = ctx.rootOf(plr)
+		if not root then return { ok = false } end
+		local target = typeof(uid) == "number" and Players:GetPlayerByUserId(uid) or plr
+		local i = plotOf[target]
+		if not i then return { ok = false, msg = "У игрока нет двора" } end
+		ctx.stopHold(plr)
+		local p = plots[i]
+		plr.Character:PivotTo(CFrame.new(p.center + Vector3.new(math.random(-3, 3), 3, -p.back * 20)))
+		if target ~= plr then ctx.NoticeEv:FireClient(target, plr.DisplayName .. " пришёл к тебе во двор!") end
+		return { ok = true }
+	end
+	R.Trade.OnServerInvoke = tradeAction
+	R.Club.OnServerInvoke = clubAction
+	-- клубы: обновление кэша и запись накопленных поимок
+	task.spawn(function()
+		while true do
+			task.wait(60)
+			local seen = {}
+			for _, p in Players:GetPlayers() do
+				local d = ctx.data[p]
+				if d and d.club and not seen[d.club] then
+					seen[d.club] = true
+					local pending = 0
+					for _, q in Players:GetPlayers() do
+						local qd = ctx.data[q]
+						if qd and qd.club == d.club then
+							pending += qd._clubPending or 0
+							qd._clubPending = 0
+						end
+					end
+					clubs[d.club] = nil
+					saveClub(d.club, { fn = function(r) r.total = (r.total or 0) + pending end })
+				end
+			end
+		end
+	end)
+end
+function Social.playerReady(plr)
+	assignPlot(plr)
+	local d = ctx.data[plr]
+	if d and d.club then
+		task.spawn(function()
+			if not loadClub(d.club) then d.club = nil end
+			ctx.pushState(plr)
+		end)
+	end
+end
+function Social.playerLeft(plr)
+	freePlot(plr)
+	requests[plr] = nil
+	local t = tradeOf[plr] and trades[tradeOf[plr]]
+	if t then closeTrade(t, plr.DisplayName .. " вышел из игры") end
+end
+
+return Social
+]]></string>
+        </Properties>
+      </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="18">
+  <Item class="StarterPlayer" referent="19">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="19">
+    <Item class="StarterPlayerScripts" referent="20">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="20">
+      <Item class="Folder" referent="21">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="21">
+        <Item class="LocalScript" referent="22">
           <Properties>
             <string name="Name">Client</string>
             <string name="Source"><![CDATA[-- Spirit Catchers, клиент.
@@ -4763,6 +5362,7 @@ do
 
 end
 local enterPhoto -- фото-режим (ниже)
+local toggleWindow -- открыть одно окно, закрыть остальные (ниже)
 -- бонус способности спутника (доля), например compBonus("reveal") = 0.12
 local function compBonus(key)
 	local c = state.comp
@@ -4816,9 +5416,9 @@ do
 
 end
 ------------------------------------------------------------------ HUD: левая колонка
-local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason
+local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason, btnSocial
 do
-	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 18), Size = UDim2.fromOffset(136, 350), BackgroundTransparency = 1 }, hud)
+	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 22), Size = UDim2.fromOffset(136, 360), BackgroundTransparency = 1 }, hud)
 	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
 	btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 	btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
@@ -4829,8 +5429,9 @@ do
 	btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
 	btnPower = K.iconButton(leftCol, "level", "Сила", Color3.fromRGB(240, 180, 40))
 	btnSeason = K.iconButton(leftCol, "trophy", "Сезон", Color3.fromRGB(255, 130, 60))
+	btnSocial = K.iconButton(leftCol, "paw", "Ловцы", Color3.fromRGB(90, 190, 200))
 	btnAdmin.Visible = false
-	for i, b in { btnAtlas, btnSeason, btnPower, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
+	for i, b in { btnAtlas, btnSeason, btnPower, btnQuests, btnShop, btnSocial, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
 
 end
 ------------------------------------------------------------------ HUD: справа валюты и уровень
@@ -5569,6 +6170,216 @@ do
 		end
 	end)
 end
+------------------------------------------------------------------ окно: Ловцы (дворы, обмен, клуб)
+local socialW, refreshSocial
+do
+	local body
+	socialW, body = K.window(gui, "Ловцы", "paw", Color3.fromRGB(90, 190, 200), 0.84, 0.84)
+	local tabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1 }, body)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, tabs)
+	local TEAL = Color3.fromRGB(70, 170, 190)
+	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+
+	-- дворы: свой двор + список игроков сервера
+	local yardPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44) })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, yardPage)
+	local myYard = K.panel(yardPage, { Size = UDim2.new(1, -10, 0, 70), LayoutOrder = 0, BackgroundColor3 = Color3.fromRGB(45, 80, 70) })
+	local myYardL = K.text(myYard, "", { Size = UDim2.new(0.62, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextWrapped = true })
+	local goHome = K.button(myYard, "Мой двор", T.green, { Size = UDim2.new(0.36, -8, 1, -14), Position = UDim2.new(0.64, 0, 0, 7), MaxText = 17 })
+	goHome.Activated:Connect(function()
+		local r = remotes.VisitYard:InvokeServer(plr.UserId)
+		if r and r.ok then K.close(socialW) elseif r and r.msg then showToast(r.msg) end
+	end)
+	K.text(yardPage, "Во дворе гуляют твои самые редкие духи. Заходи к другим и ставь «Нравится» у таблички: тебе +10 монет, хозяину +25.",
+		{ Size = UDim2.new(1, -10, 0, 40), LayoutOrder = 1, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local playerRows = {}
+
+	-- обмен
+	local tradePage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, body)
+	local tradeList = K.scroll(tradePage, { Size = UDim2.new(1, 0, 1, 0) })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, tradeList)
+	K.text(tradeList, "Меняй дубликаты: у тебя всегда остаётся хотя бы один дух каждого вида. До 4 видов за обмен, оба нажимают «Готов».",
+		{ Size = UDim2.new(1, -10, 0, 40), LayoutOrder = 0, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local tradeRows = {}
+	-- активный обмен
+	local tradeBox = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Visible = false }, tradePage)
+	local tradeTitle = K.text(tradeBox, "", { Size = UDim2.new(1, 0, 0, 26), MaxText = 19 })
+	local function side(x, title)
+		local f = K.panel(tradeBox, { Position = UDim2.new(x, 0, 0, 30), Size = UDim2.new(0.49, 0, 0, 92), BackgroundColor3 = T.panel2 })
+		local t = K.text(f, title, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 2), MaxText = 16, TextXAlignment = Enum.TextXAlignment.Left })
+		local l = K.text(f, "", { Size = UDim2.new(1, -12, 1, -30), Position = UDim2.fromOffset(6, 26), MaxText = 14, Font = Enum.Font.GothamBold, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, StrokeThickness = 1 })
+		return f, t, l
+	end
+	local mineF, mineT, mineL = side(0, "Ты отдаёшь")
+	local theirsF, theirsT, theirsL = side(0.51, "Ты получаешь")
+	K.text(tradeBox, "Нажми на духа, чтобы добавить; на «-» чтобы убрать:", { Size = UDim2.new(1, 0, 0, 20), Position = UDim2.fromOffset(0, 126), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local dupGrid = K.scroll(tradeBox, { Position = UDim2.fromOffset(0, 148), Size = UDim2.new(1, 0, 1, -200) })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 44), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, dupGrid)
+	local readyB, readyL = K.button(tradeBox, "Готов", T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0.49, 0, 0, 44), MaxText = 18 })
+	local cancelB = K.button(tradeBox, "Отменить", T.red, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0.49, 0, 0, 44), MaxText = 18 })
+	local trade = nil
+	local function offerText(o)
+		local parts = {}
+		for kind, n in o or {} do table.insert(parts, ("%s x%d"):format(Catalog.Kinds[kind].name, n)) end
+		return #parts > 0 and table.concat(parts, "\n") or "пусто"
+	end
+	local function refreshTrade()
+		tradeBox.Visible = trade ~= nil
+		tradeList.Visible = trade == nil
+		if not trade then return end
+		tradeTitle.Text = "Обмен с " .. trade.other .. (trade.counting and "  -  обмен через 3 с!" or "")
+		mineL.Text = offerText(trade.mine)
+		theirsL.Text = offerText(trade.theirs)
+		mineT.Text = "Ты отдаёшь" .. (trade.readyMe and "  (готов)" or "")
+		theirsT.Text = "Ты получаешь" .. (trade.readyThem and "  (готов)" or "")
+		mineF:FindFirstChildOfClass("UIStroke").Color = trade.readyMe and T.green or T.ink
+		theirsF:FindFirstChildOfClass("UIStroke").Color = trade.readyThem and T.green or T.ink
+		readyL.Text = trade.readyMe and "Не готов" or "Готов"
+		for _, c in dupGrid:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		local i = 0
+		for _, kind in Catalog.Order do
+			local have = state.saved[kind] or 0
+			local inOffer = (trade.mine and trade.mine[kind]) or 0
+			if have - inOffer > 1 or inOffer > 0 then
+				i += 1
+				local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
+				local b = K.button(dupGrid, ("%s  %d"):format(Catalog.Kinds[kind].short, have - 1 - inOffer), K.darken(rar.color, 0.3), { LayoutOrder = i, MaxText = 14 })
+				b.Activated:Connect(function()
+					local r = remotes.Trade:InvokeServer("add", kind)
+					if r and r.msg then showToast(r.msg) end
+				end)
+				if inOffer > 0 then
+					local minus = K.button(b, "-", T.red, { Size = UDim2.fromOffset(30, 30), Position = UDim2.new(1, -24, 0, -8), MaxText = 18 })
+					minus.Activated:Connect(function() remotes.Trade:InvokeServer("remove", kind) end)
+				end
+			end
+		end
+	end
+	readyB.Activated:Connect(function()
+		if trade then remotes.Trade:InvokeServer("ready", not trade.readyMe) end
+	end)
+	cancelB.Activated:Connect(function() remotes.Trade:InvokeServer("cancel") end)
+	-- входящий запрос на обмен
+	local reqPanel = K.panel(gui, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 180), Size = UDim2.fromOffset(420, 110), Visible = false, ZIndex = 20 })
+	local reqL = K.text(reqPanel, "", { Size = UDim2.new(1, -20, 0, 44), Position = UDim2.fromOffset(10, 6), MaxText = 18, TextWrapped = true })
+	local accB = K.button(reqPanel, "Принять", T.green, { Size = UDim2.new(0.5, -15, 0, 44), Position = UDim2.new(0, 10, 1, -54), MaxText = 18 })
+	local decB = K.button(reqPanel, "Отказать", T.red, { Size = UDim2.new(0.5, -15, 0, 44), Position = UDim2.new(0.5, 5, 1, -54), MaxText = 18 })
+	accB.Activated:Connect(function()
+		reqPanel.Visible = false
+		local r = remotes.Trade:InvokeServer("respond", true)
+		if r and r.msg then showToast(r.msg) end
+	end)
+	decB.Activated:Connect(function()
+		reqPanel.Visible = false
+		remotes.Trade:InvokeServer("respond", false)
+	end)
+	remotes.TradeState.OnClientEvent:Connect(function(m)
+		if m.type == "request" then
+			reqL.Text = m.from .. " предлагает обмен духами"
+			reqPanel.Visible = true
+			K.pop(reqPanel)
+			task.delay(25, function() reqPanel.Visible = false end)
+		elseif m.type == "state" then
+			trade = m.trade
+			if not socialW.Visible then toggleWindow(socialW, refreshSocial) end
+			refreshTrade()
+		elseif m.type == "closed" then
+			trade = nil
+			refreshTrade()
+			if m.msg then showToast(m.msg, 2.5) end
+		end
+	end)
+
+	-- клуб
+	local clubPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, clubPage)
+	local noClub = K.make("Frame", { Size = UDim2.new(1, -10, 0, 220), BackgroundTransparency = 1, LayoutOrder = 1 }, clubPage)
+	K.text(noClub, "Клуб ловцов: общая коллекция с друзьями. Каждый вид в коллекции клуба даёт всем участникам +1% удачи.",
+		{ Size = UDim2.new(1, 0, 0, 44), MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local function box(y, placeholder)
+		local tb = K.make("TextBox", { Position = UDim2.fromOffset(0, y), Size = UDim2.new(0.6, -8, 0, 44), BackgroundColor3 = T.ink, Text = "", PlaceholderText = placeholder,
+			TextColor3 = T.text, PlaceholderColor3 = T.sub, Font = Enum.Font.GothamBold, TextScaled = true, ClearTextOnFocus = false }, noClub)
+		K.corner(tb, UDim.new(0, 10))
+		K.make("UITextSizeConstraint", { MaxTextSize = 18 }, tb)
+		return tb
+	end
+	local nameBox = box(54, "Название клуба")
+	local createB = K.button(noClub, "Создать (500 монет)", T.green, { Position = UDim2.new(0.6, 0, 0, 54), Size = UDim2.new(0.4, 0, 0, 44), MaxText = 16 })
+	local codeBox = box(112, "Код клуба (5 символов)")
+	local joinB = K.button(noClub, "Вступить", T.blue, { Position = UDim2.new(0.6, 0, 0, 112), Size = UDim2.new(0.4, 0, 0, 44), MaxText = 16 })
+	local inClub = K.make("Frame", { Size = UDim2.new(1, -10, 0, 300), BackgroundTransparency = 1, LayoutOrder = 2, Visible = false }, clubPage)
+	local clubName = K.text(inClub, "", { Size = UDim2.new(0.65, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 22, TextColor3 = T.gold })
+	local leaveB = K.button(inClub, "Выйти", T.red, { Position = UDim2.new(0.7, 0, 0, 0), Size = UDim2.new(0.3, 0, 0, 36), MaxText = 16 })
+	local clubInfo = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 50), Position = UDim2.fromOffset(0, 40), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16, Font = Enum.Font.GothamBold, TextWrapped = true })
+	local _, clubFill = K.bar(inClub, T.gold, { Size = UDim2.new(1, 0, 0, 14), Position = UDim2.fromOffset(0, 96) })
+	local clubMembers = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 170), Position = UDim2.fromOffset(0, 118), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true, TextColor3 = T.sub, StrokeThickness = 1 })
+	local function clubCall(action, arg)
+		local r = remotes.Club:InvokeServer(action, arg)
+		if r and r.msg then showToast(r.msg, 3) end
+	end
+	createB.Activated:Connect(function() clubCall("create", nameBox.Text) end)
+	joinB.Activated:Connect(function() clubCall("join", codeBox.Text) end)
+	leaveB.Activated:Connect(function() clubCall("leave") end)
+
+	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage } }
+	for _, pair in pages do
+		pair[1].Activated:Connect(function()
+			for _, o in pages do
+				o[2].Visible = o == pair
+				K.recolor(o[1], o == pair and TEAL or T.panel2)
+			end
+		end)
+	end
+
+	refreshSocial = function()
+		myYardL.Text = ("Твой двор: лайков %d"):format(state.yardLikes or 0)
+		-- игроки сервера: визит и обмен
+		local seen = {}
+		for _, p in Players:GetPlayers() do
+			if p ~= plr then
+				seen[p] = true
+				if not playerRows[p] then
+					local f = K.panel(yardPage, { Size = UDim2.new(1, -10, 0, 56), LayoutOrder = 10, BackgroundColor3 = T.panel2 })
+					K.text(f, p.DisplayName, { Size = UDim2.new(0.6, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+					local vb = K.button(f, "В гости", TEAL, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 0, 0, 6), MaxText = 16 })
+					vb.Activated:Connect(function()
+						local r = remotes.VisitYard:InvokeServer(p.UserId)
+						if r and r.ok then K.close(socialW) elseif r and r.msg then showToast(r.msg) end
+					end)
+					local tf = K.panel(tradeList, { Size = UDim2.new(1, -10, 0, 56), LayoutOrder = 10, BackgroundColor3 = T.panel2 })
+					K.text(tf, p.DisplayName, { Size = UDim2.new(0.6, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+					local tb = K.button(tf, "Обменяться", T.orange, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 0, 0, 6), MaxText = 16 })
+					tb.Activated:Connect(function()
+						local r = remotes.Trade:InvokeServer("request", p.UserId)
+						if r and r.msg then showToast(r.msg, 2.5) end
+					end)
+					playerRows[p] = { f, tf }
+				end
+			end
+		end
+		for p, rows in playerRows do
+			if not seen[p] then
+				rows[1]:Destroy()
+				rows[2]:Destroy()
+				playerRows[p] = nil
+			end
+		end
+		refreshTrade()
+		local c = state.club
+		noClub.Visible = c == nil
+		inClub.Visible = c ~= nil
+		if c then
+			clubName.Text = c.name
+			clubInfo.Text = ("Код для друзей: %s   Участников: %d/20\nОбщая коллекция %d/%d видов: удача +%d%%   Поймано клубом: %d"):format(c.code, c.count, c.distinct, #Catalog.Order, c.luck, c.total)
+			clubFill.Size = UDim2.fromScale(math.clamp(c.distinct / #Catalog.Order, 0, 1), 1)
+			clubMembers.Text = "Участники: " .. table.concat(c.members, ", ")
+		end
+	end
+end
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
 do
@@ -5970,7 +6781,7 @@ do
 end
 
 ------------------------------------------------------------------ навигация по окнам
-local newsW, newsBody, toggleWindow
+local newsW, newsBody
 do
 	-- Телепорт
 	local tpW, tpBody = K.window(gui, "Телепорт", "portal", T.purple, 0.62, 0.8)
@@ -6071,7 +6882,7 @@ do
 		K.close(adminW)
 	end)
 
-	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW, seasonW }
+	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW, seasonW, socialW }
 	toggleWindow = function(w, refresh)
 		local willOpen = not w.Visible
 		for _, x in allWindows do K.close(x) end
@@ -6083,6 +6894,7 @@ do
 	btnAtlas.Activated:Connect(function() toggleWindow(atlasW, refreshAtlas) end)
 	btnQuests.Activated:Connect(function() toggleWindow(questW, refreshQuests) end)
 	btnSeason.Activated:Connect(function() toggleWindow(seasonW, refreshSeason) end)
+	btnSocial.Activated:Connect(function() toggleWindow(socialW, refreshSocial) end)
 	compPill.Activated:Connect(function()
 		local res = remotes.FeedCompanion:InvokeServer()
 		if res and res.ok then
@@ -6194,6 +7006,7 @@ do
 		if giftW.Visible then refreshGift() end
 		if powerW.Visible then refreshPower() end
 		if seasonW.Visible then refreshSeason() end
+		if socialW.Visible then refreshSocial() end
 	end
 
 end
@@ -6598,7 +7411,7 @@ do
 
 end
 ------------------------------------------------------------------ визуал духов и следы
-local visFolder, visuals, dropTrail, updateFollowers, updateOni
+local visFolder, visuals, dropTrail, updateFollowers, updateOni, updateYards
 do
 	visFolder = K.make("Folder", { Name = "SpiritVisuals" }, workspace)
 	local trailFolder = K.make("Folder", { Name = "Trails" }, workspace)
@@ -6707,6 +7520,48 @@ do
 			if not p.Parent then
 				f.model:Destroy()
 				followers[p] = nil
+			end
+		end
+	end
+
+	-- дворы: духи владельца гуляют по своему участку (модели только у клиента)
+	local yardModels = {} -- [plot] = { sig, list = { {model, kind, phase} } }
+	updateYards = function(now)
+		local yards = workspace:FindFirstChild("Yards")
+		if not yards then return end
+		local cam = workspace.CurrentCamera
+		for _, plot in yards:GetChildren() do
+			if plot:IsA("Folder") then
+				local sig = plot:GetAttribute("Kinds") or ""
+				local y = yardModels[plot]
+				if not y or y.sig ~= sig then
+					if y then
+						for _, e in y.list do e.model:Destroy() end
+					end
+					y = { sig = sig, list = {} }
+					yardModels[plot] = y
+					local i = 0
+					for entry in string.gmatch(sig, "[^,]+") do
+						local kind, variant = string.match(entry, "([^:]+):?(.*)")
+						if kind and Catalog.Kinds[kind] and Spirits.Builders[kind] then
+							i += 1
+							local m = Spirits.Builders[kind]()
+							pcall(Spirits.applyVariant, m, variant ~= "" and variant or nil)
+							m.Parent = visFolder
+							table.insert(y.list, { model = m, kind = kind, phase = i * 1.7, r = 6 + (i % 3) * 5 })
+						end
+					end
+				end
+				local center = plot:GetAttribute("Center")
+				if center and cam and (cam.CFrame.Position - center).Magnitude < 170 then
+					for _, e in y.list do
+						local info = Catalog.Kinds[e.kind]
+						local a = now * 0.25 + e.phase
+						local pos = center + Vector3.new(math.cos(a) * e.r, 0.5 + (info.height or 0), math.sin(a) * e.r * 0.8)
+						local look = pos + Vector3.new(-math.sin(a), 0, math.cos(a))
+						Spirits.animate(e.model, CFrame.lookAt(pos, look), now * (info.animSpeed or 1) * 0.6)
+					end
+				end
 			end
 		end
 	end
@@ -6880,6 +7735,7 @@ do
 			end
 		end
 		updateFollowers(now)
+		updateYards(now)
 		updateOni(dt)
 		local beamPart = World:FindFirstChild("LighthouseBeam")
 		if beamPart then
@@ -7106,7 +7962,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="22">
+        <Item class="ModuleScript" referent="23">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- UI-кит в стиле популярных симуляторов: толстые контуры, градиенты, иконки, пружинящие кнопки.
