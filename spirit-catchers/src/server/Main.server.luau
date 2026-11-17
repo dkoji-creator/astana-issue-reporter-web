@@ -58,6 +58,8 @@ local AdminFn = remote("Admin", "RemoteFunction")
 local NewsSeenEv = remote("NewsSeen")
 local AnnounceEv = remote("Announce") -- объявления о редкой поимке
 local PotionFn = remote("BuyPotion", "RemoteFunction")
+local TalentFn = remote("Talent", "RemoteFunction")
+local RebirthFn = remote("Rebirth", "RemoteFunction")
 local MessagingService = game:GetService("MessagingService")
 local HttpService = game:GetService("HttpService")
 -- админка: владелец игры (проверка только на сервере)
@@ -130,6 +132,15 @@ local function luckOf(d)
 	local parts = {}
 	local mult = 1 + math.min(L.levelCap, (d.level - 1) * L.perLevel)
 	if d.level > 1 then table.insert(parts, ("Уровень +%d%%"):format(math.floor((mult - 1) * 100 + 0.5))) end
+	local fortune = d.talents and d.talents.fortune or 0
+	if fortune > 0 then
+		mult *= 1 + 0.05 * fortune
+		table.insert(parts, ("Фортуна +%d%%"):format(fortune * 5))
+	end
+	if (d.rebirths or 0) > 0 then
+		mult *= 1 + Catalog.Progress.Rebirth.luck * d.rebirths
+		table.insert(parts, ("Перерождения +%d%%"):format(math.floor(Catalog.Progress.Rebirth.luck * d.rebirths * 100 + 0.5)))
+	end
 	if hasPass(d, "lucky") then
 		mult *= L.pass
 		table.insert(parts, ("Удача ловца x%.1f"):format(L.pass))
@@ -143,6 +154,16 @@ local function luckOf(d)
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
 	end
 	return mult, parts
+end
+local function talentPoints(d)
+	local spent = 0
+	for _, v in d.talents do spent += v end
+	return math.max(0, (d.level - 1) - spent)
+end
+local function applySpeed(plr)
+	local d = data[plr]
+	local h = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	if d and h then h.WalkSpeed = 16 + (d.talents.swift or 0) end
 end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
@@ -196,6 +217,7 @@ local function migrate(raw): Profile
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
 		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0, luckUntil = 0,
+		talents = { swift = 0, sense = 0, grip = 0, fortune = 0, greed = 0 }, rebirths = 0,
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -245,6 +267,10 @@ local function migrate(raw): Profile
 				end
 				d.newsSeen = math.floor(num(raw.newsSeen, 0, 1000, 0))
 				d.luckUntil = math.floor(num(raw.luckUntil, 0, 1e12, 0))
+				d.rebirths = math.floor(num(raw.rebirths, 0, 1000, 0))
+				if typeof(raw.talents) == "table" then
+					for k in d.talents do d.talents[k] = math.floor(num(raw.talents[k], 0, Catalog.Progress.TalentMax, 0)) end
+				end
 				if typeof(raw.owned) == "table" then
 					for k, v in raw.owned do
 						if Catalog.Money.Passes[k] and v == true then d.owned[k] = true end
@@ -318,6 +344,8 @@ local function pushState(plr)
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
 		newsSeen = d.newsSeen, isAdmin = isAdmin(plr), adminFast = adminFast[plr] == true,
 		luck = (luckOf(d)), luckParts = select(2, luckOf(d)), luckUntil = d.luckUntil or 0,
+		talents = d.talents, talentPoints = talentPoints(d), rebirths = d.rebirths or 0,
+		rebirthLevel = Catalog.Progress.rebirthLevel(d.rebirths or 0),
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
@@ -331,6 +359,7 @@ local function pushState(plr)
 	if ls then
 		ls["Духи"].Value = distinct(d)
 		ls["Уровень"].Value = d.level
+		ls["Перерождения"].Value = d.rebirths or 0
 	end
 end
 
@@ -376,7 +405,7 @@ spiritsFolder.Parent = workspace
 type Spirit = {
 	id: number, kind: string, district: string, anchor: Part, revealed: boolean, revealedAt: number,
 	born: number, pos: Vector3, dir: Vector3, goal: Vector3, progress: number, tut: boolean,
-	variant: string?, lastFlee: number?, fleeing: number?,
+	variant: string?, lastFlee: number?, fleeing: number?, idleUntil: number?,
 }
 local live: { [number]: Spirit } = {}
 local nextId = 0
@@ -421,7 +450,19 @@ local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVaria
 	local att = Instance.new("Attachment")
 	att.Name = "Att"
 	att.Parent = a
-	local start = lift(kind, at or zonePoint(district, nil, tut, kind))
+	local startPoint = at
+	if not startPoint then
+		for _ = 1, 10 do
+			startPoint = zonePoint(district, nil, tut, kind)
+			local near = false
+			for _, p in Players:GetPlayers() do
+				local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+				if r and (r.Position - startPoint).Magnitude < 35 then near = true end
+			end
+			if tut or not near then break end
+		end
+	end
+	local start = lift(kind, startPoint)
 	local s: Spirit = {
 		id = nextId, kind = kind, district = district, anchor = a, revealed = info.move == "swim", revealedAt = os.clock(),
 		born = os.clock(), pos = start, dir = Vector3.new(0, 0, -1), goal = lift(kind, zonePoint(district, start, tut, kind)),
@@ -539,9 +580,12 @@ RunService.Heartbeat:Connect(function(dt)
 			end
 			if s.fleeing and now - s.fleeing < 1.5 and not g then speed *= 2.2 end
 			local to = s.goal - s.pos
-			if to.Magnitude < 1 then
+			if not s.revealed and s.idleUntil and now < s.idleUntil then
+				to = Vector3.zero -- дух затаился и ждёт
+			elseif to.Magnitude < 1 then
 				s.goal = lift(s.kind, zonePoint(s.district, s.pos, s.tut, s.kind))
-			else
+				if not s.revealed and not s.tut then s.idleUntil = now + 4 + math.random() * 9 end
+			elseif to.Magnitude > 0 then
 				s.dir = Vector3.new(to.X, 0, to.Z).Magnitude > 0.05 and Vector3.new(to.X, 0, to.Z).Unit or s.dir
 				s.pos += to.Unit * math.min(speed * dt, to.Magnitude)
 			end
@@ -914,6 +958,7 @@ local function doSave(plr)
 		end
 	end
 	fillOrders(d)
+	coins = math.floor(coins * (1 + 0.06 * (d.talents.greed or 0)) * (1 + Catalog.Progress.Rebirth.coins * (d.rebirths or 0)))
 	if hasPass(d, "coins2x") then coins *= 2 end
 	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	d.coins += coins
@@ -1228,6 +1273,47 @@ MarketplaceService.ProcessReceipt = function(info)
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
+------------------------------------------------------------------ таланты и перерождение
+TalentFn.OnServerInvoke = function(plr, action, key)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if action == "up" then
+		if typeof(key) ~= "string" or d.talents[key] == nil then return { ok = false } end
+		if talentPoints(d) <= 0 then return { ok = false, msg = "Нет очков: повышай уровень" } end
+		if d.talents[key] >= Catalog.Progress.TalentMax then return { ok = false, msg = "Максимум" } end
+		d.talents[key] += 1
+	elseif action == "reset" then
+		if d.dust < Catalog.Progress.TalentResetDust then return { ok = false, msg = ("Нужно %d пыли"):format(Catalog.Progress.TalentResetDust) } end
+		d.dust -= Catalog.Progress.TalentResetDust
+		for k in d.talents do d.talents[k] = 0 end
+	else
+		return { ok = false }
+	end
+	applySpeed(plr)
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+
+RebirthFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	local need = Catalog.Progress.rebirthLevel(d.rebirths or 0)
+	if d.level < need then return { ok = false, msg = ("Нужен уровень %d"):format(need) } end
+	d.rebirths = (d.rebirths or 0) + 1
+	d.level, d.xp, d.coins = 1, 0, 0
+	for _, k in Catalog.UpgradeOrder do d.levels[k] = 1 end
+	for k in d.talents do d.talents[k] = 0 end
+	jars[plr] = {}
+	applySpeed(plr)
+	persist(plr)
+	pushState(plr)
+	for _, p in Players:GetPlayers() do
+		NoticeEv:FireClient(p, ("%s переродился! Перерождений: %d"):format(plr.DisplayName, d.rebirths))
+	end
+	return { ok = true, rebirths = d.rebirths }
+end
+
 ------------------------------------------------------------------ телепорт, коды, новости, админка
 local function teleportTo(plr, district)
 	local d = data[plr]
@@ -1406,6 +1492,9 @@ Players.PlayerAdded:Connect(function(plr)
 	local lv = Instance.new("IntValue")
 	lv.Name = "Уровень"
 	lv.Parent = ls
+	local rb = Instance.new("IntValue")
+	rb.Name = "Перерождения"
+	rb.Parent = ls
 	ls.Parent = plr
 
 	local raw, failed = nil, false
@@ -1430,6 +1519,7 @@ Players.PlayerAdded:Connect(function(plr)
 		giveLantern(plr, char)
 		task.wait(0.3)
 		applyPassEffects(plr)
+		applySpeed(plr)
 	end)
 	if plr.Character then giveLantern(plr, plr.Character) end
 	task.spawn(checkPasses, plr)

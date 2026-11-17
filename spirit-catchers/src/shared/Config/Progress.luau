@@ -64,4 +64,25 @@ P.News = {
 	},
 }
 
+-- таланты: очко за каждый уровень, у каждого таланта 10 ступеней
+P.TalentMax = 10
+P.TalentOrder = { "swift", "sense", "grip", "fortune", "greed" }
+P.Talents = {
+	swift = { name = "Быстрые ноги", desc = "+1 к скорости бега", icon = "paw", color = Color3.fromRGB(90, 200, 255) },
+	sense = { name = "Чутьё", desc = "Тени проявляются на 8% быстрее", icon = "target", color = Color3.fromRGB(170, 120, 255) },
+	grip = { name = "Хватка", desc = "Зона в мини-игре больше на 4%", icon = "jar", color = Color3.fromRGB(110, 220, 140) },
+	fortune = { name = "Фортуна", desc = "Удача +5%", icon = "luck", color = Color3.fromRGB(90, 230, 120) },
+	greed = { name = "Жадность", desc = "Монеты +6%", icon = "coin", color = Color3.fromRGB(255, 200, 60) },
+}
+P.TalentResetDust = 100
+
+-- перерождение: сброс уровня, монет, улучшений и талантов ради вечных множителей
+P.Rebirth = {
+	baseLevel = 15, stepLevel = 5, -- нужно уровня: 15, 20, 25...
+	coins = 0.3, luck = 0.15, -- за каждое перерождение: монеты +30%, удача +15%
+}
+function P.rebirthLevel(n: number): number
+	return P.Rebirth.baseLevel + n * P.Rebirth.stepLevel
+end
+
 return P
