@@ -124,7 +124,7 @@ function S.buildPaperFox(): Model
 		joint(p, tailRoot, "wagY", -i * 0.4, 1)
 	end
 	local glow = Instance.new("PointLight")
-	glow.Color, glow.Range, glow.Brightness = Color3.fromRGB(255, 210, 180), 12, 1.5
+	glow.Color, glow.Range, glow.Brightness = Color3.fromRGB(255, 210, 180), 10, 0.6
 	glow.Parent = body
 	m.PrimaryPart = body
 	S.scale(m, 1.6)
@@ -136,8 +136,8 @@ end
 function S.buildGoldenCarp(): Model
 	local m = Instance.new("Model")
 	m.Name = "GoldenCarp"
-	local gold = Color3.fromRGB(255, 190, 60)
-	local deep = Color3.fromRGB(230, 120, 30)
+	local gold = Color3.fromRGB(240, 170, 40)
+	local deep = Color3.fromRGB(215, 110, 25)
 	local fin = Color3.fromRGB(255, 235, 170)
 
 	local segs = {
@@ -149,7 +149,7 @@ function S.buildGoldenCarp(): Model
 	}
 	local head
 	for i, s in segs do
-		local p = ellipsoid(mk(m, { Name = "Seg" .. i, Size = s[1], CFrame = CFrame.new(0, 0, s[2]), Color = s[3], Material = Enum.Material.Metal, Reflectance = 0.25 }))
+		local p = ellipsoid(mk(m, { Name = "Seg" .. i, Size = s[1], CFrame = CFrame.new(0, 0, s[2]), Color = s[3], Material = Enum.Material.Metal, Reflectance = 0.05 }))
 		joint(p, Vector3.new(0, 0, s[2] - 1.2), "wagY", -i * 0.7, 0.12 * i)
 		if i == 1 then head = p end
 	end
@@ -160,18 +160,18 @@ function S.buildGoldenCarp(): Model
 		joint(wh, Vector3.new(x * 0.8, -0.6, -4.6), "wagY", x, 0.6)
 		-- длинные грудные плавники
 		local pf = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 1.6, 4.2), CFrame = CFrame.new(x * 2.6, -0.7, -0.8) * CFrame.Angles(0, 0, math.rad(x * -60)),
-			Color = fin, Material = Enum.Material.Neon, Transparency = 0.55 })
+			Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.5 })
 		joint(pf, Vector3.new(x * 1.3, -0.5, -0.8), "flapZ", x > 0 and 0 or math.pi, 0.7)
 		local vf = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 1.2, 3), CFrame = CFrame.new(x * 1.6, -1.6, 2.2) * CFrame.Angles(0, 0, math.rad(x * -35)),
-			Color = fin, Material = Enum.Material.Neon, Transparency = 0.6 })
+			Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.55 })
 		joint(vf, Vector3.new(x * 0.8, -1, 2.2), "flapZ", x > 0 and 1 or 1 + math.pi, 0.5)
 	end
-	local dorsal = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 2.4, 6), CFrame = CFrame.new(0, 2.3, 0.6), Color = fin, Material = Enum.Material.Neon, Transparency = 0.5 })
+	local dorsal = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 2.4, 6), CFrame = CFrame.new(0, 2.3, 0.6), Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.5 })
 	joint(dorsal, Vector3.new(0, 1.4, 0.6), "wagY", -1, 0.15)
 	-- большой вуалевый хвост
 	for i, a in { -28, 28 } do
 		local tf = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 3.4, 5.2), CFrame = CFrame.new(0, a / 28 * 1.3, 7.6) * CFrame.Angles(math.rad(a), 0, 0),
-			Color = fin, Material = Enum.Material.Neon, Transparency = 0.45 })
+			Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.45 })
 		joint(tf, Vector3.new(0, 0, 5.4), "wagY", -4 - i * 0.2, 0.9)
 	end
 	-- светящийся след
@@ -190,7 +190,7 @@ function S.buildGoldenCarp(): Model
 	trail.WidthScale = NumberSequence.new(1, 0.2)
 	trail.Parent = tailSeg
 	local glow = Instance.new("PointLight")
-	glow.Color, glow.Range, glow.Brightness = Color3.fromRGB(255, 200, 100), 22, 2.5
+	glow.Color, glow.Range, glow.Brightness = Color3.fromRGB(255, 200, 100), 14, 1
 	glow.Parent = head
 	m.PrimaryPart = head
 	S.scale(m, 1.25)

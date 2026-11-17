@@ -60,7 +60,8 @@ Lighting.EnvironmentDiffuseScale = 0.3
 local cc = Instance.new("ColorCorrectionEffect")
 cc.Parent = Lighting
 local bloom = Instance.new("BloomEffect")
-bloom.Intensity, bloom.Size, bloom.Threshold = 0.6, 24, 0.9
+bloom.Name = "Bloom"
+bloom.Intensity, bloom.Size, bloom.Threshold = 0.2, 14, 1.6
 bloom.Parent = Lighting
 local atm = Instance.new("Atmosphere")
 atm.Density, atm.Haze, atm.Color, atm.Decay = 0.3, 1.1, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
@@ -164,7 +165,7 @@ local function giveLantern(plr, char)
 	w.Name, w.Part0, w.Part1, w.C0 = "Weld", root, p, CFrame.new(0.9, 0.3, -0.9)
 	w.Parent = p
 	local sl = Instance.new("SpotLight")
-	sl.Name, sl.Face, sl.Angle, sl.Brightness = "Beam", Enum.NormalId.Front, 40, 6
+	sl.Name, sl.Face, sl.Angle, sl.Brightness = "Beam", Enum.NormalId.Front, 40, 3
 	sl.Range = Catalog.LanternRange[data[plr] and data[plr].lanternLvl or 1]
 	sl.Color = Color3.fromRGB(255, 240, 200)
 	sl.Parent = p
@@ -408,10 +409,10 @@ end)
 ------------------------------------------------------------------ Красная луна и они
 local function tweenLight(red)
 	local ti = TweenInfo.new(2.5)
-	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(115, 55, 65), OutdoorAmbient = Color3.fromRGB(130, 60, 70) }
+	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(95, 72, 90), OutdoorAmbient = Color3.fromRGB(105, 78, 98) }
 		or { Ambient = Color3.fromRGB(75, 75, 115), OutdoorAmbient = Color3.fromRGB(90, 90, 135) }):Play()
-	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 205, 205), Saturation = 0.1 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
-	TweenService:Create(atm, ti, { Color = red and Color3.fromRGB(160, 60, 70) or Color3.fromRGB(80, 90, 150) }):Play()
+	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 232, 232), Saturation = 0 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
+	TweenService:Create(atm, ti, { Color = red and Color3.fromRGB(190, 45, 55) or Color3.fromRGB(80, 90, 150), Decay = red and Color3.fromRGB(120, 20, 40) or Color3.fromRGB(40, 30, 80) }):Play()
 	TweenService:Create(map.moon, ti, { Transparency = red and 0 or 1 }):Play()
 end
 
@@ -477,10 +478,17 @@ local function oniLoop(a: Part)
 		local ring = Instance.new("Part")
 		ring.Name = "OniWarning"
 		ring.Shape, ring.Anchored, ring.CanCollide, ring.CanQuery, ring.CanTouch = Enum.PartType.Cylinder, true, false, false, false
-		ring.Material, ring.Color, ring.Transparency = Enum.Material.Neon, Color3.fromRGB(255, 30, 30), 0.5
+		ring.Material, ring.Color, ring.Transparency = Enum.Material.Neon, Color3.fromRGB(255, 25, 25), 0.3
 		ring.Size = Vector3.new(0.15, ONI_RADIUS * 2, ONI_RADIUS * 2)
 		ring.CFrame = CFrame.new(center) * CFrame.Angles(0, 0, math.rad(90))
 		ring.Parent = workspace
+		-- белая кромка: круг читается и при красном свете луны
+		local edge = ring:Clone()
+		edge.Name, edge.Color, edge.Transparency = "OniWarningEdge", Color3.new(1, 1, 1), 0.1
+		edge.Size = Vector3.new(0.12, ONI_RADIUS * 2 + 0.8, ONI_RADIUS * 2 + 0.8)
+		edge.CFrame = ring.CFrame * CFrame.new(-0.02, 0, 0)
+		edge.Parent = workspace
+		task.delay(ONI_WARN + 0.05, function() edge:Destroy() end)
 		local fill = ring:Clone()
 		fill.Transparency, fill.Size, fill.Color = 0.2, Vector3.new(0.2, 0.5, 0.5), Color3.fromRGB(255, 140, 60)
 		fill.Parent = workspace
@@ -593,7 +601,7 @@ UpgradeFn.OnServerInvoke = function(plr, which)
 	local lvl = d[key]
 	if lvl >= Catalog.MaxLevel then return { ok = false, msg = "Максимальный уровень" } end
 	local cost = Catalog.UpgradeCost[lvl]
-	if d.materials < cost then return { ok = false, msg = ("Нужно ✦%d материала"):format(cost) } end
+	if d.materials < cost then return { ok = false, msg = ("Нужно материала: %d"):format(cost) } end
 	d.materials -= cost
 	d[key] = lvl + 1
 	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")

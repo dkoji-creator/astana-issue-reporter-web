@@ -97,7 +97,7 @@ function Map.build()
 	block("CanalBed", Vector3.new(124, 1, 20), CFrame.new(0, -8, -30), Color3.fromRGB(10, 20, 40))
 	for _, z in { -19.6, -40.4 } do
 		block("CanalWall", Vector3.new(124, 7, 0.8), CFrame.new(0, -4, z), Color3.fromRGB(70, 70, 80))
-		deco("WaterEdge", Vector3.new(124, 0.12, 0.5), CFrame.new(0, 0.56, z + (z > -30 and -0.5 or 0.5)), TEAL, Enum.Material.Neon)
+		deco("WaterEdge", Vector3.new(124, 0.12, 0.5), CFrame.new(0, 0.56, z + (z > -30 and -0.5 or 0.5)), TEAL, Enum.Material.Neon, { Transparency = 0.45 })
 	end
 	local refl = { WARM, Color3.fromRGB(255, 90, 150), TEAL, Color3.fromRGB(255, 210, 90), VIOLET }
 	for i = 1, 22 do
@@ -139,20 +139,20 @@ function Map.build()
 	block("GreatLanternPole", Vector3.new(3, 28, 3), CFrame.new(0, 14, 128), Color3.fromRGB(120, 30, 30), Enum.Material.Wood)
 	local great = deco("GreatLantern", Vector3.new(11, 13, 11), CFrame.new(0, 34, 128), Color3.fromRGB(255, 130, 60), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
 	light(great, WARM, 60, 3)
-	billboard(great, "🏮 Улица фонарей", WARM, Vector3.new(0, 9, 0))
+	billboard(great, "Улица фонарей", WARM, Vector3.new(0, 9, 0))
 
 	---------------------------------------------------------------- ПЛОЩАДЬ И АЛТАРЬ (холодный свет, луч в небо)
 	local altarPos = Vector3.new(0, 0.5, 12)
-	local altar = block("Altar", Vector3.new(8, 3, 8), CFrame.new(altarPos + Vector3.new(0, 1.5, 0)), Color3.fromRGB(180, 195, 210), Enum.Material.Marble)
-	block("AltarStep", Vector3.new(14, 0.6, 14), CFrame.new(altarPos + Vector3.new(0, 0.3, 0)), Color3.fromRGB(150, 160, 175), Enum.Material.Marble)
+	local altar = block("Altar", Vector3.new(8, 3, 8), CFrame.new(altarPos + Vector3.new(0, 1.5, 0)), Color3.fromRGB(125, 130, 142), Enum.Material.Concrete, { Reflectance = 0 })
+	block("AltarStep", Vector3.new(14, 0.6, 14), CFrame.new(altarPos + Vector3.new(0, 0.3, 0)), Color3.fromRGB(105, 110, 122), Enum.Material.Concrete)
 	local orb = deco("AltarGlow", Vector3.new(3, 3, 3), CFrame.new(altarPos + Vector3.new(0, 5.5, 0)), COLD, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
-	light(orb, COLD, 40, 3)
-	deco("AltarBeam", Vector3.new(1.6, 220, 1.6), CFrame.new(altarPos + Vector3.new(0, 115, 0)), COLD, Enum.Material.Neon, { Transparency = 0.35 })
+	light(orb, COLD, 26, 1.1)
+	deco("AltarBeam", Vector3.new(1, 220, 1), CFrame.new(altarPos + Vector3.new(0, 115, 0)), COLD, Enum.Material.Neon, { Transparency = 0.6 })
 	for _, x in { -6, 6 } do
-		local pillar = deco("AltarPillar", Vector3.new(1, 10, 1), CFrame.new(x, 5.5, altarPos.Z), COLD, Enum.Material.Neon, { Transparency = 0.2 })
-		light(pillar, COLD, 18, 1.5)
+		local pillar = deco("AltarPillar", Vector3.new(1, 10, 1), CFrame.new(x, 5.5, altarPos.Z), COLD, Enum.Material.Neon, { Transparency = 0.5 })
+		light(pillar, COLD, 14, 0.5)
 	end
-	billboard(orb, "⛩ Алтарь", COLD, Vector3.new(0, 4, 0))
+	billboard(orb, "Алтарь", COLD, Vector3.new(0, 4, 0))
 	for _, p in { Vector3.new(-25, 0.5, 24), Vector3.new(25, 0.5, 24), Vector3.new(-25, 0.5, -2), Vector3.new(25, 0.5, -2) } do
 		stoneLantern(p, COLD)
 	end
@@ -166,19 +166,19 @@ function Map.build()
 		local ang = math.atan2(yb - ya, zb - za)
 		local len = math.sqrt((zb - za) ^ 2 + (yb - ya) ^ 2) + 0.4
 		local cf = CFrame.new(0, (ya + yb) / 2, (za + zb) / 2) * CFrame.Angles(-ang, 0, 0)
-		block("MoonBridge", Vector3.new(9, 1, len), cf, Color3.fromRGB(200, 50, 45), Enum.Material.Wood)
+		block("MoonBridge", Vector3.new(9, 1, len), cf, Color3.fromRGB(140, 48, 42), Enum.Material.Wood, { Reflectance = 0 })
 		for _, x in { -4.4, 4.4 } do
-			block("MoonRail", Vector3.new(0.5, 2.4, len), cf * CFrame.new(x, 1.7, 0), Color3.fromRGB(230, 70, 55), Enum.Material.Wood)
+			block("MoonRail", Vector3.new(0.5, 2.4, len), cf * CFrame.new(x, 1.7, 0), Color3.fromRGB(160, 60, 50), Enum.Material.Wood, { Reflectance = 0 })
 		end
 	end
 	for _, z in { -44, -16 } do
 		for _, x in { -5, 5 } do
-			block("BridgePost", Vector3.new(1, 6, 1), CFrame.new(x, 3.5, z), Color3.fromRGB(200, 50, 45), Enum.Material.Wood)
+			block("BridgePost", Vector3.new(1, 6, 1), CFrame.new(x, 3.5, z), Color3.fromRGB(140, 48, 42), Enum.Material.Wood)
 			local l = deco("BridgeLamp", Vector3.new(1.4, 1.6, 1.4), CFrame.new(x, 7.2, z), WARM, Enum.Material.Neon)
 			light(l, WARM, 18, 1.5)
 		end
 	end
-	billboard(world:FindFirstChild("BridgePost"), "🌉 Лунный мост", TEAL, Vector3.new(5, 8, 0))
+	billboard(world:FindFirstChild("BridgePost"), "Лунный мост", TEAL, Vector3.new(5, 8, 0))
 	for _, x in { -32, 32 } do
 		block("Bridge", Vector3.new(8, 1, 24), CFrame.new(x, 0, -30), Color3.fromRGB(130, 100, 70), Enum.Material.WoodPlanks)
 		for _, sx in { -3.8, 3.8 } do
@@ -204,7 +204,7 @@ function Map.build()
 	block("GardenFence", Vector3.new(54, 8, 1.5), CFrame.new(-35, 4, -72), Color3.fromRGB(120, 110, 100), Enum.Material.Brick)
 	local barrier = block("GardenBarrier", Vector3.new(14.2, 13, 1), CFrame.new(0, 6.5, -72), VIOLET, Enum.Material.ForceField,
 		{ Transparency = 0.2, CanQuery = false })
-	local barrierText = sign(barrier, "🔒 Храмовый сад\nСохрани 3 разных духа", Color3.new(1, 1, 1), Enum.NormalId.Back)
+	local barrierText = sign(barrier, "ЗАКРЫТО: Храмовый сад\nСохрани 3 разных духа", Color3.new(1, 1, 1), Enum.NormalId.Back)
 	sign(barrier, "Храмовый сад", Color3.new(1, 1, 1), Enum.NormalId.Front)
 	-- пагода — ориентир сада
 	for i = 0, 3 do
@@ -216,7 +216,7 @@ function Map.build()
 		if i == 3 then light(edge, VIOLET, 50, 2.5) end
 	end
 	local spire = deco("PagodaSpire", Vector3.new(0.8, 8, 0.8), CFrame.new(0, 34, -138), Color3.fromRGB(230, 200, 90), Enum.Material.Neon)
-	billboard(spire, "🏯 Храмовый сад", GARDEN, Vector3.new(0, 6, 0))
+	billboard(spire, "Храмовый сад", GARDEN, Vector3.new(0, 6, 0))
 	for _, p in { Vector3.new(-25, 0.5, -90), Vector3.new(26, 0.5, -96), Vector3.new(-30, 0.5, -125), Vector3.new(30, 0.5, -130), Vector3.new(-12, 0.5, -108), Vector3.new(16, 0.5, -118) } do
 		sakura(p, 1)
 	end

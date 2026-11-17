@@ -62,17 +62,17 @@ local function button(text, pos, size, color, parent)
 end
 
 ------------------------------------------------------------------ HUD
-local jarLabel = label("🫙 0/3", UDim2.new(0, 12, 0, 56), UDim2.new(0, 200, 0, 34))
-local infoLabel = label("✦ 0   Сад: 0/3", UDim2.new(0, 12, 0, 94), UDim2.new(0, 200, 0, 26), nil, 18)
-local collBtn = button("📖 Коллекция", UDim2.new(0, 12, 0, 126), UDim2.new(0, 200, 0, 38), Color3.fromRGB(70, 80, 160))
-local upBtn = button("⬆ Улучшения", UDim2.new(0, 12, 0, 170), UDim2.new(0, 200, 0, 38), Color3.fromRGB(60, 140, 170))
+local jarLabel = label("Банка 0/3", UDim2.new(0, 12, 0, 56), UDim2.new(0, 200, 0, 34))
+local infoLabel = label("Материал 0   Сад 0/3", UDim2.new(0, 12, 0, 94), UDim2.new(0, 200, 0, 26), nil, 18)
+local collBtn = button("Коллекция", UDim2.new(0, 12, 0, 126), UDim2.new(0, 200, 0, 38), Color3.fromRGB(70, 80, 160))
+local upBtn = button("Улучшения", UDim2.new(0, 12, 0, 170), UDim2.new(0, 200, 0, 38), Color3.fromRGB(60, 140, 170))
 upBtn.Visible = false
-local toast = label("", UDim2.new(0.5, -190, 0, 150), UDim2.new(0, 380, 0, 38))
+local toast = label("", UDim2.new(0.5, -190, 0, 46), UDim2.new(0, 380, 0, 34))
 toast.Visible = false
 local banner = label("", UDim2.new(0.5, -150, 0, 8), UDim2.new(0, 300, 0, 32), nil, 20)
-local tutPanel = label("", UDim2.new(0.5, -210, 0, 46), UDim2.new(0, 420, 0, 56), nil, 20)
+local tutPanel = label("", UDim2.new(0.5, -210, 1, -96), UDim2.new(0, 420, 0, 56), nil, 20)
 tutPanel.BackgroundColor3, tutPanel.Visible = Color3.fromRGB(30, 70, 110), false
-local skipBtn = button("Пропустить", UDim2.new(1, -96, 1, 4), UDim2.new(0, 96, 0, 24), Color3.fromRGB(60, 60, 80), tutPanel)
+local skipBtn = button("Пропустить", UDim2.new(1, -96, 0, -28), UDim2.new(0, 96, 0, 24), Color3.fromRGB(60, 60, 80), tutPanel)
 local districtTitle = label("", UDim2.new(0.5, -170, 0.32, 0), UDim2.new(0, 340, 0, 46), nil, 30)
 districtTitle.BackgroundTransparency, districtTitle.Visible = 1, false
 districtTitle.TextStrokeTransparency = 0.3
@@ -132,7 +132,7 @@ local function modal(title)
 	corner(f, UDim.new(0, 14))
 	local t = label(title, UDim2.new(0, 12, 0, 6), UDim2.new(1, -70, 0, 32), f, 26)
 	t.BackgroundTransparency, t.TextXAlignment = 1, Enum.TextXAlignment.Left
-	local close = button("✕", UDim2.new(1, -48, 0, 6), UDim2.new(0, 40, 0, 34), Color3.fromRGB(160, 50, 60), f)
+	local close = button("X", UDim2.new(1, -48, 0, 6), UDim2.new(0, 40, 0, 34), Color3.fromRGB(160, 50, 60), f)
 	close.Activated:Connect(function() f.Visible = false end)
 	f.Parent = gui
 	return f
@@ -194,7 +194,7 @@ local function refreshCollection()
 			cards[kind] = c
 		end
 		local n = state.saved[kind] or 0
-		c.icon.Text = n > 0 and info.icon or "❔"
+		c.icon.Text = n > 0 and info.icon or "?"
 		c.name.Text = n > 0 and (info.name .. "  ×" .. n) or "???"
 		c.hint.Text = (n > 0 and "Где: " or "Ищи: ") .. info.hint
 		c.equip.Visible = n > 0
@@ -204,23 +204,23 @@ local function refreshCollection()
 end
 
 local function refreshUpgrades()
-	upInfo.Text = ("Материал: ✦%d   (дубликаты при сохранении дают материал)"):format(state.materials)
+	upInfo.Text = ("Материал: %d   (дубликаты при сохранении дают материал)"):format(state.materials)
 	local function row(lbl, btn, lvl, cur, nxt)
 		if lvl >= Catalog.MaxLevel then
 			lbl.Text = cur .. "  (макс.)"
 			btn.Text, btn.AutoButtonColor, btn.BackgroundColor3 = "Готово", false, Color3.fromRGB(80, 80, 90)
 		else
 			local cost = Catalog.UpgradeCost[lvl]
-			lbl.Text = cur .. "  →  " .. nxt
-			btn.Text = ("Улучшить ✦%d"):format(cost)
+			lbl.Text = cur .. "  ->  " .. nxt
+			btn.Text = ("Улучшить: %d"):format(cost)
 			btn.BackgroundColor3 = state.materials >= cost and Color3.fromRGB(70, 160, 100) or Color3.fromRGB(90, 90, 100)
 		end
 	end
 	local l = state.lanternLvl
-	row(lanternRow, lanternBtn, l, ("🔦 Фонарь ур.%d: %d м, ловля ×%.2g"):format(l, Catalog.LanternRange[l], Catalog.LanternSpeed[l]),
+	row(lanternRow, lanternBtn, l, ("Фонарь ур.%d: %d м, ловля ×%.2g"):format(l, Catalog.LanternRange[l], Catalog.LanternSpeed[l]),
 		l < Catalog.MaxLevel and ("%d м, ×%.2g"):format(Catalog.LanternRange[l + 1], Catalog.LanternSpeed[l + 1]) or "")
 	local j = state.jarLvl
-	row(jarRow, jarBtn, j, ("🫙 Банка ур.%d: %d духа"):format(j, Catalog.JarCap[j]), j < Catalog.MaxLevel and ("%d"):format(Catalog.JarCap[j + 1]) or "")
+	row(jarRow, jarBtn, j, ("Банка ур.%d: %d духа"):format(j, Catalog.JarCap[j]), j < Catalog.MaxLevel and ("%d"):format(Catalog.JarCap[j + 1]) or "")
 end
 local function doUpgrade(which)
 	local r = remotes.Upgrade:InvokeServer(which)
@@ -246,11 +246,11 @@ end)
 
 local function refreshHUD()
 	local icons = ""
-	for _, k in state.jar do icons ..= Catalog.Kinds[k].icon end
-	jarLabel.Text = ("🫙 %d/%d %s"):format(#state.jar, state.cap, icons)
+	for i, k in state.jar do icons ..= (i == 1 and ": " or ", ") .. Catalog.Kinds[k].icon end
+	jarLabel.Text = ("Банка %d/%d %s"):format(#state.jar, state.cap, icons)
 	jarLabel.BackgroundColor3 = #state.jar >= state.cap and Color3.fromRGB(150, 60, 30) or Color3.fromRGB(20, 20, 40)
-	infoLabel.Text = state.gardenOpen and ("✦ %d   Сад открыт"):format(state.materials)
-		or ("✦ %d   Сад: %d/%d вида"):format(state.materials, math.min(state.distinct, Catalog.GardenNeed), Catalog.GardenNeed)
+	infoLabel.Text = state.gardenOpen and ("Материал %d   Сад открыт"):format(state.materials)
+		or ("Материал %d   Сад %d/%d"):format(state.materials, math.min(state.distinct, Catalog.GardenNeed), Catalog.GardenNeed)
 	-- ворота сада: открыты локально, сервер всё равно проверяет доступ
 	Barrier.CanCollide = not state.gardenOpen
 	Barrier.Transparency = state.gardenOpen and 0.85 or 0.2
@@ -322,24 +322,45 @@ local function catchEffect(kind, at, coop)
 	local text = info.icon .. " " .. info.name .. " в банке!"
 	if coop > 1 then text ..= ("  Совместная ловля ×%d"):format(coop)
 	elseif streak > 1 then text ..= "  Серия ×" .. streak end
-	if info.rarity == "legendary" then text = "✦ " .. info.name .. "! Неси к алтарю ✦" end
+	if info.rarity == "legendary" then text = info.name .. "! Неси к алтарю" end
 	showToast(text, 2.5)
 end
 
--- раскрытие легендарного духа (~2 с): силуэт → пауза → световое кольцо → цвет и облёт вокруг игрока
+-- раскрытие легендарного духа (~2 с): свет алтаря приглушён, тёмный силуэт сбоку от игрока → пауза →
+-- световое кольцо → модель в цвете целиком в кадре, плывёт и оставляет золотой след
 local revealCC = Instance.new("ColorCorrectionEffect")
 revealCC.Parent = Lighting
+local function dimAltar(on)
+	for _, p in World:GetChildren() do
+		if p:IsA("BasePart") and (p.Name == "AltarGlow" or p.Name == "AltarPillar" or p.Name == "AltarBeam") then
+			local base = p:GetAttribute("BaseT") or p.Transparency
+			p:SetAttribute("BaseT", base)
+			TweenService:Create(p, TweenInfo.new(0.25), { Transparency = on and math.max(base, 0.85) or base }):Play()
+			local l = p:FindFirstChildOfClass("PointLight")
+			if l then
+				local b = l:GetAttribute("BaseB") or l.Brightness
+				l:SetAttribute("BaseB", b)
+				TweenService:Create(l, TweenInfo.new(0.25), { Brightness = on and b * 0.15 or b }):Play()
+			end
+		end
+	end
+end
+local function flat(v)
+	local f = Vector3.new(v.X, 0, v.Z)
+	return f.Magnitude > 0.01 and f.Unit or Vector3.new(0, 0, -1)
+end
 local function revealLegendary(kind)
 	local r = root()
 	if not r then return end
+	local cam = workspace.CurrentCamera
 	local m = Spirits.Builders[kind]()
-	Spirits.scale(m, 0.55)
+	Spirits.scale(m, 0.5)
 	local orig = {}
 	for _, p in m:GetDescendants() do
 		if p:IsA("BasePart") then
 			orig[p] = { p.Color, p.Material, p.Transparency, p.Reflectance }
 			if p.Name == "Fin" or p.Name == "Whisker" then
-				p.Color, p.Material, p.Transparency = GOLD, Enum.Material.Neon, 0.25
+				p.Color, p.Material, p.Transparency = GOLD, Enum.Material.Neon, 0.35 -- подсвеченные плавники
 			else
 				p.Color, p.Material, p.Reflectance = Color3.fromRGB(8, 6, 12), Enum.Material.SmoothPlastic, 0
 			end
@@ -348,29 +369,25 @@ local function revealLegendary(kind)
 		end
 	end
 	m.Parent = workspace
-	TweenService:Create(revealCC, TweenInfo.new(0.2), { Brightness = -0.18, Saturation = -0.7 }):Play()
+	dimAltar(true)
+	TweenService:Create(revealCC, TweenInfo.new(0.2), { Brightness = -0.12, Saturation = -0.6 }):Play()
 	local t0 = os.clock()
-	local colored, ringed = false, false
+	local colored, ringed, restored = false, false, false
 	local conn
 	conn = RunService.RenderStepped:Connect(function()
 		local t = os.clock() - t0
 		local cr = root() or r
-		local pivot
-		if t < 0.9 then
-			local front = cr.CFrame * CFrame.new(0, 2, -9)
-			pivot = CFrame.lookAt(front.Position, front.Position + cr.CFrame.RightVector) * CFrame.new(0, math.sin(t * 3) * 0.2, 0)
-		else
-			local look = cr.CFrame.LookVector
-			local a = (t - 0.9) * 5.2 + math.atan2(-look.X, -look.Z)
-			local p = cr.Position + Vector3.new(math.sin(a) * 8, 2.5 + math.sin(t * 4) * 0.5, math.cos(a) * 8)
-			pivot = CFrame.lookAt(p, p + Vector3.new(math.cos(a), 0, -math.sin(a)))
-		end
-		Spirits.animate(m, pivot, t * 4)
-		if t > 0.55 and not ringed then
+		local right, fwd = flat(cam.CFrame.RightVector), flat(cam.CFrame.LookVector)
+		-- сбоку от игрока, профилем к камере: видно всю модель
+		local swim = t > 0.8 and (t - 0.8) * 2.2 or 0
+		local pos = cr.Position + right * (7 - swim) + fwd * 3 + Vector3.new(0, 2.2 + math.sin(t * 3) * 0.25, 0)
+		local pivot = CFrame.lookAt(pos, pos - right)
+		Spirits.animate(m, pivot, t * (t > 0.8 and 5 or 1.5))
+		if t > 0.5 and not ringed then
 			ringed = true
-			ring(pivot.Position, 2, 26, GOLD, 0.45, true)
+			ring(pos, 2, 22, GOLD, 0.45, true)
 		end
-		if t > 0.75 and not colored then
+		if t > 0.7 and not colored then
 			colored = true
 			for p, o in orig do
 				p.Material, p.Reflectance = o[2], o[4]
@@ -381,15 +398,17 @@ local function revealLegendary(kind)
 			end
 			TweenService:Create(revealCC, TweenInfo.new(0.3), { Brightness = 0, Saturation = 0 }):Play()
 		end
-		if t > 1.8 then
+		if t > 1.75 and not restored then
+			restored = true
 			for p in orig do TweenService:Create(p, TweenInfo.new(0.25), { Transparency = 1 }):Play() end
+			dimAltar(false)
 		end
-		if t > 2.1 then
+		if t > 2.05 then
 			conn:Disconnect()
 			m:Destroy()
 		end
 	end)
-	showToast("✦ " .. Catalog.Kinds[kind].name .. " в коллекции! ✦", 2.5)
+	showToast(Catalog.Kinds[kind].name .. " в коллекции!", 2.5)
 end
 
 ------------------------------------------------------------------ обучение (первая минута)
@@ -398,7 +417,7 @@ local TUT_TEXT = {
 	"1/4  Найди фиолетовую тень у площади и наведи на неё фонарь",
 	"2/4  Подойди и удерживай ЛОВИТЬ, пока дух не окажется в банке",
 	"3/4  Отнеси улов к алтарю (голубой луч) и нажми «Сохранить улов»",
-	"4/4  Открой «📖 Коллекция» и экипируй лиса",
+	"4/4  Открой «Коллекция» и экипируй лиса",
 }
 local arrowPart = Instance.new("Part")
 arrowPart.Anchored, arrowPart.CanCollide, arrowPart.CanQuery, arrowPart.Transparency, arrowPart.Size = true, false, false, 1, Vector3.one
@@ -463,12 +482,12 @@ remotes.SaveResult.OnClientEvent:Connect(function(r)
 		end
 		local msg = ("Сохранено духов: %d"):format(#r.kinds)
 		if #r.firsts > 0 then msg ..= "  Новые: " .. #r.firsts end
-		if r.gained > 0 then msg ..= ("  +✦%d"):format(r.gained) end
+		if r.gained > 0 then msg ..= ("  +%d материала"):format(r.gained) end
 		if not r.persisted then msg ..= " (без DataStore)" end
 		showToast(msg, 3)
 	end
 	if r.gardenOpened then
-		task.delay(legendary and 2.3 or 1.2, function() showToast("🏯 Храмовый сад открыт! Иди на юг за канал", 4) end)
+		task.delay(legendary and 2.3 or 1.2, function() showToast("Храмовый сад открыт! Иди на юг за канал", 4) end)
 	end
 	if tut.step == 3 then setStep(4) end
 end)
@@ -636,7 +655,7 @@ RunService.RenderStepped:Connect(function(dt)
 		local left = math.max(0, math.floor(ends - workspace:GetServerTimeNow()))
 		local timeStr = ("%d:%02d"):format(left // 60, left % 60)
 		if workspace:GetAttribute("MoonActive") then
-			banner.Text = "🌕 КРАСНАЯ ЛУНА " .. timeStr
+			banner.Text = "КРАСНАЯ ЛУНА " .. timeStr
 			banner.BackgroundColor3, banner.BackgroundTransparency = Color3.fromRGB(130, 15, 25), 0.1
 		else
 			banner.Text = "До Красной луны " .. timeStr
@@ -699,7 +718,7 @@ RunService.RenderStepped:Connect(function(dt)
 
 	highlight.Adornee, hint.Adornee = nil, nil
 	local inRange = false
-	if target and target.Parent then
+	if target and target.Parent and (r.Position - ALTAR_POS).Magnitude > 16 then
 		local v = visuals[target]
 		local id = target:GetAttribute("SpiritId")
 		local dist = (target.Position - r.Position).Magnitude
@@ -728,7 +747,7 @@ RunService.RenderStepped:Connect(function(dt)
 			hint.StudsOffset = Vector3.new(0, 3, 0)
 			local need = rar.revealTime / Catalog.LanternSpeed[plr:GetAttribute("LanternLvl") or 1]
 			aimTime += dt
-			hintText.Text = "Свети… " .. string.rep("•", math.clamp(math.floor(aimTime / need * 3), 0, 3))
+			hintText.Text = "Свети" .. string.rep(".", math.clamp(math.floor(aimTime / need * 3), 0, 3))
 			hintText.TextColor3 = Color3.fromRGB(200, 170, 255)
 			if aimTime > need and not revealSent[id] then
 				revealSent[id] = true
@@ -814,3 +833,44 @@ end)
 UserInputService.InputEnded:Connect(function(i)
 	if i.KeyCode == Enum.KeyCode.F then release() end
 end)
+
+------------------------------------------------------------------ замер кадра и Bloom (только тестовый плейс / Studio)
+local IS_TEST = RunService:IsStudio() or game.PlaceId == 99980756426085
+if IS_TEST then
+	local perf = label("", UDim2.new(0, 12, 0, 214), UDim2.new(0, 200, 0, 46), nil, 14)
+	perf.BackgroundTransparency = 0.45
+	local bloomBtn = button("", UDim2.new(0, 12, 0, 264), UDim2.new(0, 200, 0, 28), Color3.fromRGB(60, 60, 80))
+	local PRESETS = { 0, 0.1, 0.2, 0.35 }
+	local bi = 3
+	local function applyBloom()
+		local b = Lighting:FindFirstChild("Bloom")
+		if b then b.Enabled = PRESETS[bi] > 0; b.Intensity = PRESETS[bi] end
+		bloomBtn.Text = PRESETS[bi] > 0 and ("Bloom %.2f (нажми)"):format(PRESETS[bi]) or "Bloom выкл (нажми)"
+	end
+	applyBloom()
+	bloomBtn.Activated:Connect(function()
+		bi = bi % #PRESETS + 1
+		applyBloom()
+	end)
+	local win, winN, winMax = 0, 0, 0
+	local bridge = { night = { 0, 0, 0 }, moon = { 0, 0, 0 } } -- сумма, кадры, максимум
+	local function fmt(b)
+		return b[2] > 30 and ("%.1f/%.0f"):format(b[1] / b[2] * 1000, b[3] * 1000) or "-"
+	end
+	RunService.Heartbeat:Connect(function(dt)
+		win += dt
+		winN += 1
+		winMax = math.max(winMax, dt)
+		local r = root()
+		if r and math.abs(r.Position.X) < 5 and r.Position.Z > -43 and r.Position.Z < -17 then
+			local b = workspace:GetAttribute("MoonActive") and bridge.moon or bridge.night
+			b[1] += dt
+			b[2] += 1
+			b[3] = math.max(b[3], dt)
+		end
+		if win >= 1 then
+			perf.Text = ("Кадр %.1f мс (макс %.0f), %d FPS\nМост ср/макс мс: ночь %s | луна %s"):format(win / winN * 1000, winMax * 1000, winN, fmt(bridge.night), fmt(bridge.moon))
+			win, winN, winMax = 0, 0, 0
+		end
+	end)
+end
