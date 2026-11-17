@@ -16,19 +16,16 @@ local IS_TEST = RunService:IsStudio() or game.PlaceId == TEST_PLACE_ID
 local FIRST_MOON, NORMAL_TIME, MOON_TIME = 100, 150, 70
 local ALTAR_RANGE, SAFE_RADIUS = 16, 26
 local ONI_RADIUS, ONI_WARN = 8, 1.6
-local DISTRICT_MAX = { street = 6, canal = 6, garden = 7 }
-local WEIGHTS = {
-	normal = {
-		street = { PaperFox = 60, LanternSpirit = 35, Crane = 5 },
-		canal = { PaperFox = 30, Umbrella = 55, LanternSpirit = 15 },
-		garden = { Firefly = 50, Kodama = 38, Crane = 12 },
-	},
-	moon = {
-		street = { PaperFox = 40, LanternSpirit = 35, MoonRabbit = 25 },
-		canal = { PaperFox = 25, Umbrella = 45, LanternSpirit = 20, Crane = 10 },
-		garden = { Firefly = 35, Kodama = 30, Crane = 25, MoonRabbit = 10 },
-	},
-}
+-- веса появления собираются из Config/Spirits (district → kind → вес)
+local WEIGHTS = { normal = {}, moon = {} }
+for kind, info in Catalog.Kinds do
+	for district, w in info.spawn do
+		WEIGHTS.normal[district] = WEIGHTS.normal[district] or {}
+		WEIGHTS.moon[district] = WEIGHTS.moon[district] or {}
+		if (w.w or 0) > 0 then WEIGHTS.normal[district][kind] = w.w end
+		if (w.moon or 0) > 0 then WEIGHTS.moon[district][kind] = w.moon end
+	end
+end
 
 ------------------------------------------------------------------ remotes
 local remotes = Instance.new("Folder")
@@ -49,13 +46,15 @@ local SaveResultEv = remote("SaveResult")
 local CaughtEv = remote("Caught")
 local HitEv = remote("Hit")
 local NoticeEv = remote("Notice")
+local SettingsEv = remote("SetSettings")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
 Lighting.ClockTime = 0
-Lighting.Brightness = 1.3
-Lighting.Ambient = Color3.fromRGB(75, 75, 115)
-Lighting.OutdoorAmbient = Color3.fromRGB(90, 90, 135)
+Lighting.Brightness = 1
+Lighting.ExposureCompensation = -0.3
+Lighting.Ambient = Color3.fromRGB(52, 52, 82)
+Lighting.OutdoorAmbient = Color3.fromRGB(58, 60, 92)
 Lighting.EnvironmentDiffuseScale = 0.3
 local cc = Instance.new("ColorCorrectionEffect")
 cc.Parent = Lighting
@@ -67,13 +66,15 @@ local atm = Instance.new("Atmosphere")
 atm.Density, atm.Haze, atm.Color, atm.Decay = 0.3, 1.1, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
 atm.Parent = Lighting
 
------------------------------------------------------------------- профили (версия 3; сохранения версии 2 переносятся)
+------------------------------------------------------------------ профили (версия 4; v2 и v3 переносятся)
 local store = nil
 pcall(function() store = DataStoreService:GetDataStore("SpiritCatchers_v1") end)
 
 type Profile = {
 	version: number, saved: { [string]: number }, firstSaved: { [string]: boolean }, equipped: string?,
-	materials: number, lanternLvl: number, jarLvl: number, tutorialDone: boolean, loadFailed: boolean?,
+	coins: number, dust: number, levels: { [string]: number }, tutorialDone: boolean,
+	orders: { any }, settings: { music: number, sfx: number, reduced: boolean, diag: boolean },
+	loadFailed: boolean?,
 }
 local data: { [Player]: Profile } = {}
 local jars: { [Player]: { string } } = {}
@@ -82,32 +83,8 @@ local holds: { [Player]: number } = {}
 local function clampLvl(v)
 	return typeof(v) == "number" and math.clamp(math.floor(v), 1, Catalog.MaxLevel) or 1
 end
-
-local function migrate(raw): Profile
-	local d: Profile = { version = 3, saved = {}, firstSaved = {}, equipped = nil, materials = 0, lanternLvl = 1, jarLvl = 1, tutorialDone = false }
-	if typeof(raw) ~= "table" then return d end
-	-- v2: { saved, equipped, firstSaved }
-	if typeof(raw.saved) == "table" then
-		for k, v in raw.saved do
-			if Catalog.Kinds[k] and typeof(v) == "number" and v > 0 then
-				d.saved[k] = math.floor(v)
-				d.firstSaved[k] = true
-			end
-		end
-	end
-	if typeof(raw.firstSaved) == "table" then
-		for k, v in raw.firstSaved do
-			if Catalog.Kinds[k] and v == true then d.firstSaved[k] = true end
-		end
-	end
-	if typeof(raw.equipped) == "string" and (d.saved[raw.equipped] or 0) > 0 then d.equipped = raw.equipped end
-	if raw.version == 3 then
-		d.materials = typeof(raw.materials) == "number" and math.max(0, math.floor(raw.materials)) or 0
-		d.lanternLvl = clampLvl(raw.lanternLvl)
-		d.jarLvl = clampLvl(raw.jarLvl)
-		d.tutorialDone = raw.tutorialDone == true
-	end
-	return d
+local function num(v, lo, hi, def)
+	return typeof(v) == "number" and v == v and math.clamp(v, lo, hi) or def
 end
 
 local function distinct(d: Profile)
@@ -118,7 +95,102 @@ local function distinct(d: Profile)
 	return n
 end
 local function gardenOpen(d: Profile) return distinct(d) >= Catalog.GardenNeed end
-local function cap(d: Profile) return Catalog.JarCap[d.jarLvl] end
+local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) end
+local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
+local function range(d: Profile) return Catalog.upgradeValue("range", d.levels.range) end
+
+------------------------------------------------------------------ заказы алтаря
+local function onlyGarden(kind)
+	for district in Catalog.Kinds[kind].spawn do
+		if district ~= "garden" then return false end
+	end
+	return next(Catalog.Kinds[kind].spawn) ~= nil
+end
+
+local function newOrder(d: Profile, avoid: string?)
+	local pool = {}
+	for _, kind in Catalog.Order do
+		local info = Catalog.Kinds[kind]
+		if not info.moonOnly and kind ~= avoid and (gardenOpen(d) or not onlyGarden(kind)) then
+			table.insert(pool, kind)
+		end
+	end
+	if math.random() < 0.6 and #pool > 0 then
+		local kind = pool[math.random(#pool)]
+		local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
+		local need = Catalog.Kinds[kind].rarity == "common" and 2 or 1
+		return { type = "kind", kind = kind, need = need, have = 0, coins = rar.coins * need * 3 + 15, dust = rar.dust }
+	end
+	local rarity = math.random() < 0.65 and "common" or "uncommon"
+	local need = rarity == "common" and math.random(3, 4) or 2
+	local rar = Catalog.Rarity[rarity]
+	return { type = "rarity", rarity = rarity, need = need, have = 0, coins = rar.coins * need * 2 + 10, dust = rar.dust * 2 }
+end
+
+local function fillOrders(d: Profile)
+	local valid = {}
+	for _, o in d.orders do
+		if typeof(o) == "table" and (o.type == "kind" and Catalog.Kinds[o.kind] or o.type == "rarity" and Catalog.Rarity[o.rarity]) then
+			table.insert(valid, o)
+		end
+	end
+	d.orders = valid
+	while #d.orders < Catalog.OrderSlots do
+		table.insert(d.orders, newOrder(d, d.orders[1] and d.orders[1].kind))
+	end
+end
+
+local function migrate(raw): Profile
+	local d: Profile = {
+		version = 4, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0,
+		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
+		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
+	}
+	if typeof(raw) == "table" then
+		-- v2+: коллекция
+		if typeof(raw.saved) == "table" then
+			for k, v in raw.saved do
+				if Catalog.Kinds[k] and typeof(v) == "number" and v > 0 then
+					d.saved[k] = math.floor(v)
+					d.firstSaved[k] = true
+				end
+			end
+		end
+		if typeof(raw.firstSaved) == "table" then
+			for k, v in raw.firstSaved do
+				if Catalog.Kinds[k] and v == true then d.firstSaved[k] = true end
+			end
+		end
+		if typeof(raw.equipped) == "string" and (d.saved[raw.equipped] or 0) > 0 then d.equipped = raw.equipped end
+		if raw.version == 3 then
+			-- материал → пыль духов; фонарь v3 → ширина луча и сила света; стартовые монеты за коллекцию
+			d.dust = math.floor(num(raw.materials, 0, 1e9, 0))
+			d.levels.range = clampLvl(raw.lanternLvl)
+			d.levels.power = clampLvl(raw.lanternLvl)
+			d.levels.jar = clampLvl(raw.jarLvl)
+			d.tutorialDone = raw.tutorialDone == true
+			d.coins = 20 * distinct(d)
+		elseif raw.version == 4 then
+			d.coins = math.floor(num(raw.coins, 0, 1e9, 0))
+			d.dust = math.floor(num(raw.dust, 0, 1e9, 0))
+			if typeof(raw.levels) == "table" then
+				for _, k in Catalog.UpgradeOrder do d.levels[k] = clampLvl(raw.levels[k]) end
+			end
+			d.tutorialDone = raw.tutorialDone == true
+			if typeof(raw.orders) == "table" then d.orders = raw.orders end
+			if typeof(raw.settings) == "table" then
+				d.settings.music = num(raw.settings.music, 0, 1, 0.6)
+				d.settings.sfx = num(raw.settings.sfx, 0, 1, 0.8)
+				d.settings.reduced = raw.settings.reduced == true
+				d.settings.diag = raw.settings.diag == true
+			end
+		elseif typeof(raw.saved) == "table" and next(d.saved) then
+			d.coins = 20 * distinct(d) -- v2
+		end
+	end
+	fillOrders(d)
+	return d
+end
 
 local function persist(plr)
 	local d = data[plr]
@@ -133,12 +205,13 @@ end
 local function pushState(plr)
 	local d = data[plr]
 	if not d then return end
-	plr:SetAttribute("LanternLvl", d.lanternLvl)
+	plr:SetAttribute("RangeLvl", d.levels.range)
+	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
 	plr:SetAttribute("Companion", d.equipped or "")
 	StateEv:FireClient(plr, {
-		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, materials = d.materials,
-		lanternLvl = d.lanternLvl, jarLvl = d.jarLvl, tutorialDone = d.tutorialDone,
+		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
+		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
 		gardenOpen = gardenOpen(d), distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 	})
 	local ls = plr:FindFirstChild("leaderstats")
@@ -166,7 +239,7 @@ local function giveLantern(plr, char)
 	w.Parent = p
 	local sl = Instance.new("SpotLight")
 	sl.Name, sl.Face, sl.Angle, sl.Brightness = "Beam", Enum.NormalId.Front, 40, 3
-	sl.Range = Catalog.LanternRange[data[plr] and data[plr].lanternLvl or 1]
+	sl.Range = data[plr] and range(data[plr]) or 30
 	sl.Color = Color3.fromRGB(255, 240, 200)
 	sl.Parent = p
 	local pl = Instance.new("PointLight")
@@ -193,14 +266,27 @@ local moon = { active = false }
 
 local function rnd(a, b) return a + math.random() * (b - a) end
 
-local function zonePoint(district, near: Vector3?, tut: boolean?)
-	if district == "street" then
-		return Vector3.new(rnd(-14, 14), 0.5, tut and rnd(34, 62) or rnd(34, 124))
-	elseif district == "canal" then
-		local north = if near then near.Z > -30 else math.random() < 0.5
-		return Vector3.new(rnd(-56, 56), 0.5, north and rnd(-18, -11) or rnd(-49, -42))
+local function zonePoint(district, near: Vector3?, tut: boolean?, kind: string?)
+	if tut then
+		return Vector3.new(rnd(-14, 14), 0.5, rnd(34, 62))
 	end
-	return Vector3.new(rnd(-38, 38), 0.5, rnd(-144, -80))
+	local info = kind and Catalog.Kinds[kind]
+	if info and info.spots then
+		-- любимые места вида (мосты, пруд)
+		local spot = info.spots[math.random(#info.spots)]
+		if Catalog.district(spot.Z) == district then
+			return spot + Vector3.new(rnd(-6, 6), 0, rnd(-3, 3))
+		end
+	end
+	local zones = Catalog.Districts[district].zones
+	local zone = zones[math.random(#zones)]
+	if near and #zones > 1 then
+		-- остаётся на своём берегу
+		for _, z in zones do
+			if near.Z >= z.z[1] - 1 and near.Z <= z.z[2] + 1 then zone = z end
+		end
+	end
+	return Vector3.new(rnd(zone.x[1], zone.x[2]), 0.5, rnd(zone.z[1], zone.z[2]))
 end
 
 local function lift(kind, p: Vector3)
@@ -217,14 +303,14 @@ local function newSpirit(kind, district, tut: boolean?)
 	local att = Instance.new("Attachment")
 	att.Name = "Att"
 	att.Parent = a
-	local start = lift(kind, zonePoint(district, nil, tut))
+	local start = lift(kind, zonePoint(district, nil, tut, kind))
 	local s: Spirit = {
 		id = nextId, kind = kind, district = district, anchor = a, revealed = info.move == "swim", revealedAt = os.clock(),
-		born = os.clock(), pos = start, dir = Vector3.new(0, 0, -1), goal = lift(kind, zonePoint(district, start, tut)),
+		born = os.clock(), pos = start, dir = Vector3.new(0, 0, -1), goal = lift(kind, zonePoint(district, start, tut, kind)),
 		progress = 0, tut = tut == true,
 	}
 	if info.move == "swim" then
-		s.pos = Vector3.new(0, 1.5, -30)
+		s.pos = Catalog.Districts[district].swim.center
 	end
 	a.CFrame = CFrame.new(s.pos)
 	a:SetAttribute("SpiritId", s.id)
@@ -258,6 +344,7 @@ end
 
 local function pickKind(district)
 	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
+	if not tbl or next(tbl) == nil then return nil end
 	local total = 0
 	for _, w in tbl do total += w end
 	local r = math.random() * total
@@ -291,14 +378,15 @@ RunService.Heartbeat:Connect(function(dt)
 		local info = Catalog.Kinds[s.kind]
 		local g = groups[id]
 		if info.move == "swim" then
-			local a = now * 0.3
-			s.pos = Vector3.new(math.cos(a) * 22, 1.5, -30 + math.sin(a) * 6)
-			s.dir = Vector3.new(-math.sin(a) * 22, 0, math.cos(a) * 6).Unit
+			local sw = Catalog.Districts[s.district].swim
+			local a = now * sw.speed
+			s.pos = sw.center + Vector3.new(math.cos(a) * sw.rx, 0, math.sin(a) * sw.rz)
+			s.dir = Vector3.new(-math.sin(a) * sw.rx, 0, math.cos(a) * sw.rz).Unit
 		else
 			local speed = info.speed * (s.revealed and 0.55 or 1) * (g and 0.3 or 1)
 			local to = s.goal - s.pos
 			if to.Magnitude < 1 then
-				s.goal = lift(s.kind, zonePoint(s.district, s.pos, s.tut))
+				s.goal = lift(s.kind, zonePoint(s.district, s.pos, s.tut, s.kind))
 			else
 				s.dir = Vector3.new(to.X, 0, to.Z).Magnitude > 0.05 and Vector3.new(to.X, 0, to.Z).Unit or s.dir
 				s.pos += to.Unit * math.min(speed * dt, to.Magnitude)
@@ -308,7 +396,7 @@ RunService.Heartbeat:Connect(function(dt)
 
 		if g then
 			local speed = 0
-			for _, p in g do speed += Catalog.LanternSpeed[data[p].lanternLvl] end
+			for _, p in g do speed += power(data[p]) end
 			s.progress += dt * speed / Catalog.Rarity[info.rarity].catchTime
 		elseif s.progress > 0 then
 			s.progress = math.max(0, s.progress - dt * 0.4)
@@ -338,7 +426,7 @@ RevealEv.OnServerEvent:Connect(function(plr, id)
 	local d = data[plr]
 	if not (s and root and d) or s.revealed then return end
 	if s.district == "garden" and not gardenOpen(d) then return end
-	if (root.Position - s.pos).Magnitude > Catalog.LanternRange[d.lanternLvl] + 3 then return end
+	if (root.Position - s.pos).Magnitude > range(d) + 3 then return end
 	s.revealed = true
 	s.revealedAt = os.clock()
 	s.anchor:SetAttribute("Revealed", true)
@@ -394,12 +482,14 @@ task.spawn(function()
 				if (not s.revealed and now - s.born > 110) or (s.revealed and now - s.revealedAt > 35) then removeSpirit(s) end
 			end
 		end
-		for district, max in DISTRICT_MAX do
+		for district, dc in Catalog.Districts do
+			local max = dc.max
 			local n, tutN = districtCount(district)
 			if district == "street" and tutN < 2 then
 				newSpirit("PaperFox", "street", true) -- рядом с алтарём всегда есть лис для обучения
-			elseif n < max + (moon.active and 2 or 0) then
-				newSpirit(pickKind(district), district)
+			elseif max > 0 and n < max + (moon.active and 2 or 0) then
+				local kind = pickKind(district)
+				if kind then newSpirit(kind, district) end
 			end
 		end
 		task.wait(1.5)
@@ -409,8 +499,8 @@ end)
 ------------------------------------------------------------------ Красная луна и они
 local function tweenLight(red)
 	local ti = TweenInfo.new(2.5)
-	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(95, 72, 90), OutdoorAmbient = Color3.fromRGB(105, 78, 98) }
-		or { Ambient = Color3.fromRGB(75, 75, 115), OutdoorAmbient = Color3.fromRGB(90, 90, 135) }):Play()
+	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(70, 52, 66), OutdoorAmbient = Color3.fromRGB(78, 56, 72) }
+		or { Ambient = Color3.fromRGB(52, 52, 82), OutdoorAmbient = Color3.fromRGB(58, 60, 92) }):Play()
 	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 232, 232), Saturation = 0 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
 	TweenService:Create(atm, ti, { Color = red and Color3.fromRGB(190, 45, 55) or Color3.fromRGB(80, 90, 150), Decay = red and Color3.fromRGB(120, 20, 40) or Color3.fromRGB(40, 30, 80) }):Play()
 	TweenService:Create(map.moon, ti, { Transparency = red and 0 or 1 }):Play()
@@ -521,6 +611,7 @@ local function startMoon()
 	tweenLight(true)
 	if IS_TEST or math.random() < 0.35 then newSpirit("GoldenCarp", "canal") end
 	if IS_TEST or math.random() < 0.5 then newSpirit("MoonRabbit", "street") end
+	if IS_TEST or math.random() < 0.5 then newSpirit("FoxFire", "canal") end
 	newSpirit("Crane", "garden")
 	local a = Instance.new("Part")
 	a.Name = "Oni"
@@ -569,23 +660,45 @@ local function doSave(plr)
 	local jar = jars[plr]
 	if #jar == 0 then return { ok = false, msg = "Банка пуста — сначала поймай духа" } end
 	local wasOpen = gardenOpen(d)
-	local firsts, gained = {}, 0
+	local firsts, dust, coins = {}, 0, 0
 	for _, kind in jar do
+		local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
+		coins += rar.coins
 		if (d.saved[kind] or 0) > 0 then
-			gained += Catalog.Rarity[Catalog.Kinds[kind].rarity].material -- дубликат → материал
+			dust += rar.dust -- дубликат → пыль духов
 		end
 		d.saved[kind] = (d.saved[kind] or 0) + 1
 		if not d.firstSaved[kind] then
 			d.firstSaved[kind] = true
 			table.insert(firsts, kind)
 		end
+		-- заказы
+		for _, o in d.orders do
+			if o.have < o.need and ((o.type == "kind" and o.kind == kind) or (o.type == "rarity" and o.rarity == Catalog.Kinds[kind].rarity)) then
+				o.have += 1
+				break
+			end
+		end
 	end
-	d.materials += gained
+	local done = {}
+	for i = #d.orders, 1, -1 do
+		local o = d.orders[i]
+		if o.have >= o.need then
+			coins += o.coins
+			dust += o.dust
+			table.insert(done, o)
+			table.remove(d.orders, i)
+		end
+	end
+	fillOrders(d)
+	d.coins += coins
+	d.dust += dust
 	local kinds = table.clone(jar)
 	jars[plr] = {}
 	local persisted = persist(plr)
 	pushState(plr)
-	return { ok = true, kinds = kinds, firsts = firsts, gained = gained, gardenOpened = not wasOpen and gardenOpen(d), persisted = persisted }
+	return { ok = true, kinds = kinds, firsts = firsts, coins = coins, dust = dust, orders = done,
+		gardenOpened = not wasOpen and gardenOpen(d), persisted = persisted }
 end
 savePrompt.Triggered:Connect(function(plr)
 	SaveResultEv:FireClient(plr, doSave(plr))
@@ -595,21 +708,34 @@ UpgradeFn.OnServerInvoke = function(plr, which)
 	local d = data[plr]
 	local root = rootOf(plr)
 	if not (d and root) then return { ok = false, msg = "Нет персонажа" } end
-	if (root.Position - map.altarPos).Magnitude > 30 then return { ok = false, msg = "Улучшения — у алтаря" } end
-	local key = which == "lantern" and "lanternLvl" or which == "jar" and "jarLvl" or nil
-	if not key then return { ok = false } end
-	local lvl = d[key]
+	if (root.Position - map.altarPos).Magnitude > 30 then return { ok = false, msg = "Улучшения покупаются у алтаря" } end
+	local up = typeof(which) == "string" and Catalog.Upgrades[which]
+	if not up then return { ok = false } end
+	local lvl = d.levels[which]
 	if lvl >= Catalog.MaxLevel then return { ok = false, msg = "Максимальный уровень" } end
-	local cost = Catalog.UpgradeCost[lvl]
-	if d.materials < cost then return { ok = false, msg = ("Нужно материала: %d"):format(cost) } end
-	d.materials -= cost
-	d[key] = lvl + 1
+	local c, du = up.coins[lvl], up.dust[lvl]
+	if d.coins < c or d.dust < du then return { ok = false, msg = ("Нужно: %d монет и %d пыли"):format(c, du) } end
+	d.coins -= c
+	d.dust -= du
+	d.levels[which] = lvl + 1
 	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
-	if lantern and lantern:FindFirstChild("Beam") then lantern.Beam.Range = Catalog.LanternRange[d.lanternLvl] end
+	if lantern and lantern:FindFirstChild("Beam") then
+		lantern.Beam.Range = range(d)
+		lantern.Beam.Angle = 36 + d.levels.range * 4
+	end
 	persist(plr)
 	pushState(plr)
 	return { ok = true }
 end
+
+SettingsEv.OnServerEvent:Connect(function(plr, t)
+	local d = data[plr]
+	if not (d and typeof(t) == "table") then return end
+	d.settings.music = num(t.music, 0, 1, d.settings.music)
+	d.settings.sfx = num(t.sfx, 0, 1, d.settings.sfx)
+	if typeof(t.reduced) == "boolean" then d.settings.reduced = t.reduced end
+	if typeof(t.diag) == "boolean" then d.settings.diag = t.diag end
+end)
 
 EquipFn.OnServerInvoke = function(plr, kind)
 	local d = data[plr]

@@ -67,7 +67,7 @@ local function stoneLantern(pos, color)
 	block("StoneLantern", Vector3.new(1.4, 2.4, 1.4), CFrame.new(pos + Vector3.new(0, 1.2, 0)), Color3.fromRGB(130, 130, 135), Enum.Material.Concrete)
 	local f = deco("LanternFire", Vector3.new(1.2, 1, 1.2), CFrame.new(pos + Vector3.new(0, 2.9, 0)), color, Enum.Material.Neon)
 	block("LanternRoof", Vector3.new(2.2, 0.5, 2.2), CFrame.new(pos + Vector3.new(0, 3.6, 0)), Color3.fromRGB(110, 110, 115), Enum.Material.Concrete)
-	light(f, color, 16, 1.4)
+	light(f, color, 14, 0.8)
 end
 local function torii(z, x, w, h, color)
 	for _, sx in { -1, 1 } do
@@ -83,17 +83,17 @@ function Map.build()
 	world.Parent = workspace
 
 	---------------------------------------------------------------- земля (дорога светлая, вода — яркая)
-	block("StreetGround", Vector3.new(40, 1, 106), CFrame.new(0, 0, 83), Color3.fromRGB(115, 100, 92), Enum.Material.Cobblestone)
-	block("StreetPath", Vector3.new(10, 0.1, 106), CFrame.new(0, 0.55, 83), Color3.fromRGB(165, 145, 120), Enum.Material.Cobblestone, { CanCollide = false })
-	block("PlazaGround", Vector3.new(70, 1, 38), CFrame.new(0, 0, 11), Color3.fromRGB(135, 135, 150), Enum.Material.Slate)
-	block("NorthBank", Vector3.new(124, 1, 12), CFrame.new(0, 0, -14), Color3.fromRGB(110, 115, 125), Enum.Material.Slate)
-	block("SouthBank", Vector3.new(124, 1, 32), CFrame.new(0, 0, -56), Color3.fromRGB(110, 115, 125), Enum.Material.Slate)
-	block("GardenGround", Vector3.new(92, 1, 80), CFrame.new(0, 0, -112), Color3.fromRGB(70, 125, 70), Enum.Material.Grass)
+	block("StreetGround", Vector3.new(40, 1, 106), CFrame.new(0, 0, 83), Color3.fromRGB(66, 60, 62), Enum.Material.Cobblestone)
+	block("StreetPath", Vector3.new(10, 0.1, 106), CFrame.new(0, 0.55, 83), Color3.fromRGB(96, 84, 76), Enum.Material.Cobblestone, { CanCollide = false })
+	block("PlazaGround", Vector3.new(70, 1, 38), CFrame.new(0, 0, 11), Color3.fromRGB(82, 84, 96), Enum.Material.Slate)
+	block("NorthBank", Vector3.new(124, 1, 12), CFrame.new(0, 0, -14), Color3.fromRGB(72, 76, 86), Enum.Material.Slate)
+	block("SouthBank", Vector3.new(124, 1, 32), CFrame.new(0, 0, -56), Color3.fromRGB(72, 76, 86), Enum.Material.Slate)
+	block("GardenGround", Vector3.new(92, 1, 80), CFrame.new(0, 0, -112), Color3.fromRGB(46, 92, 52), Enum.Material.Grass)
 	block("GardenPath", Vector3.new(8, 0.1, 72), CFrame.new(0, 0.55, -112), Color3.fromRGB(175, 165, 140), Enum.Material.Pebble, { CanCollide = false })
 
 	-- канал: вода, дно, стенки и светящаяся кромка, чтобы на телефоне было видно край
-	block("Water", Vector3.new(124, 0.4, 20), CFrame.new(0, -2.5, -30), Color3.fromRGB(40, 120, 210), Enum.Material.Glass,
-		{ Transparency = 0.25, Reflectance = 0.3, CanCollide = false, CanQuery = false })
+	block("Water", Vector3.new(124, 0.4, 20), CFrame.new(0, -2.5, -30), Color3.fromRGB(16, 38, 82), Enum.Material.Glass,
+		{ Transparency = 0.15, Reflectance = 0.15, CanCollide = false, CanQuery = false })
 	block("CanalBed", Vector3.new(124, 1, 20), CFrame.new(0, -8, -30), Color3.fromRGB(10, 20, 40))
 	for _, z in { -19.6, -40.4 } do
 		block("CanalWall", Vector3.new(124, 7, 0.8), CFrame.new(0, -4, z), Color3.fromRGB(70, 70, 80))
@@ -118,27 +118,50 @@ function Map.build()
 	wall(Vector3.new(96, 80, 1), Vector3.new(0, 40, -152.5))
 
 	---------------------------------------------------------------- УЛИЦА БУМАЖНЫХ ФОНАРЕЙ (тёплый свет)
-	for z = 42, 130, 22 do
+	-- деревянные дома: фасады из досок, тёмный каркас, двускатные крыши разной высоты
+	local woods = { Color3.fromRGB(92, 62, 44), Color3.fromRGB(76, 52, 40), Color3.fromRGB(104, 72, 50) }
+	for i, z in { 42, 64, 86, 108, 130 } do
 		for _, side in { -1, 1 } do
-			local h = 11 + ((z // 22) % 3) * 4
-			block("House", Vector3.new(14, h, 18), CFrame.new(side * 27, h / 2, z), Color3.fromRGB(105, 80, 85), Enum.Material.Brick)
-			block("Roof", Vector3.new(16, 1, 20), CFrame.new(side * 27, h + 0.5, z), Color3.fromRGB(130, 40, 45), Enum.Material.Slate)
-			deco("Window", Vector3.new(0.3, 3, 5), CFrame.new(side * 19.9, 6, z), Color3.fromRGB(255, 200, 120), Enum.Material.Neon)
-			deco("Noren", Vector3.new(0.2, 2.5, 4), CFrame.new(side * 19.8, 3, z + 5), Color3.fromRGB(60, 70, 160), Enum.Material.Fabric)
-			block("Step", Vector3.new(4, h / 2, 4), CFrame.new(side * 18, h / 4, z + 7.5), Color3.fromRGB(110, 85, 60), Enum.Material.Wood)
+			local h = 9 + ((i + (side > 0 and 1 or 0)) % 3) * 3.5
+			local wood = woods[(i + (side > 0 and 1 or 0)) % 3 + 1]
+			local cx, front = side * 27, side * 20
+			block("House", Vector3.new(14, h, 18), CFrame.new(cx, h / 2, z), wood, Enum.Material.WoodPlanks)
+			-- каркас фасада
+			for _, dz in { -8.6, -3, 3, 8.6 } do
+				deco("Beam", Vector3.new(0.5, h, 0.6), CFrame.new(front - side * 0.1, h / 2, z + dz), Color3.fromRGB(40, 28, 24), Enum.Material.Wood)
+			end
+			deco("Beam", Vector3.new(0.5, 0.5, 18), CFrame.new(front - side * 0.1, h * 0.55, z), Color3.fromRGB(40, 28, 24), Enum.Material.Wood)
+			-- навес над входом
+			block("Awning", Vector3.new(2.5, 0.3, 7), CFrame.new(front + side * 1.0, 4.4, z + 5) * CFrame.Angles(0, 0, math.rad(side * -12)), Color3.fromRGB(55, 45, 50), Enum.Material.Slate)
+			-- тёплые окна (свет внутри, без лишнего блеска)
+			deco("Window", Vector3.new(0.25, 2.2, 3.4), CFrame.new(front + side * 0.05, h * 0.55 + 2, z - 4.5), Color3.fromRGB(190, 115, 55), Enum.Material.Neon)
+			deco("Shoji", Vector3.new(0.2, 2.2, 0.15), CFrame.new(front + side * 0.12, h * 0.55 + 2, z - 4.5), Color3.fromRGB(40, 28, 24))
+			deco("Noren", Vector3.new(0.2, 2.2, 3.6), CFrame.new(front + side * 0.15, 3, z + 5), Color3.fromRGB(45, 60, 130), Enum.Material.Fabric)
+			-- двускатная крыша из клиньев
+			local rh = 3.5
+			for _, rz in { -1, 1 } do
+				local w = Instance.new("WedgePart")
+				w.Name, w.Anchored, w.Material, w.Color = "Roof", true, Enum.Material.Slate, Color3.fromRGB(48, 44, 56)
+				w.Size = Vector3.new(16, rh, 10.5)
+				w.CFrame = CFrame.new(cx, h + rh / 2, z + rz * 5.25) * CFrame.Angles(0, rz > 0 and math.pi or 0, 0)
+				w.Parent = world
+			end
+			deco("RoofRidge", Vector3.new(16.4, 0.5, 0.8), CFrame.new(cx, h + rh + 0.1, z), Color3.fromRGB(120, 35, 35), Enum.Material.Slate)
+			block("Step", Vector3.new(4, h / 2, 4), CFrame.new(side * 18, h / 4, z + 7.5), Color3.fromRGB(80, 62, 46), Enum.Material.Wood)
 		end
 	end
+	-- гирлянды бумажных фонарей: свет мягкий, источник света только в каждом третьем фонаре
 	for z = 36, 128, 6 do
 		for _, x in { -13, 13 } do
-			local lantern = deco("PaperLantern", Vector3.new(1.6, 2, 1.6), CFrame.new(x, 9, z), Color3.fromRGB(255, 140, 70), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
-			if (z // 6) % 2 == 0 then light(lantern, WARM, 22, 1.5) end
+			local lantern = deco("PaperLantern", Vector3.new(1.3, 1.6, 1.3), CFrame.new(x, 9, z), Color3.fromRGB(215, 105, 50), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+			if (z // 6) % 3 == 0 then light(lantern, WARM, 18, 0.7) end
 		end
 		deco("String", Vector3.new(26, 0.1, 0.1), CFrame.new(0, 9.9, z), Color3.fromRGB(40, 30, 30))
 	end
 	-- ориентир: Большой фонарь в конце улицы
 	block("GreatLanternPole", Vector3.new(3, 28, 3), CFrame.new(0, 14, 128), Color3.fromRGB(120, 30, 30), Enum.Material.Wood)
-	local great = deco("GreatLantern", Vector3.new(11, 13, 11), CFrame.new(0, 34, 128), Color3.fromRGB(255, 130, 60), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
-	light(great, WARM, 60, 3)
+	local great = deco("GreatLantern", Vector3.new(11, 13, 11), CFrame.new(0, 34, 128), Color3.fromRGB(215, 100, 45), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	light(great, WARM, 40, 1.4)
 	billboard(great, "Улица фонарей", WARM, Vector3.new(0, 9, 0))
 
 	---------------------------------------------------------------- ПЛОЩАДЬ И АЛТАРЬ (холодный свет, луч в небо)
@@ -175,7 +198,7 @@ function Map.build()
 		for _, x in { -5, 5 } do
 			block("BridgePost", Vector3.new(1, 6, 1), CFrame.new(x, 3.5, z), Color3.fromRGB(140, 48, 42), Enum.Material.Wood)
 			local l = deco("BridgeLamp", Vector3.new(1.4, 1.6, 1.4), CFrame.new(x, 7.2, z), WARM, Enum.Material.Neon)
-			light(l, WARM, 18, 1.5)
+			light(l, WARM, 16, 0.8)
 		end
 	end
 	billboard(world:FindFirstChild("BridgePost"), "Лунный мост", TEAL, Vector3.new(5, 8, 0))
@@ -189,7 +212,7 @@ function Map.build()
 		for _, z in { -19, -41 } do
 			block("LampPost", Vector3.new(0.6, 7, 0.6), CFrame.new(x, 3.5, z), Color3.fromRGB(40, 50, 60), Enum.Material.Metal)
 			local l = deco("LampHead", Vector3.new(1.2, 1.2, 1.2), CFrame.new(x, 7.3, z), TEAL, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
-			light(l, TEAL, 20, 1.3)
+			light(l, TEAL, 18, 0.7)
 		end
 	end
 	-- ивы у воды
@@ -213,7 +236,7 @@ function Map.build()
 		block("Pagoda", Vector3.new(w - 4, 6, w - 4), CFrame.new(0, y + 3, -138), Color3.fromRGB(150, 50, 45), Enum.Material.Wood)
 		block("PagodaRoof", Vector3.new(w + 2, 1, w + 2), CFrame.new(0, y + 6.5, -138), Color3.fromRGB(40, 70, 60), Enum.Material.Slate)
 		local edge = deco("PagodaEdge", Vector3.new(w + 2.2, 0.25, w + 2.2), CFrame.new(0, y + 6, -138), VIOLET, Enum.Material.Neon)
-		if i == 3 then light(edge, VIOLET, 50, 2.5) end
+		if i == 3 then light(edge, VIOLET, 40, 1.2) end
 	end
 	local spire = deco("PagodaSpire", Vector3.new(0.8, 8, 0.8), CFrame.new(0, 34, -138), Color3.fromRGB(230, 200, 90), Enum.Material.Neon)
 	billboard(spire, "Храмовый сад", GARDEN, Vector3.new(0, 6, 0))
