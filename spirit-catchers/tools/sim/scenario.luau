@@ -20,7 +20,7 @@ local shared = folder("Shared", RS)
 mod("ModuleScript", "Catalog", shared, "shared/Catalog")
 mod("ModuleScript", "Spirits", shared, "shared/Spirits")
 local cfg = folder("Config", shared)
-for _, n in { "Audio", "Economy", "Icons", "Monetization", "Progress", "Spirits", "Worlds" } do
+for _, n in { "Audio", "Economy", "Icons", "Monetization", "Progress", "Spirits", "Worlds", "Live" } do
 	mod("ModuleScript", n, cfg, "shared/Config/" .. n)
 end
 local srv = folder("Server", game:GetService("ServerScriptService"))
@@ -181,6 +181,30 @@ if pr then
 	end
 end
 frames(60)
+
+stage("спутник, сезон, испытания, модификаторы")
+inv("Equip", "PaperFox")
+local fr = inv("FeedCompanion")
+if not (fr and fr.ok) then table.insert(SIM.errors, "кормление спутника: " .. tostring(fr and fr.msg)) end
+for _ = 1, 7 do inv("Admin", "mod") frames(2) end
+inv("Admin", "season")
+local sr = inv("ClaimSeason", 1)
+if not (sr and sr.ok) then table.insert(SIM.errors, "награда сезона: " .. tostring(sr and sr.msg)) end
+inv("ClaimSeason", 5)
+inv("SetTitle", "")
+frames(20)
+for round = 1, 1 do
+	for _, d in hud:GetDescendants() do
+		if d:IsA("TextButton") then
+			local lbl = d:FindFirstChildOfClass("TextLabel")
+			local text = lbl and lbl.Text or ""
+			if not skip[text] then
+				d.Activated:Fire()
+				frames(1)
+			end
+		end
+	end
+end
 
 stage("достижения")
 for _, id in { "first", "c50", "k10", "kall", "golden", "lvl25", "reborn", "legend" } do inv("ClaimAchievement", id) end

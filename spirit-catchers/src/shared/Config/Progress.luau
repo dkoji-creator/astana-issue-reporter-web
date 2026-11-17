@@ -35,7 +35,7 @@ P.Milestones = {
 -- price = монеты (dust = пыль); source = где получить; tier = ценность облика (подпись в магазине)
 -- fx: tex = sparkles | fire | smoke, colors = цвета частиц, rate/size/life/speed, up = подъём (+) или падение (-),
 --     trail = цвета шлейфа при беге, aura = большой мягкий свет вокруг игрока, burst = вспышка при поимке духа
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "golden", "fog", "ghost", "dragon", "vip" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "vip" }
 local rgb = Color3.fromRGB
 P.SkinTiers = {
 	common = { name = "Обычный", color = rgb(190, 195, 215) },
@@ -85,6 +85,22 @@ P.Skins = {
 		desc = "Огненный шлейф дракона и снопы искр",
 		fx = { tex = "fire", colors = { rgb(255, 230, 120), rgb(255, 40, 40) }, rate = 30, size = 0.9, life = 1, speed = 2.5, up = 5,
 			trail = { rgb(255, 200, 60), rgb(200, 20, 30) }, aura = true, burst = true } },
+	autumn = { name = "Осенний", tier = "rare", lamp = rgb(255, 160, 70), beam = rgb(255, 210, 150), source = "Сезон 1, уровень 5",
+		desc = "Падают оранжевые листья",
+		fx = { tex = "sparkles", colors = { rgb(255, 150, 50), rgb(220, 90, 40) }, rate = 10, size = 0.5, life = 2.6, speed = 0.8, up = -1.8,
+			trail = { rgb(255, 160, 70), rgb(160, 70, 30) } } },
+	maple = { name = "Кленовый", tier = "epic", lamp = rgb(230, 60, 50), beam = rgb(255, 150, 120), source = "Сезон 1, уровень 15",
+		desc = "Вихрь красных кленовых листьев",
+		fx = { tex = "sparkles", colors = { rgb(240, 60, 50), rgb(255, 170, 60) }, rate = 18, size = 0.6, life = 2.2, speed = 2.2, up = -1,
+			trail = { rgb(230, 60, 50), rgb(255, 170, 60) } } },
+	harvest = { name = "Урожайная луна", tier = "legendary", lamp = rgb(255, 190, 90), beam = rgb(255, 230, 170), source = "Сезон 1, уровень 25",
+		desc = "Огромный ореол полной луны и золотые искры",
+		fx = { tex = "sparkles", colors = { rgb(255, 230, 150), rgb(255, 160, 60) }, rate = 24, size = 0.55, life = 1.8, speed = 1.6, up = 1.5,
+			trail = { rgb(255, 210, 120), rgb(200, 110, 30) }, aura = true, burst = true } },
+	aurora = { name = "Северное сияние", tier = "mythic", lamp = rgb(120, 255, 200), beam = rgb(170, 220, 255), source = "Сезон 1, уровень 30",
+		desc = "Переливы сияния: зелёный, бирюзовый, фиолетовый",
+		fx = { tex = "sparkles", colors = { rgb(90, 255, 160), rgb(80, 200, 255), rgb(190, 110, 255) }, rate = 30, size = 0.6, life = 2.2, speed = 2, up = 2,
+			trail = { rgb(90, 255, 160), rgb(80, 200, 255), rgb(190, 110, 255) }, aura = true, burst = true } },
 	vip = { name = "Радужный VIP", tier = "vip", lamp = rgb(255, 120, 220), beam = rgb(200, 220, 255), source = "VIP-ловец", rainbow = true,
 		desc = "Радужные звёзды, радужный шлейф, ореол и салют при поимке",
 		fx = { tex = "sparkles", colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) },

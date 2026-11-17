@@ -71,6 +71,9 @@ local adminFast: { [Player]: boolean } = {}
 local SkinFn = remote("Skin", "RemoteFunction")
 local MilestoneFn = remote("ClaimMilestone", "RemoteFunction")
 local RewardEv = remote("Reward") -- всплывающие награды: { coins, dust, xp, levelUp }
+local FeedFn = remote("FeedCompanion", "RemoteFunction")
+local SeasonFn = remote("ClaimSeason", "RemoteFunction")
+local TitleFn = remote("SetTitle", "RemoteFunction")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
@@ -129,6 +132,86 @@ local function opened(d: Profile)
 end
 local function hasPass(d, key) return (d.passes ~= nil and d.passes[key] == true) or (d.owned ~= nil and d.owned[key] == true) end
 -- удача игрока и из чего она сложена
+------------------------------------------------------------------ спутники, модификатор дня, испытания, сезон
+local Live = Catalog.Live
+local modOverride: string? = nil
+local function dayMod(): string
+	return workspace:GetAttribute("DayMod") or ""
+end
+workspace:SetAttribute("DayMod", Live.modifierOf(Live.day(os.time())).id)
+task.spawn(function()
+	while true do
+		task.wait(30)
+		workspace:SetAttribute("DayMod", modOverride or Live.modifierOf(Live.day(os.time())).id)
+	end
+end)
+-- спутник: уровень, способность и её сила
+local function compOf(d)
+	local kind = d and d.equipped
+	if not kind or not Catalog.Kinds[kind] then return nil end
+	local lvl = Live.companionLevel(d.saved[kind] or 0, (d.fed and d.fed[kind]) or 0)
+	local key, value = Live.abilityValue(kind, Catalog.Kinds[kind].rarity, lvl)
+	return { kind = kind, level = lvl, ability = key, value = value, text = Live.abilityText(key, value) }
+end
+local function compPct(d, key: string): number
+	local c = compOf(d)
+	return (c and c.ability == key) and c.value / 100 or 0
+end
+local function ensureChal(d)
+	local day = Live.day(os.time())
+	if typeof(d.chal) ~= "table" or d.chal.day ~= day then
+		d.chal = { day = day, prog = { 0, 0, 0 }, done = { false, false, false }, all = false }
+	end
+	return d.chal, Live.challengesOf(day)
+end
+local function ensureSeason(d)
+	if typeof(d.season) ~= "table" or d.season.id ~= Live.Season.id then d.season = { id = Live.Season.id, xp = 0, claimed = {} } end
+	return d.season
+end
+local function addSeasonXp(d, n: number)
+	ensureSeason(d).xp += n
+end
+local function chalProgress(plr, d, fn)
+	local ch, list = ensureChal(d)
+	for i, c in list do
+		if not ch.done[i] then
+			local add = fn(c)
+			if add > 0 then
+				ch.prog[i] = math.min(c.need, ch.prog[i] + add)
+				if ch.prog[i] >= c.need then
+					ch.done[i] = true
+					local r = Live.ChallengeReward
+					d.coins += r.coins
+					d.dust += r.dust
+					addSeasonXp(d, r.sxp)
+					NoticeEv:FireClient(plr, ("Испытание выполнено! +%d монет, +%d пыли, +%d опыта сезона"):format(r.coins, r.dust, r.sxp))
+				end
+			end
+		end
+	end
+	if not ch.all and ch.done[1] and ch.done[2] and ch.done[3] then
+		ch.all = true
+		local r = Live.ChallengeAllBonus
+		d.coins += r.coins
+		d.dust += r.dust
+		addSeasonXp(d, r.sxp)
+		NoticeEv:FireClient(plr, ("Все испытания дня! Бонус +%d монет и +%d пыли"):format(r.coins, r.dust))
+	end
+end
+local RARITY_RANK = {}
+for i, k in Catalog.RarityOrder do RARITY_RANK[k] = i end
+local function liveOnCatch(plr, d, kind: string, district: string, variant: string)
+	local rar = Catalog.Kinds[kind].rarity
+	addSeasonXp(d, Live.Season.catchXp[rar] or 4)
+	chalProgress(plr, d, function(c)
+		if c.type == "catch" then return 1 end
+		if c.type == "rarity" and RARITY_RANK[rar] >= RARITY_RANK[c.min] then return 1 end
+		if c.type == "district" and c.district == district then return 1 end
+		if c.type == "variant" and variant ~= "normal" then return 1 end
+		return 0
+	end)
+end
+
 local function luckOf(d)
 	local L = Catalog.Luck
 	local parts = {}
@@ -159,6 +242,18 @@ local function luckOf(d)
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
 	end
+	local cl = compPct(d, "luck")
+	if cl > 0 then
+		mult *= 1 + cl
+		table.insert(parts, ("Спутник +%d%%"):format(math.floor(cl * 100 + 0.5)))
+	end
+	if dayMod() == "lucky" then
+		mult *= 1.3
+		table.insert(parts, "Счастливый день x1.3")
+	elseif dayMod() == "tracksOnly" then
+		mult *= 1.5
+		table.insert(parts, "Только следы x1.5")
+	end
 	return mult, parts
 end
 local function talentPoints(d)
@@ -169,7 +264,10 @@ end
 local function applySpeed(plr)
 	local d = data[plr]
 	local h = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
-	if d and h then h.WalkSpeed = 16 + (d.talents.swift or 0) end
+	if d and h then
+		local c = compOf(d)
+		h.WalkSpeed = 16 + (d.talents.swift or 0) + ((c and c.ability == "speed") and c.value or 0)
+	end
 end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
@@ -218,7 +316,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 6, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0,
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {},
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -249,7 +347,7 @@ local function migrate(raw): Profile
 			d.levels.jar = clampLvl(raw.jarLvl)
 			d.tutorialDone = raw.tutorialDone == true
 			d.coins = 20 * distinct(d)
-		elseif raw.version == 4 or raw.version == 5 or raw.version == 6 then
+		elseif raw.version == 4 or raw.version == 5 or raw.version == 6 or raw.version == 7 then
 			d.coins = math.floor(num(raw.coins, 0, 1e9, 0))
 			d.dust = math.floor(num(raw.dust, 0, 1e9, 0))
 			if typeof(raw.levels) == "table" then
@@ -263,7 +361,7 @@ local function migrate(raw): Profile
 				d.settings.reduced = raw.settings.reduced == true
 				d.settings.diag = raw.settings.diag == true
 			end
-			if raw.version == 5 or raw.version == 6 then
+			if raw.version == 5 or raw.version == 6 or raw.version == 7 then
 				if typeof(raw.ach) == "table" then
 					for k, v in raw.ach do
 						if Catalog.Progress.Achievements[k] and v == true then d.ach[k] = true end
@@ -324,6 +422,37 @@ local function migrate(raw): Profile
 			d.coins = 20 * distinct(d) -- v2
 		end
 	end
+	if typeof(raw) == "table" and raw.version == 7 then
+		-- v7: спутники, испытания, сезон, титулы
+		if typeof(raw.fed) == "table" then
+			for k, v in raw.fed do
+				if Catalog.Kinds[k] then d.fed[k] = math.floor(num(v, 0, Live.CompanionMax, 0)) end
+			end
+		end
+		local c = raw.chal
+		if typeof(c) == "table" and typeof(c.day) == "number" and typeof(c.prog) == "table" and typeof(c.done) == "table" then
+			d.chal = { day = c.day, prog = {}, done = {}, all = c.all == true }
+			for i = 1, 3 do
+				d.chal.prog[i] = math.floor(num(c.prog[i], 0, 1e6, 0))
+				d.chal.done[i] = c.done[i] == true
+			end
+		end
+		local se = raw.season
+		if typeof(se) == "table" and se.id == Live.Season.id then
+			d.season = { id = se.id, xp = math.floor(num(se.xp, 0, 1e9, 0)), claimed = {} }
+			if typeof(se.claimed) == "table" then
+				for k, v in se.claimed do
+					if v == true then d.season.claimed[tostring(k)] = true end
+				end
+			end
+		end
+		if typeof(raw.titles) == "table" then
+			for k, v in raw.titles do
+				if typeof(k) == "string" and v == true then d.titles[k] = true end
+			end
+		end
+		if typeof(raw.title) == "string" and d.titles[raw.title] then d.title = raw.title end
+	end
 	fillOrders(d)
 	return d
 end
@@ -370,7 +499,7 @@ local function updateRankTag(plr, d)
 	local tag = head:FindFirstChild("RankTag")
 	if not tag then
 		tag = Instance.new("BillboardGui")
-		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(200, 26), Vector3.new(0, 3.6, 0), 90
+		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(260, 26), Vector3.new(0, 3.6, 0), 90
 		local t = Instance.new("TextLabel")
 		t.Name, t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = "Text", UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
 		t.TextStrokeTransparency = 0.2
@@ -378,7 +507,7 @@ local function updateRankTag(plr, d)
 		tag.Parent = head
 	end
 	local rank = Catalog.Progress.rankOf(d.level)
-	tag.Text.Text = ((d.rebirths or 0) > 0 and ("★%d "):format(d.rebirths) or "") .. rank.name
+	tag.Text.Text = ((d.rebirths or 0) > 0 and ("★%d "):format(d.rebirths) or "") .. (d.title or rank.name)
 	tag.Text.TextColor3 = rank.color
 end
 
@@ -406,6 +535,14 @@ local function pushState(plr)
 			for id, a in Catalog.Progress.Achievements do t[id] = achProgress(d, a) end
 			return t
 		end)(), achDone = d.ach, rank = Catalog.Progress.rankOf(d.level).name,
+		comp = compOf(d), fed = d.fed, dayMod = dayMod(),
+		chal = (function()
+			local ch, list = ensureChal(d)
+			local t = {}
+			for i, c in list do t[i] = { text = Live.challengeText(c), need = c.need, have = ch.prog[i], done = ch.done[i] } end
+			return { list = t, all = ch.all }
+		end)(),
+		season = ensureSeason(d), title = d.title, titles = d.titles,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -648,7 +785,7 @@ local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVaria
 	for i = #Catalog.VariantOrder, 2, -1 do
 		local key = Catalog.VariantOrder[i]
 		local v = Catalog.Variants[key]
-		if (not v.moonOnly or moon.active) and math.random() < v.chance * (Catalog.Districts[district].luck or 1) then
+		if (not v.moonOnly or moon.active) and math.random() < v.chance * (Catalog.Districts[district].luck or 1) * ((key == "giant" and dayMod() == "giants") and 3 or 1) then
 			variant = key
 			break
 		end
@@ -812,8 +949,9 @@ RunService.Heartbeat:Connect(function(dt)
 				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant, variant ~= base)
 				lanternBurst(plr)
 				local d = data[plr]
-				local xp = Catalog.Progress.XP[info.rarity] or 4
+				local xp = math.floor((Catalog.Progress.XP[info.rarity] or 4) * (1 + compPct(d, "xp")) + 0.5)
 				d.xp += xp
+				liveOnCatch(plr, d, s.kind, s.district, variant)
 				local levelUp = nil
 				while d.xp >= Catalog.Progress.xpToNext(d.level) do
 					d.xp -= Catalog.Progress.xpToNext(d.level)
@@ -1114,12 +1252,12 @@ task.spawn(function()
 		if os.clock() >= phaseEnd then
 			if moon.active then
 				endMoon()
-				phaseEnd = os.clock() + NORMAL_TIME
+				phaseEnd = os.clock() + NORMAL_TIME * (dayMod() == "doubleMoon" and 0.5 or 1)
 				workspace:SetAttribute("NextEvent", "fog")
 			elseif moon.fog then
 				endFog()
-				phaseEnd = os.clock() + NORMAL_TIME
-				workspace:SetAttribute("NextEvent", "moon")
+				phaseEnd = os.clock() + NORMAL_TIME * (dayMod() == "doubleMoon" and 0.5 or 1)
+				workspace:SetAttribute("NextEvent", (dayMod() == "fogDay" and math.random() < 0.5) and "fog" or "moon")
 			elseif (workspace:GetAttribute("NextEvent") or "moon") == "moon" then
 				startMoon()
 				phaseEnd = os.clock() + MOON_TIME
@@ -1197,7 +1335,9 @@ local function doSave(plr)
 	end
 	fillOrders(d)
 	coins = math.floor(coins * (1 + 0.06 * (d.talents.greed or 0)) * (1 + Catalog.Progress.Rebirth.coins * (d.rebirths or 0)))
-	dust = math.floor(dust * (1 + 0.1 * (d.talents.collector or 0)) + 0.5)
+	coins = math.floor(coins * (1 + compPct(d, "coins")) * (dayMod() == "goldRush" and 1.5 or 1))
+	dust = math.floor(dust * (1 + 0.1 * (d.talents.collector or 0)) * (1 + compPct(d, "dust")) + 0.5)
+	chalProgress(plr, d, function(c) return c.type == "deliver" and 1 or 0 end)
 	if hasPass(d, "coins2x") then coins *= 2 end
 	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	d.coins += coins
@@ -1589,6 +1729,55 @@ TeleportFn.OnServerInvoke = function(plr, district)
 	if typeof(district) ~= "string" then return { ok = false } end
 	return teleportTo(plr, district)
 end
+FeedFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	local c = d and compOf(d)
+	if not c then return { ok = false, msg = "Сначала выбери спутника в Атласе" } end
+	if c.level >= Live.CompanionMax then return { ok = false, msg = "Спутник уже максимального уровня" } end
+	local cost = Live.feedCost(c.level)
+	if d.dust < cost then return { ok = false, msg = ("Нужно %d пыли"):format(cost) } end
+	d.dust -= cost
+	d.fed[c.kind] = (d.fed[c.kind] or 0) + 1
+	applySpeed(plr)
+	persist(plr)
+	pushState(plr)
+	return { ok = true, level = compOf(d).level }
+end
+SeasonFn.OnServerInvoke = function(plr, tier)
+	local d = data[plr]
+	local r = d and typeof(tier) == "number" and Live.Season.tiers[tier]
+	if not r then return { ok = false } end
+	local se = ensureSeason(d)
+	if se.claimed[tostring(tier)] then return { ok = false, msg = "Уже получено" } end
+	if math.floor(se.xp / Live.Season.tierXp) < tier then return { ok = false, msg = "Набери больше опыта сезона" } end
+	se.claimed[tostring(tier)] = true
+	d.coins += r.coins or 0
+	d.dust += r.dust or 0
+	if r.potion then d.luckUntil = math.max(d.luckUntil or 0, os.time()) + r.potion * 60 end
+	if r.skin then d.skins[r.skin] = true end
+	if r.title then
+		d.titles[r.title] = true
+		d.title = r.title
+	end
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = r.coins, dust = r.dust, skin = r.skin })
+	return { ok = true }
+end
+TitleFn.OnServerInvoke = function(plr, title)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if title == nil or title == "" then
+		d.title = nil
+	elseif typeof(title) == "string" and d.titles[title] then
+		d.title = title
+	else
+		return { ok = false }
+	end
+	pushState(plr)
+	return { ok = true }
+end
+
 RedeemFn.OnServerInvoke = function(plr, code)
 	local d = data[plr]
 	if not (d and typeof(code) == "string") then return { ok = false } end
@@ -1647,6 +1836,17 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		if moon.active then phaseEnd = os.clock() end
 	elseif cmd == "fireworks" then
 		fireworks(plr.Name)
+	elseif cmd == "mod" then
+		-- следующий модификатор дня (для проверки)
+		local cur, idx = dayMod(), 1
+		for i, m in Live.Modifiers do
+			if m.id == cur then idx = i % #Live.Modifiers + 1 end
+		end
+		modOverride = Live.Modifiers[idx].id
+		workspace:SetAttribute("DayMod", modOverride)
+		for _, p in Players:GetPlayers() do pushState(p) end
+	elseif cmd == "season" then
+		addSeasonXp(d, Live.Season.tierXp * 3)
 	elseif cmd == "fast" then
 		adminFast[plr] = not adminFast[plr]
 	elseif cmd == "fillJar" then

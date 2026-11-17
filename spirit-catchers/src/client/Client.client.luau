@@ -47,6 +47,11 @@ do
 	trackKind = nil
 
 end
+-- бонус способности спутника (доля), например compBonus("reveal") = 0.12
+local function compBonus(key)
+	local c = state.comp
+	return (c and c.ability == key) and c.value / 100 or 0
+end
 ------------------------------------------------------------------ звук
 local sfxGroup, makeSound, moonLayer, play, applyAudio
 do
@@ -95,9 +100,9 @@ do
 
 end
 ------------------------------------------------------------------ HUD: левая колонка
-local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower
+local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason
 do
-	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 10), Size = UDim2.fromOffset(136, 280), BackgroundTransparency = 1 }, hud)
+	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 18), Size = UDim2.fromOffset(136, 350), BackgroundTransparency = 1 }, hud)
 	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
 	btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 	btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
@@ -107,8 +112,9 @@ do
 	btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
 	btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
 	btnPower = K.iconButton(leftCol, "level", "Сила", Color3.fromRGB(240, 180, 40))
+	btnSeason = K.iconButton(leftCol, "trophy", "Сезон", Color3.fromRGB(255, 130, 60))
 	btnAdmin.Visible = false
-	for i, b in { btnAtlas, btnPower, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
+	for i, b in { btnAtlas, btnSeason, btnPower, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
 
 end
 ------------------------------------------------------------------ HUD: справа валюты и уровень
@@ -136,8 +142,20 @@ do
 
 end
 ------------------------------------------------------------------ HUD: событие, цель, уведомления
-local eventPill, eventGrad, eventL, trackPill, trackL, showToast
+local eventPill, eventGrad, eventL, trackPill, trackL, showToast, modPill, modL, compPill, compL
 do
+	-- модификатор дня под таймером события
+	modPill = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(250, 26), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
+	K.corner(modPill, UDim.new(1, 0))
+	K.stroke(modPill, T.ink, 2)
+	modL = K.text(modPill, "", { Size = UDim2.new(1, -16, 1, -6), Position = UDim2.fromOffset(8, 3), MaxText = 15 })
+	-- спутник: имя, уровень, способность; нажатие — покормить пылью
+	compPill = K.make("TextButton", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 262), Size = UDim2.fromOffset(230, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+	K.corner(compPill, UDim.new(0, 12))
+	K.stroke(compPill, T.ink, 3)
+	K.gradient(compPill, Color3.fromRGB(255, 150, 200), Color3.fromRGB(170, 70, 140))
+	K.icon(compPill, "paw", { Size = UDim2.fromOffset(36, 36), Position = UDim2.fromOffset(4, 4) })
+	compL = K.text(compPill, "", { Size = UDim2.new(1, -48, 1, -8), Position = UDim2.fromOffset(44, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true })
 	eventPill = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(250, 38), BackgroundColor3 = Color3.new(1, 1, 1) }, hud)
 	K.corner(eventPill, UDim.new(1, 0))
 	K.stroke(eventPill, T.ink, 3)
@@ -145,14 +163,14 @@ do
 	K.icon(eventPill, "moon", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(-10, -4) })
 	eventL = K.text(eventPill, "", { Size = UDim2.new(1, -48, 1, -10), Position = UDim2.fromOffset(38, 5), MaxText = 20 })
 
-	trackPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(310, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+	trackPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 84), Size = UDim2.fromOffset(310, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
 	K.corner(trackPill, UDim.new(0, 14))
 	K.stroke(trackPill, T.ink, 3)
 	K.gradient(trackPill, Color3.fromRGB(255, 160, 80), Color3.fromRGB(200, 90, 40))
 	K.icon(trackPill, "target", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(4, 3) })
 	trackL = K.text(trackPill, "", { Size = UDim2.new(1, -54, 1, -8), Position = UDim2.fromOffset(48, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16, Font = Enum.Font.GothamBold })
 
-	local toast = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 108), Size = UDim2.fromOffset(440, 40), BackgroundColor3 = T.panel, Visible = false }, hud)
+	local toast = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 136), Size = UDim2.fromOffset(440, 40), BackgroundColor3 = T.panel, Visible = false }, hud)
 	K.corner(toast, UDim.new(0, 12))
 	K.stroke(toast, T.ink, 3)
 	local toastL = K.text(toast, "", { Size = UDim2.new(1, -20, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 18, Font = Enum.Font.GothamBold })
@@ -474,7 +492,14 @@ do
 		c.name.TextColor3 = known and T.text or T.sub
 		c.name.Text = known and info.name or "???"
 		c.count.Text = known and ("x" .. n) or ""
-		c.info.Text = known and info.habit or ("Где искать: " .. info.hint)
+		if known then
+			local Live = Catalog.Live
+			local lvl = Live.companionLevel(n, (state.fed and state.fed[c.kind]) or 0)
+			local key, val = Live.abilityValue(c.kind, info.rarity, lvl)
+			c.info.Text = ("Спутник ур.%d: %s\n%s"):format(lvl, Live.abilityText(key, val), info.habit)
+		else
+			c.info.Text = "Где искать: " .. info.hint
+		end
 		c.trackL.Text = trackKind == c.kind and "Цель" or "Выследить"
 		c.equip.Visible = known
 		c.equipL.Text = state.equipped == c.kind and "Снять" or "Спутник"
@@ -554,6 +579,147 @@ do
 		end
 	end
 
+end
+------------------------------------------------------------------ окно: Сезон (испытания дня, награды сезона, титулы)
+local seasonW, refreshSeason
+do
+	local Live = Catalog.Live
+	local body
+	seasonW, body = K.window(gui, Live.Season.name, "trophy", Color3.fromRGB(255, 130, 60), 0.84, 0.84)
+	local tabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1 }, body)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, tabs)
+	local tabDay = K.button(tabs, "Испытания дня", T.orange, { Size = UDim2.fromOffset(190, 36), MaxText = 17 })
+	local tabPass = K.button(tabs, "Награды сезона", T.panel2, { Size = UDim2.fromOffset(190, 36), MaxText = 17 })
+	local tabTitles = K.button(tabs, "Титулы", T.panel2, { Size = UDim2.fromOffset(130, 36), MaxText = 17 })
+
+	-- испытания дня
+	local dayPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44) })
+	K.make("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, dayPage)
+	local modCard = K.panel(dayPage, { Size = UDim2.new(1, -10, 0, 70), LayoutOrder = 0, BackgroundColor3 = Color3.fromRGB(70, 50, 40) })
+	local modTitle = K.text(modCard, "", { Size = UDim2.new(1, -20, 0, 28), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 21 })
+	local modDesc = K.text(modCard, "", { Size = UDim2.new(1, -20, 0, 24), Position = UDim2.fromOffset(12, 38), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
+	local chalRows = {}
+	for i = 1, 3 do
+		local f = K.panel(dayPage, { Size = UDim2.new(1, -10, 0, 74), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+		K.icon(f, "target", { Size = UDim2.fromOffset(50, 50), Position = UDim2.fromOffset(10, 12) })
+		local title = K.text(f, "", { Size = UDim2.new(0.66, -70, 0, 26), Position = UDim2.fromOffset(68, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 19 })
+		local _, bar = K.bar(f, T.orange, { Size = UDim2.new(0.66, -70, 0, 14), Position = UDim2.fromOffset(68, 42) })
+		local state2 = K.text(f, "", { Size = UDim2.new(0.32, -10, 1, -16), Position = UDim2.new(0.68, 0, 0, 8), MaxText = 20 })
+		chalRows[i] = { title = title, bar = bar, st = state2, f = f }
+	end
+	local r = Live.ChallengeReward
+	local b = Live.ChallengeAllBonus
+	K.text(dayPage, ("Каждое: %d монет, %d пыли, %d опыта сезона. Все три: ещё %d монет и %d пыли. Новые испытания каждый день."):format(r.coins, r.dust, r.sxp, b.coins, b.dust),
+		{ Size = UDim2.new(1, -10, 0, 44), LayoutOrder = 5, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+
+	-- сезонный пропуск
+	local passPage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, body)
+	local lvlL = K.text(passPage, "", { Size = UDim2.new(0.6, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 21 })
+	local endsL = K.text(passPage, Live.Season.ends, { Size = UDim2.new(0.4, 0, 0, 24), Position = UDim2.new(0.6, 0, 0, 2), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 16, TextColor3 = T.sub, Font = Enum.Font.GothamBold })
+	local _, passFill = K.bar(passPage, Color3.fromRGB(255, 150, 60), { Size = UDim2.new(1, 0, 0, 16), Position = UDim2.fromOffset(0, 32) })
+	local tierScroll = K.scroll(passPage, { Position = UDim2.fromOffset(0, 56), Size = UDim2.new(1, 0, 1, -56), AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollingDirection = Enum.ScrollingDirection.X })
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, tierScroll)
+	local tierCards = {}
+	for i, rw in Live.Season.tiers do
+		local special = rw.skin or rw.title
+		local f = K.panel(tierScroll, { Size = UDim2.new(0, 150, 1, -12), LayoutOrder = i, BackgroundColor3 = special and Color3.fromRGB(80, 55, 40) or T.panel2 })
+		if special then f:FindFirstChildOfClass("UIStroke").Color = T.gold end
+		local num = K.make("Frame", { Size = UDim2.fromOffset(44, 30), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = T.orange }, f)
+		K.corner(num, UDim.new(1, 0))
+		K.stroke(num, T.ink, 2)
+		K.text(num, tostring(i), { Size = UDim2.new(1, -6, 1, -4), Position = UDim2.fromOffset(3, 2), MaxText = 17 })
+		local ic = rw.skin and "shop" or (rw.title and "trophy" or (rw.potion and "potion" or (rw.coins and "coin" or "dust")))
+		K.icon(f, ic, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 40), Size = UDim2.fromOffset(60, 60) })
+		local txt = rw.skin and ("Фонарь «" .. Prog.Skins[rw.skin].name .. "»") or Live.rewardText(rw)
+		if rw.skin and rw.title then txt = txt .. " и титул" end
+		K.text(f, txt, { Size = UDim2.new(1, -10, 0, 52), Position = UDim2.fromOffset(5, 104), MaxText = 15, TextWrapped = true, Font = Enum.Font.GothamBold })
+		local cb, cl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
+		cb.Activated:Connect(function()
+			local res = remotes.ClaimSeason:InvokeServer(i)
+			if res and res.ok then
+				play("legendary")
+				showToast("Награда сезона: " .. txt, 2.5, Color3.fromRGB(150, 80, 30))
+			elseif res and res.msg then
+				showToast(res.msg)
+			end
+		end)
+		tierCards[i] = { b = cb, l = cl }
+	end
+
+	-- титулы
+	local titlePage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, titlePage)
+	local titleRows = {}
+	local allTitles = { "" }
+	for _, rw in Live.Season.tiers do
+		if rw.title then table.insert(allTitles, rw.title) end
+	end
+	for i, t in allTitles do
+		local f = K.panel(titlePage, { Size = UDim2.new(1, -10, 0, 56), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+		K.text(f, t == "" and "Ранг по уровню (без титула)" or t, { Size = UDim2.new(0.62, -14, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 19 })
+		local tb, tl = K.button(f, "", T.blue, { Size = UDim2.new(0.36, -8, 1, -12), Position = UDim2.new(0.64, 0, 0, 6), MaxText = 16 })
+		tb.Activated:Connect(function()
+			local res = remotes.SetTitle:InvokeServer(t)
+			if res and res.ok then showToast(t == "" and "Титул снят" or ("Титул: " .. t), 2) end
+		end)
+		titleRows[t] = { b = tb, l = tl }
+	end
+
+	local pages = { { tabDay, dayPage, T.orange }, { tabPass, passPage, T.orange }, { tabTitles, titlePage, T.orange } }
+	for _, pair in pages do
+		pair[1].Activated:Connect(function()
+			for _, o in pages do
+				o[2].Visible = o == pair
+				K.recolor(o[1], o == pair and o[3] or T.panel2)
+			end
+		end)
+	end
+
+	refreshSeason = function()
+		local mod = nil
+		for _, m in Live.Modifiers do
+			if m.id == state.dayMod then mod = m end
+		end
+		modTitle.Text = mod and ("Модификатор дня: " .. mod.name) or "Модификатор дня"
+		modDesc.Text = mod and mod.desc or ""
+		modCard.BackgroundColor3 = mod and K.darken(mod.color, 0.6) or T.panel2
+		local ch = state.chal
+		for i, row in chalRows do
+			local c = ch and ch.list[i]
+			if c then
+				row.title.Text = c.text
+				row.bar.Size = UDim2.fromScale(math.clamp(c.have / c.need, 0, 1), 1)
+				row.st.Text = c.done and "Готово!" or ("%d/%d"):format(c.have, c.need)
+				row.st.TextColor3 = c.done and T.green or T.text
+				row.f.BackgroundColor3 = c.done and Color3.fromRGB(40, 80, 55) or T.panel2
+			end
+		end
+		local se = state.season or { xp = 0, claimed = {} }
+		local per = Live.Season.tierXp
+		local tier = math.floor(se.xp / per)
+		lvlL.Text = ("Уровень сезона %d/%d"):format(math.min(tier, #Live.Season.tiers), #Live.Season.tiers)
+		passFill.Size = UDim2.fromScale(tier >= #Live.Season.tiers and 1 or (se.xp % per) / per, 1)
+		endsL.Text = ("%s   ещё %d опыта"):format(Live.Season.ends, per - se.xp % per)
+		for i, c in tierCards do
+			local claimed = se.claimed and se.claimed[tostring(i)]
+			if claimed then
+				c.l.Text = "Получено"
+				K.recolor(c.b, Color3.fromRGB(80, 80, 95))
+			elseif tier >= i then
+				c.l.Text = "Забрать!"
+				K.recolor(c.b, T.green)
+			else
+				c.l.Text = ("Ур. %d"):format(i)
+				K.recolor(c.b, Color3.fromRGB(70, 70, 90))
+			end
+		end
+		for t, row in titleRows do
+			local owned = t == "" or (state.titles and state.titles[t])
+			local on = (state.title or "") == t
+			row.l.Text = on and "Выбран" or (owned and "Выбрать" or "Закрыт")
+			K.recolor(row.b, on and Color3.fromRGB(80, 80, 95) or (owned and T.blue or Color3.fromRGB(60, 60, 75)))
+		end
+	end
 end
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
@@ -1057,7 +1223,7 @@ do
 		K.close(adminW)
 	end)
 
-	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW }
+	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW, seasonW }
 	toggleWindow = function(w, refresh)
 		local willOpen = not w.Visible
 		for _, x in allWindows do K.close(x) end
@@ -1068,6 +1234,16 @@ do
 	end
 	btnAtlas.Activated:Connect(function() toggleWindow(atlasW, refreshAtlas) end)
 	btnQuests.Activated:Connect(function() toggleWindow(questW, refreshQuests) end)
+	btnSeason.Activated:Connect(function() toggleWindow(seasonW, refreshSeason) end)
+	compPill.Activated:Connect(function()
+		local res = remotes.FeedCompanion:InvokeServer()
+		if res and res.ok then
+			play("save")
+			showToast(("Спутник покормлен! Уровень %d"):format(res.level), 2, Color3.fromRGB(150, 60, 120))
+		elseif res and res.msg then
+			showToast(res.msg)
+		end
+	end)
 	btnShop.Activated:Connect(function()
 		toggleWindow(shopW, function()
 			refreshUpgrades()
@@ -1117,6 +1293,32 @@ do
 			if not (state.achDone and state.achDone[id]) and ((state.achCur and state.achCur[id]) or 0) >= a.need then claimable = true end
 		end
 		btnAtlas.Badge.Visible = claimable
+		-- сезон: есть награда или незавершённое испытание
+		local Live = Catalog.Live
+		local se = state.season
+		local seasonReady = false
+		if se then
+			for i = 1, math.min(math.floor(se.xp / Live.Season.tierXp), #Live.Season.tiers) do
+				if not (se.claimed and se.claimed[tostring(i)]) then seasonReady = true end
+			end
+		end
+		btnSeason.Badge.Visible = seasonReady
+		local mod = nil
+		for _, m in Live.Modifiers do
+			if m.id == state.dayMod then mod = m end
+		end
+		modPill.Visible = mod ~= nil
+		if mod then
+			modL.Text = "Сегодня: " .. mod.name
+			modPill.BackgroundColor3 = K.darken(mod.color, 0.35)
+		end
+		local c = state.comp
+		compPill.Visible = c ~= nil
+		if c then
+			local cost = Live.feedCost(c.level)
+			compL.Text = ("%s ур.%d: %s\n%s"):format(Catalog.Kinds[c.kind].short, c.level, c.text,
+				c.level >= Live.CompanionMax and "максимум" or ("нажми: покормить (%d пыли)"):format(cost))
+		end
 		-- ворота районов и таблички показывают фактическое состояние
 		local st = { distinct = state.distinct, level = state.level }
 		for name, dc in Catalog.Districts do
@@ -1143,6 +1345,7 @@ do
 		end
 		if giftW.Visible then refreshGift() end
 		if powerW.Visible then refreshPower() end
+		if seasonW.Visible then refreshSeason() end
 	end
 
 end
@@ -1791,7 +1994,8 @@ do
 					local look = r.CFrame.LookVector
 					lit = (dist < lanternRange() * 0.8 and fl.Magnitude > 0.1 and fl.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.8)
 				end
-				local goal = revealed and 0.95 or (lit and (0.35 + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
+				local litGoal = workspace:GetAttribute("DayMod") == "tracksOnly" and 0.8 or 0.35 -- «Только следы»: тень еле видна
+				local goal = revealed and 0.95 or (lit and (litGoal + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
 				v.shadow.Transparency += (goal - v.shadow.Transparency) * math.min(1, dt * 5)
 				local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
 				if pe and not revealed then
@@ -1927,7 +2131,7 @@ do
 				if tut.step == 1 then setStep(2) end
 			elseif v then
 				local sense = state.talents and state.talents.sense or 0
-				local need = rar.revealTime * 2.2 / (lanternPower() * (1 + 0.08 * sense))
+				local need = rar.revealTime * 2.2 / (lanternPower() * (1 + 0.08 * sense) * (1 + compBonus("reveal")))
 				aimTime += dt
 				-- контур и подсказка появляются, только когда луч держится на тени
 				if aimTime > 0.3 then
@@ -1954,7 +2158,7 @@ do
 			else
 				local v = visuals[target]
 				local sg = Catalog.Struggle[v and v.info.rarity or "common"]
-				local size = (0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)) * (plr:GetAttribute("Pass_wideBeam") and Catalog.Money.WideBeamBonus or 1) * (1 + 0.04 * (state.talents and state.talents.grip or 0))
+				local size = (0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)) * (plr:GetAttribute("Pass_wideBeam") and Catalog.Money.WideBeamBonus or 1) * (1 + 0.04 * (state.talents and state.talents.grip or 0)) * (1 + compBonus("grip"))
 				-- зона: поднимается, пока кнопка зажата, и падает, когда отпущена
 				mg.vel = math.clamp(mg.vel + (mg.pressing and 3.4 or -2.8) * dt, -1.3, 1.3)
 				mg.zone += mg.vel * dt

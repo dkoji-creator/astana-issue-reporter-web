@@ -52,37 +52,37 @@ W.Districts = {
 		zones = {}, tint = Color3.fromRGB(235, 242, 255), center = Vector3.new(0, 0.5, 12),
 	},
 	street = {
-		tp = Vector3.new(0, 3, 40), world = "lantern", name = "Улица бумажных фонарей", max = 4, luck = 1,
+		tp = Vector3.new(0, 3, 40), world = "lantern", name = "Улица бумажных фонарей", max = 6, luck = 1,
 		zones = { { x = { -14, 14 }, z = { 34, 124 } } },
 		tint = Color3.fromRGB(255, 240, 225), center = Vector3.new(0, 0.5, 80),
 	},
 	canal = {
-		tp = Vector3.new(0, 3, -13), world = "lantern", name = "Канал с мостами", max = 4, luck = 1.2,
+		tp = Vector3.new(0, 3, -13), world = "lantern", name = "Канал с мостами", max = 6, luck = 1.2,
 		zones = { { x = { -56, 56 }, z = { -18, -11 } }, { x = { -56, 56 }, z = { -49, -42 } } },
 		tint = Color3.fromRGB(225, 238, 255), center = Vector3.new(0, 0.5, -30),
 		swim = { center = Vector3.new(0, 1.8, -30), rx = 22, rz = 6, speed = 0.3 },
 		unlock = { level = 3 }, gate = "CanalGate", back = Vector3.new(0, 4, 2),
 	},
 	market = {
-		tp = Vector3.new(50, 3, 10), world = "lantern", name = "Ночной рынок", max = 5, luck = 1.5,
+		tp = Vector3.new(50, 3, 10), world = "lantern", name = "Ночной рынок", max = 8, luck = 1.5,
 		zones = { { x = { 48, 140 }, z = { 2, 62 } } },
 		tint = Color3.fromRGB(255, 232, 245), center = Vector3.new(95, 0.5, 32),
 		unlock = { level = 6 }, gate = "MarketGate", back = Vector3.new(28, 4, 10),
 	},
 	grove = {
-		tp = Vector3.new(-50, 3, 10), world = "lantern", name = "Бамбуковая роща", max = 5, luck = 2,
+		tp = Vector3.new(-50, 3, 10), world = "lantern", name = "Бамбуковая роща", max = 8, luck = 2,
 		zones = { { x = { -140, -48 }, z = { 2, 62 } } },
 		tint = Color3.fromRGB(225, 255, 240), center = Vector3.new(-95, 0.5, 32),
 		unlock = { level = 10 }, gate = "GroveGate", back = Vector3.new(-28, 4, 10),
 	},
 	garden = {
-		tp = Vector3.new(0, 3, -84), world = "lantern", name = "Храмовый сад", max = 5, luck = 2.5,
+		tp = Vector3.new(0, 3, -84), world = "lantern", name = "Храмовый сад", max = 8, luck = 2.5,
 		zones = { { x = { -38, 38 }, z = { -144, -80 } } },
 		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
 		unlock = { level = 15 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
 	},
 	port = {
-		tp = Vector3.new(78, 3, -47), world = "lantern", name = "Туманный порт", max = 5, luck = 3,
+		tp = Vector3.new(78, 3, -47), world = "lantern", name = "Туманный порт", max = 8, luck = 3,
 		zones = { { x = { 70, 124 }, z = { -66, -14 } } },
 		tint = Color3.fromRGB(215, 235, 245), center = Vector3.new(100, 0.5, -40),
 		-- над морем: парящие духи кружат вокруг маяка

@@ -5,9 +5,11 @@ local SpiritCfg = require(Config:WaitForChild("Spirits"))
 local Economy = require(Config:WaitForChild("Economy"))
 local Progress = require(Config:WaitForChild("Progress"))
 local Monetization = require(Config:WaitForChild("Monetization"))
+local Live = require(Config:WaitForChild("Live"))
 
 local C = {}
 C.Worlds = Worlds
+C.Live = Live
 for _, k in SpiritCfg.Kinds or {} do
 	if k.spots then
 		for i, v in k.spots do k.spots[i] = Worlds.sp(v) end
