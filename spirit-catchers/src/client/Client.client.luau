@@ -107,7 +107,7 @@ do
 
 end
 ------------------------------------------------------------------ HUD: левая колонка
-local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin
+local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower
 do
 	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 10), Size = UDim2.fromOffset(136, 280), BackgroundTransparency = 1 }, hud)
 	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
@@ -118,8 +118,9 @@ do
 	btnTeleport = K.iconButton(leftCol, "portal", "Телепорт", T.purple)
 	btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
 	btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
+	btnPower = K.iconButton(leftCol, "level", "Сила", Color3.fromRGB(240, 180, 40))
 	btnAdmin.Visible = false
-	for i, b in { btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
+	for i, b in { btnAtlas, btnPower, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
 
 end
 ------------------------------------------------------------------ HUD: справа валюты и уровень
@@ -790,6 +791,95 @@ do
 	K.text(setList, "Чувствительность камеры и графика — в меню Roblox (кнопка вверху слева).", { Size = UDim2.new(1, -10, 0, 34), LayoutOrder = 9, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 
 end
+------------------------------------------------------------------ окно: Сила ловца (таланты и перерождение)
+local powerW, refreshPower
+do
+	local body
+	powerW, body = K.window(gui, "Сила ловца", "level", Color3.fromRGB(240, 170, 40), 0.82, 0.84)
+	local pts = K.text(body, "", { Size = UDim2.new(1, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 20, TextColor3 = T.gold })
+	local list = K.scroll(body, { Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -30) })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, list)
+	local rows = {}
+	for i, key in Prog.TalentOrder do
+		local t = Prog.Talents[key]
+		local f = K.panel(list, { Size = UDim2.new(1, -10, 0, 66), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+		K.icon(f, t.icon, { Size = UDim2.fromOffset(48, 48), Position = UDim2.fromOffset(8, 9) })
+		local title = K.text(f, "", { Size = UDim2.new(0.62, -70, 0, 24), Position = UDim2.fromOffset(64, 5), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+		K.text(f, t.desc, { Size = UDim2.new(0.62, -70, 0, 16), Position = UDim2.fromOffset(64, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		local _, bar = K.bar(f, t.color, { Size = UDim2.new(0.62, -70, 0, 9), Position = UDim2.fromOffset(64, 50) })
+		local b, bl = K.button(f, "+", T.green, { Size = UDim2.new(0.34, -10, 1, -16), Position = UDim2.new(0.64, 0, 0, 8), MaxText = 20 })
+		b.Activated:Connect(function()
+			local r = remotes.Talent:InvokeServer("up", key)
+			if r and r.ok then
+				play("save")
+			elseif r and r.msg then
+				showToast(r.msg)
+			end
+		end)
+		rows[key] = { title = title, bar = bar, b = b, bl = bl }
+	end
+	local resetArmed = false
+	local rf = K.panel(list, { Size = UDim2.new(1, -10, 0, 52), LayoutOrder = 20, BackgroundColor3 = Color3.fromRGB(40, 40, 60) })
+	K.text(rf, ("Сбросить таланты и вернуть очки: %d пыли"):format(Prog.TalentResetDust), { Size = UDim2.new(0.62, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, Font = Enum.Font.GothamBold, TextWrapped = true, StrokeThickness = 1 })
+	local resetB = K.button(rf, "Сбросить", T.red, { Size = UDim2.new(0.34, -10, 1, -14), Position = UDim2.new(0.64, 0, 0, 7), MaxText = 16 })
+	resetB.Activated:Connect(function()
+		if not resetArmed then
+			resetArmed = true
+			showToast("Нажми «Сбросить» ещё раз", 2.5)
+			task.delay(2.5, function() resetArmed = false end)
+			return
+		end
+		resetArmed = false
+		local r = remotes.Talent:InvokeServer("reset")
+		if r and r.msg then showToast(r.msg) end
+	end)
+	local rbArmed = false
+	local rbf = K.panel(list, { Size = UDim2.new(1, -10, 0, 118), LayoutOrder = 30, BackgroundColor3 = Color3.fromRGB(70, 40, 95) })
+	rbf:FindFirstChildOfClass("UIStroke").Color = T.gold
+	K.icon(rbf, "level", { Size = UDim2.fromOffset(64, 64), Position = UDim2.fromOffset(8, 10) })
+	local rbTitle = K.text(rbf, "", { Size = UDim2.new(0.62, -84, 0, 26), Position = UDim2.fromOffset(80, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 19, TextColor3 = T.gold })
+	K.text(rbf, ("Сбросит уровень, монеты, улучшения и таланты. Навсегда за каждое: монеты +%d%%, удача +%d%%. Коллекция, пыль, облики и донат останутся."):format(math.floor(Prog.Rebirth.coins * 100 + 0.5), math.floor(Prog.Rebirth.luck * 100 + 0.5)),
+		{ Size = UDim2.new(0.62, -84, 0, 70), Position = UDim2.fromOffset(80, 36), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 13, Font = Enum.Font.GothamBold, TextWrapped = true, StrokeThickness = 1 })
+	local rbB, rbL = K.button(rbf, "", T.purple, { Size = UDim2.new(0.34, -10, 0, 60), Position = UDim2.new(0.64, 0, 0, 29), MaxText = 16 })
+	rbB.Activated:Connect(function()
+		if (state.level or 1) < (state.rebirthLevel or 15) then
+			showToast(("Перерождение откроется на уровне %d"):format(state.rebirthLevel or 15))
+			return
+		end
+		if not rbArmed then
+			rbArmed = true
+			showToast("Точно? Нажми ещё раз, чтобы переродиться", 3)
+			task.delay(3, function() rbArmed = false end)
+			return
+		end
+		rbArmed = false
+		local r = remotes.Rebirth:InvokeServer()
+		if r and r.ok then
+			play("legendary")
+			showToast(("Перерождение %d! Монеты и удача выросли навсегда"):format(r.rebirths), 4, Color3.fromRGB(120, 60, 150))
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
+	refreshPower = function()
+		local p = state.talentPoints or 0
+		pts.Text = ("Очки талантов: %d   (1 очко за каждый новый уровень)"):format(p)
+		for key, r in rows do
+			local lvl = (state.talents and state.talents[key]) or 0
+			r.title.Text = ("%s  %d/%d"):format(Prog.Talents[key].name, lvl, Prog.TalentMax)
+			r.bar.Size = UDim2.fromScale(lvl / Prog.TalentMax, 1)
+			local can = p > 0 and lvl < Prog.TalentMax
+			r.bl.Text = lvl >= Prog.TalentMax and "Макс." or "+"
+			K.recolor(r.b, can and T.green or Color3.fromRGB(80, 80, 95))
+		end
+		local need = state.rebirthLevel or 15
+		rbTitle.Text = ("Перерождение   (сейчас: %d)"):format(state.rebirths or 0)
+		local ready = (state.level or 1) >= need
+		rbL.Text = ready and "Переродиться" or ("Нужен ур. %d"):format(need)
+		K.recolor(rbB, ready and T.purple or Color3.fromRGB(80, 80, 95))
+	end
+end
+
 ------------------------------------------------------------------ навигация по окнам
 local newsW, newsBody, toggleWindow
 do
@@ -891,7 +981,7 @@ do
 		K.close(adminW)
 	end)
 
-	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW }
+	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW }
 	toggleWindow = function(w, refresh)
 		local willOpen = not w.Visible
 		for _, x in allWindows do K.close(x) end
@@ -911,6 +1001,7 @@ do
 	end)
 	btnGift.Activated:Connect(function() toggleWindow(giftW, refreshGift) end)
 	btnTeleport.Activated:Connect(function() toggleWindow(tpW, refreshTeleport) end)
+	btnPower.Activated:Connect(function() toggleWindow(powerW, refreshPower) end)
 	btnAdmin.Activated:Connect(function() toggleWindow(adminW) end)
 	btnSettings.Activated:Connect(function()
 		toggleWindow(setW, function()
@@ -939,6 +1030,7 @@ do
 		levelL.Text = ("Ур. %d"):format(state.level)
 		xpFill.Size = UDim2.fromScale(math.clamp(state.xp / math.max(state.xpNext, 1), 0, 1), 1)
 		btnGift.Badge.Visible = state.dailyReady
+		btnPower.Badge.Visible = (state.talentPoints or 0) > 0 or (state.level or 1) >= (state.rebirthLevel or 15)
 		luckL.Text = ("Удача x%.2f"):format(state.luck or 1)
 		luckL.Text = string.gsub(luckL.Text, "%.?0+$", "")
 		local claimable = false
@@ -970,6 +1062,7 @@ do
 			refreshDonate()
 		end
 		if giftW.Visible then refreshGift() end
+		if powerW.Visible then refreshPower() end
 	end
 
 end
@@ -1255,7 +1348,7 @@ do
 		if r.levelUp then
 			play("legendary")
 			task.delay(0.3, function()
-				showToast(("Новый уровень %d!  +%d монет"):format(r.levelUp.level, r.levelUp.coins), 3, Color3.fromRGB(150, 110, 20))
+				showToast(("Новый уровень %d!  +%d монет и очко таланта (кнопка Сила)"):format(r.levelUp.level, r.levelUp.coins), 3.5, Color3.fromRGB(150, 110, 20))
 				floatReward("level", "Ур. " .. r.levelUp.level, levelPill)
 			end)
 		end
@@ -1543,7 +1636,10 @@ do
 			if dist < lim and isOpenAt(a.Position) then
 				local fl = Vector3.new(d.X, 0, d.Z)
 				local dot = fl.Magnitude > 0.5 and fl.Unit:Dot(flatLook) or 1
-				if dot > cone or dist < 8 then
+				-- непроявленную тень цепляет только узкий луч на средней дистанции
+				local revealedA = a:GetAttribute("Revealed")
+				local ok = revealedA and (dot > cone or dist < 8) or ((dot > 0.86 and dist < lim * 0.7) or dist < 5)
+				if ok then
 					local score = dot * 2 - dist / lim + (a:GetAttribute("Revealed") and 0.3 or 0) + (v.kind == trackKind and 0.8 or 0)
 					if score > bestScore then best, bestScore = a, score end
 				end
@@ -1748,12 +1844,16 @@ do
 				end
 				if tut.step == 1 then setStep(2) end
 			elseif v then
-				highlight.Adornee = v.shadow
-				highlight.OutlineColor = rar.color
-				hint.Adornee = target
-				hint.StudsOffset = Vector3.new(0, 3, 0)
-				local need = rar.revealTime / lanternPower()
+				local sense = state.talents and state.talents.sense or 0
+				local need = rar.revealTime * 2.2 / (lanternPower() * (1 + 0.08 * sense))
 				aimTime += dt
+				-- контур и подсказка появляются, только когда луч держится на тени
+				if aimTime > 0.3 then
+					highlight.Adornee = v.shadow
+					highlight.OutlineColor = rar.color
+					hint.Adornee = target
+					hint.StudsOffset = Vector3.new(0, 3, 0)
+				end
 				hintText.Text = "Свети" .. string.rep(".", math.clamp(math.floor(aimTime / need * 3), 0, 3))
 				hintText.TextColor3 = Color3.fromRGB(200, 170, 255)
 				if aimTime > need and not revealSent[id] then
@@ -1772,7 +1872,7 @@ do
 			else
 				local v = visuals[target]
 				local sg = Catalog.Struggle[v and v.info.rarity or "common"]
-				local size = (0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)) * (plr:GetAttribute("Pass_wideBeam") and Catalog.Money.WideBeamBonus or 1)
+				local size = (0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)) * (plr:GetAttribute("Pass_wideBeam") and Catalog.Money.WideBeamBonus or 1) * (1 + 0.04 * (state.talents and state.talents.grip or 0))
 				-- зона: поднимается, пока кнопка зажата, и падает, когда отпущена
 				mg.vel = math.clamp(mg.vel + (mg.pressing and 3.4 or -2.8) * dt, -1.3, 1.3)
 				mg.zone += mg.vel * dt

@@ -383,6 +383,21 @@ function Map.build()
 		deco("BoatLamp", Vector3.new(0.8, 1, 0.8), hull.CFrame * CFrame.new(0, 1, 3.5), Color3.fromRGB(255, 160, 80), Enum.Material.Neon)
 	end
 
+	---------------------------------------------------------------- кусты-укрытия в саду и роще (за ними прячутся духи)
+	local bush = Random.new(21)
+	for _ = 1, 46 do
+		local inGrove = bush:NextNumber() < 0.5
+		local x = inGrove and bush:NextNumber(-146, -44) or bush:NextNumber(-40, 40)
+		local z = inGrove and bush:NextNumber(-2, 66) or bush:NextNumber(-146, -78)
+		if math.abs(z - 10) > 6 and math.abs(x) > 6 then
+			local sz = bush:NextNumber(3, 5.5)
+			deco("Bush", Vector3.new(sz, sz * 0.7, sz), CFrame.new(x, 0.5 + sz * 0.3, z), Color3.fromRGB(40 + bush:NextInteger(0, 20), 100 + bush:NextInteger(0, 30), 55), Enum.Material.Grass, { Shape = Enum.PartType.Ball })
+		end
+	end
+	for _, p in { Vector3.new(-120, 0.5, 50), Vector3.new(-70, 0.5, 58), Vector3.new(30, 0.5, -140), Vector3.new(-32, 0.5, -98) } do
+		stoneLantern(p, Color3.fromRGB(150, 255, 200))
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = CFrame.new(0, 0.6, 24)
 	local spawn = Instance.new("SpawnLocation")

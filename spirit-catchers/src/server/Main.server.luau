@@ -75,8 +75,8 @@ remotes.Parent = ReplicatedStorage
 Lighting.ClockTime = 0
 Lighting.Brightness = 1
 Lighting.ExposureCompensation = -0.3
-Lighting.Ambient = Color3.fromRGB(52, 52, 82)
-Lighting.OutdoorAmbient = Color3.fromRGB(58, 60, 92)
+Lighting.Ambient = Color3.fromRGB(44, 44, 72)
+Lighting.OutdoorAmbient = Color3.fromRGB(48, 50, 80)
 Lighting.EnvironmentDiffuseScale = 0.3
 local cc = Instance.new("ColorCorrectionEffect")
 cc.Parent = Lighting
@@ -741,7 +741,7 @@ end)
 local function tweenLight(red)
 	local ti = TweenInfo.new(2.5)
 	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(70, 52, 66), OutdoorAmbient = Color3.fromRGB(78, 56, 72) }
-		or { Ambient = Color3.fromRGB(52, 52, 82), OutdoorAmbient = Color3.fromRGB(58, 60, 92) }):Play()
+		or { Ambient = Color3.fromRGB(44, 44, 72), OutdoorAmbient = Color3.fromRGB(48, 50, 80) }):Play()
 	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 232, 232), Saturation = 0 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
 	TweenService:Create(atm, ti, { Color = red and Color3.fromRGB(190, 45, 55) or Color3.fromRGB(80, 90, 150), Decay = red and Color3.fromRGB(120, 20, 40) or Color3.fromRGB(40, 30, 80) }):Play()
 	TweenService:Create(map.moon, ti, { Transparency = red and 0 or 1 }):Play()
