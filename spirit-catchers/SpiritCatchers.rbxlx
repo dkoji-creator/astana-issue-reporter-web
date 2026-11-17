@@ -336,7 +336,7 @@ P.Milestones = {
 }
 
 -- облики фонаря: цвет фонаря, цвет луча; price = монеты; source = где получить
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden", "vip" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden", "sea", "fog", "vip" }
 P.Skins = {
 	classic = { name = "Классический", lamp = Color3.fromRGB(255, 225, 160), beam = Color3.fromRGB(255, 240, 200), price = 0 },
 	sakura = { name = "Сакура", lamp = Color3.fromRGB(255, 150, 200), beam = Color3.fromRGB(255, 200, 230), source = "Подарок 6-го дня" },
@@ -344,6 +344,8 @@ P.Skins = {
 	jade = { name = "Нефритовый", lamp = Color3.fromRGB(110, 240, 170), beam = Color3.fromRGB(170, 255, 210), source = "6 видов в Атласе" },
 	ember = { name = "Угольный", lamp = Color3.fromRGB(255, 110, 60), beam = Color3.fromRGB(255, 170, 120), price = 1200, dust = 20 },
 	golden = { name = "Золотой", lamp = Color3.fromRGB(255, 200, 60), beam = Color3.fromRGB(255, 225, 130), source = "12 видов в Атласе" },
+	sea = { name = "Морской", lamp = Color3.fromRGB(90, 220, 230), beam = Color3.fromRGB(170, 240, 255), source = "Достижение: 10 видов" },
+	fog = { name = "Туманный", lamp = Color3.fromRGB(200, 210, 230), beam = Color3.fromRGB(230, 235, 245), source = "Достижение: 1000 духов" },
 	vip = { name = "Радужный VIP", lamp = Color3.fromRGB(255, 120, 220), beam = Color3.fromRGB(200, 220, 255), source = "VIP-ловец", rainbow = true },
 }
 
@@ -351,32 +353,35 @@ P.Skins = {
 P.Codes = {
 	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
 	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
+	UPDATE3 = { coins = 1000, dust = 30, text = "Обновление 3! +1000 монет и +30 пыли" },
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 2
+P.NewsVersion = 3
 P.News = {
-	title = "Обновление 2: Сила ловца",
+	title = "Обновление 3: Туманный порт",
 	lines = {
-		"Таланты: очко за каждый уровень (кнопка «Сила»)",
-		"Перерождение с 15 уровня: монеты +30% и удача +15% навсегда",
-		"Удача: зелья, Красная луна, рулетка и разновидность «Бесконечный» 1 к 5000",
-		"Духов стало меньше, они прячутся и появляются вдали от тебя",
-		"Тень проявляется только узким лучом: свети и иди по следам",
-		"Кусты-укрытия в роще и саду, ночь стала темнее",
-		"Коды: BETA и WELCOME (Опции)",
+		"Районы открываются по уровню: Канал 3, Рынок 6, Роща 10, Сад 15, Порт 20",
+		"Чем дальше район, тем реже духи и выше удача района (до x3)",
+		"Новый район Туманный порт: пирсы, маяк, Бумажный кит и Туманный кракен",
+		"Духи живут в логовах: у фонарей, у воды, в кустах, у прилавков",
+		"Событие «Туманная ночь» чередуется с Красной луной",
+		"Ранги ловца, 14 достижений, сундук каждые 5 уровней, 2 новых таланта",
+		"Код UPDATE3 (Опции)",
 	},
 }
 
 -- таланты: очко за каждый уровень, у каждого таланта 10 ступеней
 P.TalentMax = 10
-P.TalentOrder = { "swift", "sense", "grip", "fortune", "greed" }
+P.TalentOrder = { "swift", "sense", "grip", "fortune", "greed", "stealth", "collector" }
 P.Talents = {
 	swift = { name = "Быстрые ноги", desc = "+1 к скорости бега", icon = "paw", color = Color3.fromRGB(90, 200, 255) },
 	sense = { name = "Чутьё", desc = "Тени проявляются на 8% быстрее", icon = "target", color = Color3.fromRGB(170, 120, 255) },
 	grip = { name = "Хватка", desc = "Зона в мини-игре больше на 4%", icon = "jar", color = Color3.fromRGB(110, 220, 140) },
 	fortune = { name = "Фортуна", desc = "Удача +5%", icon = "luck", color = Color3.fromRGB(90, 230, 120) },
 	greed = { name = "Жадность", desc = "Монеты +6%", icon = "coin", color = Color3.fromRGB(255, 200, 60) },
+	stealth = { name = "Тихий шаг", desc = "Проявленные духи подпускают ближе", icon = "paw", color = Color3.fromRGB(150, 150, 200) },
+	collector = { name = "Сборщик", desc = "Пыль за дубликаты +10%", icon = "dust", color = Color3.fromRGB(190, 130, 255) },
 }
 P.TalentResetDust = 100
 
@@ -388,6 +393,46 @@ P.Rebirth = {
 function P.rebirthLevel(n: number): number
 	return P.Rebirth.baseLevel + n * P.Rebirth.stepLevel
 end
+
+-- ранги ловца по уровню (видны над головой)
+P.Ranks = {
+	{ level = 1, name = "Новичок", color = Color3.fromRGB(200, 205, 220) },
+	{ level = 5, name = "Следопыт", color = Color3.fromRGB(120, 220, 140) },
+	{ level = 10, name = "Ловец духов", color = Color3.fromRGB(110, 190, 255) },
+	{ level = 15, name = "Мастер фонаря", color = Color3.fromRGB(190, 130, 255) },
+	{ level = 20, name = "Хранитель квартала", color = Color3.fromRGB(255, 190, 70) },
+	{ level = 30, name = "Легенда тумана", color = Color3.fromRGB(255, 110, 140) },
+}
+function P.rankOf(level: number)
+	local r = P.Ranks[1]
+	for _, x in P.Ranks do
+		if level >= x.level then r = x end
+	end
+	return r
+end
+
+-- сундук за каждый 5-й уровень
+P.ChestEvery = 5
+function P.chest(level: number) return { coins = level * 25, dust = math.floor(level / 2) } end
+
+-- достижения: type = total | distinct | level | rebirths | variant | rarity
+P.AchievementOrder = { "first", "c50", "c300", "c1000", "k10", "kall", "golden", "rainbow", "infinity", "legend", "mythic", "secret", "lvl25", "reborn" }
+P.Achievements = {
+	first = { name = "Первый улов", desc = "Сдай первого духа", type = "total", need = 1, coins = 30 },
+	c50 = { name = "Ловец", desc = "Сдай 50 духов", type = "total", need = 50, coins = 250 },
+	c300 = { name = "Опытный ловец", desc = "Сдай 300 духов", type = "total", need = 300, coins = 900, dust = 20 },
+	c1000 = { name = "Тысяча духов", desc = "Сдай 1000 духов", type = "total", need = 1000, skin = "fog", coins = 2000 },
+	k10 = { name = "Коллекционер", desc = "Собери 10 видов", type = "distinct", need = 10, skin = "sea" },
+	kall = { name = "Весь квартал", desc = "Собери все виды духов", type = "distinct", need = 22, coins = 5000, dust = 120 },
+	golden = { name = "Золотая находка", desc = "Поймай Золотую разновидность", type = "variant", key = "golden", need = 1, coins = 400 },
+	rainbow = { name = "Радуга", desc = "Поймай Радужную разновидность", type = "variant", key = "rainbow", need = 1, coins = 1500 },
+	infinity = { name = "Бесконечность", desc = "Поймай Бесконечную разновидность", type = "variant", key = "infinity", need = 1, coins = 10000, dust = 200 },
+	legend = { name = "Легенда", desc = "Сдай легендарного духа", type = "rarity", key = "legendary", need = 1, coins = 600 },
+	mythic = { name = "Миф", desc = "Сдай мифического духа", type = "rarity", key = "mythic", need = 1, coins = 1500 },
+	secret = { name = "Тайна", desc = "Сдай секретного духа", type = "rarity", key = "secret", need = 1, coins = 4000 },
+	lvl25 = { name = "Ветеран", desc = "Достигни 25 уровня", type = "level", need = 25, coins = 1200 },
+	reborn = { name = "Новая жизнь", desc = "Переродись первый раз", type = "rebirths", need = 1, dust = 60 },
+}
 
 return P
 ]]></string>
@@ -1705,6 +1750,7 @@ local AnnounceEv = remote("Announce") -- объявления о редкой п
 local PotionFn = remote("BuyPotion", "RemoteFunction")
 local TalentFn = remote("Talent", "RemoteFunction")
 local RebirthFn = remote("Rebirth", "RemoteFunction")
+local AchFn = remote("ClaimAchievement", "RemoteFunction")
 local MessagingService = game:GetService("MessagingService")
 local HttpService = game:GetService("HttpService")
 -- админка: владелец игры (проверка только на сервере)
@@ -1794,6 +1840,10 @@ local function luckOf(d)
 		mult *= L.potion
 		table.insert(parts, ("Зелье x%d"):format(L.potion))
 	end
+	if workspace:GetAttribute("FogActive") then
+		mult *= 1.25
+		table.insert(parts, "Туманная ночь x1.25")
+	end
 	if workspace:GetAttribute("MoonActive") then
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
@@ -1862,7 +1912,7 @@ local function migrate(raw): Profile
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
 		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0, luckUntil = 0,
-		talents = { swift = 0, sense = 0, grip = 0, fortune = 0, greed = 0 }, rebirths = 0,
+		talents = { swift = 0, sense = 0, grip = 0, fortune = 0, greed = 0, stealth = 0, collector = 0 }, rebirths = 0, ach = {},
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -1903,6 +1953,11 @@ local function migrate(raw): Profile
 				d.settings.diag = raw.settings.diag == true
 			end
 			if raw.version == 5 or raw.version == 6 then
+				if typeof(raw.ach) == "table" then
+					for k, v in raw.ach do
+						if Catalog.Progress.Achievements[k] and v == true then d.ach[k] = true end
+					end
+				end
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
 				if typeof(raw.codes) == "table" then
@@ -1976,9 +2031,50 @@ end
 local function today() return math.floor(os.time() / 86400) end
 local function dailyReady(d: Profile) return d.daily.last < today() end
 
+-- прогресс достижения
+local function achProgress(d, a)
+	if a.type == "total" then return d.total or 0 end
+	if a.type == "distinct" then return distinct(d) end
+	if a.type == "level" then return d.level end
+	if a.type == "rebirths" then return d.rebirths or 0 end
+	if a.type == "variant" then
+		for _, vs in d.variants do
+			if vs[a.key] then return 1 end
+		end
+		return 0
+	end
+	if a.type == "rarity" then
+		for kind, n in d.saved do
+			if n > 0 and Catalog.Kinds[kind] and Catalog.Kinds[kind].rarity == a.key then return 1 end
+		end
+		return 0
+	end
+	return 0
+end
+
+-- ранг ловца над головой
+local function updateRankTag(plr, d)
+	local head = plr.Character and plr.Character:FindFirstChild("Head")
+	if not head then return end
+	local tag = head:FindFirstChild("RankTag")
+	if not tag then
+		tag = Instance.new("BillboardGui")
+		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(200, 26), Vector3.new(0, 3.6, 0), 90
+		local t = Instance.new("TextLabel")
+		t.Name, t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = "Text", UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+		t.TextStrokeTransparency = 0.2
+		t.Parent = tag
+		tag.Parent = head
+	end
+	local rank = Catalog.Progress.rankOf(d.level)
+	tag.Text.Text = ((d.rebirths or 0) > 0 and ("★%d "):format(d.rebirths) or "") .. rank.name
+	tag.Text.TextColor3 = rank.color
+end
+
 local function pushState(plr)
 	local d = data[plr]
 	if not d then return end
+	updateRankTag(plr, d)
 	plr:SetAttribute("RangeLvl", d.levels.range)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
@@ -1994,6 +2090,11 @@ local function pushState(plr)
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
+		achCur = (function()
+			local t = {}
+			for id, a in Catalog.Progress.Achievements do t[id] = achProgress(d, a) end
+			return t
+		end)(), achDone = d.ach, rank = Catalog.Progress.rankOf(d.level).name,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -2231,7 +2332,8 @@ RunService.Heartbeat:Connect(function(dt)
 					local r = rootOf(p)
 					if r then
 						local away = Vector3.new(s.pos.X - r.Position.X, 0, s.pos.Z - r.Position.Z)
-						if away.Magnitude < 9 and away.Magnitude > 0.1 then
+						local stealth = data[p] and data[p].talents.stealth or 0
+						if away.Magnitude < 9 - 0.5 * stealth and away.Magnitude > 0.1 then
 							local zones = Catalog.Districts[s.district].zones
 							local z = zones[1]
 							for _, zz in zones do
@@ -2313,6 +2415,26 @@ RunService.Heartbeat:Connect(function(dt)
 					local bonus = Catalog.Progress.levelReward(d.level)
 					d.coins += bonus
 					levelUp = { level = d.level, coins = bonus }
+					if d.level % Catalog.Progress.ChestEvery == 0 then
+						local ch = Catalog.Progress.chest(d.level)
+						d.coins += ch.coins
+						d.dust += ch.dust
+						levelUp.chest = ch
+					end
+				end
+				if levelUp then
+					-- столб света над игроком (видят все)
+					local rp = rootOf(plr)
+					if rp then
+						local pillar = Instance.new("Part")
+						pillar.Anchored, pillar.CanCollide, pillar.CanQuery, pillar.CanTouch = true, false, false, false
+						pillar.Material, pillar.Color, pillar.Transparency = Enum.Material.Neon, Color3.fromRGB(255, 220, 110), 0.3
+						pillar.Shape, pillar.Size = Enum.PartType.Cylinder, Vector3.new(40, 3, 3)
+						pillar.CFrame = CFrame.new(rp.Position + Vector3.new(0, 18, 0)) * CFrame.Angles(0, 0, math.rad(90))
+						pillar.Parent = workspace
+						TweenService:Create(pillar, TweenInfo.new(1.6), { Transparency = 1, Size = Vector3.new(40, 8, 8) }):Play()
+						task.delay(1.7, function() pillar:Destroy() end)
+					end
 				end
 				RewardEv:FireClient(plr, { xp = xp, levelUp = levelUp })
 				pushState(plr)
@@ -2398,7 +2520,7 @@ task.spawn(function()
 			end
 			if district == "street" and needTut and tutN < 2 then
 				newSpirit("PaperFox", "street", true) -- рядом с алтарём всегда есть лис для обучения
-			elseif max > 0 and n < max + (moon.active and 2 or 0) then
+			elseif max > 0 and n < max + (moon.active and 2 or 0) + ((moon.fog and (district == "canal" or district == "port")) and 3 or 0) then
 				local kind = pickKind(district)
 				if kind then newSpirit(kind, district) end
 			end
@@ -2554,6 +2676,22 @@ local function startMoon()
 	task.spawn(oniLoop, a)
 end
 
+local function startFog()
+	moon.fog = true
+	workspace:SetAttribute("FogActive", true)
+	workspace:SetAttribute("PhaseEnds", workspace:GetServerTimeNow() + MOON_TIME)
+	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.55, Haze = 2.2, Color = Color3.fromRGB(150, 170, 190) }):Play()
+	newSpirit("JellyLantern", "port")
+	newSpirit("SeaHorse", "port")
+	for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, "Туманная ночь! В канале и порту больше духов, удача x1.25") end
+end
+local function endFog()
+	moon.fog = false
+	workspace:SetAttribute("FogActive", false)
+	setPhase(false, NORMAL_TIME)
+	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.3, Haze = 1.1, Color = Color3.fromRGB(80, 90, 150) }):Play()
+end
+
 local function endMoon()
 	setPhase(false, NORMAL_TIME)
 	tweenLight(false)
@@ -2571,8 +2709,16 @@ task.spawn(function()
 			if moon.active then
 				endMoon()
 				phaseEnd = os.clock() + NORMAL_TIME
-			else
+				workspace:SetAttribute("NextEvent", "fog")
+			elseif moon.fog then
+				endFog()
+				phaseEnd = os.clock() + NORMAL_TIME
+				workspace:SetAttribute("NextEvent", "moon")
+			elseif (workspace:GetAttribute("NextEvent") or "moon") == "moon" then
 				startMoon()
+				phaseEnd = os.clock() + MOON_TIME
+			else
+				startFog()
 				phaseEnd = os.clock() + MOON_TIME
 			end
 		end
@@ -2581,6 +2727,7 @@ end)
 
 -- донат «Призвать Красную луну»: начать сейчас или продлить на 30 с
 local function summonMoon()
+	if moon.fog then endFog() end
 	if moon.active then
 		phaseEnd += 30
 		workspace:SetAttribute("PhaseEnds", (workspace:GetAttribute("PhaseEnds") or workspace:GetServerTimeNow()) + 30)
@@ -2644,6 +2791,7 @@ local function doSave(plr)
 	end
 	fillOrders(d)
 	coins = math.floor(coins * (1 + 0.06 * (d.talents.greed or 0)) * (1 + Catalog.Progress.Rebirth.coins * (d.rebirths or 0)))
+	dust = math.floor(dust * (1 + 0.1 * (d.talents.collector or 0)) + 0.5)
 	if hasPass(d, "coins2x") then coins *= 2 end
 	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	d.coins += coins
@@ -2981,6 +3129,20 @@ TalentFn.OnServerInvoke = function(plr, action, key)
 	applySpeed(plr)
 	persist(plr)
 	pushState(plr)
+	return { ok = true }
+end
+
+AchFn.OnServerInvoke = function(plr, id)
+	local d = data[plr]
+	local a = typeof(id) == "string" and Catalog.Progress.Achievements[id]
+	if not (d and a) then return { ok = false } end
+	if d.ach[id] then return { ok = false, msg = "Уже получено" } end
+	if achProgress(d, a) < a.need then return { ok = false, msg = "Ещё не выполнено" } end
+	d.ach[id] = true
+	grant(d, a)
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = a.coins, dust = a.dust, skin = a.skin })
 	return { ok = true }
 end
 
@@ -3665,7 +3827,7 @@ function Map.build()
 
 	---------------------------------------------------------------- порталы на площади
 	local portals = {}
-	for _, p in { { -30, "grove", Color3.fromRGB(110, 240, 200) }, { -19, "garden", Color3.fromRGB(170, 255, 170) }, { 19, "canal", Color3.fromRGB(80, 230, 220) }, { 30, "market", Color3.fromRGB(255, 120, 200) } } do
+	for _, p in { { -30, "grove", Color3.fromRGB(110, 240, 200) }, { -19, "garden", Color3.fromRGB(170, 255, 170) }, { 19, "canal", Color3.fromRGB(80, 230, 220) }, { 30, "market", Color3.fromRGB(255, 120, 200) }, { 9, "port", Color3.fromRGB(150, 210, 230) } } do
 		local x, col = p[1], p[3]
 		for _, dx in { -3, 3 } do
 			block("PortalPost", Vector3.new(1, 8, 1), CFrame.new(x + dx, 4.5, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
@@ -4065,6 +4227,7 @@ do
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 	local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 214), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
@@ -4073,7 +4236,51 @@ do
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, worldList)
 	local tierList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tierList)
-	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabWorlds, worldList } }
+	-- достижения
+	local achList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, achList)
+	local achRows = {}
+	for i, id in Prog.AchievementOrder do
+		local a = Prog.Achievements[id]
+		local f = K.panel(achList, { Size = UDim2.new(1, -10, 0, 60), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+		K.icon(f, "trophy", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(8, 8) })
+		K.text(f, a.name, { Size = UDim2.new(0.6, -64, 0, 22), Position = UDim2.fromOffset(58, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17 })
+		local parts = {}
+		if a.coins then table.insert(parts, a.coins .. " монет") end
+		if a.dust then table.insert(parts, a.dust .. " пыли") end
+		if a.skin then table.insert(parts, "фонарь «" .. Prog.Skins[a.skin].name .. "»") end
+		K.text(f, a.desc .. "   Награда: " .. table.concat(parts, ", "), { Size = UDim2.new(0.6, -64, 0, 14), Position = UDim2.fromOffset(58, 26), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		local _, bar = K.bar(f, T.gold, { Size = UDim2.new(0.6, -64, 0, 8), Position = UDim2.fromOffset(58, 44) })
+		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(0.36, -8, 1, -14), Position = UDim2.new(0.62, 0, 0, 7), MaxText = 15 })
+		b.Activated:Connect(function()
+			local r = remotes.ClaimAchievement:InvokeServer(id)
+			if r and r.ok then
+				play("legendary")
+				showToast("Достижение: " .. a.name .. "!", 2.5, Color3.fromRGB(150, 110, 20))
+			elseif r and r.msg then
+				showToast(r.msg)
+			end
+		end)
+		achRows[id] = { bar = bar, b = b, bl = bl, need = a.need }
+	end
+	local function refreshAch()
+		for id, r in achRows do
+			local cur = (state.achCur and state.achCur[id]) or 0
+			local done = state.achDone and state.achDone[id]
+			r.bar.Size = UDim2.fromScale(math.clamp(cur / r.need, 0, 1), 1)
+			if done then
+				r.bl.Text = "Получено"
+				K.recolor(r.b, Color3.fromRGB(80, 80, 95))
+			elseif cur >= r.need then
+				r.bl.Text = "Забрать!"
+				K.recolor(r.b, T.green)
+			else
+				r.bl.Text = ("%d/%d"):format(math.floor(math.min(cur, r.need)), r.need)
+				K.recolor(r.b, Color3.fromRGB(70, 70, 90))
+			end
+		end
+	end
+	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList } }
 	for _, pair in atlasPages do
 		pair[1].Activated:Connect(function()
 			for _, other in atlasPages do
@@ -4224,6 +4431,7 @@ do
 	refreshAtlas = function()
 		for _, c in cards do refreshCard(c) end
 		refreshTiers()
+		refreshAch()
 		local total = #Catalog.Order
 		collectL.Text = ("Собрано %d/%d видов"):format(state.distinct, total)
 		collectFill.Size = UDim2.fromScale(math.clamp(state.distinct / total, 0, 1), 1)
@@ -4648,7 +4856,7 @@ do
 			K.recolor(r.b, can and T.green or Color3.fromRGB(80, 80, 95))
 		end
 		local need = state.rebirthLevel or 15
-		rbTitle.Text = ("Перерождение   (сейчас: %d)"):format(state.rebirths or 0)
+		rbTitle.Text = ("Перерождение   (сейчас: %d)   Ранг: %s"):format(state.rebirths or 0, state.rank or "Новичок")
 		local ready = (state.level or 1) >= need
 		rbL.Text = ready and "Переродиться" or ("Нужен ур. %d"):format(need)
 		K.recolor(rbB, ready and T.purple or Color3.fromRGB(80, 80, 95))
@@ -4812,6 +5020,9 @@ do
 		local claimable = false
 		for i, m in Prog.Milestones do
 			if not state.milestones[tostring(i)] and state.distinct >= m.need then claimable = true end
+		end
+		for id, a in Prog.Achievements do
+			if not (state.achDone and state.achDone[id]) and ((state.achCur and state.achCur[id]) or 0) >= a.need then claimable = true end
 		end
 		btnAtlas.Badge.Visible = claimable
 		-- ворота районов и таблички показывают фактическое состояние
@@ -5124,7 +5335,9 @@ do
 		if r.levelUp then
 			play("legendary")
 			task.delay(0.3, function()
-				showToast(("Новый уровень %d!  +%d монет и очко таланта (кнопка Сила)"):format(r.levelUp.level, r.levelUp.coins), 3.5, Color3.fromRGB(150, 110, 20))
+				local chest = r.levelUp.chest
+			showToast(chest and ("Уровень %d! Сундук: +%d монет, +%d пыли и очко таланта"):format(r.levelUp.level, r.levelUp.coins + chest.coins, chest.dust)
+				or ("Новый уровень %d!  +%d монет и очко таланта (кнопка Сила)"):format(r.levelUp.level, r.levelUp.coins), 3.5, Color3.fromRGB(150, 110, 20))
 				floatReward("level", "Ур. " .. r.levelUp.level, levelPill)
 			end)
 		end
@@ -5457,7 +5670,10 @@ do
 		if ends then
 			local left = math.max(0, math.floor(ends - workspace:GetServerTimeNow()))
 			local timeStr = ("%d:%02d"):format(left // 60, left % 60)
-			eventL.Text = moonActive and ("КРАСНАЯ ЛУНА  " .. timeStr) or ("Красная луна через " .. timeStr)
+			local fogActive = workspace:GetAttribute("FogActive") == true
+			local nextName = (workspace:GetAttribute("NextEvent") or "moon") == "fog" and "Туманная ночь" or "Красная луна"
+			eventL.Text = moonActive and ("КРАСНАЯ ЛУНА  " .. timeStr) or (fogActive and ("ТУМАННАЯ НОЧЬ  " .. timeStr) or (nextName .. " через " .. timeStr))
+			if fogActive then eventGrad.Color = ColorSequence.new(Color3.fromRGB(120, 160, 190), Color3.fromRGB(50, 80, 110)) end
 		end
 		if moonActive ~= wasMoon then
 			wasMoon = moonActive

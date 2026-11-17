@@ -60,6 +60,7 @@ local AnnounceEv = remote("Announce") -- объявления о редкой п
 local PotionFn = remote("BuyPotion", "RemoteFunction")
 local TalentFn = remote("Talent", "RemoteFunction")
 local RebirthFn = remote("Rebirth", "RemoteFunction")
+local AchFn = remote("ClaimAchievement", "RemoteFunction")
 local MessagingService = game:GetService("MessagingService")
 local HttpService = game:GetService("HttpService")
 -- админка: владелец игры (проверка только на сервере)
@@ -149,6 +150,10 @@ local function luckOf(d)
 		mult *= L.potion
 		table.insert(parts, ("Зелье x%d"):format(L.potion))
 	end
+	if workspace:GetAttribute("FogActive") then
+		mult *= 1.25
+		table.insert(parts, "Туманная ночь x1.25")
+	end
 	if workspace:GetAttribute("MoonActive") then
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
@@ -217,7 +222,7 @@ local function migrate(raw): Profile
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
 		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0, luckUntil = 0,
-		talents = { swift = 0, sense = 0, grip = 0, fortune = 0, greed = 0 }, rebirths = 0,
+		talents = { swift = 0, sense = 0, grip = 0, fortune = 0, greed = 0, stealth = 0, collector = 0 }, rebirths = 0, ach = {},
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -258,6 +263,11 @@ local function migrate(raw): Profile
 				d.settings.diag = raw.settings.diag == true
 			end
 			if raw.version == 5 or raw.version == 6 then
+				if typeof(raw.ach) == "table" then
+					for k, v in raw.ach do
+						if Catalog.Progress.Achievements[k] and v == true then d.ach[k] = true end
+					end
+				end
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
 				if typeof(raw.codes) == "table" then
@@ -331,9 +341,50 @@ end
 local function today() return math.floor(os.time() / 86400) end
 local function dailyReady(d: Profile) return d.daily.last < today() end
 
+-- прогресс достижения
+local function achProgress(d, a)
+	if a.type == "total" then return d.total or 0 end
+	if a.type == "distinct" then return distinct(d) end
+	if a.type == "level" then return d.level end
+	if a.type == "rebirths" then return d.rebirths or 0 end
+	if a.type == "variant" then
+		for _, vs in d.variants do
+			if vs[a.key] then return 1 end
+		end
+		return 0
+	end
+	if a.type == "rarity" then
+		for kind, n in d.saved do
+			if n > 0 and Catalog.Kinds[kind] and Catalog.Kinds[kind].rarity == a.key then return 1 end
+		end
+		return 0
+	end
+	return 0
+end
+
+-- ранг ловца над головой
+local function updateRankTag(plr, d)
+	local head = plr.Character and plr.Character:FindFirstChild("Head")
+	if not head then return end
+	local tag = head:FindFirstChild("RankTag")
+	if not tag then
+		tag = Instance.new("BillboardGui")
+		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(200, 26), Vector3.new(0, 3.6, 0), 90
+		local t = Instance.new("TextLabel")
+		t.Name, t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = "Text", UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+		t.TextStrokeTransparency = 0.2
+		t.Parent = tag
+		tag.Parent = head
+	end
+	local rank = Catalog.Progress.rankOf(d.level)
+	tag.Text.Text = ((d.rebirths or 0) > 0 and ("★%d "):format(d.rebirths) or "") .. rank.name
+	tag.Text.TextColor3 = rank.color
+end
+
 local function pushState(plr)
 	local d = data[plr]
 	if not d then return end
+	updateRankTag(plr, d)
 	plr:SetAttribute("RangeLvl", d.levels.range)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
@@ -349,6 +400,11 @@ local function pushState(plr)
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
+		achCur = (function()
+			local t = {}
+			for id, a in Catalog.Progress.Achievements do t[id] = achProgress(d, a) end
+			return t
+		end)(), achDone = d.ach, rank = Catalog.Progress.rankOf(d.level).name,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -586,7 +642,8 @@ RunService.Heartbeat:Connect(function(dt)
 					local r = rootOf(p)
 					if r then
 						local away = Vector3.new(s.pos.X - r.Position.X, 0, s.pos.Z - r.Position.Z)
-						if away.Magnitude < 9 and away.Magnitude > 0.1 then
+						local stealth = data[p] and data[p].talents.stealth or 0
+						if away.Magnitude < 9 - 0.5 * stealth and away.Magnitude > 0.1 then
 							local zones = Catalog.Districts[s.district].zones
 							local z = zones[1]
 							for _, zz in zones do
@@ -668,6 +725,26 @@ RunService.Heartbeat:Connect(function(dt)
 					local bonus = Catalog.Progress.levelReward(d.level)
 					d.coins += bonus
 					levelUp = { level = d.level, coins = bonus }
+					if d.level % Catalog.Progress.ChestEvery == 0 then
+						local ch = Catalog.Progress.chest(d.level)
+						d.coins += ch.coins
+						d.dust += ch.dust
+						levelUp.chest = ch
+					end
+				end
+				if levelUp then
+					-- столб света над игроком (видят все)
+					local rp = rootOf(plr)
+					if rp then
+						local pillar = Instance.new("Part")
+						pillar.Anchored, pillar.CanCollide, pillar.CanQuery, pillar.CanTouch = true, false, false, false
+						pillar.Material, pillar.Color, pillar.Transparency = Enum.Material.Neon, Color3.fromRGB(255, 220, 110), 0.3
+						pillar.Shape, pillar.Size = Enum.PartType.Cylinder, Vector3.new(40, 3, 3)
+						pillar.CFrame = CFrame.new(rp.Position + Vector3.new(0, 18, 0)) * CFrame.Angles(0, 0, math.rad(90))
+						pillar.Parent = workspace
+						TweenService:Create(pillar, TweenInfo.new(1.6), { Transparency = 1, Size = Vector3.new(40, 8, 8) }):Play()
+						task.delay(1.7, function() pillar:Destroy() end)
+					end
 				end
 				RewardEv:FireClient(plr, { xp = xp, levelUp = levelUp })
 				pushState(plr)
@@ -753,7 +830,7 @@ task.spawn(function()
 			end
 			if district == "street" and needTut and tutN < 2 then
 				newSpirit("PaperFox", "street", true) -- рядом с алтарём всегда есть лис для обучения
-			elseif max > 0 and n < max + (moon.active and 2 or 0) then
+			elseif max > 0 and n < max + (moon.active and 2 or 0) + ((moon.fog and (district == "canal" or district == "port")) and 3 or 0) then
 				local kind = pickKind(district)
 				if kind then newSpirit(kind, district) end
 			end
@@ -909,6 +986,22 @@ local function startMoon()
 	task.spawn(oniLoop, a)
 end
 
+local function startFog()
+	moon.fog = true
+	workspace:SetAttribute("FogActive", true)
+	workspace:SetAttribute("PhaseEnds", workspace:GetServerTimeNow() + MOON_TIME)
+	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.55, Haze = 2.2, Color = Color3.fromRGB(150, 170, 190) }):Play()
+	newSpirit("JellyLantern", "port")
+	newSpirit("SeaHorse", "port")
+	for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, "Туманная ночь! В канале и порту больше духов, удача x1.25") end
+end
+local function endFog()
+	moon.fog = false
+	workspace:SetAttribute("FogActive", false)
+	setPhase(false, NORMAL_TIME)
+	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.3, Haze = 1.1, Color = Color3.fromRGB(80, 90, 150) }):Play()
+end
+
 local function endMoon()
 	setPhase(false, NORMAL_TIME)
 	tweenLight(false)
@@ -926,8 +1019,16 @@ task.spawn(function()
 			if moon.active then
 				endMoon()
 				phaseEnd = os.clock() + NORMAL_TIME
-			else
+				workspace:SetAttribute("NextEvent", "fog")
+			elseif moon.fog then
+				endFog()
+				phaseEnd = os.clock() + NORMAL_TIME
+				workspace:SetAttribute("NextEvent", "moon")
+			elseif (workspace:GetAttribute("NextEvent") or "moon") == "moon" then
 				startMoon()
+				phaseEnd = os.clock() + MOON_TIME
+			else
+				startFog()
 				phaseEnd = os.clock() + MOON_TIME
 			end
 		end
@@ -936,6 +1037,7 @@ end)
 
 -- донат «Призвать Красную луну»: начать сейчас или продлить на 30 с
 local function summonMoon()
+	if moon.fog then endFog() end
 	if moon.active then
 		phaseEnd += 30
 		workspace:SetAttribute("PhaseEnds", (workspace:GetAttribute("PhaseEnds") or workspace:GetServerTimeNow()) + 30)
@@ -999,6 +1101,7 @@ local function doSave(plr)
 	end
 	fillOrders(d)
 	coins = math.floor(coins * (1 + 0.06 * (d.talents.greed or 0)) * (1 + Catalog.Progress.Rebirth.coins * (d.rebirths or 0)))
+	dust = math.floor(dust * (1 + 0.1 * (d.talents.collector or 0)) + 0.5)
 	if hasPass(d, "coins2x") then coins *= 2 end
 	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	d.coins += coins
@@ -1336,6 +1439,20 @@ TalentFn.OnServerInvoke = function(plr, action, key)
 	applySpeed(plr)
 	persist(plr)
 	pushState(plr)
+	return { ok = true }
+end
+
+AchFn.OnServerInvoke = function(plr, id)
+	local d = data[plr]
+	local a = typeof(id) == "string" and Catalog.Progress.Achievements[id]
+	if not (d and a) then return { ok = false } end
+	if d.ach[id] then return { ok = false, msg = "Уже получено" } end
+	if achProgress(d, a) < a.need then return { ok = false, msg = "Ещё не выполнено" } end
+	d.ach[id] = true
+	grant(d, a)
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = a.coins, dust = a.dust, skin = a.skin })
 	return { ok = true }
 end
 

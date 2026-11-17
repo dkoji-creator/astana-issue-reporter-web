@@ -278,6 +278,7 @@ do
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 	local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 214), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
@@ -286,7 +287,51 @@ do
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, worldList)
 	local tierList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tierList)
-	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabWorlds, worldList } }
+	-- достижения
+	local achList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, achList)
+	local achRows = {}
+	for i, id in Prog.AchievementOrder do
+		local a = Prog.Achievements[id]
+		local f = K.panel(achList, { Size = UDim2.new(1, -10, 0, 60), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+		K.icon(f, "trophy", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(8, 8) })
+		K.text(f, a.name, { Size = UDim2.new(0.6, -64, 0, 22), Position = UDim2.fromOffset(58, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17 })
+		local parts = {}
+		if a.coins then table.insert(parts, a.coins .. " монет") end
+		if a.dust then table.insert(parts, a.dust .. " пыли") end
+		if a.skin then table.insert(parts, "фонарь «" .. Prog.Skins[a.skin].name .. "»") end
+		K.text(f, a.desc .. "   Награда: " .. table.concat(parts, ", "), { Size = UDim2.new(0.6, -64, 0, 14), Position = UDim2.fromOffset(58, 26), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		local _, bar = K.bar(f, T.gold, { Size = UDim2.new(0.6, -64, 0, 8), Position = UDim2.fromOffset(58, 44) })
+		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(0.36, -8, 1, -14), Position = UDim2.new(0.62, 0, 0, 7), MaxText = 15 })
+		b.Activated:Connect(function()
+			local r = remotes.ClaimAchievement:InvokeServer(id)
+			if r and r.ok then
+				play("legendary")
+				showToast("Достижение: " .. a.name .. "!", 2.5, Color3.fromRGB(150, 110, 20))
+			elseif r and r.msg then
+				showToast(r.msg)
+			end
+		end)
+		achRows[id] = { bar = bar, b = b, bl = bl, need = a.need }
+	end
+	local function refreshAch()
+		for id, r in achRows do
+			local cur = (state.achCur and state.achCur[id]) or 0
+			local done = state.achDone and state.achDone[id]
+			r.bar.Size = UDim2.fromScale(math.clamp(cur / r.need, 0, 1), 1)
+			if done then
+				r.bl.Text = "Получено"
+				K.recolor(r.b, Color3.fromRGB(80, 80, 95))
+			elseif cur >= r.need then
+				r.bl.Text = "Забрать!"
+				K.recolor(r.b, T.green)
+			else
+				r.bl.Text = ("%d/%d"):format(math.floor(math.min(cur, r.need)), r.need)
+				K.recolor(r.b, Color3.fromRGB(70, 70, 90))
+			end
+		end
+	end
+	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList } }
 	for _, pair in atlasPages do
 		pair[1].Activated:Connect(function()
 			for _, other in atlasPages do
@@ -437,6 +482,7 @@ do
 	refreshAtlas = function()
 		for _, c in cards do refreshCard(c) end
 		refreshTiers()
+		refreshAch()
 		local total = #Catalog.Order
 		collectL.Text = ("Собрано %d/%d видов"):format(state.distinct, total)
 		collectFill.Size = UDim2.fromScale(math.clamp(state.distinct / total, 0, 1), 1)
@@ -861,7 +907,7 @@ do
 			K.recolor(r.b, can and T.green or Color3.fromRGB(80, 80, 95))
 		end
 		local need = state.rebirthLevel or 15
-		rbTitle.Text = ("Перерождение   (сейчас: %d)"):format(state.rebirths or 0)
+		rbTitle.Text = ("Перерождение   (сейчас: %d)   Ранг: %s"):format(state.rebirths or 0, state.rank or "Новичок")
 		local ready = (state.level or 1) >= need
 		rbL.Text = ready and "Переродиться" or ("Нужен ур. %d"):format(need)
 		K.recolor(rbB, ready and T.purple or Color3.fromRGB(80, 80, 95))
@@ -1025,6 +1071,9 @@ do
 		local claimable = false
 		for i, m in Prog.Milestones do
 			if not state.milestones[tostring(i)] and state.distinct >= m.need then claimable = true end
+		end
+		for id, a in Prog.Achievements do
+			if not (state.achDone and state.achDone[id]) and ((state.achCur and state.achCur[id]) or 0) >= a.need then claimable = true end
 		end
 		btnAtlas.Badge.Visible = claimable
 		-- ворота районов и таблички показывают фактическое состояние
@@ -1337,7 +1386,9 @@ do
 		if r.levelUp then
 			play("legendary")
 			task.delay(0.3, function()
-				showToast(("Новый уровень %d!  +%d монет и очко таланта (кнопка Сила)"):format(r.levelUp.level, r.levelUp.coins), 3.5, Color3.fromRGB(150, 110, 20))
+				local chest = r.levelUp.chest
+			showToast(chest and ("Уровень %d! Сундук: +%d монет, +%d пыли и очко таланта"):format(r.levelUp.level, r.levelUp.coins + chest.coins, chest.dust)
+				or ("Новый уровень %d!  +%d монет и очко таланта (кнопка Сила)"):format(r.levelUp.level, r.levelUp.coins), 3.5, Color3.fromRGB(150, 110, 20))
 				floatReward("level", "Ур. " .. r.levelUp.level, levelPill)
 			end)
 		end
@@ -1670,7 +1721,10 @@ do
 		if ends then
 			local left = math.max(0, math.floor(ends - workspace:GetServerTimeNow()))
 			local timeStr = ("%d:%02d"):format(left // 60, left % 60)
-			eventL.Text = moonActive and ("КРАСНАЯ ЛУНА  " .. timeStr) or ("Красная луна через " .. timeStr)
+			local fogActive = workspace:GetAttribute("FogActive") == true
+			local nextName = (workspace:GetAttribute("NextEvent") or "moon") == "fog" and "Туманная ночь" or "Красная луна"
+			eventL.Text = moonActive and ("КРАСНАЯ ЛУНА  " .. timeStr) or (fogActive and ("ТУМАННАЯ НОЧЬ  " .. timeStr) or (nextName .. " через " .. timeStr))
+			if fogActive then eventGrad.Color = ColorSequence.new(Color3.fromRGB(120, 160, 190), Color3.fromRGB(50, 80, 110)) end
 		end
 		if moonActive ~= wasMoon then
 			wasMoon = moonActive

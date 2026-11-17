@@ -182,7 +182,16 @@ if pr then
 end
 frames(60)
 
-stage("долгий прогон 60 с")
-frames(1200)
+stage("достижения")
+for _, id in { "first", "c50", "k10", "kall", "golden", "lvl25", "reborn", "legend" } do inv("ClaimAchievement", id) end
+frames(20)
+
+stage("долгий прогон 4 мин (луна → туманная ночь)")
+local sawFog = false
+for _ = 1, 4800 do
+	frames(1)
+	if workspace:GetAttribute("FogActive") then sawFog = true end
+end
+if not sawFog then table.insert(SIM.errors, "туманная ночь не наступила") end
 stage("конец")
 return SIM
