@@ -1,0 +1,25 @@
+{
+  "name": "SpiritCatchers",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 0,
+        "Brightness": 0.5,
+        "Ambient": [0.12, 0.12, 0.22],
+        "OutdoorAmbient": [0.15, 0.15, 0.28]
+      }
+    }
+  }
+}
