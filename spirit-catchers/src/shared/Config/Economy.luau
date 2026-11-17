@@ -6,9 +6,28 @@ E.Rarity = {
 	uncommon = { name = "Необычный", color = Color3.fromRGB(110, 200, 255), coins = 12, dust = 2, catchTime = 2.0, revealTime = 0.5, shadow = Color3.fromRGB(30, 70, 160) },
 	rare = { name = "Редкий", color = Color3.fromRGB(120, 255, 170), coins = 30, dust = 4, catchTime = 2.6, revealTime = 0.7, shadow = Color3.fromRGB(15, 110, 90) },
 	epic = { name = "Эпический", color = Color3.fromRGB(255, 120, 220), coins = 70, dust = 8, catchTime = 3.0, revealTime = 0.8, shadow = Color3.fromRGB(140, 25, 115) },
-	legendary = { name = "Легендарный", color = Color3.fromRGB(255, 200, 80), coins = 200, dust = 15, catchTime = 3.5, revealTime = 0, shadow = Color3.fromRGB(160, 115, 15) },
+	legendary = { name = "Легендарный", color = Color3.fromRGB(255, 200, 80), coins = 200, dust = 15, catchTime = 3.5, revealTime = 0.9, shadow = Color3.fromRGB(160, 115, 15) },
+	mythic = { name = "Мифический", color = Color3.fromRGB(255, 90, 70), coins = 400, dust = 25, catchTime = 4.0, revealTime = 1.0, shadow = Color3.fromRGB(150, 30, 20) },
+	secret = { name = "Секретный", color = Color3.fromRGB(60, 255, 220), coins = 1000, dust = 50, catchTime = 4.5, revealTime = 1.2, shadow = Color3.fromRGB(10, 90, 90) },
 }
-E.RarityOrder = { "common", "uncommon", "rare", "epic", "legendary" }
+E.RarityOrder = { "common", "uncommon", "rare", "epic", "legendary", "mythic", "secret" }
+-- сложность мини-игры ловли: скорость и рывки метки духа
+E.Struggle = {
+	common = { speed = 0.55, jitter = 0.25 }, uncommon = { speed = 0.75, jitter = 0.35 }, rare = { speed = 0.95, jitter = 0.45 },
+	epic = { speed = 1.15, jitter = 0.6 }, legendary = { speed = 1.3, jitter = 0.7 }, mythic = { speed = 1.5, jitter = 0.8 },
+	secret = { speed = 1.7, jitter = 0.95 },
+}
+
+-- разновидности: выпадают при появлении духа, видны всем игрокам
+E.VariantOrder = { "normal", "giant", "shiny", "shadow", "golden", "rainbow" }
+E.Variants = {
+	normal = { name = "Обычный", chance = 0, mult = 1, color = Color3.fromRGB(200, 200, 210) },
+	giant = { name = "Гигант", chance = 1 / 12, mult = 2, scale = 1.6, color = Color3.fromRGB(120, 200, 255) },
+	shiny = { name = "Сияющий", chance = 1 / 25, mult = 3, color = Color3.fromRGB(255, 250, 180) },
+	shadow = { name = "Теневой", chance = 1 / 30, mult = 5, moonOnly = true, color = Color3.fromRGB(150, 80, 255) },
+	golden = { name = "Золотой", chance = 1 / 80, mult = 6, color = Color3.fromRGB(255, 200, 40) },
+	rainbow = { name = "Радужный", chance = 1 / 250, mult = 15, color = Color3.fromRGB(255, 100, 200) },
+}
 
 E.MaxLevel = 5
 E.Upgrades = {

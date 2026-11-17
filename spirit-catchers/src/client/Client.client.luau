@@ -180,6 +180,24 @@ K.corner(fill, UDim.new(1, 0))
 K.icon(catchBtn, "paw", { Size = UDim2.fromScale(0.5, 0.5), Position = UDim2.fromScale(0.25, 0.08) })
 local catchL = K.text(catchBtn, "ЛОВИТЬ", { Size = UDim2.new(0.9, 0, 0.3, 0), Position = UDim2.fromScale(0.05, 0.6), MaxText = 18 })
 
+-- мини-игра ловли: держи кнопку, чтобы зелёная зона удерживала метку духа
+local mini = K.make("Frame", { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -292, 1, -140), Size = UDim2.fromOffset(66, 230), BackgroundColor3 = T.panel, Visible = false }, gui)
+K.corner(mini, UDim.new(0, 14))
+K.stroke(mini, T.ink, 3)
+local track = K.make("Frame", { Position = UDim2.fromOffset(8, 8), Size = UDim2.new(0, 32, 1, -16), BackgroundColor3 = Color3.fromRGB(20, 28, 50) }, mini)
+K.corner(track, UDim.new(0, 10))
+local zoneF = K.make("Frame", { Size = UDim2.fromScale(1, 0.3), Position = UDim2.fromScale(0, 0.4), BackgroundColor3 = Color3.fromRGB(120, 240, 160), BackgroundTransparency = 0.3 }, track)
+K.corner(zoneF, UDim.new(0, 8))
+K.stroke(zoneF, Color3.new(1, 1, 1), 2)
+local markerF = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(30, 30), Position = UDim2.fromScale(0.5, 0.5), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 3 }, track)
+K.corner(markerF, UDim.new(1, 0))
+local markerStroke = K.stroke(markerF, T.ink, 3)
+K.icon(markerF, "paw", { Size = UDim2.fromScale(0.8, 0.8), Position = UDim2.fromScale(0.1, 0.1), ZIndex = 4 })
+local progBack = K.make("Frame", { Position = UDim2.new(1, -20, 0, 8), Size = UDim2.new(0, 12, 1, -16), BackgroundColor3 = T.ink }, mini)
+K.corner(progBack, UDim.new(1, 0))
+local progFill = K.make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0), BackgroundColor3 = T.gold }, progBack)
+K.corner(progFill, UDim.new(1, 0))
+
 local vignette = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BackgroundColor3 = Color3.fromRGB(200, 0, 0) }, gui)
 
 local hint = K.make("BillboardGui", { Size = UDim2.fromOffset(180, 34), AlwaysOnTop = true }, gui)
@@ -215,9 +233,9 @@ local mileRow = K.make("Frame", { Position = UDim2.new(0.41, 0, 0, 0), Size = UD
 K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right }, mileRow)
 local mileBtns = {}
 for i in Prog.Milestones do
-	local b, l = K.button(mileRow, "", T.panel2, { Size = UDim2.new(0.24, -4, 1, 0), MaxText = 13 })
-	K.icon(b, "trophy", { Size = UDim2.fromOffset(26, 26), Position = UDim2.fromOffset(2, 2) })
-	l.Size, l.Position = UDim2.new(1, -30, 1, -8), UDim2.fromOffset(28, 4)
+	local b, l = K.button(mileRow, "", T.panel2, { Size = UDim2.new(1 / #Prog.Milestones, -5, 1, 0), MaxText = 12 })
+	K.icon(b, "trophy", { Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(2, 2) })
+	l.Size, l.Position = UDim2.new(1, -6, 0.55, 0), UDim2.new(0, 3, 0.42, 0)
 	mileBtns[i] = { b = b, l = l }
 	b.Activated:Connect(function()
 		local r = remotes.ClaimMilestone:InvokeServer(i)
@@ -227,22 +245,57 @@ end
 local atlasTabs = K.make("Frame", { Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, atlasBody)
 K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 local spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
 K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 214), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
 local worldList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
 K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, worldList)
-tabSpirits.Activated:Connect(function()
-	spiritGrid.Visible, worldList.Visible = true, false
-	K.recolor(tabSpirits, T.blue)
-	K.recolor(tabWorlds, T.panel2)
-end)
-tabWorlds.Activated:Connect(function()
-	spiritGrid.Visible, worldList.Visible = false, true
-	K.recolor(tabSpirits, T.panel2)
-	K.recolor(tabWorlds, T.blue)
-end)
+local tierList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
+K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tierList)
+local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabWorlds, worldList } }
+for _, pair in atlasPages do
+	pair[1].Activated:Connect(function()
+		for _, other in atlasPages do
+			other[2].Visible = other == pair
+			K.recolor(other[1], other == pair and T.blue or T.panel2)
+		end
+	end)
+end
+-- тир-лист: строка на каждую редкость, плашки видов (цветные — пойманы)
+local tierChips = {}
+for i = #Catalog.RarityOrder, 1, -1 do
+	local rk = Catalog.RarityOrder[i]
+	local rar = Catalog.Rarity[rk]
+	local row = K.panel(tierList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = #Catalog.RarityOrder - i, BackgroundColor3 = T.panel2 })
+	local tag = K.make("Frame", { Size = UDim2.new(0, 120, 1, -10), Position = UDim2.fromOffset(5, 5), BackgroundColor3 = Color3.new(1, 1, 1) }, row)
+	K.corner(tag, UDim.new(0, 10))
+	K.gradient(tag, K.lighten(rar.color, 0.2), K.darken(rar.color, 0.25))
+	K.text(tag, rar.name, { Size = UDim2.new(1, -8, 1, -8), Position = UDim2.fromOffset(4, 4), MaxText = 16 })
+	local chips = K.make("Frame", { Size = UDim2.new(1, -140, 1, -10), Position = UDim2.fromOffset(132, 5), BackgroundTransparency = 1 }, row)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), VerticalAlignment = Enum.VerticalAlignment.Center }, chips)
+	for _, kind in Catalog.Order do
+		if Catalog.Kinds[kind].rarity == rk then
+			local chip = K.make("Frame", { Size = UDim2.new(0.25, -6, 1, 0), BackgroundColor3 = Color3.fromRGB(40, 38, 60) }, chips)
+			K.corner(chip, UDim.new(0, 8))
+			K.stroke(chip, rar.color, 2)
+			local l = K.text(chip, Catalog.Kinds[kind].name, { Size = UDim2.new(1, -6, 0.6, 0), Position = UDim2.fromOffset(3, 1), MaxText = 12, StrokeThickness = 1 })
+			local v = K.text(chip, "", { Size = UDim2.new(1, -6, 0.4, -2), Position = UDim2.new(0, 3, 0.6, 0), MaxText = 10, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+			tierChips[kind] = { chip = chip, name = l, vars = v }
+		end
+	end
+end
+local function refreshTiers()
+	for kind, t in tierChips do
+		local n = state.saved[kind] or 0
+		local got = 0
+		for _ in (state.variants and state.variants[kind]) or {} do got += 1 end
+		t.chip.BackgroundColor3 = n > 0 and K.darken(Catalog.Rarity[Catalog.Kinds[kind].rarity].color, 0.55) or Color3.fromRGB(40, 38, 60)
+		t.name.TextColor3 = n > 0 and T.text or T.sub
+		t.vars.Text = n > 0 and ("разновидностей %d/%d"):format(got, #Catalog.VariantOrder) or "не найден"
+	end
+end
 for i, key in Catalog.Worlds.Order do
 	local w = Catalog.Worlds.Worlds[key]
 	local f = K.panel(worldList, { Size = UDim2.new(1, -10, 0, 96), LayoutOrder = i, BackgroundColor3 = w.active and Color3.fromRGB(46, 58, 96) or Color3.fromRGB(36, 34, 54) })
@@ -289,6 +342,16 @@ local function buildCard(i, kind)
 	c.name = K.text(f, info.name, { Size = UDim2.new(1, -10, 0, 20), Position = UDim2.fromOffset(5, 98), MaxText = 15 })
 	c.rar = K.text(f, rar.name, { Size = UDim2.new(1, -10, 0, 14), Position = UDim2.fromOffset(5, 118), MaxText = 12, TextColor3 = rar.color, StrokeThickness = 1 })
 	c.info = K.text(f, "", { Size = UDim2.new(1, -10, 0, 30), Position = UDim2.fromOffset(5, 134), MaxText = 11, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	-- точки собранных разновидностей
+	local dots = K.make("Frame", { Size = UDim2.new(1, -12, 0, 12), Position = UDim2.fromOffset(8, 78), BackgroundTransparency = 1, ZIndex = 3 }, f)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 4) }, dots)
+	c.dots = {}
+	for _, vk in Catalog.VariantOrder do
+		local d = K.make("Frame", { Size = UDim2.fromOffset(12, 12), BackgroundColor3 = T.ink, ZIndex = 3 }, dots)
+		K.corner(d, UDim.new(1, 0))
+		K.stroke(d, Color3.new(1, 1, 1), 1)
+		c.dots[vk] = d
+	end
 	local trackB, trackBL = K.button(f, "Выследить", T.orange, { Size = UDim2.new(0.5, -6, 0, 34), Position = UDim2.new(0, 4, 1, -40), MaxText = 12 })
 	local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(0.5, -6, 0, 34), Position = UDim2.new(0.5, 2, 1, -40), MaxText = 12 })
 	c.trackL, c.equip, c.equipL = trackBL, equipB, equipBL
@@ -320,10 +383,15 @@ local function refreshCard(c)
 	c.trackL.Text = trackKind == c.kind and "Цель" or "Выследить"
 	c.equip.Visible = known
 	c.equipL.Text = state.equipped == c.kind and "Снять" or "Спутник"
+	local got = (state.variants and state.variants[c.kind]) or {}
+	for vk, d in c.dots do
+		d.BackgroundColor3 = got[vk] and Catalog.Variants[vk].color or T.ink
+	end
 end
 
 local function refreshAtlas()
 	for _, c in cards do refreshCard(c) end
+	refreshTiers()
 	local total = #Catalog.Order
 	collectL.Text = ("Собрано %d/%d видов"):format(state.distinct, total)
 	collectFill.Size = UDim2.fromScale(math.clamp(state.distinct / total, 0, 1), 1)
@@ -604,7 +672,11 @@ local function refreshHUD()
 	jarL.Text = ("Банка %d/%d"):format(n, state.cap)
 	jarFill.Size = UDim2.fromScale(math.clamp(n / math.max(state.cap, 1), 0, 1), 1)
 	local names = {}
-	for _, k in state.jar do table.insert(names, Catalog.Kinds[k].short) end
+	for _, e in state.jar do
+		local k = typeof(e) == "table" and e.k or e
+		local v = typeof(e) == "table" and e.v or "normal"
+		table.insert(names, (v ~= "normal" and (Catalog.Variants[v].name .. " ") or "") .. Catalog.Kinds[k].short)
+	end
 	jarNames.Text = n > 0 and table.concat(names, ", ") or "пусто"
 	jarNames.TextColor3 = n >= state.cap and Color3.fromRGB(255, 160, 100) or T.sub
 	coinL.Text = tostring(state.coins)
@@ -617,14 +689,20 @@ local function refreshHUD()
 		if not state.milestones[tostring(i)] and state.distinct >= m.need then claimable = true end
 	end
 	btnAtlas.Badge.Visible = claimable
-	-- ворота и табличка сада
-	Barrier.CanCollide = not state.gardenOpen
-	Barrier.Transparency = state.gardenOpen and 0.9 or 0.2
-	for _, g in Barrier:GetChildren() do
-		local t = g:IsA("SurfaceGui") and g:FindFirstChildOfClass("TextLabel")
-		if t then
-			t.Text = state.gardenOpen and "Храмовый сад\nоткрыт"
-				or ("Храмовый сад закрыт\nСохрани 3 разных духа: %d/%d"):format(math.min(state.distinct, Catalog.GardenNeed), Catalog.GardenNeed)
+	-- ворота районов и таблички показывают фактическое состояние
+	local st = { distinct = state.distinct, level = state.level }
+	for name, dc in Catalog.Districts do
+		local gate = dc.gate and World:FindFirstChild(dc.gate)
+		if gate then
+			local open = Catalog.unlocked(name, st)
+			gate.CanCollide = not open
+			gate.Transparency = open and 0.9 or 0.2
+			for _, g in gate:GetChildren() do
+				local t = g:IsA("SurfaceGui") and g:FindFirstChildOfClass("TextLabel")
+				if t then
+					t.Text = open and (dc.name .. "\nоткрыт") or (dc.name .. " закрыт\n" .. Catalog.unlockText(name, st))
+				end
+			end
 		end
 	end
 	if atlasW.Visible then refreshAtlas() end
@@ -667,7 +745,7 @@ local function burst(pos, colors, n)
 end
 
 local streak, lastCatch = 0, 0
-local function catchEffect(kind, at, coop)
+local function catchEffect(kind, at, coop, variant)
 	local r = root()
 	if not r then return end
 	local info = Catalog.Kinds[kind]
@@ -701,7 +779,8 @@ local function catchEffect(kind, at, coop)
 			K.pop(jarPanel)
 		end
 	end)
-	local text = info.name .. " в банке!"
+	local vname = (variant and variant ~= "normal") and (Catalog.Variants[variant].name .. " ") or ""
+	local text = vname .. info.name .. " в банке!"
 	if coop > 1 then text ..= ("  Вместе x%d"):format(coop)
 	elseif streak > 1 then text ..= "  Серия x" .. streak end
 	if info.rarity == "legendary" then text = info.name .. "! Неси к алтарю" end
@@ -799,7 +878,7 @@ end
 local tut = { step = 0 }
 local TUT_TEXT = {
 	"1/4  Найди тень рядом с площадью и наведи на неё фонарь",
-	"2/4  Подойди и держи ЛОВИТЬ, пока дух не окажется в банке",
+	"2/4  Жми ЛОВИТЬ и держи кнопку: зелёная зона должна держать метку духа",
 	"3/4  Неси банку к алтарю (голубой луч) и сохрани улов",
 	"4/4  Открой Атлас и возьми лиса спутником",
 }
@@ -911,6 +990,11 @@ remotes.SaveResult.OnClientEvent:Connect(function(r)
 		end
 		local msg = ("Сдано духов: %d"):format(#r.kinds)
 		if #r.firsts > 0 then msg ..= ("  Новых в Атласе: %d"):format(#r.firsts) end
+		for i, nv in r.newVariants or {} do
+			task.delay(1.2 + i * 1.4, function()
+				showToast(("Новая разновидность: %s %s!"):format(Catalog.Variants[nv.v].name, Catalog.Kinds[nv.k].name), 2.5, K.darken(Catalog.Variants[nv.v].color, 0.5))
+			end)
+		end
 		if not r.persisted then msg ..= " (без сохранения)" end
 		showToast(msg, 3, Color3.fromRGB(30, 90, 140))
 	end
@@ -926,9 +1010,9 @@ remotes.SaveResult.OnClientEvent:Connect(function(r)
 end)
 
 local holding = false
-remotes.Caught.OnClientEvent:Connect(function(kind, at, coop)
+remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant)
 	holding = false
-	catchEffect(kind, at, coop or 1)
+	catchEffect(kind, at, coop or 1, variant)
 	if tut.step == 2 or tut.step == 1 then setStep(3) end
 end)
 
@@ -987,6 +1071,14 @@ local function addAnchor(a)
 	local v = { anchor = a, kind = kind, info = info, seed = math.random() * 10, lastDrop = 0, lastPos = a.Position }
 	if info.move ~= "swim" then
 		v.shadow = Spirits.buildShadow(Catalog.Rarity[info.rarity].shadow)
+		local variant = a:GetAttribute("Variant") or "normal"
+		if variant ~= "normal" and variant ~= "giant" then
+			local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
+			if pe then
+				pe.Color = ColorSequence.new(Catalog.Variants[variant].color)
+				pe.Rate = 24
+			end
+		end
 		v.shadow.Parent = visFolder
 	end
 	local sid = Audio.Spirit[kind]
@@ -1080,6 +1172,9 @@ local target: BasePart? = nil
 local aimTime, revealSent = 0, {}
 local holdId = nil
 
+local function isOpenAt(pos)
+	return Catalog.unlocked(Catalog.district(pos), { distinct = state.distinct, level = state.level })
+end
 local function lanternRange() return Catalog.upgradeValue("range", plr:GetAttribute("RangeLvl") or 1) end
 local function lanternPower() return Catalog.upgradeValue("power", plr:GetAttribute("PowerLvl") or 1) end
 
@@ -1093,7 +1188,7 @@ local function findTarget(r)
 		local d = a.Position - r.Position
 		local dist = d.Magnitude
 		local lim = v.info.move == "swim" and rng + 8 or rng
-		if dist < lim and (a.Position.Z > -73 or state.gardenOpen) then
+		if dist < lim and isOpenAt(a.Position) then
 			local fl = Vector3.new(d.X, 0, d.Z)
 			local dot = fl.Magnitude > 0.5 and fl.Unit:Dot(flatLook) or 1
 			if dot > cone or dist < 8 then
@@ -1105,9 +1200,11 @@ local function findTarget(r)
 	return best
 end
 
+local mg = { zone = 0.35, vel = 0, marker = 0.5, goal = 0.5, timer = 0, pressing = false, inZone = false }
 local function release()
 	if holding then
 		holding = false
+		mg.pressing = false
 		remotes.CatchHold:FireServer(nil)
 	end
 end
@@ -1153,6 +1250,13 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 		if revealed and not v.model then
 			v.model = Spirits.Builders[v.kind]()
+			local variant = a:GetAttribute("Variant") or "normal"
+			Spirits.applyVariant(v.model, variant)
+			local rk = v.info.rarity
+			if not reducedFx and (rk ~= "common" and rk ~= "uncommon") then
+				Spirits.aura(v.model, Catalog.Rarity[rk].color)
+			end
+			v.variant = variant
 			v.model.Parent = visFolder
 			if dist < 60 then play("reveal") end
 			ring(cf.Position + Vector3.new(0, 1, 0), 2, 10, Catalog.Rarity[v.info.rarity].color, 0.4, false)
@@ -1165,6 +1269,7 @@ RunService.RenderStepped:Connect(function(dt)
 		if v.model and dist < 170 then
 			local t = now + v.seed
 			Spirits.animate(v.model, cf * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
+			if v.variant == "rainbow" and math.floor(now * 12) % 3 == 0 then Spirits.rainbowTick(v.model, now) end
 		end
 		if dist < 120 and now - v.lastDrop > 1.1 and (cf.Position - v.lastPos).Magnitude > 2 then
 			dropTrail(v, cf.Position, cf.LookVector)
@@ -1176,13 +1281,19 @@ RunService.RenderStepped:Connect(function(dt)
 	if not r then return end
 
 	-- район
-	local d = Catalog.district(r.Position.Z)
+	local d = Catalog.district(r.Position)
 	if d ~= currentDistrict then
 		currentDistrict = d
 		districtTitle.Text = Catalog.DistrictNames[d]
 		districtTitle.Visible = not introOpen
 		districtTitle.TextTransparency = 0
-		TweenService:Create(districtTitle, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 1.6), { TextTransparency = 1 }):Play()
+		local fadeInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 1.6)
+		local stroke = districtTitle:FindFirstChildOfClass("UIStroke")
+		if stroke then
+			stroke.Transparency = 0
+			TweenService:Create(stroke, fadeInfo, { Transparency = 1 }):Play()
+		end
+		TweenService:Create(districtTitle, fadeInfo, { TextTransparency = 1 }):Play()
 		TweenService:Create(districtCC, TweenInfo.new(1.5), { TintColor = Catalog.Districts[d].tint }):Play()
 	end
 	local atAltar = (r.Position - ALTAR_POS).Magnitude < 16
@@ -1192,7 +1303,7 @@ RunService.RenderStepped:Connect(function(dt)
 	if trackKind then
 		local best, bd = nil, math.huge
 		for a, v in visuals do
-			if v.kind == trackKind and (a.Position.Z > -73 or state.gardenOpen) then
+			if v.kind == trackKind and isOpenAt(a.Position) then
 				local dd = (a.Position - r.Position).Magnitude
 				if dd < bd then best, bd = a, dd end
 			end
@@ -1206,7 +1317,7 @@ RunService.RenderStepped:Connect(function(dt)
 			local dc = places[1] and Catalog.Districts[places[1]]
 			if info.moonOnly and not moonActive then
 				trackL.Text = ("%s\nПоявится в Красную луну"):format(info.name)
-			elseif dc and dc.locked and not state.gardenOpen then
+			elseif dc and dc.unlock and not Catalog.unlocked(places[1], { distinct = state.distinct, level = state.level }) then
 				trackL.Text = ("%s\nСначала открой сад"):format(info.name)
 			else
 				trackL.Text = ("%s\nИщи: %s"):format(info.name, info.hint)
@@ -1248,7 +1359,8 @@ RunService.RenderStepped:Connect(function(dt)
 			elseif holders > 1 then
 				hintText.Text, hintText.TextColor3 = ("Ловим вместе x%d"):format(holders), GOLD
 			else
-				hintText.Text = inRange and v.info.name or "Подойди ближе"
+				local vn = (v.variant and v.variant ~= "normal") and (Catalog.Variants[v.variant].name .. " ") or ""
+				hintText.Text = inRange and (vn .. v.info.name) or (vn ~= "" and (vn .. v.info.name .. " - ближе!") or "Подойди ближе")
 				hintText.TextColor3 = inRange and rar.color or Color3.new(1, 1, 1)
 			end
 			if tut.step == 1 then setStep(2) end
@@ -1268,17 +1380,44 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- кнопка ловли
+	-- кнопка ловли и мини-игра
 	catchBtn.Visible = (inRange or holding) and not introOpen
+	mini.Visible = holding
 	if holding then
 		if not inRange or not target or target:GetAttribute("SpiritId") ~= holdId then
 			release()
 		else
+			local v = visuals[target]
+			local sg = Catalog.Struggle[v and v.info.rarity or "common"]
+			local size = 0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)
+			-- зона: поднимается, пока кнопка зажата, и падает, когда отпущена
+			mg.vel = math.clamp(mg.vel + (mg.pressing and 3.4 or -2.8) * dt, -1.3, 1.3)
+			mg.zone += mg.vel * dt
+			if mg.zone < 0 then mg.zone, mg.vel = 0, math.max(mg.vel, 0) * -0.2 end
+			if mg.zone > 1 - size then mg.zone, mg.vel = 1 - size, math.min(mg.vel, 0) * -0.2 end
+			-- метка духа: плавно рыскает и иногда дёргается
+			mg.timer -= dt
+			if mg.timer <= 0 or math.random() < sg.jitter * dt * 1.5 then
+				mg.goal = math.random() * 0.9 + 0.05
+				mg.timer = (0.5 + math.random()) / sg.speed
+			end
+			mg.marker += (mg.goal - mg.marker) * math.min(1, dt * 2.2 * sg.speed)
+			local inside = mg.marker >= mg.zone and mg.marker <= mg.zone + size
+			if inside ~= mg.inZone then
+				mg.inZone = inside
+				remotes.CatchZone:FireServer(inside)
+			end
+			zoneF.Size = UDim2.fromScale(1, size)
+			zoneF.Position = UDim2.fromScale(0, 1 - mg.zone - size)
+			zoneF.BackgroundColor3 = inside and Color3.fromRGB(120, 240, 160) or Color3.fromRGB(255, 150, 80)
+			markerF.Position = UDim2.fromScale(0.5, 1 - mg.marker)
+			markerStroke.Color = inside and T.ink or T.red
 			local p = target:GetAttribute("Progress") or 0
+			progFill.Size = UDim2.fromScale(1, math.clamp(p, 0, 1))
 			fill.Size = UDim2.fromScale(1, math.clamp(p, 0, 1))
-			catchBtn.Rotation = reducedFx and 0 or math.sin(now * 40) * 4 * p
+			catchBtn.Rotation = (reducedFx or inside) and 0 or math.sin(now * 40) * 4
 			local holders = target:GetAttribute("Holders") or 0
-			catchL.Text = holders > 1 and ("ВМЕСТЕ x" .. holders) or "ЛОВИТЬ"
+			catchL.Text = holders > 1 and ("ВМЕСТЕ x" .. holders) or "ДЕРЖИ"
 		end
 	end
 	if not holding then
@@ -1327,17 +1466,24 @@ local function beginHold()
 		return
 	end
 	holding, holdId = true, target:GetAttribute("SpiritId")
+	mg.zone, mg.vel, mg.marker, mg.goal, mg.timer, mg.inZone = 0.35, 0, 0.5, 0.5, 0, false
 	K.bounce(catchBtn)
 	remotes.CatchHold:FireServer(holdId)
 end
-catchBtn.MouseButton1Down:Connect(beginHold)
-catchBtn.MouseButton1Up:Connect(release)
-catchBtn.MouseLeave:Connect(release)
+-- первое нажатие начинает ловлю, дальше удержание поднимает зону
+local function press()
+	if not holding then beginHold() end
+	mg.pressing = holding
+end
+local function unpress() mg.pressing = false end
+catchBtn.MouseButton1Down:Connect(press)
+catchBtn.MouseButton1Up:Connect(unpress)
+catchBtn.MouseLeave:Connect(unpress)
 UserInputService.InputBegan:Connect(function(i, gp)
-	if not gp and i.KeyCode == Enum.KeyCode.F then beginHold() end
+	if not gp and i.KeyCode == Enum.KeyCode.F then press() end
 end)
 UserInputService.InputEnded:Connect(function(i)
-	if i.KeyCode == Enum.KeyCode.F then release() end
+	if i.KeyCode == Enum.KeyCode.F then unpress() end
 end)
 
 ------------------------------------------------------------------ диагностика (тест)

@@ -56,11 +56,29 @@ W.Districts = {
 		world = "lantern", name = "Храмовый сад", max = 8,
 		zones = { { x = { -38, 38 }, z = { -144, -80 } } },
 		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
-		locked = true,
+		unlock = { kinds = 3 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
+	},
+	grove = {
+		world = "lantern", name = "Бамбуковая роща", max = 8,
+		zones = { { x = { -140, -48 }, z = { 2, 62 } } },
+		tint = Color3.fromRGB(225, 255, 240), center = Vector3.new(-95, 0.5, 32),
+		unlock = { level = 3 }, gate = "GroveGate", back = Vector3.new(-28, 4, 10),
+	},
+	market = {
+		world = "lantern", name = "Ночной рынок", max = 8,
+		zones = { { x = { 48, 140 }, z = { 2, 62 } } },
+		tint = Color3.fromRGB(255, 232, 245), center = Vector3.new(95, 0.5, 32),
+		unlock = { kinds = 8 }, gate = "MarketGate", back = Vector3.new(28, 4, 10),
 	},
 }
 
-function W.districtAt(z: number): string
+-- район по позиции (x, z)
+function W.districtAt(pos: Vector3): string
+	local x, z = pos.X, pos.Z
+	if z > -8 and z < 72 then
+		if x < -36 then return "grove" end
+		if x > 36 then return "market" end
+	end
 	if z > 30 then
 		return "street"
 	elseif z > -8 then

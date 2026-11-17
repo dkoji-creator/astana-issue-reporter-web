@@ -473,6 +473,216 @@ function S.buildFoxFire(): Model
 	return m
 end
 
+------------------------------------------------------------------ каппа
+function S.buildKappa(): Model
+	local m = Instance.new("Model")
+	m.Name = "Kappa"
+	local skin = Color3.fromRGB(110, 190, 120)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.9, 2.1, 1.7), CFrame = CFrame.new(0, 1.3, 0), Color = skin }))
+	ellipsoid(mk(m, { Name = "Belly", Size = Vector3.new(1.4, 1.6, 0.5), CFrame = CFrame.new(0, 1.2, -0.7), Color = Color3.fromRGB(240, 230, 160) }))
+	ellipsoid(mk(m, { Name = "Shell", Size = Vector3.new(1.9, 2.0, 1.0), CFrame = CFrame.new(0, 1.5, 0.7), Color = Color3.fromRGB(120, 80, 50) }))
+	ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(1.7, 1.5, 1.5), CFrame = CFrame.new(0, 2.85, -0.1), Color = skin }))
+	mk(m, { Name = "Dish", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 1.1, 1.1), CFrame = CFrame.new(0, 3.6, -0.1) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(230, 240, 245) })
+	mk(m, { Name = "Water", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.05, 0.9, 0.9), CFrame = CFrame.new(0, 3.72, -0.1) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(120, 220, 255), Material = Enum.Material.Neon, Transparency = 0.3 })
+	mk(m, { Name = "Beak", Size = Vector3.new(0.6, 0.35, 0.6), CFrame = CFrame.new(0, 2.6, -0.9), Color = Color3.fromRGB(240, 190, 60) })
+	for i, x in { -1, 1 } do
+		ellipsoid(mk(m, { Name = "Eye", Size = Vector3.new(0.35, 0.42, 0.2), CFrame = CFrame.new(x * 0.4, 3.0, -0.78), Color = Color3.fromRGB(20, 20, 30) }))
+		local arm = mk(m, { Name = "Arm", Size = Vector3.new(0.3, 1.1, 0.3), CFrame = CFrame.new(x * 1.1, 1.4, -0.2), Color = skin })
+		joint(arm, Vector3.new(x * 0.9, 1.9, -0.2), "swingX", i * math.pi, 0.8)
+		local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.4, 0.7, 0.5), CFrame = CFrame.new(x * 0.5, 0.35, 0), Color = skin })
+		joint(leg, Vector3.new(x * 0.5, 0.7, 0), "swingX", i * math.pi + math.pi, 0.7)
+	end
+	m.PrimaryPart = body
+	S.scale(m, 1.2)
+	return m
+end
+
+------------------------------------------------------------------ манэки-нэко
+function S.buildLuckyCat(): Model
+	local m = Instance.new("Model")
+	m.Name = "LuckyCat"
+	local white = Color3.fromRGB(250, 248, 240)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(2.1, 2.3, 1.9), CFrame = CFrame.new(0, 1.3, 0), Color = white }))
+	ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(2.2, 1.9, 1.9), CFrame = CFrame.new(0, 3.1, -0.1), Color = white }))
+	ellipsoid(mk(m, { Name = "Spot", Size = Vector3.new(0.9, 0.7, 0.5), CFrame = CFrame.new(0.6, 3.6, 0.3), Color = Color3.fromRGB(240, 150, 60) }))
+	for _, x in { -1, 1 } do
+		mk(m, { Name = "Ear", Size = Vector3.new(0.25, 0.8, 0.7), CFrame = CFrame.new(x * 0.75, 4.15, -0.1), Color = white }, "WedgePart")
+		mk(m, { Name = "EarIn", Size = Vector3.new(0.27, 0.5, 0.4), CFrame = CFrame.new(x * 0.75, 4.05, -0.2), Color = Color3.fromRGB(255, 150, 160) }, "WedgePart")
+		mk(m, { Name = "Eye", Size = Vector3.new(0.4, 0.08, 0.1), CFrame = CFrame.new(x * 0.45, 3.2, -1.0) * CFrame.Angles(0, 0, math.rad(x * 12)), Color = Color3.fromRGB(30, 20, 20) })
+		mk(m, { Name = "Whisker", Size = Vector3.new(0.7, 0.05, 0.05), CFrame = CFrame.new(x * 0.95, 2.85, -0.95), Color = Color3.fromRGB(60, 50, 50) })
+	end
+	mk(m, { Name = "Nose", Size = Vector3.new(0.18, 0.14, 0.1), CFrame = CFrame.new(0, 2.95, -1.02), Color = Color3.fromRGB(255, 120, 140) })
+	mk(m, { Name = "Collar", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.25, 1.9, 1.9), CFrame = CFrame.new(0, 2.25, -0.05) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(220, 40, 50) })
+	mk(m, { Name = "Bell", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), CFrame = CFrame.new(0, 2.05, -0.95), Color = Color3.fromRGB(255, 200, 50), Material = Enum.Material.Metal })
+	local paw = mk(m, { Name = "Paw", Size = Vector3.new(0.6, 1.4, 0.6), CFrame = CFrame.new(1.1, 3.1, -0.5), Color = white })
+	joint(paw, Vector3.new(1.0, 2.4, -0.4), "swingX", 0, 0.7)
+	local coin = mk(m, { Name = "Coin", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 1.2, 1.2), CFrame = CFrame.new(-1.0, 1.6, -0.9) * CFrame.Angles(0, math.rad(90), 0), Color = Color3.fromRGB(255, 200, 50), Material = Enum.Material.Metal })
+	joint(coin, Vector3.new(-1.0, 1.6, -0.9), "wagY", 0, 0.4)
+	m.PrimaryPart = body
+	S.scale(m, 1.15)
+	return m
+end
+
+------------------------------------------------------------------ медуза-фонарь (опора — центр)
+function S.buildJellyLantern(): Model
+	local m = Instance.new("Model")
+	m.Name = "JellyLantern"
+	local dome = ellipsoid(mk(m, { Name = "Dome", Size = Vector3.new(3.2, 2.2, 3.2), CFrame = CFrame.new(0, 0.6, 0), Color = Color3.fromRGB(150, 230, 255), Material = Enum.Material.Glass, Transparency = 0.35 }))
+	ellipsoid(mk(m, { Name = "Core", Size = Vector3.new(1.4, 1.0, 1.4), CFrame = CFrame.new(0, 0.5, 0), Color = Color3.fromRGB(200, 250, 255), Material = Enum.Material.Neon }))
+	for _, x in { -0.4, 0.4 } do
+		ellipsoid(mk(m, { Name = "Eye", Size = Vector3.new(0.3, 0.35, 0.15), CFrame = CFrame.new(x, 0.7, -1.45), Color = Color3.fromRGB(20, 30, 60) }))
+	end
+	for i = 1, 8 do
+		local a = i * math.pi / 4
+		local p = Vector3.new(math.cos(a) * 1.1, -1.2, math.sin(a) * 1.1)
+		local t = mk(m, { Name = "Tentacle", Size = Vector3.new(0.14, 2.6, 0.14), CFrame = CFrame.new(p), Color = Color3.fromRGB(170, 240, 255), Material = Enum.Material.Neon, Transparency = 0.25 })
+		joint(t, p + Vector3.new(0, 1.2, 0), "swingX", i * 0.8, 0.5)
+	end
+	light(dome, Color3.fromRGB(130, 220, 255), 14, 1.2)
+	m.PrimaryPart = dome
+	return m
+end
+
+------------------------------------------------------------------ маска тэнгу (опора — центр)
+function S.buildTenguMask(): Model
+	local m = Instance.new("Model")
+	m.Name = "TenguMask"
+	local red = Color3.fromRGB(205, 35, 40)
+	local face = ellipsoid(mk(m, { Name = "Face", Size = Vector3.new(2.3, 2.7, 0.9), CFrame = CFrame.new(), Color = red }))
+	local nose = mk(m, { Name = "Nose", Size = Vector3.new(0.45, 0.45, 2.4), CFrame = CFrame.new(0, -0.1, -1.4), Color = red })
+	joint(nose, Vector3.new(0, -0.1, -0.4), "twitch", 0, 0.6)
+	for i, x in { -1, 1 } do
+		mk(m, { Name = "Brow", Size = Vector3.new(0.9, 0.25, 0.2), CFrame = CFrame.new(x * 0.5, 0.65, -0.45) * CFrame.Angles(0, 0, math.rad(x * -20)), Color = Color3.new(1, 1, 1) })
+		mk(m, { Name = "Eye", Size = Vector3.new(0.35, 0.3, 0.1), CFrame = CFrame.new(x * 0.5, 0.35, -0.47), Color = Color3.fromRGB(255, 220, 80), Material = Enum.Material.Neon })
+		local wing = mk(m, { Name = "Wing", Size = Vector3.new(2.8, 0.12, 1.4), CFrame = CFrame.new(x * 2.3, 0.2, 0.4), Color = Color3.fromRGB(30, 25, 35) })
+		joint(wing, Vector3.new(x * 0.9, 0.2, 0.4), "flapZ", i * math.pi, 1.3)
+	end
+	for i = 1, 7 do
+		local a = math.rad(-60 + (i - 1) * 20)
+		mk(m, { Name = "Crown", Size = Vector3.new(0.15, 1.5, 0.15), CFrame = CFrame.new(0, 1.2, 0.3) * CFrame.Angles(0, 0, a) * CFrame.new(0, 0.75, 0), Color = Color3.fromRGB(30, 25, 35) })
+	end
+	m.PrimaryPart = face
+	S.scale(m, 1.3)
+	return m
+end
+
+------------------------------------------------------------------ бумажный дракон (опора — голова)
+function S.buildPaperDragon(): Model
+	local m = Instance.new("Model")
+	m.Name = "PaperDragon"
+	local red, gold = Color3.fromRGB(215, 40, 45), Color3.fromRGB(255, 195, 60)
+	local head = mk(m, { Name = "Head", Size = Vector3.new(1.8, 1.5, 2.4), CFrame = CFrame.new(0, 0, 0), Color = red })
+	mk(m, { Name = "Jaw", Size = Vector3.new(1.4, 0.4, 1.6), CFrame = CFrame.new(0, -0.8, -0.5), Color = gold })
+	for i, x in { -1, 1 } do
+		mk(m, { Name = "Horn", Size = Vector3.new(0.25, 1.4, 0.25), CFrame = CFrame.new(x * 0.6, 1.2, 0.6) * CFrame.Angles(math.rad(-35), 0, math.rad(x * -15)), Color = gold })
+		mk(m, { Name = "Eye", Size = Vector3.new(0.3, 0.3, 0.3), CFrame = CFrame.new(x * 0.7, 0.35, -0.9), Color = Color3.fromRGB(255, 240, 120), Material = Enum.Material.Neon })
+		local wh = mk(m, { Name = "Whisker", Size = Vector3.new(0.1, 0.1, 2.4), CFrame = CFrame.new(x * 0.8, -0.3, -2.0) * CFrame.Angles(0, math.rad(x * 25), 0), Color = gold, Material = Enum.Material.Neon })
+		joint(wh, Vector3.new(x * 0.8, -0.3, -1), "wagY", i, 0.6)
+	end
+	for i = 1, 9 do
+		local z = 1.2 + i * 1.5
+		local seg = mk(m, { Name = "Seg", Size = Vector3.new(1.5 - i * 0.08, 1.4 - i * 0.08, 1.6), CFrame = CFrame.new(0, 0, z), Color = i % 2 == 0 and gold or red })
+		joint(seg, Vector3.new(0, 0, z - 0.8), "wagY", -i * 0.7, 0.15 + i * 0.05)
+		if i % 3 == 1 then
+			local fin = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 1.0, 1.2), CFrame = CFrame.new(0, 1.0, z), Color = gold, Material = Enum.Material.Neon, Transparency = 0.3 })
+			joint(fin, Vector3.new(0, 0, z - 0.8), "wagY", -i * 0.7, 0.15 + i * 0.05)
+		end
+	end
+	light(head, Color3.fromRGB(255, 160, 80), 18, 1.4)
+	m.PrimaryPart = head
+	S.scale(m, 1.3)
+	return m
+end
+
+------------------------------------------------------------------ девятихвостая кицунэ
+function S.buildKyubi(): Model
+	local m = Instance.new("Model")
+	m.Name = "Kyubi"
+	local white = Color3.fromRGB(245, 250, 255)
+	local cyan = Color3.fromRGB(60, 255, 220)
+	local body = mk(m, { Name = "Body", Size = Vector3.new(1.6, 1.4, 2.8), CFrame = CFrame.new(0, 1.7, 0), Color = white })
+	mk(m, { Name = "Head", Size = Vector3.new(1.4, 1.3, 1.4), CFrame = CFrame.new(0, 2.7, -1.8) * CFrame.Angles(0, math.rad(45), 0), Color = white })
+	mk(m, { Name = "Snout", Size = Vector3.new(0.6, 0.55, 1.1), CFrame = CFrame.new(0, 2.45, -2.75), Color = white })
+	for i, x in { -1, 1 } do
+		mk(m, { Name = "Ear", Size = Vector3.new(0.2, 1.4, 0.9), CFrame = CFrame.new(x * 0.5, 3.75, -1.7), Color = white }, "WedgePart")
+		mk(m, { Name = "Eye", Size = Vector3.new(0.22, 0.2, 0.08), CFrame = CFrame.new(x * 0.33, 2.9, -2.45), Color = cyan, Material = Enum.Material.Neon })
+		mk(m, { Name = "Mark", Size = Vector3.new(0.12, 0.5, 0.06), CFrame = CFrame.new(x * 0.55, 2.7, -2.4), Color = cyan, Material = Enum.Material.Neon })
+		for j, z in { -1, 1 } do
+			local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.35, 1.3, 0.35), CFrame = CFrame.new(x * 0.55, 0.65, z * 1.0), Color = white })
+			joint(leg, Vector3.new(x * 0.55, 1.2, z * 1.0), "swingX", (i + j) % 2 * math.pi, 1)
+		end
+	end
+	for t = 1, 9 do
+		local a = math.rad(-64 + (t - 1) * 16)
+		local tail = mk(m, { Name = "Tail", Size = Vector3.new(0.5, 0.5, 3.0), CFrame = CFrame.new(0, 2.0, 1.4) * CFrame.Angles(math.rad(40), a, 0) * CFrame.new(0, 0, 1.5),
+			Color = t % 2 == 0 and white or Color3.fromRGB(200, 255, 245), Material = Enum.Material.Neon, Transparency = 0.25 })
+		joint(tail, Vector3.new(0, 2.0, 1.4), "wagY", t * 0.5, 0.5)
+	end
+	light(body, cyan, 16, 1.5)
+	m.PrimaryPart = body
+	S.scale(m, 1.5)
+	return m
+end
+
+------------------------------------------------------------------ разновидности и аура
+function S.applyVariant(m: Model, variant: string?)
+	if not variant or variant == "normal" then return end
+	if variant == "giant" then
+		S.scale(m, 1.6)
+	end
+	for _, p in m:GetDescendants() do
+		if p:IsA("BasePart") and p.Transparency < 0.5 then
+			if variant == "golden" then
+				p.Color = p.Material == Enum.Material.Neon and Color3.fromRGB(255, 240, 160) or Color3.fromRGB(255, 190, 45):Lerp(p.Color, 0.15)
+				if p.Material ~= Enum.Material.Neon then
+					p.Material = Enum.Material.Metal
+					p.Reflectance = 0.15
+				end
+			elseif variant == "shadow" then
+				p.Color = p.Material == Enum.Material.Neon and Color3.fromRGB(190, 110, 255) or Color3.fromRGB(45, 25, 70):Lerp(p.Color, 0.2)
+			end
+		end
+	end
+	local root = m.PrimaryPart
+	if root and (variant == "shiny" or variant == "rainbow" or variant == "golden" or variant == "shadow") then
+		local pe = Instance.new("ParticleEmitter")
+		pe.Name = "VariantFx"
+		pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		pe.Color = ColorSequence.new(variant == "shadow" and Color3.fromRGB(170, 100, 255) or (variant == "golden" and Color3.fromRGB(255, 220, 90) or Color3.new(1, 1, 1)))
+		pe.LightEmission, pe.Rate, pe.Lifetime = 1, variant == "shiny" and 14 or 10, NumberRange.new(0.6, 1.2)
+		pe.Speed, pe.SpreadAngle = NumberRange.new(1, 3), Vector2.new(180, 180)
+		pe.Size = NumberSequence.new(0.6, 0)
+		pe.Parent = root
+	end
+	m:SetAttribute("Variant", variant)
+end
+
+-- радужный перелив (вызывать раз в несколько кадров)
+function S.rainbowTick(m: Model, t: number)
+	local i = 0
+	for _, p in m:GetChildren() do
+		if p:IsA("BasePart") and p.Transparency < 0.5 then
+			i += 1
+			p.Color = Color3.fromHSV((t * 0.25 + i * 0.07) % 1, 0.55, 1)
+		end
+	end
+end
+
+-- мягкая аура редкости вокруг проявленного духа
+function S.aura(m: Model, color: Color3)
+	local root = m.PrimaryPart
+	if not root then return end
+	local pe = Instance.new("ParticleEmitter")
+	pe.Name = "Aura"
+	pe.Color = ColorSequence.new(color)
+	pe.LightEmission, pe.Rate, pe.Lifetime = 0.8, 8, NumberRange.new(1.2, 2)
+	pe.Speed, pe.SpreadAngle = NumberRange.new(0.5, 1.5), Vector2.new(40, 40)
+	pe.EmissionDirection = Enum.NormalId.Top
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.5), NumberSequenceKeypoint.new(1, 0) })
+	pe.Transparency = NumberSequence.new(0.2, 1)
+	pe.Parent = root
+end
+
 ------------------------------------------------------------------ тень
 function S.buildShadow(color: Color3?): Part
 	local s = Instance.new("Part")
@@ -506,6 +716,12 @@ S.Builders = {
 	BellTanuki = S.buildBellTanuki,
 	InkSnake = S.buildInkSnake,
 	FoxFire = S.buildFoxFire,
+	Kappa = S.buildKappa,
+	LuckyCat = S.buildLuckyCat,
+	JellyLantern = S.buildJellyLantern,
+	TenguMask = S.buildTenguMask,
+	PaperDragon = S.buildPaperDragon,
+	Kyubi = S.buildKyubi,
 	GoldenCarp = S.buildGoldenCarp,
 }
 
@@ -523,6 +739,12 @@ S.Pose = {
 	BellTanuki = function(t) return CFrame.new(0, abs(sin(t * 3)) * 0.25, 0) * CFrame.Angles(0, 0, sin(t * 3) * 0.12) end,
 	InkSnake = function(t) return CFrame.new(sin(t * 2) * 0.3, 0, 0) end,
 	FoxFire = function(t) return CFrame.new(0, sin(t * 1.5) * 0.7, 0) * CFrame.Angles(0, t * 1.8, 0) end,
+	Kappa = function(t) return CFrame.new(0, abs(sin(t * 3.5)) * 0.4, 0) * CFrame.Angles(0, 0, sin(t * 3.5) * 0.1) end,
+	LuckyCat = function(t) return CFrame.new(0, abs(sin(t * 2.5)) * 0.3, 0) end,
+	JellyLantern = function(t) return CFrame.new(0, sin(t * 0.9) * 0.8, 0) * CFrame.Angles(0, t * 0.3, 0) end,
+	TenguMask = function(t) return CFrame.new(sin(t * 1.4) * 0.8, sin(t * 2.1) * 0.6, 0) * CFrame.Angles(0, 0, sin(t * 1.2) * 0.3) end,
+	PaperDragon = function(t) return CFrame.new(0, sin(t * 0.8) * 1.2, 0) * CFrame.Angles(sin(t * 0.6) * 0.1, 0, sin(t * 0.7) * 0.15) end,
+	Kyubi = function(t) return CFrame.new(0, abs(sin(t * 3)) * 0.4, 0) end,
 	Firefly = function(t) return CFrame.new(sin(t * 1.3) * 0.6, sin(t * 2) * 0.6, math.cos(t * 1.1) * 0.6) end,
 	LanternSpirit = function(t)
 		return CFrame.new(0, abs(sin(t * 4)) * 0.9, 0) * CFrame.Angles(0, sin(t * 2) * 0.8, sin(t * 4) * 0.28)

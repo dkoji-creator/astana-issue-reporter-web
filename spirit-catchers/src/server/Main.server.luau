@@ -38,6 +38,8 @@ local function remote(name, class)
 end
 local RevealEv = remote("Reveal")
 local CatchHoldEv = remote("CatchHold")
+local CatchZoneEv = remote("CatchZone") -- мини-игра: метка духа в зоне луча
+local updateBoard -- доска рекордов (ниже)
 local EquipFn = remote("Equip", "RemoteFunction")
 local UpgradeFn = remote("Upgrade", "RemoteFunction")
 local TutorialEv = remote("TutorialDone")
@@ -79,11 +81,12 @@ type Profile = {
 	coins: number, dust: number, levels: { [string]: number }, tutorialDone: boolean,
 	orders: { any }, settings: { music: number, sfx: number, reduced: boolean, diag: boolean },
 	xp: number, level: number, daily: { last: number, streak: number }, skins: { [string]: boolean }, skin: string,
-	milestones: { [string]: boolean }, loadFailed: boolean?,
+	milestones: { [string]: boolean }, variants: { [string]: { [string]: boolean } }, total: number, loadFailed: boolean?,
 }
 local data: { [Player]: Profile } = {}
 local jars: { [Player]: { string } } = {}
 local holds: { [Player]: number } = {}
+local inZone: { [Player]: boolean } = {}
 
 local function clampLvl(v)
 	return typeof(v) == "number" and math.clamp(math.floor(v), 1, Catalog.MaxLevel) or 1
@@ -100,6 +103,12 @@ local function distinct(d: Profile)
 	return n
 end
 local function gardenOpen(d: Profile) return distinct(d) >= Catalog.GardenNeed end
+local function stats(d: Profile) return { distinct = distinct(d), level = d.level } end
+local function opened(d: Profile)
+	local t = {}
+	for name in Catalog.Districts do t[name] = Catalog.unlocked(name, stats(d)) end
+	return t
+end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
 local function range(d: Profile) return Catalog.upgradeValue("range", d.levels.range) end
@@ -147,10 +156,11 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 5, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0,
+		version = 6, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0,
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
+		variants = {}, total = 0,
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -176,7 +186,7 @@ local function migrate(raw): Profile
 			d.levels.jar = clampLvl(raw.jarLvl)
 			d.tutorialDone = raw.tutorialDone == true
 			d.coins = 20 * distinct(d)
-		elseif raw.version == 4 or raw.version == 5 then
+		elseif raw.version == 4 or raw.version == 5 or raw.version == 6 then
 			d.coins = math.floor(num(raw.coins, 0, 1e9, 0))
 			d.dust = math.floor(num(raw.dust, 0, 1e9, 0))
 			if typeof(raw.levels) == "table" then
@@ -190,8 +200,19 @@ local function migrate(raw): Profile
 				d.settings.reduced = raw.settings.reduced == true
 				d.settings.diag = raw.settings.diag == true
 			end
-			if raw.version == 5 then
+			if raw.version == 5 or raw.version == 6 then
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
+				d.total = math.floor(num(raw.total, 0, 1e9, 0))
+				if typeof(raw.variants) == "table" then
+					for k, vs in raw.variants do
+						if Catalog.Kinds[k] and typeof(vs) == "table" then
+							d.variants[k] = {}
+							for v, on in vs do
+								if Catalog.Variants[v] and on == true then d.variants[k][v] = true end
+							end
+						end
+					end
+				end
 				d.level = math.floor(num(raw.level, 1, 999, 1))
 				if typeof(raw.daily) == "table" then
 					d.daily.last = math.floor(num(raw.daily.last, 0, 1e7, 0))
@@ -240,7 +261,8 @@ local function pushState(plr)
 	StateEv:FireClient(plr, {
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
-		gardenOpen = gardenOpen(d), distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
+		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
+		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
 		skins = d.skins, skin = d.skin, milestones = d.milestones,
 	})
@@ -293,6 +315,7 @@ spiritsFolder.Parent = workspace
 type Spirit = {
 	id: number, kind: string, district: string, anchor: Part, revealed: boolean, revealedAt: number,
 	born: number, pos: Vector3, dir: Vector3, goal: Vector3, progress: number, tut: boolean,
+	variant: string?, lastFlee: number?, fleeing: number?,
 }
 local live: { [number]: Spirit } = {}
 local nextId = 0
@@ -308,7 +331,7 @@ local function zonePoint(district, near: Vector3?, tut: boolean?, kind: string?)
 	if info and info.spots then
 		-- любимые места вида (мосты, пруд)
 		local spot = info.spots[math.random(#info.spots)]
-		if Catalog.district(spot.Z) == district then
+		if Catalog.district(spot) == district then
 			return spot + Vector3.new(rnd(-6, 6), 0, rnd(-3, 3))
 		end
 	end
@@ -352,6 +375,19 @@ local function newSpirit(kind, district, tut: boolean?)
 	a:SetAttribute("Revealed", s.revealed)
 	a:SetAttribute("Progress", 0)
 	a:SetAttribute("Holders", 0)
+	-- разновидность выпадает при появлении: все видят золотого или радужного духа
+	local variant = "normal"
+	for i = #Catalog.VariantOrder, 2, -1 do
+		local key = Catalog.VariantOrder[i]
+		local v = Catalog.Variants[key]
+		if (not v.moonOnly or moon.active) and math.random() < v.chance then
+			variant = key
+			break
+		end
+	end
+	if tut then variant = "normal" end
+	s.variant = variant
+	a:SetAttribute("Variant", variant)
 	a.Parent = spiritsFolder
 	live[s.id] = s
 	return s
@@ -418,6 +454,28 @@ RunService.Heartbeat:Connect(function(dt)
 			s.dir = Vector3.new(-math.sin(a) * sw.rx, 0, math.cos(a) * sw.rz).Unit
 		else
 			local speed = info.speed * (s.revealed and 0.55 or 1) * (g and 0.3 or 1)
+			if s.revealed and not g and now - (s.lastFlee or 0) > 0.5 then
+				s.lastFlee = now
+				-- проявленный дух убегает от ближайшего игрока
+				for _, p in Players:GetPlayers() do
+					local r = rootOf(p)
+					if r then
+						local away = Vector3.new(s.pos.X - r.Position.X, 0, s.pos.Z - r.Position.Z)
+						if away.Magnitude < 9 and away.Magnitude > 0.1 then
+							local zones = Catalog.Districts[s.district].zones
+							local z = zones[1]
+							for _, zz in zones do
+								if s.pos.Z >= zz.z[1] - 1 and s.pos.Z <= zz.z[2] + 1 then z = zz end
+							end
+							local target = s.pos + away.Unit * 12
+							s.goal = Vector3.new(math.clamp(target.X, z.x[1], z.x[2]), s.pos.Y, math.clamp(target.Z, z.z[1], z.z[2]))
+							s.fleeing = now
+							break
+						end
+					end
+				end
+			end
+			if s.fleeing and now - s.fleeing < 1.5 and not g then speed *= 2.2 end
 			local to = s.goal - s.pos
 			if to.Magnitude < 1 then
 				s.goal = lift(s.kind, zonePoint(s.district, s.pos, s.tut, s.kind))
@@ -429,9 +487,11 @@ RunService.Heartbeat:Connect(function(dt)
 		s.anchor.CFrame = CFrame.lookAt(s.pos, s.pos + s.dir)
 
 		if g then
-			local speed = 0
-			for _, p in g do speed += power(data[p]) end
-			s.progress += dt * speed / Catalog.Rarity[info.rarity].catchTime
+			local rate = 0
+			for _, p in g do
+				rate += inZone[p] and power(data[p]) * 1.25 or -0.45
+			end
+			s.progress = math.max(0, s.progress + dt * rate / Catalog.Rarity[info.rarity].catchTime)
 		elseif s.progress > 0 then
 			s.progress = math.max(0, s.progress - dt * 0.4)
 		end
@@ -444,8 +504,8 @@ RunService.Heartbeat:Connect(function(dt)
 
 		if g and s.progress >= 1 then
 			for _, plr in g do
-				table.insert(jars[plr], s.kind)
-				CaughtEv:FireClient(plr, s.kind, s.pos, #g)
+				table.insert(jars[plr], { k = s.kind, v = s.variant or "normal" })
+				CaughtEv:FireClient(plr, s.kind, s.pos, #g, s.variant or "normal")
 				local d = data[plr]
 				local xp = Catalog.Progress.XP[info.rarity] or 4
 				d.xp += xp
@@ -471,15 +531,20 @@ RevealEv.OnServerEvent:Connect(function(plr, id)
 	local root = rootOf(plr)
 	local d = data[plr]
 	if not (s and root and d) or s.revealed then return end
-	if s.district == "garden" and not gardenOpen(d) then return end
+	if not Catalog.unlocked(s.district, stats(d)) then return end
 	if (root.Position - s.pos).Magnitude > range(d) + 3 then return end
 	s.revealed = true
 	s.revealedAt = os.clock()
 	s.anchor:SetAttribute("Revealed", true)
 end)
 
+CatchZoneEv.OnServerEvent:Connect(function(plr, on)
+	inZone[plr] = on == true
+end)
+
 CatchHoldEv.OnServerEvent:Connect(function(plr, id)
 	stopHold(plr)
+	inZone[plr] = false
 	if typeof(id) ~= "number" then return end
 	local s = live[id]
 	local root = rootOf(plr)
@@ -658,6 +723,8 @@ local function startMoon()
 	if IS_TEST or math.random() < 0.35 then newSpirit("GoldenCarp", "canal") end
 	if IS_TEST or math.random() < 0.5 then newSpirit("MoonRabbit", "street") end
 	if IS_TEST or math.random() < 0.5 then newSpirit("FoxFire", "canal") end
+	if IS_TEST or math.random() < 0.3 then newSpirit("PaperDragon", "grove") end
+	if IS_TEST or math.random() < 0.1 then newSpirit("Kyubi", "market") end
 	newSpirit("Crane", "garden")
 	local a = Instance.new("Part")
 	a.Name = "Oni"
@@ -706,10 +773,17 @@ local function doSave(plr)
 	local jar = jars[plr]
 	if #jar == 0 then return { ok = false, msg = "Банка пуста — сначала поймай духа" } end
 	local wasOpen = gardenOpen(d)
-	local firsts, dust, coins = {}, 0, 0
-	for _, kind in jar do
+	local firsts, dust, coins, newVariants = {}, 0, 0, {}
+	for _, entry in jar do
+		local kind, variant = entry.k, entry.v
 		local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
-		coins += rar.coins
+		coins += math.floor(rar.coins * Catalog.Variants[variant].mult)
+		d.total += 1
+		d.variants[kind] = d.variants[kind] or {}
+		if not d.variants[kind][variant] then
+			d.variants[kind][variant] = true
+			if variant ~= "normal" then table.insert(newVariants, { k = kind, v = variant }) end
+		end
 		if (d.saved[kind] or 0) > 0 then
 			dust += rar.dust -- дубликат → пыль духов
 		end
@@ -743,7 +817,8 @@ local function doSave(plr)
 	jars[plr] = {}
 	local persisted = persist(plr)
 	pushState(plr)
-	return { ok = true, kinds = kinds, firsts = firsts, coins = coins, dust = dust, orders = done,
+	updateBoard(plr)
+	return { ok = true, kinds = kinds, firsts = firsts, coins = coins, dust = dust, orders = done, newVariants = newVariants,
 		gardenOpened = not wasOpen and gardenOpen(d), persisted = persisted }
 end
 savePrompt.Triggered:Connect(function(plr)
@@ -887,9 +962,13 @@ task.spawn(function()
 				if p.Y < -3.5 then
 					-- упал в канал: на ближайший берег
 					plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
-				elseif p.Z < -73 and not gardenOpen(d) then
-					plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -10, 10), 4, -64))
-					NoticeEv:FireClient(plr, ("Сад откроется, когда сохранишь 3 разных духа (%d/3)"):format(distinct(d)))
+				else
+					local dn = Catalog.district(p)
+					local dc = Catalog.Districts[dn]
+					if dc and dc.unlock and not Catalog.unlocked(dn, stats(d)) then
+						plr.Character:PivotTo(CFrame.new(dc.back))
+						NoticeEv:FireClient(plr, dc.name .. " закрыт. " .. Catalog.unlockText(dn, stats(d)))
+					end
 				end
 			end
 		end
@@ -897,8 +976,60 @@ task.spawn(function()
 	end
 end)
 
+------------------------------------------------------------------ доска рекордов (всего поймано)
+local board = nil
+pcall(function() board = DataStoreService:GetOrderedDataStore("SpiritCatchers_TotalCaught") end)
+local nameCache = {}
+function updateBoard(plr)
+	local d = data[plr]
+	if not (board and d) or d.loadFailed then return end
+	task.spawn(function()
+		pcall(function() board:SetAsync("u" .. plr.UserId, d.total) end)
+	end)
+end
+local function renderBoard()
+	if not board then return end
+	local ok, pages = pcall(function() return board:GetSortedAsync(false, 10) end)
+	if not ok then return end
+	local list = pages:GetCurrentPage()
+	local gui = map.boardGui
+	for _, c in gui:GetChildren() do c:Destroy() end
+	local frame = Instance.new("Frame")
+	frame.Size, frame.BackgroundColor3 = UDim2.fromScale(1, 1), Color3.fromRGB(30, 22, 40)
+	frame.Parent = gui
+	local title = Instance.new("TextLabel")
+	title.Size, title.BackgroundTransparency, title.TextScaled, title.Font = UDim2.new(1, 0, 0.16, 0), 1, true, Enum.Font.GothamBlack
+	title.Text, title.TextColor3 = "ЛУЧШИЕ ЛОВЦЫ", Color3.fromRGB(255, 205, 70)
+	title.Parent = frame
+	for i, e in list do
+		local uid = tonumber(string.sub(e.key, 2))
+		local name = uid and nameCache[uid]
+		if not name and uid then
+			local okN, n = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
+			name = okN and n or ("#" .. uid)
+			nameCache[uid] = name
+		end
+		local row = Instance.new("TextLabel")
+		row.Size, row.Position = UDim2.new(0.94, 0, 0.083, 0), UDim2.new(0.03, 0, 0.16 + (i - 1) * 0.083, 0)
+		row.BackgroundTransparency, row.TextScaled, row.Font = 1, true, Enum.Font.GothamBold
+		row.TextXAlignment = Enum.TextXAlignment.Left
+		row.TextColor3 = i == 1 and Color3.fromRGB(255, 220, 90) or Color3.new(1, 1, 1)
+		row.Text = ("%d. %s — %d"):format(i, name or "?", e.value)
+		row.Parent = frame
+	end
+end
+task.spawn(function()
+	while true do
+		renderBoard()
+		task.wait(60)
+	end
+end)
+
+game:GetService("StarterPlayer").CameraMaxZoomDistance = 40
+
 ------------------------------------------------------------------ игроки
 Players.PlayerAdded:Connect(function(plr)
+	plr.CameraMaxZoomDistance = 40
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
 	local v = Instance.new("IntValue")
@@ -940,7 +1071,8 @@ end)
 Players.PlayerRemoving:Connect(function(plr)
 	stopHold(plr)
 	persist(plr)
-	data[plr], jars[plr] = nil, nil
+	updateBoard(plr)
+	data[plr], jars[plr], inZone[plr] = nil, nil, nil
 end)
 
 task.spawn(function()

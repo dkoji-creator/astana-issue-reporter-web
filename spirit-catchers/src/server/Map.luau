@@ -48,7 +48,7 @@ local function sign(parent, text, color, face)
 end
 local function billboard(parent, text, color, offset)
 	local b = Instance.new("BillboardGui")
-	b.Size, b.StudsOffset, b.AlwaysOnTop, b.MaxDistance = UDim2.new(0, 190, 0, 34), offset or Vector3.new(0, 5, 0), true, 600
+	b.Size, b.StudsOffset, b.AlwaysOnTop, b.MaxDistance = UDim2.new(0, 170, 0, 30), offset or Vector3.new(0, 5, 0), false, 220
 	local t = Instance.new("TextLabel")
 	t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBold
 	t.Text, t.TextColor3, t.TextStrokeTransparency = text, color, 0.25
@@ -106,8 +106,16 @@ function Map.build()
 	end
 
 	---------------------------------------------------------------- границы
-	wall(Vector3.new(1, 80, 144), Vector3.new(35.5, 40, 64)) -- улица+площадь
-	wall(Vector3.new(1, 80, 144), Vector3.new(-35.5, 40, 64))
+	for _, sx in { -1, 1 } do
+		wall(Vector3.new(1, 80, 106), Vector3.new(sx * 35.5, 40, 83)) -- улица
+		-- бока площади с проёмом z 4..16 под ворота рощи и рынка
+		wall(Vector3.new(1, 80, 12), Vector3.new(sx * 35.5, 40, -2))
+		wall(Vector3.new(1, 80, 14), Vector3.new(sx * 35.5, 40, 23))
+		-- границы рощи (запад) и рынка (восток)
+		wall(Vector3.new(1, 80, 82), Vector3.new(sx * 152.5, 40, 32))
+		wall(Vector3.new(118, 80, 1), Vector3.new(sx * 94, 40, 72.5))
+		wall(Vector3.new(91, 80, 1), Vector3.new(sx * 107.5, 40, -8.5))
+	end
 	wall(Vector3.new(80, 80, 1), Vector3.new(0, 40, 136.5))
 	wall(Vector3.new(27, 80, 1), Vector3.new(49, 40, -8))
 	wall(Vector3.new(27, 80, 1), Vector3.new(-49, 40, -8))
@@ -260,6 +268,85 @@ function Map.build()
 	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.3), NumberSequenceKeypoint.new(1, 0) })
 	pe.Parent = glowArea
 
+	---------------------------------------------------------------- БАМБУКОВАЯ РОЩА (запад, бирюзово-зелёный свет)
+	local JADE = Color3.fromRGB(110, 240, 200)
+	block("GroveGround", Vector3.new(117, 1, 80), CFrame.new(-94, 0, 32), Color3.fromRGB(52, 88, 60), Enum.Material.Grass)
+	block("GrovePath", Vector3.new(104, 0.1, 7), CFrame.new(-88, 0.55, 10), Color3.fromRGB(110, 115, 100), Enum.Material.Slate, { CanCollide = false })
+	block("GrovePond", Vector3.new(18, 0.3, 14), CFrame.new(-95, 0.4, 42), Color3.fromRGB(40, 110, 140), Enum.Material.Glass, { Transparency = 0.2, CanCollide = false })
+	local rng = Random.new(11)
+	for _ = 1, 90 do
+		local x, z = rng:NextNumber(-148, -40), rng:NextNumber(-4, 68)
+		local nearPath = math.abs(z - 10) < 6
+		local nearPond = (Vector3.new(x, 0, z) - Vector3.new(-95, 0, 42)).Magnitude < 12
+		if not nearPath and not nearPond then
+			local h = rng:NextNumber(12, 22)
+			local stalk = block("Bamboo", Vector3.new(h, 0.9, 0.9), CFrame.new(x, h / 2, z) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(80 + rng:NextInteger(0, 30), 150, 80), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Cylinder })
+			stalk.CastShadow = false
+			deco("BambooLeaves", Vector3.new(3, 1.2, 3), CFrame.new(x, h, z), Color3.fromRGB(70, 140, 80), Enum.Material.Grass, { Shape = Enum.PartType.Ball })
+		end
+	end
+	for x = -48, -140, -16 do
+		stoneLantern(Vector3.new(x, 0.5, 4), JADE)
+	end
+	-- ориентир: лунные врата из камня
+	for i = 0, 17 do
+		local a = i / 18 * math.pi * 2
+		block("MoonGate", Vector3.new(2, 2.4, 3), CFrame.new(-146, 9 + math.sin(a) * 8, 10 + math.cos(a) * 8) * CFrame.Angles(-a, 0, 0), Color3.fromRGB(150, 150, 155), Enum.Material.Concrete)
+	end
+	local groveMark = deco("GroveMark", Vector3.new(1, 1, 1), CFrame.new(-146, 19, 10), JADE, Enum.Material.Neon, { Transparency = 1 })
+	billboard(groveMark, "Бамбуковая роща", JADE, Vector3.new(0, 2, 0))
+
+	---------------------------------------------------------------- НОЧНОЙ РЫНОК (восток, розово-фиолетовый свет)
+	local PINK = Color3.fromRGB(255, 120, 200)
+	block("MarketGround", Vector3.new(117, 1, 80), CFrame.new(94, 0, 32), Color3.fromRGB(70, 58, 72), Enum.Material.Cobblestone)
+	block("MarketPath", Vector3.new(104, 0.1, 9), CFrame.new(88, 0.55, 10), Color3.fromRGB(105, 90, 95), Enum.Material.Cobblestone, { CanCollide = false })
+	local awnings = { Color3.fromRGB(220, 60, 80), Color3.fromRGB(70, 110, 210), Color3.fromRGB(240, 170, 50), Color3.fromRGB(150, 70, 200) }
+	local n = 0
+	for x = 52, 140, 16 do
+		for _, z in { 30, 52 } do
+			n += 1
+			block("StallCounter", Vector3.new(8, 2.5, 3), CFrame.new(x, 1.75, z), Color3.fromRGB(110, 75, 50), Enum.Material.Wood)
+			for _, px in { -3.8, 3.8 } do
+				block("StallPost", Vector3.new(0.5, 7, 0.5), CFrame.new(x + px, 4, z - 1.6), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+			end
+			block("Awning", Vector3.new(9, 0.4, 5), CFrame.new(x, 7.4, z - 1) * CFrame.Angles(math.rad(12), 0, 0), awnings[n % 4 + 1], Enum.Material.Fabric)
+			local lamp = deco("StallLantern", Vector3.new(1.2, 1.5, 1.2), CFrame.new(x, 6, z - 3.4), n % 2 == 0 and PINK or Color3.fromRGB(255, 150, 70), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+			if n % 2 == 0 then light(lamp, PINK, 16, 0.8) end
+		end
+	end
+	for x = 44, 144, 8 do
+		local l = deco("MarketGarland", Vector3.new(1, 1.2, 1), CFrame.new(x, 10, 10 + math.sin(x) * 0.5), x % 16 == 4 and PINK or Color3.fromRGB(180, 120, 255), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+		if x % 24 == 4 then light(l, PINK, 18, 0.7) end
+	end
+	-- ориентир: башня с огромным розовым фонарём
+	block("MarketTower", Vector3.new(3, 24, 3), CFrame.new(146, 12, 10), Color3.fromRGB(90, 40, 60), Enum.Material.Wood)
+	local bigLamp = deco("MarketBigLantern", Vector3.new(8, 10, 8), CFrame.new(146, 28, 10), Color3.fromRGB(230, 90, 170), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	light(bigLamp, PINK, 40, 1.4)
+	billboard(bigLamp, "Ночной рынок", PINK, Vector3.new(0, 7, 0))
+
+	-- ворота в рощу и рынок (открываются по прогрессу игрока)
+	local gates = {}
+	for _, g in { { "GroveGate", -35.5, JADE, "Бамбуковая роща" }, { "MarketGate", 35.5, PINK, "Ночной рынок" } } do
+		local barrier = block(g[1], Vector3.new(1, 13, 12), CFrame.new(g[2], 6.5, 10), g[3], Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
+		sign(barrier, g[4], Color3.new(1, 1, 1), Enum.NormalId.Right)
+		sign(barrier, g[4], Color3.new(1, 1, 1), Enum.NormalId.Left)
+		for _, z in { 3.5, 16.5 } do
+			block("GatePost", Vector3.new(1.4, 14, 1.4), CFrame.new(g[2], 7, z), Color3.fromRGB(180, 50, 45), Enum.Material.Wood)
+		end
+		block("GateBeam", Vector3.new(1.8, 1.2, 16), CFrame.new(g[2], 14.4, 10), Color3.fromRGB(40, 30, 30), Enum.Material.Wood)
+		gates[g[1]] = barrier
+	end
+
+	---------------------------------------------------------------- доска рекордов на площади
+	local board = block("Leaderboard", Vector3.new(14, 9, 0.6), CFrame.new(-26, 6, 20) * CFrame.Angles(0, math.rad(-90), 0), Color3.fromRGB(40, 30, 45), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(-26, 3, 14), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(-26, 3, 26), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	local boardGui = Instance.new("SurfaceGui")
+	boardGui.Face = Enum.NormalId.Front
+	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	boardGui.PixelsPerStud = 30
+	boardGui.Parent = board
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = CFrame.new(0, 0.6, 24)
 	local spawn = Instance.new("SpawnLocation")
@@ -272,6 +359,8 @@ function Map.build()
 		{ Shape = Enum.PartType.Ball, Transparency = 1 })
 
 	return {
+		gates = gates,
+		boardGui = boardGui,
 		altar = altar,
 		altarPos = altarPos,
 		spawnCF = spawnCF,
