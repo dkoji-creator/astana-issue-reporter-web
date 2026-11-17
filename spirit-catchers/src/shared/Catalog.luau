@@ -4,6 +4,7 @@ local Worlds = require(Config:WaitForChild("Worlds"))
 local SpiritCfg = require(Config:WaitForChild("Spirits"))
 local Economy = require(Config:WaitForChild("Economy"))
 local Progress = require(Config:WaitForChild("Progress"))
+local Monetization = require(Config:WaitForChild("Monetization"))
 
 local C = {}
 C.Worlds = Worlds
@@ -21,6 +22,7 @@ C.MaxLevel = Economy.MaxLevel
 C.GardenNeed = Economy.GardenNeed
 C.OrderSlots = Economy.OrderSlots
 C.Progress = Progress
+C.Money = Monetization
 C.Districts = Worlds.Districts
 C.district = Worlds.districtAt
 

@@ -49,6 +49,8 @@ local CaughtEv = remote("Caught")
 local HitEv = remote("Hit")
 local NoticeEv = remote("Notice")
 local SettingsEv = remote("SetSettings")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Money = Catalog.Money
 local DailyFn = remote("ClaimDaily", "RemoteFunction")
 local SkinFn = remote("Skin", "RemoteFunction")
 local MilestoneFn = remote("ClaimMilestone", "RemoteFunction")
@@ -109,7 +111,8 @@ local function opened(d: Profile)
 	for name in Catalog.Districts do t[name] = Catalog.unlocked(name, stats(d)) end
 	return t
 end
-local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) end
+local function hasPass(d, key) return d.passes ~= nil and d.passes[key] == true end
+local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
 local function range(d: Profile) return Catalog.upgradeValue("range", d.levels.range) end
 
@@ -203,6 +206,12 @@ local function migrate(raw): Profile
 			if raw.version == 5 or raw.version == 6 then
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
+				if typeof(raw.receipts) == "table" then
+					d.receipts = {}
+					for _, r in raw.receipts do
+						if typeof(r) == "string" and #d.receipts < 50 then table.insert(d.receipts, r) end
+					end
+				end
 				if typeof(raw.variants) == "table" then
 					for k, vs in raw.variants do
 						if Catalog.Kinds[k] and typeof(vs) == "table" then
@@ -243,6 +252,7 @@ local function persist(plr)
 	if not (store and d) or d.loadFailed then return false end
 	local copy = table.clone(d)
 	copy.loadFailed = nil
+	copy.passes = nil
 	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
 	if not ok then warn("DataStore save failed:", err) end
 	return ok
@@ -258,13 +268,14 @@ local function pushState(plr)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
 	plr:SetAttribute("Companion", d.equipped or "")
+	plr:SetAttribute("Skin", d.skin)
 	StateEv:FireClient(plr, {
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
-		skins = d.skins, skin = d.skin, milestones = d.milestones,
+		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = d.passes or {},
 	})
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls then
@@ -504,8 +515,12 @@ RunService.Heartbeat:Connect(function(dt)
 
 		if g and s.progress >= 1 then
 			for _, plr in g do
-				table.insert(jars[plr], { k = s.kind, v = s.variant or "normal" })
-				CaughtEv:FireClient(plr, s.kind, s.pos, #g, s.variant or "normal")
+				local variant = s.variant or "normal"
+				if variant == "normal" and hasPass(data[plr], "lucky") and math.random() < Money.LuckyChance then
+					variant = "shiny" -- «Удача ловца»
+				end
+				table.insert(jars[plr], { k = s.kind, v = variant })
+				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant)
 				local d = data[plr]
 				local xp = Catalog.Progress.XP[info.rarity] or 4
 				d.xp += xp
@@ -717,6 +732,7 @@ local function setPhase(active, secs)
 	workspace:SetAttribute("PhaseEnds", workspace:GetServerTimeNow() + secs)
 end
 
+local phaseEnd = os.clock() + FIRST_MOON
 local function startMoon()
 	setPhase(true, MOON_TIME)
 	tweenLight(true)
@@ -747,16 +763,32 @@ local function endMoon()
 	end
 end
 
+setPhase(false, FIRST_MOON)
 task.spawn(function()
-	setPhase(false, FIRST_MOON)
-	task.wait(FIRST_MOON)
 	while true do
-		startMoon()
-		task.wait(MOON_TIME)
-		endMoon()
-		task.wait(NORMAL_TIME)
+		task.wait(0.5)
+		if os.clock() >= phaseEnd then
+			if moon.active then
+				endMoon()
+				phaseEnd = os.clock() + NORMAL_TIME
+			else
+				startMoon()
+				phaseEnd = os.clock() + MOON_TIME
+			end
+		end
 	end
 end)
+
+-- донат «Призвать Красную луну»: начать сейчас или продлить на 30 с
+local function summonMoon()
+	if moon.active then
+		phaseEnd += 30
+		workspace:SetAttribute("PhaseEnds", (workspace:GetAttribute("PhaseEnds") or workspace:GetServerTimeNow()) + 30)
+	else
+		startMoon()
+		phaseEnd = os.clock() + MOON_TIME
+	end
+end
 
 ------------------------------------------------------------------ алтарь
 local savePrompt = Instance.new("ProximityPrompt")
@@ -811,6 +843,8 @@ local function doSave(plr)
 		end
 	end
 	fillOrders(d)
+	if hasPass(d, "coins2x") then coins *= 2 end
+	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	d.coins += coins
 	d.dust += dust
 	local kinds = table.clone(jar)
@@ -976,6 +1010,105 @@ task.spawn(function()
 	end
 end)
 
+------------------------------------------------------------------ донат
+local function applyPassEffects(plr)
+	local d = data[plr]
+	if not d then return end
+	for key in Money.Passes do plr:SetAttribute("Pass_" .. key, hasPass(d, key)) end
+	if hasPass(d, "vip") then d.skins.vip = true end
+	local head = plr.Character and plr.Character:FindFirstChild("Head")
+	if head and hasPass(d, "vip") and not head:FindFirstChild("VipTag") then
+		local b = Instance.new("BillboardGui")
+		b.Name, b.Size, b.StudsOffset, b.MaxDistance = "VipTag", UDim2.fromOffset(90, 30), Vector3.new(0, 2.6, 0), 80
+		local t = Instance.new("TextLabel")
+		t.Size, t.BackgroundColor3, t.Text, t.TextScaled, t.Font = UDim2.fromScale(1, 1), Color3.fromRGB(255, 190, 40), "VIP", true, Enum.Font.GothamBlack
+		t.TextColor3 = Color3.fromRGB(60, 30, 0)
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(1, 0)
+		c.Parent = t
+		t.Parent = b
+		b.Parent = head
+	end
+	pushState(plr)
+end
+
+local function checkPasses(plr)
+	local d = data[plr]
+	if not d then return end
+	d.passes = d.passes or {}
+	for key, p in Money.Passes do
+		if p.id ~= 0 then
+			local ok, owns = pcall(function() return MarketplaceService:UserOwnsGamePassAsync(plr.UserId, p.id) end)
+			if ok and owns then d.passes[key] = true end
+		end
+	end
+	applyPassEffects(plr)
+end
+
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(plr, passId, bought)
+	if not bought then return end
+	local d = data[plr]
+	if not d then return end
+	for key, p in Money.Passes do
+		if p.id == passId then
+			d.passes = d.passes or {}
+			d.passes[key] = true
+			applyPassEffects(plr)
+			NoticeEv:FireClient(plr, "Спасибо! Куплено: " .. p.name)
+		end
+	end
+end)
+
+local function fireworks(byName)
+	local center = map.altarPos + Vector3.new(0, 30, 0)
+	local colors = { Color3.fromRGB(255, 80, 120), Color3.fromRGB(255, 210, 60), Color3.fromRGB(90, 200, 255), Color3.fromRGB(150, 255, 120), Color3.fromRGB(200, 120, 255) }
+	for _, plr in Players:GetPlayers() do NoticeEv:FireClient(plr, byName .. " запускает фейерверк над площадью!") end
+	for i = 1, 14 do
+		task.delay(i * 0.45, function()
+			local p = Instance.new("Part")
+			p.Anchored, p.CanCollide, p.CanQuery, p.Transparency, p.Size = true, false, false, 1, Vector3.one
+			p.Position = center + Vector3.new(math.random(-30, 30), math.random(-6, 12), math.random(-30, 30))
+			p.Parent = workspace
+			local pe = Instance.new("ParticleEmitter")
+			local col = colors[math.random(#colors)]
+			pe.Color = ColorSequence.new(col, Color3.new(1, 1, 1))
+			pe.LightEmission, pe.Rate, pe.Lifetime = 1, 0, NumberRange.new(1.2, 2)
+			pe.Speed, pe.SpreadAngle = NumberRange.new(18, 28), Vector2.new(180, 180)
+			pe.Drag, pe.Acceleration = 2, Vector3.new(0, -10, 0)
+			pe.Size = NumberSequence.new(0.8, 0)
+			pe.Parent = p
+			local l = Instance.new("PointLight")
+			l.Color, l.Range, l.Brightness = col, 40, 3
+			l.Parent = p
+			pe:Emit(120)
+			task.delay(0.4, function() l.Enabled = false end)
+			task.delay(2.5, function() p:Destroy() end)
+		end)
+	end
+end
+
+MarketplaceService.ProcessReceipt = function(info)
+	local plr = Players:GetPlayerByUserId(info.PlayerId)
+	local d = plr and data[plr]
+	if not d then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	d.receipts = d.receipts or {}
+	if table.find(d.receipts, info.PurchaseId) then return Enum.ProductPurchaseDecision.PurchaseGranted end
+	local granted = false
+	if info.ProductId == Money.Products.summonMoon.id and Money.Products.summonMoon.id ~= 0 then
+		summonMoon()
+		for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, plr.Name .. " призвал Красную луну!") end
+		granted = true
+	elseif info.ProductId == Money.Products.fireworks.id and Money.Products.fireworks.id ~= 0 then
+		fireworks(plr.Name)
+		granted = true
+	end
+	if not granted then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	table.insert(d.receipts, info.PurchaseId)
+	while #d.receipts > 50 do table.remove(d.receipts, 1) end
+	persist(plr)
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
 ------------------------------------------------------------------ доска рекордов (всего поймано)
 local board = nil
 pcall(function() board = DataStoreService:GetOrderedDataStore("SpiritCatchers_TotalCaught") end)
@@ -1061,9 +1194,10 @@ Players.PlayerAdded:Connect(function(plr)
 	plr.CharacterAdded:Connect(function(char)
 		giveLantern(plr, char)
 		task.wait(0.3)
-		pushState(plr)
+		applyPassEffects(plr)
 	end)
 	if plr.Character then giveLantern(plr, plr.Character) end
+	task.spawn(checkPasses, plr)
 	pushState(plr)
 	if failed then NoticeEv:FireClient(plr, "Не удалось загрузить сохранение — прогресс этой сессии не запишется") end
 end)

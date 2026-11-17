@@ -32,7 +32,7 @@ P.Milestones = {
 }
 
 -- облики фонаря: цвет фонаря, цвет луча; price = монеты; source = где получить
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden", "vip" }
 P.Skins = {
 	classic = { name = "Классический", lamp = Color3.fromRGB(255, 225, 160), beam = Color3.fromRGB(255, 240, 200), price = 0 },
 	sakura = { name = "Сакура", lamp = Color3.fromRGB(255, 150, 200), beam = Color3.fromRGB(255, 200, 230), source = "Подарок 6-го дня" },
@@ -40,6 +40,7 @@ P.Skins = {
 	jade = { name = "Нефритовый", lamp = Color3.fromRGB(110, 240, 170), beam = Color3.fromRGB(170, 255, 210), source = "6 видов в Атласе" },
 	ember = { name = "Угольный", lamp = Color3.fromRGB(255, 110, 60), beam = Color3.fromRGB(255, 170, 120), price = 1200, dust = 20 },
 	golden = { name = "Золотой", lamp = Color3.fromRGB(255, 200, 60), beam = Color3.fromRGB(255, 225, 130), source = "12 видов в Атласе" },
+	vip = { name = "Радужный VIP", lamp = Color3.fromRGB(255, 120, 220), beam = Color3.fromRGB(200, 220, 255), source = "VIP-ловец", rainbow = true },
 }
 
 return P

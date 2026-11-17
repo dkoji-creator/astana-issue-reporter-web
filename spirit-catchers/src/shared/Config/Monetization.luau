@@ -1,0 +1,46 @@
+-- Донат: геймпассы (навсегда) и товары (можно покупать много раз). Цены до 199 Robux (~2$).
+-- id = 0, пока товар не создан в Roblox: кнопка показывает «Скоро».
+local M = {}
+
+M.PassOrder = { "vip", "coins2x", "bigjar", "lucky", "wideBeam" }
+M.Passes = {
+	vip = {
+		id = 0, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
+		name = "VIP-ловец", desc = "Золотая табличка VIP над головой, радужный фонарь и +25% монет",
+	},
+	coins2x = {
+		id = 0, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),
+		name = "x2 Монеты", desc = "Все монеты за сданных духов удваиваются",
+	},
+	bigjar = {
+		id = 0, price = 129, icon = "jar", color = Color3.fromRGB(90, 170, 255),
+		name = "Огромная банка", desc = "+5 мест в банке навсегда",
+	},
+	lucky = {
+		id = 0, price = 99, icon = "dust", color = Color3.fromRGB(170, 110, 255),
+		name = "Удача ловца", desc = "15% шанс, что пойманный обычный дух станет Сияющим",
+	},
+	wideBeam = {
+		id = 0, price = 79, icon = "target", color = Color3.fromRGB(80, 210, 140),
+		name = "Широкий луч", desc = "Зелёная зона в мини-игре ловли на 40% больше",
+	},
+}
+
+M.ProductOrder = { "summonMoon", "fireworks" }
+M.Products = {
+	summonMoon = {
+		id = 0, price = 49, icon = "moon", color = Color3.fromRGB(230, 60, 70),
+		name = "Призвать Красную луну", desc = "Красная луна начнётся сразу для всего сервера (если уже идёт, продлится на 30 с)",
+	},
+	fireworks = {
+		id = 0, price = 15, icon = "gift", color = Color3.fromRGB(255, 120, 190),
+		name = "Фейерверк", desc = "Салют над площадью для всех игроков с вашим именем",
+	},
+}
+
+M.VipCoinBonus = 1.25
+M.LuckyChance = 0.15
+M.BigJarBonus = 5
+M.WideBeamBonus = 1.4
+
+return M

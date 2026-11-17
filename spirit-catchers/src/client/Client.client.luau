@@ -444,20 +444,66 @@ local shopTabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTran
 K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, shopTabs)
 local tabUp = K.button(shopTabs, "Улучшения", T.red, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
 local tabSkins = K.button(shopTabs, "Фонари", T.panel2, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
+local tabDonate = K.button(shopTabs, "Донат", T.gold, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
 local upList = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42) })
 K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, upList)
 local skinGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
 K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 150), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
-tabUp.Activated:Connect(function()
-	upList.Visible, skinGrid.Visible = true, false
-	K.recolor(tabUp, T.red)
-	K.recolor(tabSkins, T.panel2)
-end)
-tabSkins.Activated:Connect(function()
-	upList.Visible, skinGrid.Visible = false, true
-	K.recolor(tabUp, T.panel2)
-	K.recolor(tabSkins, T.red)
-end)
+local donateGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
+K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 196), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
+local shopPages = { { tabUp, upList, T.red }, { tabSkins, skinGrid, T.red }, { tabDonate, donateGrid, T.gold } }
+local function showShopPage(pair)
+	for _, other in shopPages do
+		other[2].Visible = other == pair
+		K.recolor(other[1], other == pair and other[3] or T.panel2)
+	end
+end
+for _, pair in shopPages do
+	pair[1].Activated:Connect(function() showShopPage(pair) end)
+end
+showShopPage(shopPages[1])
+-- донат-карточки: геймпассы и товары
+local MarketplaceService = game:GetService("MarketplaceService")
+local Money = Catalog.Money
+local donateCards = {}
+local function donateCard(order, key, item, isPass)
+	local f = K.panel(donateGrid, { LayoutOrder = order, BackgroundColor3 = T.panel2 })
+	f:FindFirstChildOfClass("UIStroke").Color = item.color
+	local bg = K.make("Frame", { Size = UDim2.new(1, -8, 0, 70), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+	K.corner(bg, UDim.new(0, 10))
+	K.gradient(bg, K.lighten(item.color, 0.15), K.darken(item.color, 0.45))
+	K.icon(bg, item.icon, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(62, 62) })
+	K.text(f, item.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 78), MaxText = 16 })
+	K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 100), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
+	b.Activated:Connect(function()
+		if item.id == 0 then
+			showToast("Скоро в продаже")
+		elseif isPass then
+			if not (state.passes and state.passes[key]) then MarketplaceService:PromptGamePassPurchase(plr, item.id) end
+		else
+			MarketplaceService:PromptProductPurchase(plr, item.id)
+		end
+	end)
+	donateCards[key] = { b = b, l = bl, item = item, isPass = isPass }
+end
+for i, key in Money.PassOrder do donateCard(i, key, Money.Passes[key], true) end
+for i, key in Money.ProductOrder do donateCard(10 + i, key, Money.Products[key], false) end
+local function refreshDonate()
+	for key, c in donateCards do
+		local owned = c.isPass and state.passes and state.passes[key]
+		if c.item.id == 0 then
+			c.l.Text = "Скоро"
+			K.recolor(c.b, Color3.fromRGB(90, 90, 105))
+		elseif owned then
+			c.l.Text = "Куплено"
+			K.recolor(c.b, Color3.fromRGB(80, 80, 95))
+		else
+			c.l.Text = ("R$ %d"):format(c.item.price)
+			K.recolor(c.b, T.green)
+		end
+	end
+end
 local UP_ICON = { jar = "jar", range = "target", power = "upgrade" }
 local upRows = {}
 for i, key in Catalog.UpgradeOrder do
@@ -657,6 +703,7 @@ btnShop.Activated:Connect(function()
 	toggleWindow(shopW, function()
 		refreshUpgrades()
 		refreshSkins()
+		refreshDonate()
 	end)
 end)
 btnGift.Activated:Connect(function() toggleWindow(giftW, refreshGift) end)
@@ -710,6 +757,7 @@ local function refreshHUD()
 	if shopW.Visible then
 		refreshUpgrades()
 		refreshSkins()
+		refreshDonate()
 	end
 	if giftW.Visible then refreshGift() end
 end
@@ -1278,6 +1326,19 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	updateFollowers(now)
 	updateOni(dt)
+	if math.floor(now * 10) % 2 == 0 then
+		for _, p in Players:GetPlayers() do
+			if p:GetAttribute("Skin") == "vip" then
+				local lamp = p.Character and p.Character:FindFirstChild("Lantern")
+				if lamp then
+					local c = Color3.fromHSV((now * 0.3) % 1, 0.6, 1)
+					lamp.Color = c
+					local beam = lamp:FindFirstChild("Beam")
+					if beam then beam.Color = c end
+				end
+			end
+		end
+	end
 	if not r then return end
 
 	-- район
@@ -1389,7 +1450,7 @@ RunService.RenderStepped:Connect(function(dt)
 		else
 			local v = visuals[target]
 			local sg = Catalog.Struggle[v and v.info.rarity or "common"]
-			local size = 0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)
+			local size = (0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)) * (plr:GetAttribute("Pass_wideBeam") and Catalog.Money.WideBeamBonus or 1)
 			-- зона: поднимается, пока кнопка зажата, и падает, когда отпущена
 			mg.vel = math.clamp(mg.vel + (mg.pressing and 3.4 or -2.8) * dt, -1.3, 1.3)
 			mg.zone += mg.vel * dt

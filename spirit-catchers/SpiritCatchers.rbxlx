@@ -33,6 +33,7 @@ local Worlds = require(Config:WaitForChild("Worlds"))
 local SpiritCfg = require(Config:WaitForChild("Spirits"))
 local Economy = require(Config:WaitForChild("Economy"))
 local Progress = require(Config:WaitForChild("Progress"))
+local Monetization = require(Config:WaitForChild("Monetization"))
 
 local C = {}
 C.Worlds = Worlds
@@ -50,6 +51,7 @@ C.MaxLevel = Economy.MaxLevel
 C.GardenNeed = Economy.GardenNeed
 C.OrderSlots = Economy.OrderSlots
 C.Progress = Progress
+C.Money = Monetization
 C.Districts = Worlds.Districts
 C.district = Worlds.districtAt
 
@@ -223,6 +225,58 @@ return {
         </Item>
         <Item class="ModuleScript" referent="8">
           <Properties>
+            <string name="Name">Monetization</string>
+            <string name="Source"><![CDATA[-- Донат: геймпассы (навсегда) и товары (можно покупать много раз). Цены до 199 Robux (~2$).
+-- id = 0, пока товар не создан в Roblox: кнопка показывает «Скоро».
+local M = {}
+
+M.PassOrder = { "vip", "coins2x", "bigjar", "lucky", "wideBeam" }
+M.Passes = {
+	vip = {
+		id = 0, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
+		name = "VIP-ловец", desc = "Золотая табличка VIP над головой, радужный фонарь и +25% монет",
+	},
+	coins2x = {
+		id = 0, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),
+		name = "x2 Монеты", desc = "Все монеты за сданных духов удваиваются",
+	},
+	bigjar = {
+		id = 0, price = 129, icon = "jar", color = Color3.fromRGB(90, 170, 255),
+		name = "Огромная банка", desc = "+5 мест в банке навсегда",
+	},
+	lucky = {
+		id = 0, price = 99, icon = "dust", color = Color3.fromRGB(170, 110, 255),
+		name = "Удача ловца", desc = "15% шанс, что пойманный обычный дух станет Сияющим",
+	},
+	wideBeam = {
+		id = 0, price = 79, icon = "target", color = Color3.fromRGB(80, 210, 140),
+		name = "Широкий луч", desc = "Зелёная зона в мини-игре ловли на 40% больше",
+	},
+}
+
+M.ProductOrder = { "summonMoon", "fireworks" }
+M.Products = {
+	summonMoon = {
+		id = 0, price = 49, icon = "moon", color = Color3.fromRGB(230, 60, 70),
+		name = "Призвать Красную луну", desc = "Красная луна начнётся сразу для всего сервера (если уже идёт, продлится на 30 с)",
+	},
+	fireworks = {
+		id = 0, price = 15, icon = "gift", color = Color3.fromRGB(255, 120, 190),
+		name = "Фейерверк", desc = "Салют над площадью для всех игроков с вашим именем",
+	},
+}
+
+M.VipCoinBonus = 1.25
+M.LuckyChance = 0.15
+M.BigJarBonus = 5
+M.WideBeamBonus = 1.4
+
+return M
+]]></string>
+          </Properties>
+        </Item>
+        <Item class="ModuleScript" referent="9">
+          <Properties>
             <string name="Name">Progress</string>
             <string name="Source"><![CDATA[-- Уровни, ежедневные награды, награды за коллекцию и облики фонаря.
 local P = {}
@@ -258,7 +312,7 @@ P.Milestones = {
 }
 
 -- облики фонаря: цвет фонаря, цвет луча; price = монеты; source = где получить
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "ember", "golden", "vip" }
 P.Skins = {
 	classic = { name = "Классический", lamp = Color3.fromRGB(255, 225, 160), beam = Color3.fromRGB(255, 240, 200), price = 0 },
 	sakura = { name = "Сакура", lamp = Color3.fromRGB(255, 150, 200), beam = Color3.fromRGB(255, 200, 230), source = "Подарок 6-го дня" },
@@ -266,13 +320,14 @@ P.Skins = {
 	jade = { name = "Нефритовый", lamp = Color3.fromRGB(110, 240, 170), beam = Color3.fromRGB(170, 255, 210), source = "6 видов в Атласе" },
 	ember = { name = "Угольный", lamp = Color3.fromRGB(255, 110, 60), beam = Color3.fromRGB(255, 170, 120), price = 1200, dust = 20 },
 	golden = { name = "Золотой", lamp = Color3.fromRGB(255, 200, 60), beam = Color3.fromRGB(255, 225, 130), source = "12 видов в Атласе" },
+	vip = { name = "Радужный VIP", lamp = Color3.fromRGB(255, 120, 220), beam = Color3.fromRGB(200, 220, 255), source = "VIP-ловец", rainbow = true },
 }
 
 return P
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="9">
+        <Item class="ModuleScript" referent="10">
           <Properties>
             <string name="Name">Spirits</string>
             <string name="Source"><![CDATA[-- Виды духов. Чтобы добавить вид: запись здесь + модель в shared/Spirits.luau (Builders и Pose).
@@ -470,7 +525,7 @@ return S
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="10">
+        <Item class="ModuleScript" referent="11">
           <Properties>
             <string name="Name">Worlds</string>
             <string name="Source"><![CDATA[-- Миры и районы. Новый мир добавляется сюда, его духи — в Config/Spirits.
@@ -569,7 +624,7 @@ return W
           </Properties>
         </Item>
       </Item>
-      <Item class="ModuleScript" referent="11">
+      <Item class="ModuleScript" referent="12">
         <Properties>
           <string name="Name">Spirits</string>
           <string name="Source"><![CDATA[-- Модели духов и они из примитивов (оригинальный дизайн) + процедурная анимация.
@@ -1335,15 +1390,15 @@ return S
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="12">
+  <Item class="ServerScriptService" referent="13">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="13">
+    <Item class="Folder" referent="14">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="14">
+      <Item class="Script" referent="15">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
@@ -1398,6 +1453,8 @@ local CaughtEv = remote("Caught")
 local HitEv = remote("Hit")
 local NoticeEv = remote("Notice")
 local SettingsEv = remote("SetSettings")
+local MarketplaceService = game:GetService("MarketplaceService")
+local Money = Catalog.Money
 local DailyFn = remote("ClaimDaily", "RemoteFunction")
 local SkinFn = remote("Skin", "RemoteFunction")
 local MilestoneFn = remote("ClaimMilestone", "RemoteFunction")
@@ -1458,7 +1515,8 @@ local function opened(d: Profile)
 	for name in Catalog.Districts do t[name] = Catalog.unlocked(name, stats(d)) end
 	return t
 end
-local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) end
+local function hasPass(d, key) return d.passes ~= nil and d.passes[key] == true end
+local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
 local function range(d: Profile) return Catalog.upgradeValue("range", d.levels.range) end
 
@@ -1552,6 +1610,12 @@ local function migrate(raw): Profile
 			if raw.version == 5 or raw.version == 6 then
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
+				if typeof(raw.receipts) == "table" then
+					d.receipts = {}
+					for _, r in raw.receipts do
+						if typeof(r) == "string" and #d.receipts < 50 then table.insert(d.receipts, r) end
+					end
+				end
 				if typeof(raw.variants) == "table" then
 					for k, vs in raw.variants do
 						if Catalog.Kinds[k] and typeof(vs) == "table" then
@@ -1592,6 +1656,7 @@ local function persist(plr)
 	if not (store and d) or d.loadFailed then return false end
 	local copy = table.clone(d)
 	copy.loadFailed = nil
+	copy.passes = nil
 	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
 	if not ok then warn("DataStore save failed:", err) end
 	return ok
@@ -1607,13 +1672,14 @@ local function pushState(plr)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
 	plr:SetAttribute("Companion", d.equipped or "")
+	plr:SetAttribute("Skin", d.skin)
 	StateEv:FireClient(plr, {
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
-		skins = d.skins, skin = d.skin, milestones = d.milestones,
+		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = d.passes or {},
 	})
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls then
@@ -1853,8 +1919,12 @@ RunService.Heartbeat:Connect(function(dt)
 
 		if g and s.progress >= 1 then
 			for _, plr in g do
-				table.insert(jars[plr], { k = s.kind, v = s.variant or "normal" })
-				CaughtEv:FireClient(plr, s.kind, s.pos, #g, s.variant or "normal")
+				local variant = s.variant or "normal"
+				if variant == "normal" and hasPass(data[plr], "lucky") and math.random() < Money.LuckyChance then
+					variant = "shiny" -- «Удача ловца»
+				end
+				table.insert(jars[plr], { k = s.kind, v = variant })
+				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant)
 				local d = data[plr]
 				local xp = Catalog.Progress.XP[info.rarity] or 4
 				d.xp += xp
@@ -2066,6 +2136,7 @@ local function setPhase(active, secs)
 	workspace:SetAttribute("PhaseEnds", workspace:GetServerTimeNow() + secs)
 end
 
+local phaseEnd = os.clock() + FIRST_MOON
 local function startMoon()
 	setPhase(true, MOON_TIME)
 	tweenLight(true)
@@ -2096,16 +2167,32 @@ local function endMoon()
 	end
 end
 
+setPhase(false, FIRST_MOON)
 task.spawn(function()
-	setPhase(false, FIRST_MOON)
-	task.wait(FIRST_MOON)
 	while true do
-		startMoon()
-		task.wait(MOON_TIME)
-		endMoon()
-		task.wait(NORMAL_TIME)
+		task.wait(0.5)
+		if os.clock() >= phaseEnd then
+			if moon.active then
+				endMoon()
+				phaseEnd = os.clock() + NORMAL_TIME
+			else
+				startMoon()
+				phaseEnd = os.clock() + MOON_TIME
+			end
+		end
 	end
 end)
+
+-- донат «Призвать Красную луну»: начать сейчас или продлить на 30 с
+local function summonMoon()
+	if moon.active then
+		phaseEnd += 30
+		workspace:SetAttribute("PhaseEnds", (workspace:GetAttribute("PhaseEnds") or workspace:GetServerTimeNow()) + 30)
+	else
+		startMoon()
+		phaseEnd = os.clock() + MOON_TIME
+	end
+end
 
 ------------------------------------------------------------------ алтарь
 local savePrompt = Instance.new("ProximityPrompt")
@@ -2160,6 +2247,8 @@ local function doSave(plr)
 		end
 	end
 	fillOrders(d)
+	if hasPass(d, "coins2x") then coins *= 2 end
+	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	d.coins += coins
 	d.dust += dust
 	local kinds = table.clone(jar)
@@ -2325,6 +2414,105 @@ task.spawn(function()
 	end
 end)
 
+------------------------------------------------------------------ донат
+local function applyPassEffects(plr)
+	local d = data[plr]
+	if not d then return end
+	for key in Money.Passes do plr:SetAttribute("Pass_" .. key, hasPass(d, key)) end
+	if hasPass(d, "vip") then d.skins.vip = true end
+	local head = plr.Character and plr.Character:FindFirstChild("Head")
+	if head and hasPass(d, "vip") and not head:FindFirstChild("VipTag") then
+		local b = Instance.new("BillboardGui")
+		b.Name, b.Size, b.StudsOffset, b.MaxDistance = "VipTag", UDim2.fromOffset(90, 30), Vector3.new(0, 2.6, 0), 80
+		local t = Instance.new("TextLabel")
+		t.Size, t.BackgroundColor3, t.Text, t.TextScaled, t.Font = UDim2.fromScale(1, 1), Color3.fromRGB(255, 190, 40), "VIP", true, Enum.Font.GothamBlack
+		t.TextColor3 = Color3.fromRGB(60, 30, 0)
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(1, 0)
+		c.Parent = t
+		t.Parent = b
+		b.Parent = head
+	end
+	pushState(plr)
+end
+
+local function checkPasses(plr)
+	local d = data[plr]
+	if not d then return end
+	d.passes = d.passes or {}
+	for key, p in Money.Passes do
+		if p.id ~= 0 then
+			local ok, owns = pcall(function() return MarketplaceService:UserOwnsGamePassAsync(plr.UserId, p.id) end)
+			if ok and owns then d.passes[key] = true end
+		end
+	end
+	applyPassEffects(plr)
+end
+
+MarketplaceService.PromptGamePassPurchaseFinished:Connect(function(plr, passId, bought)
+	if not bought then return end
+	local d = data[plr]
+	if not d then return end
+	for key, p in Money.Passes do
+		if p.id == passId then
+			d.passes = d.passes or {}
+			d.passes[key] = true
+			applyPassEffects(plr)
+			NoticeEv:FireClient(plr, "Спасибо! Куплено: " .. p.name)
+		end
+	end
+end)
+
+local function fireworks(byName)
+	local center = map.altarPos + Vector3.new(0, 30, 0)
+	local colors = { Color3.fromRGB(255, 80, 120), Color3.fromRGB(255, 210, 60), Color3.fromRGB(90, 200, 255), Color3.fromRGB(150, 255, 120), Color3.fromRGB(200, 120, 255) }
+	for _, plr in Players:GetPlayers() do NoticeEv:FireClient(plr, byName .. " запускает фейерверк над площадью!") end
+	for i = 1, 14 do
+		task.delay(i * 0.45, function()
+			local p = Instance.new("Part")
+			p.Anchored, p.CanCollide, p.CanQuery, p.Transparency, p.Size = true, false, false, 1, Vector3.one
+			p.Position = center + Vector3.new(math.random(-30, 30), math.random(-6, 12), math.random(-30, 30))
+			p.Parent = workspace
+			local pe = Instance.new("ParticleEmitter")
+			local col = colors[math.random(#colors)]
+			pe.Color = ColorSequence.new(col, Color3.new(1, 1, 1))
+			pe.LightEmission, pe.Rate, pe.Lifetime = 1, 0, NumberRange.new(1.2, 2)
+			pe.Speed, pe.SpreadAngle = NumberRange.new(18, 28), Vector2.new(180, 180)
+			pe.Drag, pe.Acceleration = 2, Vector3.new(0, -10, 0)
+			pe.Size = NumberSequence.new(0.8, 0)
+			pe.Parent = p
+			local l = Instance.new("PointLight")
+			l.Color, l.Range, l.Brightness = col, 40, 3
+			l.Parent = p
+			pe:Emit(120)
+			task.delay(0.4, function() l.Enabled = false end)
+			task.delay(2.5, function() p:Destroy() end)
+		end)
+	end
+end
+
+MarketplaceService.ProcessReceipt = function(info)
+	local plr = Players:GetPlayerByUserId(info.PlayerId)
+	local d = plr and data[plr]
+	if not d then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	d.receipts = d.receipts or {}
+	if table.find(d.receipts, info.PurchaseId) then return Enum.ProductPurchaseDecision.PurchaseGranted end
+	local granted = false
+	if info.ProductId == Money.Products.summonMoon.id and Money.Products.summonMoon.id ~= 0 then
+		summonMoon()
+		for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, plr.Name .. " призвал Красную луну!") end
+		granted = true
+	elseif info.ProductId == Money.Products.fireworks.id and Money.Products.fireworks.id ~= 0 then
+		fireworks(plr.Name)
+		granted = true
+	end
+	if not granted then return Enum.ProductPurchaseDecision.NotProcessedYet end
+	table.insert(d.receipts, info.PurchaseId)
+	while #d.receipts > 50 do table.remove(d.receipts, 1) end
+	persist(plr)
+	return Enum.ProductPurchaseDecision.PurchaseGranted
+end
+
 ------------------------------------------------------------------ доска рекордов (всего поймано)
 local board = nil
 pcall(function() board = DataStoreService:GetOrderedDataStore("SpiritCatchers_TotalCaught") end)
@@ -2410,9 +2598,10 @@ Players.PlayerAdded:Connect(function(plr)
 	plr.CharacterAdded:Connect(function(char)
 		giveLantern(plr, char)
 		task.wait(0.3)
-		pushState(plr)
+		applyPassEffects(plr)
 	end)
 	if plr.Character then giveLantern(plr, plr.Character) end
+	task.spawn(checkPasses, plr)
 	pushState(plr)
 	if failed then NoticeEv:FireClient(plr, "Не удалось загрузить сохранение — прогресс этой сессии не запишется") end
 end)
@@ -2437,7 +2626,7 @@ end)
 ]]></string>
         </Properties>
       </Item>
-      <Item class="ModuleScript" referent="15">
+      <Item class="ModuleScript" referent="16">
         <Properties>
           <string name="Name">Map</string>
           <string name="Source"><![CDATA[-- Квартал из трёх районов: улица бумажных фонарей (север), площадь алтаря,
@@ -2818,19 +3007,19 @@ return Map
       </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="16">
+  <Item class="StarterPlayer" referent="17">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="17">
+    <Item class="StarterPlayerScripts" referent="18">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="18">
+      <Item class="Folder" referent="19">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="19">
+        <Item class="LocalScript" referent="20">
           <Properties>
             <string name="Name">Client</string>
             <string name="Source"><![CDATA[-- Spirit Catchers, клиент.
@@ -3279,20 +3468,66 @@ local shopTabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTran
 K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, shopTabs)
 local tabUp = K.button(shopTabs, "Улучшения", T.red, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
 local tabSkins = K.button(shopTabs, "Фонари", T.panel2, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
+local tabDonate = K.button(shopTabs, "Донат", T.gold, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
 local upList = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42) })
 K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, upList)
 local skinGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
 K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 150), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
-tabUp.Activated:Connect(function()
-	upList.Visible, skinGrid.Visible = true, false
-	K.recolor(tabUp, T.red)
-	K.recolor(tabSkins, T.panel2)
-end)
-tabSkins.Activated:Connect(function()
-	upList.Visible, skinGrid.Visible = false, true
-	K.recolor(tabUp, T.panel2)
-	K.recolor(tabSkins, T.red)
-end)
+local donateGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
+K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 196), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
+local shopPages = { { tabUp, upList, T.red }, { tabSkins, skinGrid, T.red }, { tabDonate, donateGrid, T.gold } }
+local function showShopPage(pair)
+	for _, other in shopPages do
+		other[2].Visible = other == pair
+		K.recolor(other[1], other == pair and other[3] or T.panel2)
+	end
+end
+for _, pair in shopPages do
+	pair[1].Activated:Connect(function() showShopPage(pair) end)
+end
+showShopPage(shopPages[1])
+-- донат-карточки: геймпассы и товары
+local MarketplaceService = game:GetService("MarketplaceService")
+local Money = Catalog.Money
+local donateCards = {}
+local function donateCard(order, key, item, isPass)
+	local f = K.panel(donateGrid, { LayoutOrder = order, BackgroundColor3 = T.panel2 })
+	f:FindFirstChildOfClass("UIStroke").Color = item.color
+	local bg = K.make("Frame", { Size = UDim2.new(1, -8, 0, 70), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+	K.corner(bg, UDim.new(0, 10))
+	K.gradient(bg, K.lighten(item.color, 0.15), K.darken(item.color, 0.45))
+	K.icon(bg, item.icon, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(62, 62) })
+	K.text(f, item.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 78), MaxText = 16 })
+	K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 100), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
+	b.Activated:Connect(function()
+		if item.id == 0 then
+			showToast("Скоро в продаже")
+		elseif isPass then
+			if not (state.passes and state.passes[key]) then MarketplaceService:PromptGamePassPurchase(plr, item.id) end
+		else
+			MarketplaceService:PromptProductPurchase(plr, item.id)
+		end
+	end)
+	donateCards[key] = { b = b, l = bl, item = item, isPass = isPass }
+end
+for i, key in Money.PassOrder do donateCard(i, key, Money.Passes[key], true) end
+for i, key in Money.ProductOrder do donateCard(10 + i, key, Money.Products[key], false) end
+local function refreshDonate()
+	for key, c in donateCards do
+		local owned = c.isPass and state.passes and state.passes[key]
+		if c.item.id == 0 then
+			c.l.Text = "Скоро"
+			K.recolor(c.b, Color3.fromRGB(90, 90, 105))
+		elseif owned then
+			c.l.Text = "Куплено"
+			K.recolor(c.b, Color3.fromRGB(80, 80, 95))
+		else
+			c.l.Text = ("R$ %d"):format(c.item.price)
+			K.recolor(c.b, T.green)
+		end
+	end
+end
 local UP_ICON = { jar = "jar", range = "target", power = "upgrade" }
 local upRows = {}
 for i, key in Catalog.UpgradeOrder do
@@ -3492,6 +3727,7 @@ btnShop.Activated:Connect(function()
 	toggleWindow(shopW, function()
 		refreshUpgrades()
 		refreshSkins()
+		refreshDonate()
 	end)
 end)
 btnGift.Activated:Connect(function() toggleWindow(giftW, refreshGift) end)
@@ -3545,6 +3781,7 @@ local function refreshHUD()
 	if shopW.Visible then
 		refreshUpgrades()
 		refreshSkins()
+		refreshDonate()
 	end
 	if giftW.Visible then refreshGift() end
 end
@@ -4113,6 +4350,19 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	updateFollowers(now)
 	updateOni(dt)
+	if math.floor(now * 10) % 2 == 0 then
+		for _, p in Players:GetPlayers() do
+			if p:GetAttribute("Skin") == "vip" then
+				local lamp = p.Character and p.Character:FindFirstChild("Lantern")
+				if lamp then
+					local c = Color3.fromHSV((now * 0.3) % 1, 0.6, 1)
+					lamp.Color = c
+					local beam = lamp:FindFirstChild("Beam")
+					if beam then beam.Color = c end
+				end
+			end
+		end
+	end
 	if not r then return end
 
 	-- район
@@ -4224,7 +4474,7 @@ RunService.RenderStepped:Connect(function(dt)
 		else
 			local v = visuals[target]
 			local sg = Catalog.Struggle[v and v.info.rarity or "common"]
-			local size = 0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)
+			local size = (0.27 + 0.03 * ((plr:GetAttribute("PowerLvl") or 1) - 1)) * (plr:GetAttribute("Pass_wideBeam") and Catalog.Money.WideBeamBonus or 1)
 			-- зона: поднимается, пока кнопка зажата, и падает, когда отпущена
 			mg.vel = math.clamp(mg.vel + (mg.pressing and 3.4 or -2.8) * dt, -1.3, 1.3)
 			mg.zone += mg.vel * dt
@@ -4368,7 +4618,7 @@ end
 ]]></string>
           </Properties>
         </Item>
-        <Item class="ModuleScript" referent="20">
+        <Item class="ModuleScript" referent="21">
           <Properties>
             <string name="Name">UIKit</string>
             <string name="Source"><![CDATA[-- UI-кит в стиле популярных симуляторов: толстые контуры, градиенты, иконки, пружинящие кнопки.
