@@ -1,6 +1,6 @@
 """Рисует иконки интерфейса (256x256 PNG, мультяшный стиль: толстый контур, блик, тень)."""
 import math, os, sys
-from PIL import Image, ImageDraw, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 OUT = sys.argv[1] if len(sys.argv) > 1 else "art/icons"
 S = 256
@@ -182,3 +182,45 @@ os.makedirs(OUT, exist_ok=True)
 for f in (coin, dust, jar, book, scroll, lantern, gift, gear, upgrade, star, lock, moon, target, paw, trophy, sound):
     f()
 print("icons:", sorted(os.listdir(OUT)))
+
+
+def portal():
+    im = canvas(); d = ImageDraw.Draw(im)
+    d.ellipse((30, 20, 226, 236), fill=(140, 90, 255), outline=OUTLINE, width=12)
+    d.ellipse((66, 56, 190, 200), fill=(90, 220, 255), outline=OUTLINE, width=8)
+    d.ellipse((98, 88, 158, 168), fill=(240, 250, 255))
+    for a in range(0, 360, 60):
+        x, y = 128 + 82 * math.cos(math.radians(a)), 128 + 82 * math.sin(math.radians(a))
+        d.ellipse((x - 9, y - 9, x + 9, y + 9), fill=(255, 255, 255))
+    finish(im, "portal")
+
+
+def ticket():
+    im = canvas(); d = ImageDraw.Draw(im)
+    d.rounded_rectangle((20, 64, 236, 192), 18, fill=(255, 120, 170), outline=OUTLINE, width=12)
+    d.ellipse((4, 104, 52, 152), fill=(0, 0, 0, 0)); d.ellipse((204, 104, 252, 152), fill=(0, 0, 0, 0))
+    for y in range(84, 176, 22):
+        d.rectangle((74, y, 84, y + 12), fill=OUTLINE)
+    d.polygon(star_pts(158, 128, 40, 16), fill=(255, 230, 120), outline=OUTLINE)
+    finish(im, "code")
+
+
+def crown():
+    im = canvas(); d = ImageDraw.Draw(im)
+    d.polygon([(28, 200), (40, 70), (90, 130), (128, 46), (166, 130), (216, 70), (228, 200)], fill=(255, 200, 50), outline=OUTLINE, width=12)
+    d.rounded_rectangle((28, 188, 228, 232), 10, fill=(230, 160, 30), outline=OUTLINE, width=10)
+    for x, c in [(78, (255, 80, 100)), (128, (90, 200, 255)), (178, (120, 240, 140))]:
+        d.ellipse((x - 14, 150, x + 14, 178), fill=c, outline=OUTLINE, width=5)
+    finish(im, "admin")
+
+
+def news():
+    im = canvas(); d = ImageDraw.Draw(im)
+    d.polygon(star_pts(128, 128, 116, 70, 12), fill=(255, 90, 90), outline=OUTLINE, width=10)
+    f = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 64)
+    d.text((128, 132), "NEW", font=f, anchor="mm", fill=(255, 255, 255), stroke_width=6, stroke_fill=OUTLINE)
+    finish(im, "news")
+
+
+for f in (portal, ticket, crown, news):
+    f()

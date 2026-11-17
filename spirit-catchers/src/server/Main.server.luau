@@ -52,6 +52,14 @@ local SettingsEv = remote("SetSettings")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Money = Catalog.Money
 local DailyFn = remote("ClaimDaily", "RemoteFunction")
+local TeleportFn = remote("Teleport", "RemoteFunction")
+local RedeemFn = remote("Redeem", "RemoteFunction")
+local AdminFn = remote("Admin", "RemoteFunction")
+local NewsSeenEv = remote("NewsSeen")
+-- админка: владелец игры (проверка только на сервере)
+local ADMINS = { [8432365972] = true }
+local function isAdmin(plr) return ADMINS[plr.UserId] == true or (game.CreatorType == Enum.CreatorType.User and plr.UserId == game.CreatorId) end
+local adminFast: { [Player]: boolean } = {}
 local SkinFn = remote("Skin", "RemoteFunction")
 local MilestoneFn = remote("ClaimMilestone", "RemoteFunction")
 local RewardEv = remote("Reward") -- всплывающие награды: { coins, dust, xp, levelUp }
@@ -163,7 +171,7 @@ local function migrate(raw): Profile
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
-		variants = {}, total = 0, owned = {},
+		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0,
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -206,6 +214,12 @@ local function migrate(raw): Profile
 			if raw.version == 5 or raw.version == 6 then
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
+				if typeof(raw.codes) == "table" then
+					for k, v in raw.codes do
+						if typeof(k) == "string" and v == true then d.codes[k] = true end
+					end
+				end
+				d.newsSeen = math.floor(num(raw.newsSeen, 0, 1000, 0))
 				if typeof(raw.owned) == "table" then
 					for k, v in raw.owned do
 						if Catalog.Money.Passes[k] and v == true then d.owned[k] = true end
@@ -277,6 +291,7 @@ local function pushState(plr)
 	StateEv:FireClient(plr, {
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
+		newsSeen = d.newsSeen, isAdmin = isAdmin(plr), adminFast = adminFast[plr] == true,
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
@@ -370,7 +385,7 @@ local function lift(kind, p: Vector3)
 	return Vector3.new(p.X, 0.5 + Catalog.Kinds[kind].height, p.Z)
 end
 
-local function newSpirit(kind, district, tut: boolean?)
+local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVariant: string?)
 	nextId += 1
 	local info = Catalog.Kinds[kind]
 	local a = Instance.new("Part")
@@ -380,7 +395,7 @@ local function newSpirit(kind, district, tut: boolean?)
 	local att = Instance.new("Attachment")
 	att.Name = "Att"
 	att.Parent = a
-	local start = lift(kind, zonePoint(district, nil, tut, kind))
+	local start = lift(kind, at or zonePoint(district, nil, tut, kind))
 	local s: Spirit = {
 		id = nextId, kind = kind, district = district, anchor = a, revealed = info.move == "swim", revealedAt = os.clock(),
 		born = os.clock(), pos = start, dir = Vector3.new(0, 0, -1), goal = lift(kind, zonePoint(district, start, tut, kind)),
@@ -406,6 +421,7 @@ local function newSpirit(kind, district, tut: boolean?)
 		end
 	end
 	if tut then variant = "normal" end
+	if forceVariant and Catalog.Variants[forceVariant] then variant = forceVariant end
 	s.variant = variant
 	a:SetAttribute("Variant", variant)
 	a.Parent = spiritsFolder
@@ -509,7 +525,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if g then
 			local rate = 0
 			for _, p in g do
-				rate += inZone[p] and power(data[p]) * 1.25 or -0.45
+				rate += adminFast[p] and 50 or (inZone[p] and power(data[p]) * 1.25 or -0.45)
 			end
 			s.progress = math.max(0, s.progress + dt * rate / Catalog.Rarity[info.rarity].catchTime)
 		elseif s.progress > 0 then
@@ -1129,6 +1145,122 @@ MarketplaceService.ProcessReceipt = function(info)
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
+------------------------------------------------------------------ телепорт, коды, новости, админка
+local function teleportTo(plr, district)
+	local d = data[plr]
+	local dc = Catalog.Districts[district]
+	local root = rootOf(plr)
+	if not (d and dc and dc.tp and root) then return { ok = false } end
+	if not Catalog.unlocked(district, stats(d)) then
+		return { ok = false, msg = dc.name .. " закрыт. " .. Catalog.unlockText(district, stats(d)) }
+	end
+	stopHold(plr)
+	plr.Character:PivotTo(CFrame.new(dc.tp + Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))))
+	return { ok = true }
+end
+TeleportFn.OnServerInvoke = function(plr, district)
+	if typeof(district) ~= "string" then return { ok = false } end
+	return teleportTo(plr, district)
+end
+-- порталы на площади
+for _, portal in map.portals do
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Телепорт"
+	prompt.ObjectText = Catalog.Districts[portal:GetAttribute("District")].name
+	prompt.HoldDuration, prompt.MaxActivationDistance, prompt.RequiresLineOfSight = 0, 10, false
+	prompt.Parent = portal
+	prompt.Triggered:Connect(function(plr)
+		local r = teleportTo(plr, portal:GetAttribute("District"))
+		if not r.ok and r.msg then NoticeEv:FireClient(plr, r.msg) end
+	end)
+end
+
+RedeemFn.OnServerInvoke = function(plr, code)
+	local d = data[plr]
+	if not (d and typeof(code) == "string") then return { ok = false } end
+	local key = string.upper(string.gsub(code, "%s", ""))
+	local c = Catalog.Progress.Codes[key]
+	if not c then return { ok = false, msg = "Такого кода нет" } end
+	d.codes = d.codes or {}
+	if d.codes[key] then return { ok = false, msg = "Код уже активирован" } end
+	d.codes[key] = true
+	d.coins += c.coins or 0
+	d.dust += c.dust or 0
+	if c.skin then d.skins[c.skin] = true end
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = c.coins, dust = c.dust, skin = c.skin })
+	return { ok = true, msg = c.text }
+end
+
+NewsSeenEv.OnServerEvent:Connect(function(plr)
+	local d = data[plr]
+	if d and d.newsSeen < Catalog.Progress.NewsVersion then
+		d.newsSeen = Catalog.Progress.NewsVersion
+		persist(plr)
+	end
+end)
+
+AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
+	if not isAdmin(plr) then return { ok = false, msg = "Нет доступа" } end
+	local d = data[plr]
+	local root = rootOf(plr)
+	if not d then return { ok = false } end
+	if cmd == "coins" then
+		d.coins += 1000
+	elseif cmd == "dust" then
+		d.dust += 100
+	elseif cmd == "level" then
+		d.level += 1
+		d.xp = 0
+	elseif cmd == "allSpirits" then
+		for _, kind in Catalog.Order do
+			d.saved[kind] = math.max(d.saved[kind] or 0, 1)
+			d.firstSaved[kind] = true
+			d.variants[kind] = {}
+			for _, v in Catalog.VariantOrder do d.variants[kind][v] = true end
+		end
+	elseif cmd == "maxUpgrades" then
+		for _, k in Catalog.UpgradeOrder do d.levels[k] = Catalog.MaxLevel end
+	elseif cmd == "passes" then
+		d.owned = d.owned or {}
+		for key in Money.Passes do d.owned[key] = true end
+		for key in Catalog.Progress.Skins do d.skins[key] = true end
+		applyPassEffects(plr)
+	elseif cmd == "moon" then
+		summonMoon()
+	elseif cmd == "endMoon" then
+		if moon.active then phaseEnd = os.clock() end
+	elseif cmd == "fireworks" then
+		fireworks(plr.Name)
+	elseif cmd == "fast" then
+		adminFast[plr] = not adminFast[plr]
+	elseif cmd == "fillJar" then
+		while #jars[plr] < cap(d) do table.insert(jars[plr], { k = "PaperFox", v = "normal" }) end
+	elseif cmd == "spawn" then
+		local kind = typeof(a1) == "string" and Catalog.Kinds[a1] and a1
+		if not (kind and root) then return { ok = false, msg = "Нет такого духа" } end
+		local district = Catalog.district(root.Position)
+		if not Catalog.Districts[district] or #Catalog.Districts[district].zones == 0 then district = "street" end
+		local at = root.Position + root.CFrame.LookVector * 8
+		local s = newSpirit(kind, district, false, Vector3.new(at.X, 0.5, at.Z), typeof(a2) == "string" and a2 or nil)
+		s.revealed = true
+		s.revealedAt = os.clock()
+		s.anchor:SetAttribute("Revealed", true)
+	elseif cmd == "reset" then
+		local fresh = migrate(nil)
+		fresh.passes = d.passes
+		data[plr] = fresh
+		jars[plr] = {}
+		d = fresh
+	else
+		return { ok = false, msg = "Неизвестная команда" }
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+
 ------------------------------------------------------------------ доска рекордов (всего поймано)
 local board = nil
 pcall(function() board = DataStoreService:GetOrderedDataStore("SpiritCatchers_TotalCaught") end)
@@ -1226,7 +1358,7 @@ Players.PlayerRemoving:Connect(function(plr)
 	stopHold(plr)
 	persist(plr)
 	updateBoard(plr)
-	data[plr], jars[plr], inZone[plr] = nil, nil, nil
+	data[plr], jars[plr], inZone[plr], adminFast[plr] = nil, nil, nil, nil
 end)
 
 task.spawn(function()

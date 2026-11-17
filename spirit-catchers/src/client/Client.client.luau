@@ -98,14 +98,17 @@ workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale
 local hud = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, gui)
 
 ------------------------------------------------------------------ HUD: левая колонка
-local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 6), Size = UDim2.fromOffset(150, 230), BackgroundTransparency = 1 }, hud)
-K.make("UIGridLayout", { CellSize = UDim2.fromOffset(68, 68), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
+local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 10), Size = UDim2.fromOffset(136, 280), BackgroundTransparency = 1 }, hud)
+K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
 local btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 local btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
 local btnShop = K.iconButton(leftCol, "shop", "Магазин", T.red)
 local btnGift = K.iconButton(leftCol, "gift", "Подарок", T.green)
+local btnTeleport = K.iconButton(leftCol, "portal", "Телепорт", T.purple)
 local btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
-for i, b in { btnAtlas, btnQuests, btnShop, btnGift, btnSettings } do b.LayoutOrder = i end
+local btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
+btnAdmin.Visible = false
+for i, b in { btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
 
 ------------------------------------------------------------------ HUD: справа валюты и уровень
 local rightCol = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 140), BackgroundTransparency = 1 }, hud)
@@ -690,10 +693,127 @@ soundTestL.Parent.Activated:Connect(function()
 	play("catchRare")
 	soundTestL.Text = "Звук: " .. soundStatus
 end)
+local codeRow = K.panel(setList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = 6, BackgroundColor3 = T.panel2 })
+K.icon(codeRow, "code", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 5) })
+local codeBox = K.make("TextBox", {
+	Size = UDim2.new(0.6, -60, 1, -14), Position = UDim2.fromOffset(56, 7), BackgroundColor3 = T.ink, Text = "", PlaceholderText = "Введи код",
+	TextColor3 = T.text, PlaceholderColor3 = T.sub, Font = Enum.Font.GothamBold, TextScaled = true, ClearTextOnFocus = false,
+}, codeRow)
+K.corner(codeBox, UDim.new(0, 10))
+K.make("UITextSizeConstraint", { MaxTextSize = 20 }, codeBox)
+local codeBtn = K.button(codeRow, "Активировать", T.pink, { Size = UDim2.new(0.4, -10, 1, -14), Position = UDim2.new(0.6, 2, 0, 7), MaxText = 16 })
+codeBtn.Activated:Connect(function()
+	local r = remotes.Redeem:InvokeServer(codeBox.Text)
+	if r and r.ok then
+		codeBox.Text = ""
+		play("legendary")
+		showToast(r.msg, 3, Color3.fromRGB(150, 60, 110))
+	elseif r and r.msg then
+		showToast(r.msg)
+	end
+end)
 K.text(setList, "Чувствительность камеры и графика — в меню Roblox (кнопка вверху слева).", { Size = UDim2.new(1, -10, 0, 34), LayoutOrder = 9, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 
 ------------------------------------------------------------------ навигация по окнам
-local allWindows = { atlasW, questW, shopW, giftW, setW }
+-- Телепорт
+local tpW, tpBody = K.window(gui, "Телепорт", "portal", T.purple, 0.62, 0.8)
+local tpList = K.scroll(tpBody)
+K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, tpList)
+local tpRows = {}
+for i, key in Catalog.Worlds.TeleportOrder do
+	local dc = Catalog.Districts[key]
+	local f = K.panel(tpList, { Size = UDim2.new(1, -10, 0, 58), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+	local sw = K.make("Frame", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(9, 9), BackgroundColor3 = dc.tint }, f)
+	K.corner(sw, UDim.new(1, 0))
+	K.stroke(sw, T.ink, 3)
+	K.text(f, dc.name, { Size = UDim2.new(0.6, -64, 0, 24), Position = UDim2.fromOffset(58, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+	local st = K.text(f, "", { Size = UDim2.new(0.6, -64, 0, 16), Position = UDim2.fromOffset(58, 34), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local b, bl = K.button(f, "Лететь", T.purple, { Size = UDim2.new(0.38, -10, 1, -14), Position = UDim2.new(0.62, 0, 0, 7), MaxText = 16 })
+	b.Activated:Connect(function()
+		local r = remotes.Teleport:InvokeServer(key)
+		if r and r.ok then
+			K.close(tpW)
+			play("reveal")
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
+	tpRows[key] = { st = st, b = b, bl = bl }
+end
+local function refreshTeleport()
+	local stt = { distinct = state.distinct, level = state.level }
+	for key, row in tpRows do
+		local open = Catalog.unlocked(key, stt)
+		row.st.Text = open and "Открыт" or Catalog.unlockText(key, stt)
+		row.bl.Text = open and "Лететь" or "Закрыт"
+		K.recolor(row.b, open and T.purple or Color3.fromRGB(80, 80, 95))
+	end
+end
+
+-- Что нового
+local newsW, newsBody = K.window(gui, Prog.News.title, "news", T.red, 0.62, 0.8)
+local newsList = K.make("Frame", { Size = UDim2.new(1, 0, 1, -64), BackgroundTransparency = 1 }, newsBody)
+K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, newsList)
+for i, line in Prog.News.lines do
+	K.text(newsList, "•  " .. line, { Size = UDim2.new(1, 0, 0, 26), LayoutOrder = i, TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, Font = Enum.Font.GothamBold })
+end
+local newsOk = K.button(newsBody, "Погнали!", T.green, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(220, 50), Position = UDim2.new(0.5, 0, 1, 0), MaxText = 22 })
+newsOk.Activated:Connect(function()
+	K.close(newsW)
+	remotes.NewsSeen:FireServer()
+end)
+
+-- Админка (сервер проверяет доступ сам)
+local adminW, adminBody = K.window(gui, "Админка", "admin", Color3.fromRGB(230, 160, 30), 0.78, 0.82)
+local adminGrid = K.scroll(adminBody)
+K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 52), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, adminGrid)
+local function adminCmd(cmd, a1, a2)
+	local r = remotes.Admin:InvokeServer(cmd, a1, a2)
+	if r and r.ok then showToast("Админ: готово", 1.2, Color3.fromRGB(150, 110, 20))
+	elseif r and r.msg then showToast(r.msg) end
+end
+local adminButtons = {
+	{ "+1000 монет", "coins" }, { "+100 пыли", "dust" }, { "+1 уровень", "level" }, { "Все духи", "allSpirits" },
+	{ "Макс. улучшения", "maxUpgrades" }, { "Весь донат", "passes" }, { "Начать луну", "moon" }, { "Закончить луну", "endMoon" },
+	{ "Фейерверк", "fireworks" }, { "Банка полная", "fillJar" }, { "Мгновенная ловля", "fast" }, { "Сброс прогресса", "reset" },
+}
+local resetArmed = false
+for i, bd in adminButtons do
+	local b = K.button(adminGrid, bd[1], bd[2] == "reset" and T.red or T.orange, { LayoutOrder = i, MaxText = 15 })
+	b.Activated:Connect(function()
+		if bd[2] == "reset" and not resetArmed then
+			resetArmed = true
+			showToast("Нажми «Сброс прогресса» ещё раз для подтверждения", 3)
+			task.delay(3, function() resetArmed = false end)
+			return
+		end
+		resetArmed = false
+		adminCmd(bd[2])
+	end)
+end
+local spawnKind, spawnVar = 1, 1
+local kindB, kindL = K.button(adminGrid, "", T.blue, { LayoutOrder = 50, MaxText = 14 })
+local varB, varL = K.button(adminGrid, "", T.purple, { LayoutOrder = 51, MaxText = 14 })
+local spawnB = K.button(adminGrid, "Призвать духа", T.green, { LayoutOrder = 52, MaxText = 15 })
+local function refreshSpawnLabels()
+	kindL.Text = Catalog.Kinds[Catalog.Order[spawnKind]].name
+	varL.Text = Catalog.Variants[Catalog.VariantOrder[spawnVar]].name
+end
+refreshSpawnLabels()
+kindB.Activated:Connect(function()
+	spawnKind = spawnKind % #Catalog.Order + 1
+	refreshSpawnLabels()
+end)
+varB.Activated:Connect(function()
+	spawnVar = spawnVar % #Catalog.VariantOrder + 1
+	refreshSpawnLabels()
+end)
+spawnB.Activated:Connect(function()
+	adminCmd("spawn", Catalog.Order[spawnKind], Catalog.VariantOrder[spawnVar])
+	K.close(adminW)
+end)
+
+local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW }
 local function toggleWindow(w, refresh)
 	local willOpen = not w.Visible
 	for _, x in allWindows do K.close(x) end
@@ -712,6 +832,8 @@ btnShop.Activated:Connect(function()
 	end)
 end)
 btnGift.Activated:Connect(function() toggleWindow(giftW, refreshGift) end)
+btnTeleport.Activated:Connect(function() toggleWindow(tpW, refreshTeleport) end)
+btnAdmin.Activated:Connect(function() toggleWindow(adminW) end)
 btnSettings.Activated:Connect(function()
 	toggleWindow(setW, function()
 		for _, r in setRefreshers do r() end
@@ -986,7 +1108,9 @@ playBtn.Activated:Connect(function()
 		intro:Destroy()
 		hud.Visible = true
 		if not state.tutorialDone and tut.step == 0 then setStep(1) end
-		if state.dailyReady then
+		if state.tutorialDone and (state.newsSeen or 0) < Prog.NewsVersion then
+			task.delay(0.6, function() toggleWindow(newsW) end)
+		elseif state.dailyReady then
 			task.delay(1.2, function() toggleWindow(giftW, refreshGift) end)
 		end
 	end)
@@ -1005,6 +1129,7 @@ remotes.State.OnClientEvent:Connect(function(s)
 		if not s.tutorialDone and not introOpen then setStep(1) end
 		if s.persistent == false then showToast("Сохранения недоступны в этом запуске", 3) end
 	end
+	btnAdmin.Visible = s.isAdmin == true
 	refreshHUD()
 	if tut.step == 4 and s.equipped then finishTutorial() end
 end)
@@ -1299,7 +1424,21 @@ RunService.RenderStepped:Connect(function(dt)
 		local dist = r and (cf.Position - r.Position).Magnitude or 0
 		if v.shadow then
 			v.shadow.CFrame = CFrame.new(cf.X, 0.62, cf.Z) * CFrame.Angles(0, now * 0.8, math.rad(90))
-			v.shadow.Transparency = revealed and 0.88 or 0.3 + math.sin(now * 3 + v.seed) * 0.1
+			-- тень видна только в луче фонаря или совсем рядом, иначе ищи по следам
+			local lit = false
+			if r and not revealed then
+				local d = cf.Position - r.Position
+				local fl = Vector3.new(d.X, 0, d.Z)
+				local look = r.CFrame.LookVector
+				lit = dist < 6 or (dist < lanternRange() * 0.8 and fl.Magnitude > 0.1 and fl.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.8)
+			end
+			local goal = revealed and 0.95 or (lit and (0.35 + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
+			v.shadow.Transparency += (goal - v.shadow.Transparency) * math.min(1, dt * 5)
+			local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
+			if pe and not revealed then
+				local sparkle = v.anchor:GetAttribute("Variant")
+				pe.Rate = lit and ((sparkle ~= "normal" and sparkle ~= "giant") and 24 or 8) or ((sparkle ~= "normal" and sparkle ~= "giant") and 2 or 0)
+			end
 		end
 		if revealed and not v.model then
 			v.model = Spirits.Builders[v.kind]()

@@ -219,6 +219,10 @@ return {
 	target = "rbxassetid://134649108001683",
 	trophy = "rbxassetid://112966267833981",
 	upgrade = "rbxassetid://104155225587936",
+	portal = "rbxassetid://121921391992229",
+	code = "rbxassetid://128285801735878",
+	admin = "rbxassetid://100153452016284",
+	news = "rbxassetid://101968313426978",
 }
 ]]></string>
           </Properties>
@@ -322,6 +326,27 @@ P.Skins = {
 	ember = { name = "Угольный", lamp = Color3.fromRGB(255, 110, 60), beam = Color3.fromRGB(255, 170, 120), price = 1200, dust = 20 },
 	golden = { name = "Золотой", lamp = Color3.fromRGB(255, 200, 60), beam = Color3.fromRGB(255, 225, 130), source = "12 видов в Атласе" },
 	vip = { name = "Радужный VIP", lamp = Color3.fromRGB(255, 120, 220), beam = Color3.fromRGB(200, 220, 255), source = "VIP-ловец", rainbow = true },
+}
+
+-- гифткоды (регистр не важен, каждый активируется один раз на аккаунт)
+P.Codes = {
+	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
+	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
+}
+
+-- окно «Что нового»: показывается один раз после выхода обновления
+P.NewsVersion = 1
+P.News = {
+	title = "Обновление 1: Большая охота",
+	lines = {
+		"Две новые зоны: Бамбуковая роща и Ночной рынок",
+		"18 видов духов, тиры Мифический и Секретный",
+		"Разновидности: Гигант, Сияющий, Теневой, Золотой, Радужный",
+		"Мини-игра ловли: держи метку духа в зелёной зоне",
+		"Тени почти не видно: свети фонарём и иди по следам",
+		"Телепорты по районам и доска лучших ловцов",
+		"Коды: BETA и WELCOME (Опции → Коды)",
+	},
 }
 
 return P
@@ -566,37 +591,39 @@ W.Worlds = {
 	},
 }
 
+W.TeleportOrder = { "plaza", "street", "canal", "garden", "grove", "market" }
+
 W.Districts = {
 	street = {
-		world = "lantern", name = "Улица бумажных фонарей", max = 7,
+		tp = Vector3.new(0, 3, 40), world = "lantern", name = "Улица бумажных фонарей", max = 7,
 		zones = { { x = { -14, 14 }, z = { 34, 124 } } },
 		tint = Color3.fromRGB(255, 240, 225), center = Vector3.new(0, 0.5, 80),
 	},
 	plaza = {
-		world = "lantern", name = "Площадь алтаря", max = 0,
+		tp = Vector3.new(0, 3, 26), world = "lantern", name = "Площадь алтаря", max = 0,
 		zones = {}, tint = Color3.fromRGB(235, 242, 255), center = Vector3.new(0, 0.5, 12),
 	},
 	canal = {
-		world = "lantern", name = "Канал с мостами", max = 7,
+		tp = Vector3.new(0, 3, -13), world = "lantern", name = "Канал с мостами", max = 7,
 		zones = { { x = { -56, 56 }, z = { -18, -11 } }, { x = { -56, 56 }, z = { -49, -42 } } },
 		tint = Color3.fromRGB(225, 238, 255), center = Vector3.new(0, 0.5, -30),
 		-- траектория для «плывущих» духов: эллипс над водой
 		swim = { center = Vector3.new(0, 1.8, -30), rx = 22, rz = 6, speed = 0.3 },
 	},
 	garden = {
-		world = "lantern", name = "Храмовый сад", max = 8,
+		tp = Vector3.new(0, 3, -84), world = "lantern", name = "Храмовый сад", max = 8,
 		zones = { { x = { -38, 38 }, z = { -144, -80 } } },
 		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
 		unlock = { kinds = 3 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
 	},
 	grove = {
-		world = "lantern", name = "Бамбуковая роща", max = 8,
+		tp = Vector3.new(-50, 3, 10), world = "lantern", name = "Бамбуковая роща", max = 8,
 		zones = { { x = { -140, -48 }, z = { 2, 62 } } },
 		tint = Color3.fromRGB(225, 255, 240), center = Vector3.new(-95, 0.5, 32),
 		unlock = { level = 3 }, gate = "GroveGate", back = Vector3.new(-28, 4, 10),
 	},
 	market = {
-		world = "lantern", name = "Ночной рынок", max = 8,
+		tp = Vector3.new(50, 3, 10), world = "lantern", name = "Ночной рынок", max = 8,
 		zones = { { x = { 48, 140 }, z = { 2, 62 } } },
 		tint = Color3.fromRGB(255, 232, 245), center = Vector3.new(95, 0.5, 32),
 		unlock = { kinds = 8 }, gate = "MarketGate", back = Vector3.new(28, 4, 10),
@@ -1457,6 +1484,14 @@ local SettingsEv = remote("SetSettings")
 local MarketplaceService = game:GetService("MarketplaceService")
 local Money = Catalog.Money
 local DailyFn = remote("ClaimDaily", "RemoteFunction")
+local TeleportFn = remote("Teleport", "RemoteFunction")
+local RedeemFn = remote("Redeem", "RemoteFunction")
+local AdminFn = remote("Admin", "RemoteFunction")
+local NewsSeenEv = remote("NewsSeen")
+-- админка: владелец игры (проверка только на сервере)
+local ADMINS = { [8432365972] = true }
+local function isAdmin(plr) return ADMINS[plr.UserId] == true or (game.CreatorType == Enum.CreatorType.User and plr.UserId == game.CreatorId) end
+local adminFast: { [Player]: boolean } = {}
 local SkinFn = remote("Skin", "RemoteFunction")
 local MilestoneFn = remote("ClaimMilestone", "RemoteFunction")
 local RewardEv = remote("Reward") -- всплывающие награды: { coins, dust, xp, levelUp }
@@ -1568,7 +1603,7 @@ local function migrate(raw): Profile
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
-		variants = {}, total = 0, owned = {},
+		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0,
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -1611,6 +1646,12 @@ local function migrate(raw): Profile
 			if raw.version == 5 or raw.version == 6 then
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
+				if typeof(raw.codes) == "table" then
+					for k, v in raw.codes do
+						if typeof(k) == "string" and v == true then d.codes[k] = true end
+					end
+				end
+				d.newsSeen = math.floor(num(raw.newsSeen, 0, 1000, 0))
 				if typeof(raw.owned) == "table" then
 					for k, v in raw.owned do
 						if Catalog.Money.Passes[k] and v == true then d.owned[k] = true end
@@ -1682,6 +1723,7 @@ local function pushState(plr)
 	StateEv:FireClient(plr, {
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
+		newsSeen = d.newsSeen, isAdmin = isAdmin(plr), adminFast = adminFast[plr] == true,
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
@@ -1775,7 +1817,7 @@ local function lift(kind, p: Vector3)
 	return Vector3.new(p.X, 0.5 + Catalog.Kinds[kind].height, p.Z)
 end
 
-local function newSpirit(kind, district, tut: boolean?)
+local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVariant: string?)
 	nextId += 1
 	local info = Catalog.Kinds[kind]
 	local a = Instance.new("Part")
@@ -1785,7 +1827,7 @@ local function newSpirit(kind, district, tut: boolean?)
 	local att = Instance.new("Attachment")
 	att.Name = "Att"
 	att.Parent = a
-	local start = lift(kind, zonePoint(district, nil, tut, kind))
+	local start = lift(kind, at or zonePoint(district, nil, tut, kind))
 	local s: Spirit = {
 		id = nextId, kind = kind, district = district, anchor = a, revealed = info.move == "swim", revealedAt = os.clock(),
 		born = os.clock(), pos = start, dir = Vector3.new(0, 0, -1), goal = lift(kind, zonePoint(district, start, tut, kind)),
@@ -1811,6 +1853,7 @@ local function newSpirit(kind, district, tut: boolean?)
 		end
 	end
 	if tut then variant = "normal" end
+	if forceVariant and Catalog.Variants[forceVariant] then variant = forceVariant end
 	s.variant = variant
 	a:SetAttribute("Variant", variant)
 	a.Parent = spiritsFolder
@@ -1914,7 +1957,7 @@ RunService.Heartbeat:Connect(function(dt)
 		if g then
 			local rate = 0
 			for _, p in g do
-				rate += inZone[p] and power(data[p]) * 1.25 or -0.45
+				rate += adminFast[p] and 50 or (inZone[p] and power(data[p]) * 1.25 or -0.45)
 			end
 			s.progress = math.max(0, s.progress + dt * rate / Catalog.Rarity[info.rarity].catchTime)
 		elseif s.progress > 0 then
@@ -2534,6 +2577,122 @@ MarketplaceService.ProcessReceipt = function(info)
 	return Enum.ProductPurchaseDecision.PurchaseGranted
 end
 
+------------------------------------------------------------------ телепорт, коды, новости, админка
+local function teleportTo(plr, district)
+	local d = data[plr]
+	local dc = Catalog.Districts[district]
+	local root = rootOf(plr)
+	if not (d and dc and dc.tp and root) then return { ok = false } end
+	if not Catalog.unlocked(district, stats(d)) then
+		return { ok = false, msg = dc.name .. " закрыт. " .. Catalog.unlockText(district, stats(d)) }
+	end
+	stopHold(plr)
+	plr.Character:PivotTo(CFrame.new(dc.tp + Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))))
+	return { ok = true }
+end
+TeleportFn.OnServerInvoke = function(plr, district)
+	if typeof(district) ~= "string" then return { ok = false } end
+	return teleportTo(plr, district)
+end
+-- порталы на площади
+for _, portal in map.portals do
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText = "Телепорт"
+	prompt.ObjectText = Catalog.Districts[portal:GetAttribute("District")].name
+	prompt.HoldDuration, prompt.MaxActivationDistance, prompt.RequiresLineOfSight = 0, 10, false
+	prompt.Parent = portal
+	prompt.Triggered:Connect(function(plr)
+		local r = teleportTo(plr, portal:GetAttribute("District"))
+		if not r.ok and r.msg then NoticeEv:FireClient(plr, r.msg) end
+	end)
+end
+
+RedeemFn.OnServerInvoke = function(plr, code)
+	local d = data[plr]
+	if not (d and typeof(code) == "string") then return { ok = false } end
+	local key = string.upper(string.gsub(code, "%s", ""))
+	local c = Catalog.Progress.Codes[key]
+	if not c then return { ok = false, msg = "Такого кода нет" } end
+	d.codes = d.codes or {}
+	if d.codes[key] then return { ok = false, msg = "Код уже активирован" } end
+	d.codes[key] = true
+	d.coins += c.coins or 0
+	d.dust += c.dust or 0
+	if c.skin then d.skins[c.skin] = true end
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = c.coins, dust = c.dust, skin = c.skin })
+	return { ok = true, msg = c.text }
+end
+
+NewsSeenEv.OnServerEvent:Connect(function(plr)
+	local d = data[plr]
+	if d and d.newsSeen < Catalog.Progress.NewsVersion then
+		d.newsSeen = Catalog.Progress.NewsVersion
+		persist(plr)
+	end
+end)
+
+AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
+	if not isAdmin(plr) then return { ok = false, msg = "Нет доступа" } end
+	local d = data[plr]
+	local root = rootOf(plr)
+	if not d then return { ok = false } end
+	if cmd == "coins" then
+		d.coins += 1000
+	elseif cmd == "dust" then
+		d.dust += 100
+	elseif cmd == "level" then
+		d.level += 1
+		d.xp = 0
+	elseif cmd == "allSpirits" then
+		for _, kind in Catalog.Order do
+			d.saved[kind] = math.max(d.saved[kind] or 0, 1)
+			d.firstSaved[kind] = true
+			d.variants[kind] = {}
+			for _, v in Catalog.VariantOrder do d.variants[kind][v] = true end
+		end
+	elseif cmd == "maxUpgrades" then
+		for _, k in Catalog.UpgradeOrder do d.levels[k] = Catalog.MaxLevel end
+	elseif cmd == "passes" then
+		d.owned = d.owned or {}
+		for key in Money.Passes do d.owned[key] = true end
+		for key in Catalog.Progress.Skins do d.skins[key] = true end
+		applyPassEffects(plr)
+	elseif cmd == "moon" then
+		summonMoon()
+	elseif cmd == "endMoon" then
+		if moon.active then phaseEnd = os.clock() end
+	elseif cmd == "fireworks" then
+		fireworks(plr.Name)
+	elseif cmd == "fast" then
+		adminFast[plr] = not adminFast[plr]
+	elseif cmd == "fillJar" then
+		while #jars[plr] < cap(d) do table.insert(jars[plr], { k = "PaperFox", v = "normal" }) end
+	elseif cmd == "spawn" then
+		local kind = typeof(a1) == "string" and Catalog.Kinds[a1] and a1
+		if not (kind and root) then return { ok = false, msg = "Нет такого духа" } end
+		local district = Catalog.district(root.Position)
+		if not Catalog.Districts[district] or #Catalog.Districts[district].zones == 0 then district = "street" end
+		local at = root.Position + root.CFrame.LookVector * 8
+		local s = newSpirit(kind, district, false, Vector3.new(at.X, 0.5, at.Z), typeof(a2) == "string" and a2 or nil)
+		s.revealed = true
+		s.revealedAt = os.clock()
+		s.anchor:SetAttribute("Revealed", true)
+	elseif cmd == "reset" then
+		local fresh = migrate(nil)
+		fresh.passes = d.passes
+		data[plr] = fresh
+		jars[plr] = {}
+		d = fresh
+	else
+		return { ok = false, msg = "Неизвестная команда" }
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+
 ------------------------------------------------------------------ доска рекордов (всего поймано)
 local board = nil
 pcall(function() board = DataStoreService:GetOrderedDataStore("SpiritCatchers_TotalCaught") end)
@@ -2631,7 +2790,7 @@ Players.PlayerRemoving:Connect(function(plr)
 	stopHold(plr)
 	persist(plr)
 	updateBoard(plr)
-	data[plr], jars[plr], inZone[plr] = nil, nil, nil
+	data[plr], jars[plr], inZone[plr], adminFast[plr] = nil, nil, nil, nil
 end)
 
 task.spawn(function()
@@ -2999,6 +3158,42 @@ function Map.build()
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
 
+	---------------------------------------------------------------- порталы на площади
+	local portals = {}
+	for _, p in { { -30, "grove", Color3.fromRGB(110, 240, 200) }, { -19, "garden", Color3.fromRGB(170, 255, 170) }, { 19, "canal", Color3.fromRGB(80, 230, 220) }, { 30, "market", Color3.fromRGB(255, 120, 200) } } do
+		local x, col = p[1], p[3]
+		for _, dx in { -3, 3 } do
+			block("PortalPost", Vector3.new(1, 8, 1), CFrame.new(x + dx, 4.5, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
+		end
+		block("PortalTop", Vector3.new(8, 1, 1.4), CFrame.new(x, 9, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
+		local swirl = deco("Portal", Vector3.new(0.3, 7, 5.2), CFrame.new(x, 4.6, -4) * CFrame.Angles(0, math.rad(90), 0), col, Enum.Material.Neon,
+			{ Shape = Enum.PartType.Cylinder, Transparency = 0.35 })
+		swirl:SetAttribute("District", p[2])
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color, pe.LightEmission, pe.Rate = ColorSequence.new(col, Color3.new(1, 1, 1)), 1, 12
+		pe.Lifetime, pe.Speed, pe.Size = NumberRange.new(0.8, 1.4), NumberRange.new(1, 2), NumberSequence.new(0.4, 0)
+		pe.Parent = swirl
+		light(swirl, col, 12, 0.8)
+		table.insert(portals, swirl)
+	end
+
+	---------------------------------------------------------------- детали: бочки, ящики, лодки
+	local props = Random.new(7)
+	for _ = 1, 26 do
+		local onMarket = props:NextNumber() < 0.4
+		local x = onMarket and props:NextNumber(46, 146) or (props:NextInteger(0, 1) == 0 and props:NextNumber(-19, -16) or props:NextNumber(16, 19))
+		local z = onMarket and (props:NextInteger(0, 1) == 0 and props:NextNumber(18, 24) or props:NextNumber(40, 46)) or props:NextNumber(36, 128)
+		if props:NextNumber() < 0.5 then
+			block("Barrel", Vector3.new(2.4, 1.8, 1.8), CFrame.new(x, 1.7, z) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(110, 75, 45), Enum.Material.Wood, { Shape = Enum.PartType.Cylinder })
+		else
+			block("Crate", Vector3.new(2, 2, 2), CFrame.new(x, 1.5, z) * CFrame.Angles(0, props:NextNumber(0, 1), 0), Color3.fromRGB(140, 105, 65), Enum.Material.WoodPlanks)
+		end
+	end
+	for _, b in { { -45, -26 }, { 46, -34 }, { -12, -36 } } do
+		local hull = deco("Boat", Vector3.new(4, 1, 9), CFrame.new(b[1], -2.1, b[2]) * CFrame.Angles(0, 0.3, 0), Color3.fromRGB(120, 80, 50), Enum.Material.Wood)
+		deco("BoatLamp", Vector3.new(0.8, 1, 0.8), hull.CFrame * CFrame.new(0, 1, 3.5), Color3.fromRGB(255, 160, 80), Enum.Material.Neon)
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = CFrame.new(0, 0.6, 24)
 	local spawn = Instance.new("SpawnLocation")
@@ -3011,6 +3206,7 @@ function Map.build()
 		{ Shape = Enum.PartType.Ball, Transparency = 1 })
 
 	return {
+		portals = portals,
 		gates = gates,
 		boardGui = boardGui,
 		altar = altar,
@@ -3143,14 +3339,17 @@ workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale
 local hud = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, gui)
 
 ------------------------------------------------------------------ HUD: левая колонка
-local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 6), Size = UDim2.fromOffset(150, 230), BackgroundTransparency = 1 }, hud)
-K.make("UIGridLayout", { CellSize = UDim2.fromOffset(68, 68), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
+local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 10), Size = UDim2.fromOffset(136, 280), BackgroundTransparency = 1 }, hud)
+K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
 local btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 local btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
 local btnShop = K.iconButton(leftCol, "shop", "Магазин", T.red)
 local btnGift = K.iconButton(leftCol, "gift", "Подарок", T.green)
+local btnTeleport = K.iconButton(leftCol, "portal", "Телепорт", T.purple)
 local btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
-for i, b in { btnAtlas, btnQuests, btnShop, btnGift, btnSettings } do b.LayoutOrder = i end
+local btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
+btnAdmin.Visible = false
+for i, b in { btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
 
 ------------------------------------------------------------------ HUD: справа валюты и уровень
 local rightCol = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 140), BackgroundTransparency = 1 }, hud)
@@ -3735,10 +3934,127 @@ soundTestL.Parent.Activated:Connect(function()
 	play("catchRare")
 	soundTestL.Text = "Звук: " .. soundStatus
 end)
+local codeRow = K.panel(setList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = 6, BackgroundColor3 = T.panel2 })
+K.icon(codeRow, "code", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 5) })
+local codeBox = K.make("TextBox", {
+	Size = UDim2.new(0.6, -60, 1, -14), Position = UDim2.fromOffset(56, 7), BackgroundColor3 = T.ink, Text = "", PlaceholderText = "Введи код",
+	TextColor3 = T.text, PlaceholderColor3 = T.sub, Font = Enum.Font.GothamBold, TextScaled = true, ClearTextOnFocus = false,
+}, codeRow)
+K.corner(codeBox, UDim.new(0, 10))
+K.make("UITextSizeConstraint", { MaxTextSize = 20 }, codeBox)
+local codeBtn = K.button(codeRow, "Активировать", T.pink, { Size = UDim2.new(0.4, -10, 1, -14), Position = UDim2.new(0.6, 2, 0, 7), MaxText = 16 })
+codeBtn.Activated:Connect(function()
+	local r = remotes.Redeem:InvokeServer(codeBox.Text)
+	if r and r.ok then
+		codeBox.Text = ""
+		play("legendary")
+		showToast(r.msg, 3, Color3.fromRGB(150, 60, 110))
+	elseif r and r.msg then
+		showToast(r.msg)
+	end
+end)
 K.text(setList, "Чувствительность камеры и графика — в меню Roblox (кнопка вверху слева).", { Size = UDim2.new(1, -10, 0, 34), LayoutOrder = 9, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 
 ------------------------------------------------------------------ навигация по окнам
-local allWindows = { atlasW, questW, shopW, giftW, setW }
+-- Телепорт
+local tpW, tpBody = K.window(gui, "Телепорт", "portal", T.purple, 0.62, 0.8)
+local tpList = K.scroll(tpBody)
+K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, tpList)
+local tpRows = {}
+for i, key in Catalog.Worlds.TeleportOrder do
+	local dc = Catalog.Districts[key]
+	local f = K.panel(tpList, { Size = UDim2.new(1, -10, 0, 58), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+	local sw = K.make("Frame", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(9, 9), BackgroundColor3 = dc.tint }, f)
+	K.corner(sw, UDim.new(1, 0))
+	K.stroke(sw, T.ink, 3)
+	K.text(f, dc.name, { Size = UDim2.new(0.6, -64, 0, 24), Position = UDim2.fromOffset(58, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+	local st = K.text(f, "", { Size = UDim2.new(0.6, -64, 0, 16), Position = UDim2.fromOffset(58, 34), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local b, bl = K.button(f, "Лететь", T.purple, { Size = UDim2.new(0.38, -10, 1, -14), Position = UDim2.new(0.62, 0, 0, 7), MaxText = 16 })
+	b.Activated:Connect(function()
+		local r = remotes.Teleport:InvokeServer(key)
+		if r and r.ok then
+			K.close(tpW)
+			play("reveal")
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
+	tpRows[key] = { st = st, b = b, bl = bl }
+end
+local function refreshTeleport()
+	local stt = { distinct = state.distinct, level = state.level }
+	for key, row in tpRows do
+		local open = Catalog.unlocked(key, stt)
+		row.st.Text = open and "Открыт" or Catalog.unlockText(key, stt)
+		row.bl.Text = open and "Лететь" or "Закрыт"
+		K.recolor(row.b, open and T.purple or Color3.fromRGB(80, 80, 95))
+	end
+end
+
+-- Что нового
+local newsW, newsBody = K.window(gui, Prog.News.title, "news", T.red, 0.62, 0.8)
+local newsList = K.make("Frame", { Size = UDim2.new(1, 0, 1, -64), BackgroundTransparency = 1 }, newsBody)
+K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, newsList)
+for i, line in Prog.News.lines do
+	K.text(newsList, "•  " .. line, { Size = UDim2.new(1, 0, 0, 26), LayoutOrder = i, TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, Font = Enum.Font.GothamBold })
+end
+local newsOk = K.button(newsBody, "Погнали!", T.green, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(220, 50), Position = UDim2.new(0.5, 0, 1, 0), MaxText = 22 })
+newsOk.Activated:Connect(function()
+	K.close(newsW)
+	remotes.NewsSeen:FireServer()
+end)
+
+-- Админка (сервер проверяет доступ сам)
+local adminW, adminBody = K.window(gui, "Админка", "admin", Color3.fromRGB(230, 160, 30), 0.78, 0.82)
+local adminGrid = K.scroll(adminBody)
+K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 52), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, adminGrid)
+local function adminCmd(cmd, a1, a2)
+	local r = remotes.Admin:InvokeServer(cmd, a1, a2)
+	if r and r.ok then showToast("Админ: готово", 1.2, Color3.fromRGB(150, 110, 20))
+	elseif r and r.msg then showToast(r.msg) end
+end
+local adminButtons = {
+	{ "+1000 монет", "coins" }, { "+100 пыли", "dust" }, { "+1 уровень", "level" }, { "Все духи", "allSpirits" },
+	{ "Макс. улучшения", "maxUpgrades" }, { "Весь донат", "passes" }, { "Начать луну", "moon" }, { "Закончить луну", "endMoon" },
+	{ "Фейерверк", "fireworks" }, { "Банка полная", "fillJar" }, { "Мгновенная ловля", "fast" }, { "Сброс прогресса", "reset" },
+}
+local resetArmed = false
+for i, bd in adminButtons do
+	local b = K.button(adminGrid, bd[1], bd[2] == "reset" and T.red or T.orange, { LayoutOrder = i, MaxText = 15 })
+	b.Activated:Connect(function()
+		if bd[2] == "reset" and not resetArmed then
+			resetArmed = true
+			showToast("Нажми «Сброс прогресса» ещё раз для подтверждения", 3)
+			task.delay(3, function() resetArmed = false end)
+			return
+		end
+		resetArmed = false
+		adminCmd(bd[2])
+	end)
+end
+local spawnKind, spawnVar = 1, 1
+local kindB, kindL = K.button(adminGrid, "", T.blue, { LayoutOrder = 50, MaxText = 14 })
+local varB, varL = K.button(adminGrid, "", T.purple, { LayoutOrder = 51, MaxText = 14 })
+local spawnB = K.button(adminGrid, "Призвать духа", T.green, { LayoutOrder = 52, MaxText = 15 })
+local function refreshSpawnLabels()
+	kindL.Text = Catalog.Kinds[Catalog.Order[spawnKind]].name
+	varL.Text = Catalog.Variants[Catalog.VariantOrder[spawnVar]].name
+end
+refreshSpawnLabels()
+kindB.Activated:Connect(function()
+	spawnKind = spawnKind % #Catalog.Order + 1
+	refreshSpawnLabels()
+end)
+varB.Activated:Connect(function()
+	spawnVar = spawnVar % #Catalog.VariantOrder + 1
+	refreshSpawnLabels()
+end)
+spawnB.Activated:Connect(function()
+	adminCmd("spawn", Catalog.Order[spawnKind], Catalog.VariantOrder[spawnVar])
+	K.close(adminW)
+end)
+
+local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW }
 local function toggleWindow(w, refresh)
 	local willOpen = not w.Visible
 	for _, x in allWindows do K.close(x) end
@@ -3757,6 +4073,8 @@ btnShop.Activated:Connect(function()
 	end)
 end)
 btnGift.Activated:Connect(function() toggleWindow(giftW, refreshGift) end)
+btnTeleport.Activated:Connect(function() toggleWindow(tpW, refreshTeleport) end)
+btnAdmin.Activated:Connect(function() toggleWindow(adminW) end)
 btnSettings.Activated:Connect(function()
 	toggleWindow(setW, function()
 		for _, r in setRefreshers do r() end
@@ -4031,7 +4349,9 @@ playBtn.Activated:Connect(function()
 		intro:Destroy()
 		hud.Visible = true
 		if not state.tutorialDone and tut.step == 0 then setStep(1) end
-		if state.dailyReady then
+		if state.tutorialDone and (state.newsSeen or 0) < Prog.NewsVersion then
+			task.delay(0.6, function() toggleWindow(newsW) end)
+		elseif state.dailyReady then
 			task.delay(1.2, function() toggleWindow(giftW, refreshGift) end)
 		end
 	end)
@@ -4050,6 +4370,7 @@ remotes.State.OnClientEvent:Connect(function(s)
 		if not s.tutorialDone and not introOpen then setStep(1) end
 		if s.persistent == false then showToast("Сохранения недоступны в этом запуске", 3) end
 	end
+	btnAdmin.Visible = s.isAdmin == true
 	refreshHUD()
 	if tut.step == 4 and s.equipped then finishTutorial() end
 end)
@@ -4344,7 +4665,21 @@ RunService.RenderStepped:Connect(function(dt)
 		local dist = r and (cf.Position - r.Position).Magnitude or 0
 		if v.shadow then
 			v.shadow.CFrame = CFrame.new(cf.X, 0.62, cf.Z) * CFrame.Angles(0, now * 0.8, math.rad(90))
-			v.shadow.Transparency = revealed and 0.88 or 0.3 + math.sin(now * 3 + v.seed) * 0.1
+			-- тень видна только в луче фонаря или совсем рядом, иначе ищи по следам
+			local lit = false
+			if r and not revealed then
+				local d = cf.Position - r.Position
+				local fl = Vector3.new(d.X, 0, d.Z)
+				local look = r.CFrame.LookVector
+				lit = dist < 6 or (dist < lanternRange() * 0.8 and fl.Magnitude > 0.1 and fl.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.8)
+			end
+			local goal = revealed and 0.95 or (lit and (0.35 + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
+			v.shadow.Transparency += (goal - v.shadow.Transparency) * math.min(1, dt * 5)
+			local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
+			if pe and not revealed then
+				local sparkle = v.anchor:GetAttribute("Variant")
+				pe.Rate = lit and ((sparkle ~= "normal" and sparkle ~= "giant") and 24 or 8) or ((sparkle ~= "normal" and sparkle ~= "giant") and 2 or 0)
+			end
 		end
 		if revealed and not v.model then
 			v.model = Spirits.Builders[v.kind]()

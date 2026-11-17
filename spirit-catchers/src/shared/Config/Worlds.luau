@@ -35,37 +35,39 @@ W.Worlds = {
 	},
 }
 
+W.TeleportOrder = { "plaza", "street", "canal", "garden", "grove", "market" }
+
 W.Districts = {
 	street = {
-		world = "lantern", name = "Улица бумажных фонарей", max = 7,
+		tp = Vector3.new(0, 3, 40), world = "lantern", name = "Улица бумажных фонарей", max = 7,
 		zones = { { x = { -14, 14 }, z = { 34, 124 } } },
 		tint = Color3.fromRGB(255, 240, 225), center = Vector3.new(0, 0.5, 80),
 	},
 	plaza = {
-		world = "lantern", name = "Площадь алтаря", max = 0,
+		tp = Vector3.new(0, 3, 26), world = "lantern", name = "Площадь алтаря", max = 0,
 		zones = {}, tint = Color3.fromRGB(235, 242, 255), center = Vector3.new(0, 0.5, 12),
 	},
 	canal = {
-		world = "lantern", name = "Канал с мостами", max = 7,
+		tp = Vector3.new(0, 3, -13), world = "lantern", name = "Канал с мостами", max = 7,
 		zones = { { x = { -56, 56 }, z = { -18, -11 } }, { x = { -56, 56 }, z = { -49, -42 } } },
 		tint = Color3.fromRGB(225, 238, 255), center = Vector3.new(0, 0.5, -30),
 		-- траектория для «плывущих» духов: эллипс над водой
 		swim = { center = Vector3.new(0, 1.8, -30), rx = 22, rz = 6, speed = 0.3 },
 	},
 	garden = {
-		world = "lantern", name = "Храмовый сад", max = 8,
+		tp = Vector3.new(0, 3, -84), world = "lantern", name = "Храмовый сад", max = 8,
 		zones = { { x = { -38, 38 }, z = { -144, -80 } } },
 		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
 		unlock = { kinds = 3 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
 	},
 	grove = {
-		world = "lantern", name = "Бамбуковая роща", max = 8,
+		tp = Vector3.new(-50, 3, 10), world = "lantern", name = "Бамбуковая роща", max = 8,
 		zones = { { x = { -140, -48 }, z = { 2, 62 } } },
 		tint = Color3.fromRGB(225, 255, 240), center = Vector3.new(-95, 0.5, 32),
 		unlock = { level = 3 }, gate = "GroveGate", back = Vector3.new(-28, 4, 10),
 	},
 	market = {
-		world = "lantern", name = "Ночной рынок", max = 8,
+		tp = Vector3.new(50, 3, 10), world = "lantern", name = "Ночной рынок", max = 8,
 		zones = { { x = { 48, 140 }, z = { 2, 62 } } },
 		tint = Color3.fromRGB(255, 232, 245), center = Vector3.new(95, 0.5, 32),
 		unlock = { kinds = 8 }, gate = "MarketGate", back = Vector3.new(28, 4, 10),

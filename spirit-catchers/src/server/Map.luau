@@ -347,6 +347,42 @@ function Map.build()
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
 
+	---------------------------------------------------------------- порталы на площади
+	local portals = {}
+	for _, p in { { -30, "grove", Color3.fromRGB(110, 240, 200) }, { -19, "garden", Color3.fromRGB(170, 255, 170) }, { 19, "canal", Color3.fromRGB(80, 230, 220) }, { 30, "market", Color3.fromRGB(255, 120, 200) } } do
+		local x, col = p[1], p[3]
+		for _, dx in { -3, 3 } do
+			block("PortalPost", Vector3.new(1, 8, 1), CFrame.new(x + dx, 4.5, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
+		end
+		block("PortalTop", Vector3.new(8, 1, 1.4), CFrame.new(x, 9, -4), Color3.fromRGB(60, 50, 70), Enum.Material.Slate)
+		local swirl = deco("Portal", Vector3.new(0.3, 7, 5.2), CFrame.new(x, 4.6, -4) * CFrame.Angles(0, math.rad(90), 0), col, Enum.Material.Neon,
+			{ Shape = Enum.PartType.Cylinder, Transparency = 0.35 })
+		swirl:SetAttribute("District", p[2])
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color, pe.LightEmission, pe.Rate = ColorSequence.new(col, Color3.new(1, 1, 1)), 1, 12
+		pe.Lifetime, pe.Speed, pe.Size = NumberRange.new(0.8, 1.4), NumberRange.new(1, 2), NumberSequence.new(0.4, 0)
+		pe.Parent = swirl
+		light(swirl, col, 12, 0.8)
+		table.insert(portals, swirl)
+	end
+
+	---------------------------------------------------------------- детали: бочки, ящики, лодки
+	local props = Random.new(7)
+	for _ = 1, 26 do
+		local onMarket = props:NextNumber() < 0.4
+		local x = onMarket and props:NextNumber(46, 146) or (props:NextInteger(0, 1) == 0 and props:NextNumber(-19, -16) or props:NextNumber(16, 19))
+		local z = onMarket and (props:NextInteger(0, 1) == 0 and props:NextNumber(18, 24) or props:NextNumber(40, 46)) or props:NextNumber(36, 128)
+		if props:NextNumber() < 0.5 then
+			block("Barrel", Vector3.new(2.4, 1.8, 1.8), CFrame.new(x, 1.7, z) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(110, 75, 45), Enum.Material.Wood, { Shape = Enum.PartType.Cylinder })
+		else
+			block("Crate", Vector3.new(2, 2, 2), CFrame.new(x, 1.5, z) * CFrame.Angles(0, props:NextNumber(0, 1), 0), Color3.fromRGB(140, 105, 65), Enum.Material.WoodPlanks)
+		end
+	end
+	for _, b in { { -45, -26 }, { 46, -34 }, { -12, -36 } } do
+		local hull = deco("Boat", Vector3.new(4, 1, 9), CFrame.new(b[1], -2.1, b[2]) * CFrame.Angles(0, 0.3, 0), Color3.fromRGB(120, 80, 50), Enum.Material.Wood)
+		deco("BoatLamp", Vector3.new(0.8, 1, 0.8), hull.CFrame * CFrame.new(0, 1, 3.5), Color3.fromRGB(255, 160, 80), Enum.Material.Neon)
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = CFrame.new(0, 0.6, 24)
 	local spawn = Instance.new("SpawnLocation")
@@ -359,6 +395,7 @@ function Map.build()
 		{ Shape = Enum.PartType.Ball, Transparency = 1 })
 
 	return {
+		portals = portals,
 		gates = gates,
 		boardGui = boardGui,
 		altar = altar,

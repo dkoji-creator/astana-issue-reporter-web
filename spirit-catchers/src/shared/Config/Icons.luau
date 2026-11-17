@@ -16,4 +16,8 @@ return {
 	target = "rbxassetid://134649108001683",
 	trophy = "rbxassetid://112966267833981",
 	upgrade = "rbxassetid://104155225587936",
+	portal = "rbxassetid://121921391992229",
+	code = "rbxassetid://128285801735878",
+	admin = "rbxassetid://100153452016284",
+	news = "rbxassetid://101968313426978",
 }
