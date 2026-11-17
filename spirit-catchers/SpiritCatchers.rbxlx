@@ -4091,11 +4091,6 @@ volumeRow(1, "Музыка", "music")
 volumeRow(2, "Звуки", "sfx")
 toggleRow(3, "Приглушённые эффекты", "reduced", function() applyReduced() end)
 if IS_TEST then toggleRow(4, "Диагностика FPS (тест)", "diag") end
-local _, soundTestL = K.button(setList, "Проверить звук", T.blue, { Size = UDim2.new(1, -10, 0, 46), LayoutOrder = 5, MaxText = 18 })
-soundTestL.Parent.Activated:Connect(function()
-	play("catchRare")
-	soundTestL.Text = "Звук: " .. soundStatus
-end)
 local codeRow = K.panel(setList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = 6, BackgroundColor3 = T.panel2 })
 K.icon(codeRow, "code", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 5) })
 local codeBox = K.make("TextBox", {
