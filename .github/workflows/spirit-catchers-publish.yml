@@ -1,0 +1,18 @@
+name: Publish Spirit Catchers test place
+on: workflow_dispatch
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 spirit-catchers/build.py
+      - name: Upload via Roblox Open Cloud
+        env:
+          KEY: ${{ secrets.ROBLOX_API_KEY }}
+          UNIVERSE: ${{ vars.SC_UNIVERSE_ID }}
+          PLACE: ${{ vars.SC_PLACE_ID }}
+        run: |
+          curl --fail-with-body -X POST \
+            "https://apis.roblox.com/universes/v1/$UNIVERSE/places/$PLACE/versions?versionType=Published" \
+            -H "x-api-key: $KEY" -H "Content-Type: application/xml" \
+            --data-binary @spirit-catchers/SpiritCatchers.rbxlx
