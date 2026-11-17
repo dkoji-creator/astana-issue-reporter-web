@@ -26,6 +26,77 @@
       </Properties>
       <Item class="ModuleScript" referent="3">
         <Properties>
+          <string name="Name">Catalog</string>
+          <string name="Source"><![CDATA[-- Каталог духов, редкостей и прогресса. Общий для сервера и клиента.
+local C = {}
+
+C.Order = { "PaperFox", "Umbrella", "Firefly", "LanternSpirit", "Kodama", "Crane", "MoonRabbit", "GoldenCarp" }
+
+C.Rarity = {
+	common = { name = "Обычный", color = Color3.fromRGB(215, 215, 225), material = 1, catchTime = 1.5, revealTime = 0.35, shadow = Color3.fromRGB(80, 25, 140) },
+	uncommon = { name = "Необычный", color = Color3.fromRGB(110, 200, 255), material = 2, catchTime = 2.0, revealTime = 0.5, shadow = Color3.fromRGB(25, 70, 170) },
+	rare = { name = "Редкий", color = Color3.fromRGB(120, 255, 170), material = 4, catchTime = 2.6, revealTime = 0.7, shadow = Color3.fromRGB(10, 120, 95) },
+	epic = { name = "Эпический", color = Color3.fromRGB(255, 120, 220), material = 8, catchTime = 3.0, revealTime = 0.8, shadow = Color3.fromRGB(150, 20, 120) },
+	legendary = { name = "Легендарный", color = Color3.fromRGB(255, 200, 80), material = 15, catchTime = 3.5, revealTime = 0, shadow = Color3.fromRGB(170, 120, 10) },
+}
+
+-- move: walk | float | fly | swim; height — над землёй
+C.Kinds = {
+	PaperFox = { name = "Бумажный лис", icon = "🦊", rarity = "common", move = "walk", speed = 6, height = 0,
+		hint = "Улица фонарей и берега канала", follow = 0.45, animSpeed = 9 },
+	Umbrella = { name = "Зонтик-каса", icon = "☂️", rarity = "common", move = "walk", speed = 5, height = 0,
+		hint = "Берега канала, прыгает у воды", follow = 0.5, animSpeed = 6 },
+	Firefly = { name = "Светлячок", icon = "✨", rarity = "common", move = "float", speed = 4, height = 2.5,
+		hint = "Храмовый сад", follow = 0.8, animSpeed = 8 },
+	LanternSpirit = { name = "Дух-фонарь", icon = "🏮", rarity = "uncommon", move = "float", speed = 4, height = 1,
+		hint = "Улица фонарей, танцует под гирляндами", follow = 0.5, animSpeed = 5 },
+	Kodama = { name = "Моховичок", icon = "🌿", rarity = "uncommon", move = "walk", speed = 3, height = 0,
+		hint = "Храмовый сад, у деревьев", follow = 0.6, animSpeed = 4 },
+	Crane = { name = "Бумажный журавлик", icon = "🕊️", rarity = "rare", move = "fly", speed = 8, height = 6,
+		hint = "Храмовый сад, чаще в Красную луну", follow = 0.5, animSpeed = 5 },
+	MoonRabbit = { name = "Лунный кролик", icon = "🐇", rarity = "epic", move = "walk", speed = 7, height = 0,
+		hint = "Только в Красную луну: улица и сад", follow = 0.5, animSpeed = 6, moonOnly = true },
+	GoldenCarp = { name = "Золотой карп", icon = "🐟", rarity = "legendary", move = "swim", speed = 0, height = 0,
+		hint = "Только в Красную луну: над каналом", follow = 0.3, animSpeed = 3, moonOnly = true },
+}
+
+C.JarCap = { 3, 5, 7, 10 }
+C.LanternRange = { 30, 36, 42, 50 }
+C.LanternSpeed = { 1, 1.2, 1.4, 1.65 }
+C.UpgradeCost = { 5, 12, 25 }
+C.MaxLevel = 4
+C.GardenNeed = 3
+C.CatchRange = 14
+C.CarpCatchRange = 20
+
+C.DistrictNames = {
+	street = "Улица бумажных фонарей",
+	plaza = "Площадь алтаря",
+	canal = "Канал с мостами",
+	garden = "Храмовый сад",
+}
+
+function C.district(z: number): string
+	if z > 30 then
+		return "street"
+	elseif z > -8 then
+		return "plaza"
+	elseif z > -72 then
+		return "canal"
+	end
+	return "garden"
+end
+
+function C.catchRange(kind: string): number
+	return kind == "GoldenCarp" and C.CarpCatchRange or C.CatchRange
+end
+
+return C
+]]></string>
+        </Properties>
+      </Item>
+      <Item class="ModuleScript" referent="4">
+        <Properties>
           <string name="Name">Spirits</string>
           <string name="Source"><![CDATA[-- Модели духов и они из примитивов (оригинальный дизайн) + процедурная анимация.
 -- Каждая деталь хранит атрибут Base (CFrame относительно опоры модели).
@@ -52,6 +123,13 @@ local function ellipsoid(p)
 	mesh.MeshType = Enum.MeshType.Sphere
 	mesh.Parent = p
 	return p
+end
+
+local function light(parent, color, range, brightness)
+	local l = Instance.new("PointLight")
+	l.Color, l.Range, l.Brightness = color, range, brightness
+	l.Parent = parent
+	return l
 end
 
 local function joint(p, at: Vector3, anim: string, phase: number?, amp: number?)
@@ -245,14 +323,166 @@ function S.buildOni(): Model
 	return m
 end
 
+------------------------------------------------------------------ дух-фонарь (танцует)
+function S.buildLanternSpirit(): Model
+	local m = Instance.new("Model")
+	m.Name = "LanternSpirit"
+	local paper = Color3.fromRGB(255, 165, 85)
+	local rim = Color3.fromRGB(110, 25, 30)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(3, 3.8, 3), CFrame = CFrame.new(0, 3, 0), Color = paper, Material = Enum.Material.Neon, Transparency = 0.05 }))
+	local vertical = CFrame.Angles(0, 0, math.rad(90))
+	for _, r in { { 2, 2.65 }, { 3, 3.05 }, { 4, 2.65 } } do
+		mk(m, { Name = "Rib", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.18, r[2], r[2]), CFrame = CFrame.new(0, r[1], 0) * vertical, Color = rim })
+	end
+	mk(m, { Name = "Cap", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5, 1.7, 1.7), CFrame = CFrame.new(0, 1.05, 0) * vertical, Color = rim })
+	mk(m, { Name = "Cap", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.5, 1.7, 1.7), CFrame = CFrame.new(0, 4.95, 0) * vertical, Color = rim })
+	mk(m, { Name = "Handle", Size = Vector3.new(0.2, 1.1, 0.2), CFrame = CFrame.new(0, 5.6, 0), Color = Color3.fromRGB(60, 40, 30) })
+	mk(m, { Name = "Handle", Size = Vector3.new(1.4, 0.2, 0.2), CFrame = CFrame.new(0, 6.1, 0), Color = Color3.fromRGB(60, 40, 30) })
+	ellipsoid(mk(m, { Name = "Eye", Size = Vector3.new(1.4, 1.2, 0.4), CFrame = CFrame.new(0, 3.3, -1.38), Color = Color3.new(1, 1, 1) }))
+	ellipsoid(mk(m, { Name = "Pupil", Size = Vector3.new(0.55, 0.6, 0.2), CFrame = CFrame.new(0, 3.3, -1.58), Color = Color3.fromRGB(20, 10, 20) }))
+	local tongue = mk(m, { Name = "Tongue", Size = Vector3.new(0.6, 0.15, 1.2), CFrame = CFrame.new(0, 2.15, -1.75) * CFrame.Angles(math.rad(-35), 0, 0), Color = Color3.fromRGB(230, 60, 90) })
+	joint(tongue, Vector3.new(0, 2.4, -1.3), "twitch", 0, 2)
+	for i, x in { -1, 1 } do
+		local arm = mk(m, { Name = "Arm", Size = Vector3.new(0.25, 1.6, 0.25), CFrame = CFrame.new(x * 1.9, 3.4, 0) * CFrame.Angles(0, 0, math.rad(x * 40)), Color = rim })
+		joint(arm, Vector3.new(x * 1.45, 3.1, 0), "flapZ", i * math.pi, 1.2)
+		local hand = mk(m, { Name = "Hand", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), CFrame = CFrame.new(x * 2.4, 4, 0), Color = paper, Material = Enum.Material.Neon })
+		joint(hand, Vector3.new(x * 1.45, 3.1, 0), "flapZ", i * math.pi, 1.2)
+		local ribbon = mk(m, { Name = "Ribbon", Size = Vector3.new(0.08, 2.4, 0.5), CFrame = CFrame.new(x * 0.5, -0.3, 0.2), Color = Color3.fromRGB(240, 40, 50), Material = Enum.Material.Neon })
+		joint(ribbon, Vector3.new(x * 0.5, 0.9, 0.2), "flapZ", i * 1.7, 0.8)
+	end
+	light(body, Color3.fromRGB(255, 170, 90), 16, 2)
+	m.PrimaryPart = body
+	return m
+end
+
+------------------------------------------------------------------ зонтик-каса
+function S.buildUmbrella(): Model
+	local m = Instance.new("Model")
+	m.Name = "Umbrella"
+	local red = Color3.fromRGB(205, 50, 65)
+	local canopy = ellipsoid(mk(m, { Name = "Canopy", Size = Vector3.new(5, 1.9, 5), CFrame = CFrame.new(0, 4.5, 0), Color = red }))
+	ellipsoid(mk(m, { Name = "Under", Size = Vector3.new(4.7, 1.2, 4.7), CFrame = CFrame.new(0, 4.05, 0), Color = Color3.fromRGB(90, 20, 30) }))
+	mk(m, { Name = "Tip", Size = Vector3.new(0.3, 0.9, 0.3), CFrame = CFrame.new(0, 5.8, 0), Color = Color3.fromRGB(60, 40, 30) })
+	for i = 0, 5 do
+		local a = i * math.pi / 3
+		mk(m, { Name = "Rib", Size = Vector3.new(0.12, 0.12, 2.5), CFrame = CFrame.new(math.sin(a) * 1.25, 5.25, math.cos(a) * 1.25) * CFrame.Angles(0, a, 0) * CFrame.Angles(math.rad(-25), 0, 0),
+			Color = Color3.fromRGB(250, 220, 200) })
+	end
+	ellipsoid(mk(m, { Name = "Eye", Size = Vector3.new(1.1, 1.2, 0.4), CFrame = CFrame.new(0, 4.6, -2.25), Color = Color3.new(1, 1, 1) }))
+	ellipsoid(mk(m, { Name = "Pupil", Size = Vector3.new(0.5, 0.55, 0.2), CFrame = CFrame.new(0, 4.55, -2.45), Color = Color3.fromRGB(20, 10, 20) }))
+	local tongue = mk(m, { Name = "Tongue", Size = Vector3.new(0.5, 0.12, 2), CFrame = CFrame.new(0, 3.6, -2.9) * CFrame.Angles(math.rad(-30), 0, 0), Color = Color3.fromRGB(255, 110, 150) })
+	joint(tongue, Vector3.new(0, 4, -2.1), "wagY", 0, 1.4)
+	mk(m, { Name = "Leg", Size = Vector3.new(0.35, 3.6, 0.35), CFrame = CFrame.new(0, 2.1, 0), Color = Color3.fromRGB(120, 85, 55), Material = Enum.Material.Wood })
+	mk(m, { Name = "Geta", Size = Vector3.new(1, 0.3, 1.7), CFrame = CFrame.new(0, 0.3, 0), Color = Color3.fromRGB(150, 110, 70), Material = Enum.Material.Wood })
+	for _, z in { -0.5, 0.5 } do
+		mk(m, { Name = "Tooth", Size = Vector3.new(1, 0.3, 0.25), CFrame = CFrame.new(0, 0.05, z), Color = Color3.fromRGB(80, 55, 35) })
+	end
+	light(canopy, Color3.fromRGB(255, 120, 140), 10, 1)
+	m.PrimaryPart = canopy
+	return m
+end
+
+------------------------------------------------------------------ светлячок (опора — центр)
+function S.buildFirefly(): Model
+	local m = Instance.new("Model")
+	m.Name = "Firefly"
+	local core = mk(m, { Name = "Core", Shape = Enum.PartType.Ball, Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(), Color = Color3.fromRGB(200, 255, 110), Material = Enum.Material.Neon })
+	for i, x in { -1, 1 } do
+		local w = mk(m, { Name = "Wing", Size = Vector3.new(0.05, 0.9, 1.3), CFrame = CFrame.new(x * 0.7, 0.4, 0.1) * CFrame.Angles(0, 0, math.rad(x * -30)),
+			Color = Color3.fromRGB(220, 255, 255), Material = Enum.Material.Neon, Transparency = 0.5 })
+		joint(w, Vector3.new(x * 0.4, 0.3, 0), "flapZ", i * math.pi, 1.4)
+	end
+	for i = 1, 3 do
+		local a = i * math.pi * 2 / 3
+		local o = mk(m, { Name = "Orb", Shape = Enum.PartType.Ball, Size = Vector3.new(0.4, 0.4, 0.4), CFrame = CFrame.new(math.cos(a) * 1.4, math.sin(i) * 0.3, math.sin(a) * 1.4),
+			Color = Color3.fromRGB(255, 255, 160), Material = Enum.Material.Neon })
+		joint(o, Vector3.zero, "wagY", i * 2, 2)
+	end
+	light(core, Color3.fromRGB(190, 255, 120), 12, 2)
+	m.PrimaryPart = core
+	S.scale(m, 1.4)
+	return m
+end
+
+------------------------------------------------------------------ моховичок
+function S.buildKodama(): Model
+	local m = Instance.new("Model")
+	m.Name = "Kodama"
+	local white = Color3.fromRGB(235, 242, 225)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.5, 1.8, 1.3), CFrame = CFrame.new(0, 0.9, 0), Color = white }))
+	local head = ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(2.3, 2.5, 2.1), CFrame = CFrame.new(0, 2.9, 0), Color = white }))
+	joint(head, Vector3.new(0, 1.8, 0), "twitch", 0, 1)
+	for _, x in { -0.45, 0.45 } do
+		local e = ellipsoid(mk(m, { Name = "Eye", Size = Vector3.new(0.4, 0.5, 0.2), CFrame = CFrame.new(x, 3.1, -1.0), Color = Color3.fromRGB(20, 20, 20) }))
+		joint(e, Vector3.new(0, 1.8, 0), "twitch", 0, 1)
+		local arm = mk(m, { Name = "Arm", Size = Vector3.new(0.25, 0.8, 0.25), CFrame = CFrame.new(x * 2, 1.1, 0), Color = white })
+		joint(arm, Vector3.new(x * 1.6, 1.4, 0), "flapZ", x > 0 and 0 or math.pi, 0.6)
+	end
+	local mouth = ellipsoid(mk(m, { Name = "Mouth", Size = Vector3.new(0.35, 0.45, 0.2), CFrame = CFrame.new(0, 2.4, -1.0), Color = Color3.fromRGB(20, 20, 20) }))
+	joint(mouth, Vector3.new(0, 1.8, 0), "twitch", 0, 1)
+	local leaf = mk(m, { Name = "Leaf", Size = Vector3.new(0.15, 0.9, 0.6), CFrame = CFrame.new(0, 4.4, 0), Color = Color3.fromRGB(90, 200, 90), Material = Enum.Material.Neon }, "WedgePart")
+	joint(leaf, Vector3.new(0, 1.8, 0), "twitch", 0, 1)
+	light(head, Color3.fromRGB(180, 255, 200), 10, 1)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
+------------------------------------------------------------------ бумажный журавлик (опора — центр)
+function S.buildCrane(): Model
+	local m = Instance.new("Model")
+	m.Name = "Crane"
+	local paper = Color3.fromRGB(250, 250, 255)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.4, 1.2, 3), CFrame = CFrame.new(), Color = paper }))
+	mk(m, { Name = "Neck", Size = Vector3.new(0.3, 2.1, 0.3), CFrame = CFrame.new(0, 1.0, -1.7) * CFrame.Angles(math.rad(-35), 0, 0), Color = paper })
+	mk(m, { Name = "Head", Size = Vector3.new(0.5, 0.5, 0.9), CFrame = CFrame.new(0, 1.9, -2.4), Color = paper })
+	mk(m, { Name = "Crown", Size = Vector3.new(0.35, 0.15, 0.35), CFrame = CFrame.new(0, 2.2, -2.4), Color = Color3.fromRGB(240, 40, 50), Material = Enum.Material.Neon })
+	mk(m, { Name = "Beak", Size = Vector3.new(0.15, 0.15, 0.9), CFrame = CFrame.new(0, 1.85, -3.2), Color = Color3.fromRGB(240, 200, 90) })
+	for i, x in { -1, 1 } do
+		local w = mk(m, { Name = "Wing", Size = Vector3.new(4.6, 0.1, 1.9), CFrame = CFrame.new(x * 2.7, 0.3, 0), Color = paper })
+		joint(w, Vector3.new(x * 0.6, 0.3, 0), "flapZ", i * math.pi, 1.3)
+		local tip = mk(m, { Name = "WingTip", Size = Vector3.new(1.2, 0.12, 1.9), CFrame = CFrame.new(x * 4.6, 0.3, 0), Color = Color3.fromRGB(40, 40, 60) })
+		joint(tip, Vector3.new(x * 0.6, 0.3, 0), "flapZ", i * math.pi, 1.3)
+	end
+	mk(m, { Name = "Tail", Size = Vector3.new(1, 0.2, 1.5), CFrame = CFrame.new(0, 0.2, 2), Color = paper }, "WedgePart")
+	light(body, Color3.fromRGB(200, 255, 230), 12, 1.2)
+	m.PrimaryPart = body
+	S.scale(m, 1.4)
+	return m
+end
+
+------------------------------------------------------------------ лунный кролик
+function S.buildMoonRabbit(): Model
+	local m = Instance.new("Model")
+	m.Name = "MoonRabbit"
+	local white = Color3.fromRGB(245, 245, 255)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(2.2, 2, 2.8), CFrame = CFrame.new(0, 1.2, 0), Color = white }))
+	ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(1.8, 1.7, 1.8), CFrame = CFrame.new(0, 2.6, -1.4), Color = white }))
+	for i, x in { -1, 1 } do
+		local ear = ellipsoid(mk(m, { Name = "Ear", Size = Vector3.new(0.45, 2.3, 0.7), CFrame = CFrame.new(x * 0.45, 4.2, -1.2) * CFrame.Angles(0, 0, math.rad(-x * 10)), Color = white }))
+		joint(ear, Vector3.new(x * 0.45, 3.2, -1.3), "twitch", i * 1.5, 1.4)
+		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.3, 0.15), CFrame = CFrame.new(x * 0.5, 2.8, -2.25), Color = Color3.fromRGB(255, 50, 80), Material = Enum.Material.Neon })
+	end
+	mk(m, { Name = "Tail", Shape = Enum.PartType.Ball, Size = Vector3.new(0.9, 0.9, 0.9), CFrame = CFrame.new(0, 1.5, 1.5), Color = white })
+	for i = 1, 10 do
+		local a = i * math.pi * 2 / 10
+		mk(m, { Name = "Halo", Shape = Enum.PartType.Ball, Size = Vector3.new(0.35, 0.35, 0.35), CFrame = CFrame.new(math.cos(a) * 1.8, 3 + math.sin(a) * 1.8, 0.4),
+			Color = Color3.fromRGB(255, 240, 170), Material = Enum.Material.Neon })
+	end
+	light(body, Color3.fromRGB(255, 220, 240), 14, 1.5)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
 ------------------------------------------------------------------ тень
-function S.buildShadow(): Part
+function S.buildShadow(color: Color3?): Part
 	local s = Instance.new("Part")
 	s.Name = "Shadow"
 	s.Shape = Enum.PartType.Cylinder
 	s.Size = Vector3.new(0.2, 7, 7)
-	s.Anchored, s.CanCollide, s.CanTouch = true, false, false
-	s.Color = Color3.fromRGB(20, 0, 40)
+	s.Anchored, s.CanCollide, s.CanTouch, s.CanQuery = true, false, false, false
+	s.Color = color or Color3.fromRGB(20, 0, 40)
 	s.Material = Enum.Material.Neon
 	s.Transparency = 0.25
 	local pe = Instance.new("ParticleEmitter")
@@ -266,8 +496,31 @@ function S.buildShadow(): Part
 	return s
 end
 
-S.Names = { PaperFox = "Бумажный лис", GoldenCarp = "Золотой карп" }
-S.Builders = { PaperFox = S.buildPaperFox, GoldenCarp = S.buildGoldenCarp }
+S.Builders = {
+	PaperFox = S.buildPaperFox,
+	Umbrella = S.buildUmbrella,
+	Firefly = S.buildFirefly,
+	LanternSpirit = S.buildLanternSpirit,
+	Kodama = S.buildKodama,
+	Crane = S.buildCrane,
+	MoonRabbit = S.buildMoonRabbit,
+	GoldenCarp = S.buildGoldenCarp,
+}
+
+-- Движение всей модели поверх опоры (прыжки, танец, парение).
+local abs = math.abs
+S.Pose = {
+	PaperFox = function(t) return CFrame.new(0, abs(sin(t * 6)) * 0.5, 0) end,
+	Umbrella = function(t) return CFrame.new(0, abs(sin(t * 4)) * 1.8, 0) * CFrame.Angles(0, 0, sin(t * 4) * 0.12) end,
+	Firefly = function(t) return CFrame.new(sin(t * 1.3) * 0.6, sin(t * 2) * 0.6, math.cos(t * 1.1) * 0.6) end,
+	LanternSpirit = function(t)
+		return CFrame.new(0, abs(sin(t * 4)) * 0.9, 0) * CFrame.Angles(0, sin(t * 2) * 0.8, sin(t * 4) * 0.28)
+	end,
+	Kodama = function(t) return CFrame.new(0, abs(sin(t * 3)) * 0.3, 0) * CFrame.Angles(0, 0, sin(t * 1.5) * 0.15) end,
+	Crane = function(t) return CFrame.new(0, sin(t * 1.2) * 0.8, 0) * CFrame.Angles(0, 0, sin(t * 0.8) * 0.25) end,
+	MoonRabbit = function(t) return CFrame.new(0, abs(sin(t * 4)) * 1.4, 0) end,
+	GoldenCarp = function(t) return CFrame.new(0, sin(t * 1.3) * 0.6, 0) end,
+}
 
 return S
 ]]></string>
@@ -275,19 +528,19 @@ return S
       </Item>
     </Item>
   </Item>
-  <Item class="ServerScriptService" referent="4">
+  <Item class="ServerScriptService" referent="5">
     <Properties>
       <string name="Name">ServerScriptService</string>
     </Properties>
-    <Item class="Folder" referent="5">
+    <Item class="Folder" referent="6">
       <Properties>
         <string name="Name">Server</string>
       </Properties>
-      <Item class="Script" referent="6">
+      <Item class="Script" referent="7">
         <Properties>
           <string name="Name">Main</string>
           <token name="RunContext">0</token>
-          <string name="Source"><![CDATA[-- Spirit Catchers: сервер. Вылазка: лис → Красная луна → карп/они → алтарь.
+          <string name="Source"><![CDATA[-- Spirit Catchers: сервер. Появление, ловля, потеря и сохранение улова — только здесь.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local DataStoreService = game:GetService("DataStoreService")
@@ -295,23 +548,33 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
 
-local Spirits = require(ReplicatedStorage.Shared.Spirits)
+local Catalog = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Catalog"))
+local Map = require(script.Parent:WaitForChild("Map"))
+local map = Map.build()
 
 local TEST_PLACE_ID = 99980756426085
--- Закрытый тест: карп гарантированно приходит в первую Красную луну (Studio и тестовый плейс).
-local FORCE_CARP = RunService:IsStudio() or game.PlaceId == TEST_PLACE_ID
-local CARP_CHANCE = 0.35
-
-local REVEAL_RANGE, CATCH_RANGE, ALTAR_RANGE = 30, 15, 16
-local CATCH_TIME = { PaperFox = 1.5, GoldenCarp = 2.5 }
-local MAX_FOXES = 4
-local MOON_TIME, MOON_COOLDOWN = 75, 20
-local ONI_RADIUS, ONI_WARN, SAFE_RADIUS = 8, 1.6, 24
+-- Закрытый тест: редкие духи луны гарантированы (Studio и тестовый плейс)
+local IS_TEST = RunService:IsStudio() or game.PlaceId == TEST_PLACE_ID
+local FIRST_MOON, NORMAL_TIME, MOON_TIME = 100, 150, 70
+local ALTAR_RANGE, SAFE_RADIUS = 16, 26
+local ONI_RADIUS, ONI_WARN = 8, 1.6
+local DISTRICT_MAX = { street = 6, canal = 6, garden = 7 }
+local WEIGHTS = {
+	normal = {
+		street = { PaperFox = 60, LanternSpirit = 35, Crane = 5 },
+		canal = { PaperFox = 30, Umbrella = 55, LanternSpirit = 15 },
+		garden = { Firefly = 50, Kodama = 38, Crane = 12 },
+	},
+	moon = {
+		street = { PaperFox = 40, LanternSpirit = 35, MoonRabbit = 25 },
+		canal = { PaperFox = 25, Umbrella = 45, LanternSpirit = 20, Crane = 10 },
+		garden = { Firefly = 35, Kodama = 30, Crane = 25, MoonRabbit = 10 },
+	},
+}
 
 ------------------------------------------------------------------ remotes
 local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
-remotes.Parent = ReplicatedStorage
 local function remote(name, class)
 	local r = Instance.new(class or "RemoteEvent")
 	r.Name = name
@@ -319,164 +582,108 @@ local function remote(name, class)
 	return r
 end
 local RevealEv = remote("Reveal")
-local CatchStartEv = remote("CatchStart")
-local CatchFinishEv = remote("CatchFinish")
+local CatchHoldEv = remote("CatchHold")
 local EquipFn = remote("Equip", "RemoteFunction")
-local StateEv = remote("State") -- {jar, jarKinds, saved, equipped} | {saveResult}
-local CaughtEv = remote("Caught") -- kind, position
-local MoonEv = remote("Moon") -- active
-local HitEv = remote("Hit") -- lost count
+local UpgradeFn = remote("Upgrade", "RemoteFunction")
+local TutorialEv = remote("TutorialDone")
+local StateEv = remote("State")
+local SaveResultEv = remote("SaveResult")
+local CaughtEv = remote("Caught")
+local HitEv = remote("Hit")
+local NoticeEv = remote("Notice")
+remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
 Lighting.ClockTime = 0
-Lighting.Brightness = 1.2
-Lighting.Ambient = Color3.fromRGB(70, 70, 110)
-Lighting.OutdoorAmbient = Color3.fromRGB(80, 80, 125)
+Lighting.Brightness = 1.3
+Lighting.Ambient = Color3.fromRGB(75, 75, 115)
+Lighting.OutdoorAmbient = Color3.fromRGB(90, 90, 135)
 Lighting.EnvironmentDiffuseScale = 0.3
 local cc = Instance.new("ColorCorrectionEffect")
-cc.Name = "MoonTint"
 cc.Parent = Lighting
 local bloom = Instance.new("BloomEffect")
 bloom.Intensity, bloom.Size, bloom.Threshold = 0.6, 24, 0.9
 bloom.Parent = Lighting
 local atm = Instance.new("Atmosphere")
-atm.Density, atm.Haze, atm.Color, atm.Decay = 0.32, 1.2, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
+atm.Density, atm.Haze, atm.Color, atm.Decay = 0.3, 1.1, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
 atm.Parent = Lighting
 
------------------------------------------------------------------- квартал
-local world = Instance.new("Folder")
-world.Name = "World"
-world.Parent = workspace
-local function block(name, size, cf, color, mat, props)
-	local p = Instance.new("Part")
-	p.Name, p.Size, p.CFrame, p.Color = name, size, cf, color
-	p.Anchored = true
-	p.Material = mat or Enum.Material.Slate
-	for k, v in props or {} do p[k] = v end
-	p.Parent = world
-	return p
-end
-local function light(parent, color, range, brightness, cls)
-	local l = Instance.new(cls or "PointLight")
-	l.Color, l.Range, l.Brightness = color, range, brightness
-	l.Parent = parent
-	return l
-end
-local WARM = Color3.fromRGB(255, 160, 80)
-local COLD = Color3.fromRGB(110, 200, 255)
-
-local stone = Color3.fromRGB(70, 68, 82)
-block("StreetN", Vector3.new(40, 1, 60), CFrame.new(0, 0, -42), stone, Enum.Material.Cobblestone)
-block("StreetS", Vector3.new(40, 1, 80), CFrame.new(0, 0, 52), stone, Enum.Material.Cobblestone)
-for _, x in { -20, 20 } do
-	block("CanalWall", Vector3.new(1, 7, 24), CFrame.new(x, -3, 0), Color3.fromRGB(60, 55, 60))
-end
-block("CanalBed", Vector3.new(40, 1, 24), CFrame.new(0, -7, 0), Color3.fromRGB(10, 15, 30))
-block("Water", Vector3.new(40, 0.4, 24), CFrame.new(0, -3, 0), Color3.fromRGB(25, 60, 110), Enum.Material.Glass,
-	{ Transparency = 0.35, Reflectance = 0.35, CanCollide = false })
--- цветные «отражения» фонарей под водой
-local refl = { WARM, Color3.fromRGB(255, 90, 140), COLD, Color3.fromRGB(255, 200, 90) }
-for i = 1, 12 do
-	local x = -18 + (i - 1) * 3.3
-	block("Reflection", Vector3.new(0.8, 0.1, 4 + (i % 3) * 3), CFrame.new(x, -3.6, ((i * 7) % 13) - 6), refl[i % 4 + 1], Enum.Material.Neon,
-		{ CanCollide = false, Transparency = 0.35 })
-end
-block("Bridge", Vector3.new(12, 1, 26), CFrame.new(0, 0.6, 0), Color3.fromRGB(150, 45, 40), Enum.Material.Wood)
-for _, x in { -6, 6 } do
-	block("Rail", Vector3.new(0.5, 2.5, 26), CFrame.new(x, 2.3, 0), Color3.fromRGB(190, 55, 45), Enum.Material.Wood)
-	for _, z in { -12, 12 } do
-		local post = block("BridgeLamp", Vector3.new(1.2, 1.6, 1.2), CFrame.new(x, 4.4, z), WARM, Enum.Material.Neon, { CanCollide = false })
-		light(post, WARM, 18, 1.6)
-	end
-end
--- домики с крышами
-for i = -3, 3 do
-	if i ~= 0 then
-		for _, side in { -1, 1 } do
-			local h = 10 + (i % 3) * 4
-			local z = i * 22
-			block("House", Vector3.new(14, h, 18), CFrame.new(side * 27, h / 2, z), Color3.fromRGB(85, 70, 90), Enum.Material.Brick)
-			block("Roof", Vector3.new(16, 1, 20), CFrame.new(side * 27, h + 0.5, z), Color3.fromRGB(110, 35, 40), Enum.Material.Slate)
-			block("Window", Vector3.new(0.3, 3, 4), CFrame.new(side * 19.9, 6, z), Color3.fromRGB(255, 200, 120), Enum.Material.Neon)
-			block("Step", Vector3.new(4, h / 2, 4), CFrame.new(side * 18, h / 4, z + 7), Color3.fromRGB(90, 75, 60), Enum.Material.Wood)
-		end
-	end
-end
--- гирлянды тёплых бумажных фонарей ведут к мосту
-for z = -50, 64, 6 do
-	if math.abs(z) > 13 then
-		for _, x in { -13, 13 } do
-			local lantern = block("PaperLantern", Vector3.new(1.4, 1.8, 1.4), CFrame.new(x, 9, z), Color3.fromRGB(255, 140, 70), Enum.Material.Neon,
-				{ CanCollide = false, Shape = Enum.PartType.Ball })
-			if (z // 6) % 2 == 0 then light(lantern, WARM, 20, 1.3) end
-		end
-		block("String", Vector3.new(26, 0.1, 0.1), CFrame.new(0, 9.8, z), Color3.fromRGB(40, 30, 30), nil, { CanCollide = false })
-	end
-end
--- алтарь: холодный свет
-local ALTAR_POS = Vector3.new(0, 1, 78)
-local altar = block("Altar", Vector3.new(8, 3, 8), CFrame.new(ALTAR_POS + Vector3.new(0, 1, 0)), Color3.fromRGB(170, 185, 200), Enum.Material.Marble)
-local altarGlow = block("AltarGlow", Vector3.new(3, 3, 3), CFrame.new(ALTAR_POS + Vector3.new(0, 5.5, 0)), COLD, Enum.Material.Neon,
-	{ CanCollide = false, Shape = Enum.PartType.Ball })
-light(altarGlow, COLD, 36, 3)
-for _, x in { -6, 6 } do
-	local pillar = block("AltarPillar", Vector3.new(1, 10, 1), CFrame.new(x, 5.5, ALTAR_POS.Z), COLD, Enum.Material.Neon, { Transparency = 0.2 })
-	light(pillar, COLD, 18, 1.5)
-end
-local altarBill = Instance.new("BillboardGui")
-altarBill.Size, altarBill.StudsOffset, altarBill.AlwaysOnTop = UDim2.new(0, 160, 0, 40), Vector3.new(0, 4, 0), true
-altarBill.MaxDistance = 400
-local altarText = Instance.new("TextLabel")
-altarText.Size, altarText.BackgroundTransparency, altarText.TextScaled = UDim2.fromScale(1, 1), 1, true
-altarText.Font, altarText.TextColor3, altarText.Text = Enum.Font.GothamBold, COLD, "⛩ Алтарь"
-altarText.TextStrokeTransparency = 0.3
-altarText.Parent = altarBill
-altarBill.Parent = altarGlow
-
-local SPAWN_CF = CFrame.new(0, 0.6, 68)
-local spawn = Instance.new("SpawnLocation")
-spawn.Size, spawn.CFrame, spawn.Anchored, spawn.Transparency, spawn.CanCollide = Vector3.new(6, 1, 6), SPAWN_CF, true, 1, false
-spawn.Neutral = true
-spawn.Parent = world
-
-local savePrompt = Instance.new("ProximityPrompt")
-savePrompt.ActionText, savePrompt.ObjectText = "Сохранить улов", "Алтарь"
-savePrompt.HoldDuration, savePrompt.MaxActivationDistance = 0.3, ALTAR_RANGE
-savePrompt.RequiresLineOfSight = false
-savePrompt.Parent = altar
-
--- красная луна в небе (видна только во время события)
-local moonPart = block("RedMoon", Vector3.new(60, 60, 60), CFrame.new(0, 160, -260), Color3.fromRGB(255, 50, 40), Enum.Material.Neon,
-	{ Shape = Enum.PartType.Ball, CanCollide = false, Transparency = 1, CastShadow = false })
-
------------------------------------------------------------------- данные игроков
+------------------------------------------------------------------ профили (версия 3; сохранения версии 2 переносятся)
 local store = nil
 pcall(function() store = DataStoreService:GetDataStore("SpiritCatchers_v1") end)
 
-type PData = { saved: { [string]: number }, equipped: string?, firstSaved: { [string]: boolean } }
-local data: { [Player]: PData } = {}
+type Profile = {
+	version: number, saved: { [string]: number }, firstSaved: { [string]: boolean }, equipped: string?,
+	materials: number, lanternLvl: number, jarLvl: number, tutorialDone: boolean, loadFailed: boolean?,
+}
+local data: { [Player]: Profile } = {}
 local jars: { [Player]: { string } } = {}
-local catching: { [Player]: { id: number, t: number } } = {}
-local followers: { [Player]: Model } = {}
+local holds: { [Player]: number } = {}
+
+local function clampLvl(v)
+	return typeof(v) == "number" and math.clamp(math.floor(v), 1, Catalog.MaxLevel) or 1
+end
+
+local function migrate(raw): Profile
+	local d: Profile = { version = 3, saved = {}, firstSaved = {}, equipped = nil, materials = 0, lanternLvl = 1, jarLvl = 1, tutorialDone = false }
+	if typeof(raw) ~= "table" then return d end
+	-- v2: { saved, equipped, firstSaved }
+	if typeof(raw.saved) == "table" then
+		for k, v in raw.saved do
+			if Catalog.Kinds[k] and typeof(v) == "number" and v > 0 then
+				d.saved[k] = math.floor(v)
+				d.firstSaved[k] = true
+			end
+		end
+	end
+	if typeof(raw.firstSaved) == "table" then
+		for k, v in raw.firstSaved do
+			if Catalog.Kinds[k] and v == true then d.firstSaved[k] = true end
+		end
+	end
+	if typeof(raw.equipped) == "string" and (d.saved[raw.equipped] or 0) > 0 then d.equipped = raw.equipped end
+	if raw.version == 3 then
+		d.materials = typeof(raw.materials) == "number" and math.max(0, math.floor(raw.materials)) or 0
+		d.lanternLvl = clampLvl(raw.lanternLvl)
+		d.jarLvl = clampLvl(raw.jarLvl)
+		d.tutorialDone = raw.tutorialDone == true
+	end
+	return d
+end
+
+local function distinct(d: Profile)
+	local n = 0
+	for _, v in d.saved do
+		if v > 0 then n += 1 end
+	end
+	return n
+end
+local function gardenOpen(d: Profile) return distinct(d) >= Catalog.GardenNeed end
+local function cap(d: Profile) return Catalog.JarCap[d.jarLvl] end
+
+local function persist(plr)
+	local d = data[plr]
+	if not (store and d) or d.loadFailed then return false end
+	local copy = table.clone(d)
+	copy.loadFailed = nil
+	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
+	if not ok then warn("DataStore save failed:", err) end
+	return ok
+end
 
 local function pushState(plr)
 	local d = data[plr]
 	if not d then return end
-	StateEv:FireClient(plr, { jar = #jars[plr], jarKinds = jars[plr], saved = d.saved, equipped = d.equipped })
+	plr:SetAttribute("LanternLvl", d.lanternLvl)
+	plr:SetAttribute("GardenOpen", gardenOpen(d))
+	plr:SetAttribute("Companion", d.equipped or "")
+	StateEv:FireClient(plr, {
+		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, materials = d.materials,
+		lanternLvl = d.lanternLvl, jarLvl = d.jarLvl, tutorialDone = d.tutorialDone,
+		gardenOpen = gardenOpen(d), distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
+	})
 	local ls = plr:FindFirstChild("leaderstats")
-	if ls then
-		local total = 0
-		for _, n in d.saved do total += n end
-		ls.Saved.Value = total
-	end
-end
-
-local function persist(plr)
-	local d = data[plr]
-	if not (store and d) then return false end
-	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, d) end)
-	if not ok then warn("DataStore save failed:", err) end
-	return ok
+	if ls then ls.Spirits.Value = distinct(d) end
 end
 
 local function rootOf(plr)
@@ -486,16 +693,30 @@ local function rootOf(plr)
 	return c:FindFirstChild("HumanoidRootPart")
 end
 
------------------------------------------------------------------- спутник
-local function setFollower(plr, kind)
-	if followers[plr] then followers[plr]:Destroy() followers[plr] = nil end
-	local build = kind and Spirits.Builders[kind]
-	if not build then return end
-	local m = build()
-	Spirits.scale(m, kind == "GoldenCarp" and 0.3 or 0.45)
-	m.Name = "Companion_" .. plr.Name
-	m.Parent = workspace
-	followers[plr] = m
+------------------------------------------------------------------ фонарь игрока (виден всем)
+local function giveLantern(plr, char)
+	local root = char:WaitForChild("HumanoidRootPart", 10)
+	if not root then return end
+	local p = Instance.new("Part")
+	p.Name = "Lantern"
+	p.Size, p.Material, p.Color = Vector3.new(0.6, 0.8, 0.6), Enum.Material.Neon, Color3.fromRGB(255, 225, 160)
+	p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, true
+	p.CFrame = root.CFrame * CFrame.new(0.9, 0.3, -0.9)
+	local w = Instance.new("Weld")
+	w.Name, w.Part0, w.Part1, w.C0 = "Weld", root, p, CFrame.new(0.9, 0.3, -0.9)
+	w.Parent = p
+	local sl = Instance.new("SpotLight")
+	sl.Name, sl.Face, sl.Angle, sl.Brightness = "Beam", Enum.NormalId.Front, 40, 6
+	sl.Range = Catalog.LanternRange[data[plr] and data[plr].lanternLvl or 1]
+	sl.Color = Color3.fromRGB(255, 240, 200)
+	sl.Parent = p
+	local pl = Instance.new("PointLight")
+	pl.Range, pl.Brightness, pl.Color = 8, 0.8, Color3.fromRGB(255, 220, 160)
+	pl.Parent = p
+	local att = Instance.new("Attachment")
+	att.Name = "BeamAtt"
+	att.Parent = p
+	p.Parent = char
 end
 
 ------------------------------------------------------------------ духи
@@ -503,319 +724,426 @@ local spiritsFolder = Instance.new("Folder")
 spiritsFolder.Name = "Spirits"
 spiritsFolder.Parent = workspace
 
-type Spirit = { id: number, kind: string, anchor: Part, model: Model?, revealed: boolean, path: { Vector3 }, t: number, pos: Vector3, dir: Vector3 }
+type Spirit = {
+	id: number, kind: string, district: string, anchor: Part, revealed: boolean, revealedAt: number,
+	born: number, pos: Vector3, dir: Vector3, goal: Vector3, progress: number, tut: boolean,
+}
 local live: { [number]: Spirit } = {}
 local nextId = 0
-local moon = { active = false, endsAt = 0, cooldownUntil = 0, carp = nil :: Spirit?, oni = nil :: Model? }
+local moon = { active = false }
 
-local function foxPoint()
-	local z = math.random(-48, 58)
-	if math.abs(z) < 16 then z = 16 * (z < 0 and -1 or 1) end
-	return Vector3.new(math.random(-14, 14), 0.6, z)
+local function rnd(a, b) return a + math.random() * (b - a) end
+
+local function zonePoint(district, near: Vector3?, tut: boolean?)
+	if district == "street" then
+		return Vector3.new(rnd(-14, 14), 0.5, tut and rnd(34, 62) or rnd(34, 124))
+	elseif district == "canal" then
+		local north = if near then near.Z > -30 else math.random() < 0.5
+		return Vector3.new(rnd(-56, 56), 0.5, north and rnd(-18, -11) or rnd(-49, -42))
+	end
+	return Vector3.new(rnd(-38, 38), 0.5, rnd(-144, -80))
 end
 
-local function newSpirit(kind)
+local function lift(kind, p: Vector3)
+	return Vector3.new(p.X, 0.5 + Catalog.Kinds[kind].height, p.Z)
+end
+
+local function newSpirit(kind, district, tut: boolean?)
 	nextId += 1
-	local s: Spirit = { id = nextId, kind = kind, anchor = nil :: any, model = nil, revealed = false, path = { foxPoint(), foxPoint() }, t = 0,
-		pos = Vector3.zero, dir = Vector3.new(0, 0, -1) }
-	if kind == "GoldenCarp" then
-		local a = Instance.new("Part")
-		a.Name, a.Anchored, a.CanCollide, a.CanTouch, a.Transparency, a.Size = "Shadow", true, false, false, 1, Vector3.new(1, 1, 1)
-		s.anchor = a
-		s.revealed = true
-		a:SetAttribute("Revealed", true)
-		local m = Spirits.buildGoldenCarp()
-		m:SetAttribute("SpiritId", s.id)
-		m.Parent = spiritsFolder
-		s.model = m
-		local bill = Instance.new("BillboardGui")
-		bill.Size, bill.StudsOffset, bill.AlwaysOnTop, bill.MaxDistance = UDim2.new(0, 200, 0, 36), Vector3.new(0, 7, 0), true, 400
-		local t = Instance.new("TextLabel")
-		t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
-		t.Text, t.TextColor3, t.TextStrokeTransparency = "✦ Золотой карп ✦", Color3.fromRGB(255, 210, 90), 0.2
-		t.Parent = bill
-		bill.Parent = a
-	else
-		s.anchor = Spirits.buildShadow()
-		s.pos = s.path[1]
+	local info = Catalog.Kinds[kind]
+	local a = Instance.new("Part")
+	a.Name = "Spirit"
+	a.Size, a.Transparency = Vector3.new(1, 1, 1), 1
+	a.Anchored, a.CanCollide, a.CanQuery, a.CanTouch = true, false, false, false
+	local att = Instance.new("Attachment")
+	att.Name = "Att"
+	att.Parent = a
+	local start = lift(kind, zonePoint(district, nil, tut))
+	local s: Spirit = {
+		id = nextId, kind = kind, district = district, anchor = a, revealed = info.move == "swim", revealedAt = os.clock(),
+		born = os.clock(), pos = start, dir = Vector3.new(0, 0, -1), goal = lift(kind, zonePoint(district, start, tut)),
+		progress = 0, tut = tut == true,
+	}
+	if info.move == "swim" then
+		s.pos = Vector3.new(0, 1.5, -30)
 	end
-	s.anchor:SetAttribute("SpiritId", s.id)
-	s.anchor:SetAttribute("Kind", kind)
-	s.anchor:SetAttribute("CatchTime", CATCH_TIME[kind])
-	s.anchor.Parent = spiritsFolder
+	a.CFrame = CFrame.new(s.pos)
+	a:SetAttribute("SpiritId", s.id)
+	a:SetAttribute("Kind", kind)
+	a:SetAttribute("Revealed", s.revealed)
+	a:SetAttribute("Progress", 0)
+	a:SetAttribute("Holders", 0)
+	a.Parent = spiritsFolder
 	live[s.id] = s
 	return s
 end
 
-local function foxCount()
-	local n = 0
-	for _, s in live do
-		if s.kind == "PaperFox" then n += 1 end
+local function stopHold(plr)
+	local id = holds[plr]
+	holds[plr] = nil
+	local s = id and live[id]
+	if s then
+		local b = s.anchor:FindFirstChild("Beam_" .. plr.UserId)
+		if b then b:Destroy() end
 	end
-	return n
 end
 
 local function removeSpirit(s: Spirit)
 	if live[s.id] ~= s then return end
+	for plr, id in holds do
+		if id == s.id then stopHold(plr) end
+	end
 	live[s.id] = nil
 	s.anchor:Destroy()
-	if s.model then s.model:Destroy() end
-	if moon.carp == s then moon.carp = nil end
-	if s.kind == "PaperFox" then
-		task.delay(moon.active and math.random(2, 4) or math.random(4, 7), function()
-			if foxCount() < MAX_FOXES + (moon.active and 2 or 0) then newSpirit("PaperFox") end
-		end)
-	end
 end
 
-for _ = 1, MAX_FOXES do newSpirit("PaperFox") end
+local function pickKind(district)
+	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
+	local total = 0
+	for _, w in tbl do total += w end
+	local r = math.random() * total
+	for k, w in tbl do
+		r -= w
+		if r <= 0 then return k end
+	end
+	return next(tbl)
+end
+
+------------------------------------------------------------------ движение
+RunService.Heartbeat:Connect(function(dt)
+	local now = os.clock()
+	-- группы ловцов: несколько игроков на одном духе ловят быстрее, каждый получает свой экземпляр
+	local groups: { [number]: { Player } } = {}
+	for plr, id in holds do
+		local s = live[id]
+		local root = rootOf(plr)
+		local d = data[plr]
+		if not (s and root and d and jars[plr]) or #jars[plr] >= cap(d)
+			or (root.Position - s.pos).Magnitude > Catalog.catchRange(s.kind) + 4 then
+			if d and jars[plr] and #jars[plr] >= cap(d) then NoticeEv:FireClient(plr, "Банка полна — отнеси улов к алтарю") end
+			stopHold(plr)
+		else
+			groups[id] = groups[id] or {}
+			table.insert(groups[id], plr)
+		end
+	end
+
+	for id, s in live do
+		local info = Catalog.Kinds[s.kind]
+		local g = groups[id]
+		if info.move == "swim" then
+			local a = now * 0.3
+			s.pos = Vector3.new(math.cos(a) * 22, 1.5, -30 + math.sin(a) * 6)
+			s.dir = Vector3.new(-math.sin(a) * 22, 0, math.cos(a) * 6).Unit
+		else
+			local speed = info.speed * (s.revealed and 0.55 or 1) * (g and 0.3 or 1)
+			local to = s.goal - s.pos
+			if to.Magnitude < 1 then
+				s.goal = lift(s.kind, zonePoint(s.district, s.pos, s.tut))
+			else
+				s.dir = Vector3.new(to.X, 0, to.Z).Magnitude > 0.05 and Vector3.new(to.X, 0, to.Z).Unit or s.dir
+				s.pos += to.Unit * math.min(speed * dt, to.Magnitude)
+			end
+		end
+		s.anchor.CFrame = CFrame.lookAt(s.pos, s.pos + s.dir)
+
+		if g then
+			local speed = 0
+			for _, p in g do speed += Catalog.LanternSpeed[data[p].lanternLvl] end
+			s.progress += dt * speed / Catalog.Rarity[info.rarity].catchTime
+		elseif s.progress > 0 then
+			s.progress = math.max(0, s.progress - dt * 0.4)
+		end
+		local shown = s.anchor:GetAttribute("Progress")
+		if math.abs(shown - s.progress) > 0.02 or (s.progress == 0 and shown ~= 0) then
+			s.anchor:SetAttribute("Progress", math.min(s.progress, 1))
+		end
+		local n = g and #g or 0
+		if s.anchor:GetAttribute("Holders") ~= n then s.anchor:SetAttribute("Holders", n) end
+
+		if g and s.progress >= 1 then
+			for _, plr in g do
+				table.insert(jars[plr], s.kind)
+				CaughtEv:FireClient(plr, s.kind, s.pos, #g)
+				pushState(plr)
+			end
+			removeSpirit(s)
+		end
+	end
+end)
+
+------------------------------------------------------------------ проявление и удержание
+RevealEv.OnServerEvent:Connect(function(plr, id)
+	local s = typeof(id) == "number" and live[id]
+	local root = rootOf(plr)
+	local d = data[plr]
+	if not (s and root and d) or s.revealed then return end
+	if s.district == "garden" and not gardenOpen(d) then return end
+	if (root.Position - s.pos).Magnitude > Catalog.LanternRange[d.lanternLvl] + 3 then return end
+	s.revealed = true
+	s.revealedAt = os.clock()
+	s.anchor:SetAttribute("Revealed", true)
+end)
+
+CatchHoldEv.OnServerEvent:Connect(function(plr, id)
+	stopHold(plr)
+	if typeof(id) ~= "number" then return end
+	local s = live[id]
+	local root = rootOf(plr)
+	local d = data[plr]
+	if not (s and root and d and s.revealed) then return end
+	if #jars[plr] >= cap(d) then
+		NoticeEv:FireClient(plr, "Банка полна — отнеси улов к алтарю")
+		return
+	end
+	if (root.Position - s.pos).Magnitude > Catalog.catchRange(s.kind) + 2 then return end
+	holds[plr] = id
+	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
+	local att = lantern and lantern:FindFirstChild("BeamAtt")
+	if att then
+		local b = Instance.new("Beam")
+		b.Name = "Beam_" .. plr.UserId
+		b.Attachment0, b.Attachment1 = att, s.anchor.Att
+		b.Width0, b.Width1, b.LightEmission, b.FaceCamera = 0.4, 1.6, 1, true
+		b.Color = ColorSequence.new(Color3.fromRGB(255, 240, 190), Catalog.Rarity[Catalog.Kinds[s.kind].rarity].color)
+		b.Transparency = NumberSequence.new(0.2, 0.5)
+		b.Parent = s.anchor
+	end
+end)
+
+------------------------------------------------------------------ появление и исчезновение
+local function districtCount(d)
+	local n, tutN = 0, 0
+	for _, s in live do
+		if s.district == d then
+			n += 1
+			if s.tut and not s.revealed then tutN += 1 end
+		end
+	end
+	return n, tutN
+end
+
+newSpirit("PaperFox", "street", true)
+newSpirit("PaperFox", "street", true)
+
+task.spawn(function()
+	while true do
+		local now = os.clock()
+		for _, s in live do
+			local held = s.anchor:GetAttribute("Holders") > 0
+			if not held and not Catalog.Kinds[s.kind].moonOnly then
+				if (not s.revealed and now - s.born > 110) or (s.revealed and now - s.revealedAt > 35) then removeSpirit(s) end
+			end
+		end
+		for district, max in DISTRICT_MAX do
+			local n, tutN = districtCount(district)
+			if district == "street" and tutN < 2 then
+				newSpirit("PaperFox", "street", true) -- рядом с алтарём всегда есть лис для обучения
+			elseif n < max + (moon.active and 2 or 0) then
+				newSpirit(pickKind(district), district)
+			end
+		end
+		task.wait(1.5)
+	end
+end)
 
 ------------------------------------------------------------------ Красная луна и они
 local function tweenLight(red)
-	local ti = TweenInfo.new(2)
-	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(110, 50, 60), OutdoorAmbient = Color3.fromRGB(120, 55, 65) }
-		or { Ambient = Color3.fromRGB(70, 70, 110), OutdoorAmbient = Color3.fromRGB(80, 80, 125) }):Play()
-	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 200, 200), Saturation = 0.1 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
+	local ti = TweenInfo.new(2.5)
+	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(115, 55, 65), OutdoorAmbient = Color3.fromRGB(130, 60, 70) }
+		or { Ambient = Color3.fromRGB(75, 75, 115), OutdoorAmbient = Color3.fromRGB(90, 90, 135) }):Play()
+	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 205, 205), Saturation = 0.1 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
 	TweenService:Create(atm, ti, { Color = red and Color3.fromRGB(160, 60, 70) or Color3.fromRGB(80, 90, 150) }):Play()
-	TweenService:Create(moonPart, ti, { Transparency = red and 0 or 1 }):Play()
+	TweenService:Create(map.moon, ti, { Transparency = red and 0 or 1 }):Play()
 end
 
 local function hitPlayer(plr)
-	local lost = #jars[plr]
+	local lost = jars[plr] and #jars[plr] or 0
 	jars[plr] = {}
-	catching[plr] = nil
+	stopHold(plr)
 	local c = plr.Character
-	if c then c:PivotTo(SPAWN_CF + Vector3.new(0, 3, 0)) end
+	if c then c:PivotTo(map.spawnCF + Vector3.new(0, 3, 0)) end
 	HitEv:FireClient(plr, lost)
 	pushState(plr)
 end
 
-local oniPos = Vector3.new(0, 0.5, -45)
-local function oniLoop(oni: Model)
-	local t0 = os.clock()
-	local facing = Vector3.new(0, 0, 1)
-	local swing = 0
-	local function step(dt, speed)
-		Spirits.animate(oni, CFrame.lookAt(oniPos, oniPos + facing), (os.clock() - t0) * 5 * speed / 10 + swing, 1)
+local oniAnchor: Part? = nil
+local oniPos = Vector3.new(0, 0.5, 118)
+local function oniLoop(a: Part)
+	local facing = Vector3.new(0, 0, -1)
+	local function place() a.CFrame = CFrame.lookAt(oniPos, oniPos + facing) end
+	local function walkTo(goal: Vector3, speed, maxT)
+		local t0 = os.clock()
+		a:SetAttribute("State", "walk")
+		while moon.active and a.Parent and os.clock() - t0 < maxT do
+			local d = Vector3.new(goal.X, 0.5, goal.Z) - oniPos
+			if d.Magnitude < 1.5 then break end
+			facing = d.Unit
+			oniPos += facing * math.min(speed * 0.05, d.Magnitude)
+			place()
+			task.wait(0.05)
+		end
 	end
-	while moon.active and oni.Parent do
-		-- цель: ближайший игрок вне безопасной зоны алтаря (с уловом — в приоритете)
+	while moon.active and a.Parent do
 		local target, best = nil, math.huge
 		for _, plr in Players:GetPlayers() do
 			local r = rootOf(plr)
-			if r and (r.Position - ALTAR_POS).Magnitude > SAFE_RADIUS and r.Position.Z > -60 then
-				local d = (r.Position - oniPos).Magnitude - (#(jars[plr] or {}) > 0 and 40 or 0)
+			if r and (r.Position - map.altarPos).Magnitude > SAFE_RADIUS and r.Position.Z > -72 and r.Position.Y > -2 then
+				local d = (r.Position - oniPos).Magnitude - ((jars[plr] and #jars[plr] > 0) and 40 or 0)
 				if d < best then target, best = r, d end
 			end
 		end
 		if not target then
-			-- бродит у моста
-			local goal = Vector3.new(math.random(-12, 12), 0.5, math.random(-40, 30))
-			for _ = 1, 40 do
-				if not moon.active then break end
-				local d = goal - oniPos
-				if d.Magnitude < 1 then break end
-				facing = d.Unit
-				oniPos += facing * math.min(d.Magnitude, 0.4)
-				step(0.05, 6)
-				task.wait(0.05)
-			end
-		else
-			-- подходит
-			local tStart = os.clock()
-			while moon.active and target.Parent and os.clock() - tStart < 3 do
-				local d = Vector3.new(target.Position.X, 0.5, target.Position.Z) - oniPos
-				if d.Magnitude < 10 then break end
-				facing = d.Unit
-				oniPos += facing * 0.55
-				step(0.05, 11)
-				task.wait(0.05)
-			end
-			if not (moon.active and target.Parent) then continue end
-			-- метка удара на земле
-			local center = Vector3.new(target.Position.X, target.Position.Y - 2.9, target.Position.Z)
-			if (center - ALTAR_POS).Magnitude < SAFE_RADIUS then continue end
-			facing = Vector3.new(center.X - oniPos.X, 0, center.Z - oniPos.Z)
-			facing = facing.Magnitude > 0.1 and facing.Unit or Vector3.new(0, 0, 1)
-			local ring = Instance.new("Part")
-			ring.Shape, ring.Anchored, ring.CanCollide, ring.CanTouch = Enum.PartType.Cylinder, true, false, false
-			ring.Material, ring.Color, ring.Transparency = Enum.Material.Neon, Color3.fromRGB(255, 40, 40), 0.55
-			ring.Size = Vector3.new(0.15, ONI_RADIUS * 2, ONI_RADIUS * 2)
-			ring.CFrame = CFrame.new(center) * CFrame.Angles(0, 0, math.rad(90))
-			ring.Parent = workspace
-			local fillDisc = ring:Clone()
-			fillDisc.Transparency, fillDisc.Size, fillDisc.Color = 0.25, Vector3.new(0.2, 0.5, 0.5), Color3.fromRGB(255, 120, 60)
-			fillDisc.Parent = workspace
-			TweenService:Create(fillDisc, TweenInfo.new(ONI_WARN, Enum.EasingStyle.Linear), { Size = Vector3.new(0.2, ONI_RADIUS * 2, ONI_RADIUS * 2) }):Play()
-			local w0 = os.clock()
-			while os.clock() - w0 < ONI_WARN do
-				swing = -math.pi / 2 -- замах
-				step(0.05, 2)
-				task.wait(0.05)
-			end
-			-- удар
-			swing = math.pi / 2
-			step(0, 0)
-			for _, plr in Players:GetPlayers() do
-				local r = rootOf(plr)
-				if r then
-					local d = r.Position - center
-					if Vector3.new(d.X, 0, d.Z).Magnitude <= ONI_RADIUS and math.abs(d.Y) < 8 then hitPlayer(plr) end
-				end
-			end
-			fillDisc:Destroy()
-			ring.Color, ring.Transparency = Color3.fromRGB(255, 220, 180), 0.2
-			TweenService:Create(ring, TweenInfo.new(0.4), { Transparency = 1, Size = Vector3.new(0.1, ONI_RADIUS * 2.6, ONI_RADIUS * 2.6) }):Play()
-			task.delay(0.45, function() ring:Destroy() end)
-			task.wait(1.2)
-			swing = 0
+			walkTo(Vector3.new(rnd(-12, 12), 0.5, rnd(40, 120)), 7, 4)
+			continue
 		end
+		-- подходит к игроку
+		local tStart = os.clock()
+		a:SetAttribute("State", "walk")
+		while moon.active and target.Parent and os.clock() - tStart < 3.5 do
+			local d = Vector3.new(target.Position.X, 0.5, target.Position.Z) - oniPos
+			if d.Magnitude < 10 then break end
+			facing = d.Unit
+			oniPos += facing * 0.6
+			place()
+			task.wait(0.05)
+		end
+		if not (moon.active and target.Parent) then continue end
+		local center = Vector3.new(target.Position.X, target.Position.Y - 2.9, target.Position.Z)
+		if (center - map.altarPos).Magnitude < SAFE_RADIUS or center.Z < -72 then continue end
+		local f = Vector3.new(center.X - oniPos.X, 0, center.Z - oniPos.Z)
+		if f.Magnitude > 0.1 then facing = f.Unit end
+		place()
+		-- круг удара заранее
+		a:SetAttribute("State", "windup")
+		local ring = Instance.new("Part")
+		ring.Name = "OniWarning"
+		ring.Shape, ring.Anchored, ring.CanCollide, ring.CanQuery, ring.CanTouch = Enum.PartType.Cylinder, true, false, false, false
+		ring.Material, ring.Color, ring.Transparency = Enum.Material.Neon, Color3.fromRGB(255, 30, 30), 0.5
+		ring.Size = Vector3.new(0.15, ONI_RADIUS * 2, ONI_RADIUS * 2)
+		ring.CFrame = CFrame.new(center) * CFrame.Angles(0, 0, math.rad(90))
+		ring.Parent = workspace
+		local fill = ring:Clone()
+		fill.Transparency, fill.Size, fill.Color = 0.2, Vector3.new(0.2, 0.5, 0.5), Color3.fromRGB(255, 140, 60)
+		fill.Parent = workspace
+		TweenService:Create(fill, TweenInfo.new(ONI_WARN, Enum.EasingStyle.Linear), { Size = Vector3.new(0.2, ONI_RADIUS * 2, ONI_RADIUS * 2) }):Play()
+		task.wait(ONI_WARN)
+		a:SetAttribute("State", "strike")
+		for _, plr in Players:GetPlayers() do
+			local r = rootOf(plr)
+			if r then
+				local d = r.Position - center
+				if Vector3.new(d.X, 0, d.Z).Magnitude <= ONI_RADIUS and math.abs(d.Y) < 8 then hitPlayer(plr) end
+			end
+		end
+		fill:Destroy()
+		ring.Color, ring.Transparency = Color3.fromRGB(255, 220, 180), 0.2
+		TweenService:Create(ring, TweenInfo.new(0.4), { Transparency = 1, Size = Vector3.new(0.1, ONI_RADIUS * 2.6, ONI_RADIUS * 2.6) }):Play()
+		task.delay(0.45, function() ring:Destroy() end)
+		task.wait(1.3)
 	end
 end
 
-local function endMoon()
-	if not moon.active then return end
-	moon.active = false
-	moon.cooldownUntil = os.clock() + MOON_COOLDOWN
-	tweenLight(false)
-	if moon.oni then moon.oni:Destroy() moon.oni = nil end
-	if moon.carp then removeSpirit(moon.carp) end
-	MoonEv:FireAllClients(false)
+local function setPhase(active, secs)
+	moon.active = active
+	workspace:SetAttribute("MoonActive", active)
+	workspace:SetAttribute("PhaseEnds", workspace:GetServerTimeNow() + secs)
 end
 
 local function startMoon()
-	if moon.active or os.clock() < moon.cooldownUntil then return end
-	moon.active = true
-	moon.endsAt = os.clock() + MOON_TIME
+	setPhase(true, MOON_TIME)
 	tweenLight(true)
-	if FORCE_CARP or math.random() < CARP_CHANCE then
-		moon.carp = newSpirit("GoldenCarp")
-	end
-	for _ = 1, 2 do newSpirit("PaperFox") end
-	local oni = Spirits.buildOni()
-	oni.Parent = workspace
-	moon.oni = oni
-	oniPos = Vector3.new(0, 0.5, -45)
-	task.spawn(oniLoop, oni)
-	MoonEv:FireAllClients(true, MOON_TIME)
-	task.delay(MOON_TIME, function()
-		if moon.active and os.clock() >= moon.endsAt - 0.1 then endMoon() end
-	end)
+	if IS_TEST or math.random() < 0.35 then newSpirit("GoldenCarp", "canal") end
+	if IS_TEST or math.random() < 0.5 then newSpirit("MoonRabbit", "street") end
+	newSpirit("Crane", "garden")
+	local a = Instance.new("Part")
+	a.Name = "Oni"
+	a.Size, a.Transparency = Vector3.new(1, 1, 1), 1
+	a.Anchored, a.CanCollide, a.CanQuery, a.CanTouch = true, false, false, false
+	oniPos = Vector3.new(0, 0.5, 118)
+	a.CFrame = CFrame.new(oniPos)
+	a:SetAttribute("State", "walk")
+	a.Parent = workspace
+	oniAnchor = a
+	task.spawn(oniLoop, a)
 end
 
------------------------------------------------------------------- движение и анимация
-RunService.Heartbeat:Connect(function(dt)
-	local now = os.clock()
+local function endMoon()
+	setPhase(false, NORMAL_TIME)
+	tweenLight(false)
+	if oniAnchor then oniAnchor:Destroy() oniAnchor = nil end
 	for _, s in live do
-		if s.kind == "GoldenCarp" then
-			-- плывёт эллипсом над каналом, видно с моста и с улицы
-			local a = now * 0.35
-			s.pos = Vector3.new(math.cos(a) * 13, 4 + math.sin(now * 1.3) * 0.8, math.sin(a) * 6)
-			s.dir = Vector3.new(-math.sin(a) * 13, 0, math.cos(a) * 6).Unit
-		else
-			local a, b = s.path[1], s.path[2]
-			local speed = s.revealed and 3 or 6
-			s.t += dt * speed / math.max((b - a).Magnitude, 1)
-			if s.t >= 1 then
-				s.path = { b, foxPoint() }
-				s.t = 0
-				a, b = s.path[1], s.path[2]
-			end
-			s.pos = a:Lerp(b, s.t)
-			s.dir = (b - a).Magnitude > 0.1 and (b - a).Unit or s.dir
-		end
-		if s.kind == "GoldenCarp" then
-			s.anchor.CFrame = CFrame.new(s.pos)
-		else
-			s.anchor.CFrame = CFrame.new(s.pos) * CFrame.Angles(0, 0, math.rad(90))
-		end
-		if s.model then
-			local bob = s.kind == "PaperFox" and math.abs(math.sin(now * 6 + s.id)) * 0.5 or 0
-			local base = s.kind == "PaperFox" and s.pos + Vector3.new(0, -0.1 + bob, 0) or s.pos
-			Spirits.animate(s.model, CFrame.lookAt(base, base + s.dir), now * (s.kind == "PaperFox" and 9 or 3) + s.id)
-		end
+		if Catalog.Kinds[s.kind].moonOnly then removeSpirit(s) end
 	end
-	for plr, m in followers do
-		local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
-		if root and m.Parent then
-			local goal = root.CFrame * CFrame.new(3, 2.5 + math.sin(now * 2) * 0.4, 2)
-			local cur = m:GetAttribute("Pivot") or goal
-			cur = cur:Lerp(goal, 0.12)
-			m:SetAttribute("Pivot", cur)
-			Spirits.animate(m, cur, now * 6)
-		end
+end
+
+task.spawn(function()
+	setPhase(false, FIRST_MOON)
+	task.wait(FIRST_MOON)
+	while true do
+		startMoon()
+		task.wait(MOON_TIME)
+		endMoon()
+		task.wait(NORMAL_TIME)
 	end
 end)
 
------------------------------------------------------------------- проявление и ловля (проверки на сервере)
-RevealEv.OnServerEvent:Connect(function(plr, id)
-	local s = typeof(id) == "number" and live[id]
-	local root = rootOf(plr)
-	if not (s and root) or s.revealed then return end
-	if (root.Position - s.pos).Magnitude > REVEAL_RANGE then return end
-	s.revealed = true
-	s.anchor.Transparency = 0.75
-	s.anchor:SetAttribute("Revealed", true)
-	local pe = s.anchor:FindFirstChildOfClass("ParticleEmitter")
-	if pe then pe:Emit(30) pe.Rate = 4 end
-	local m = Spirits.buildPaperFox()
-	m:SetAttribute("SpiritId", s.id)
-	m.Parent = spiritsFolder
-	s.model = m
-	task.delay(25, function()
-		if live[s.id] == s then removeSpirit(s) end
-	end)
-end)
+------------------------------------------------------------------ алтарь
+local savePrompt = Instance.new("ProximityPrompt")
+savePrompt.ActionText, savePrompt.ObjectText = "Сохранить улов", "Алтарь"
+savePrompt.HoldDuration, savePrompt.MaxActivationDistance = 0.25, ALTAR_RANGE
+savePrompt.RequiresLineOfSight = false
+savePrompt.Parent = map.altar
 
-CatchStartEv.OnServerEvent:Connect(function(plr, id)
-	if typeof(id) ~= "number" then catching[plr] = nil return end
-	catching[plr] = { id = id, t = os.clock() }
-end)
-
-CatchFinishEv.OnServerEvent:Connect(function(plr, id)
-	local c = catching[plr]
-	catching[plr] = nil
-	local s = typeof(id) == "number" and live[id]
-	local root = rootOf(plr)
-	if not (c and s and root and c.id == id and s.revealed and jars[plr]) then return end
-	if os.clock() - c.t < CATCH_TIME[s.kind] - 0.2 then return end
-	if (root.Position - s.pos).Magnitude > CATCH_RANGE + (s.kind == "GoldenCarp" and 4 or 0) then return end
-	table.insert(jars[plr], s.kind)
-	local at, kind = s.pos, s.kind
-	removeSpirit(s)
-	CaughtEv:FireClient(plr, kind, at)
-	pushState(plr)
-	-- первый улов запускает Красную луну
-	if kind == "PaperFox" and not moon.active then
-		task.delay(2, startMoon)
-	end
-end)
-
------------------------------------------------------------------- алтарь и экипировка
 local function doSave(plr)
 	local root = rootOf(plr)
 	local d = data[plr]
 	if not (root and d) then return { ok = false, msg = "Нет персонажа" } end
-	if (root.Position - ALTAR_POS).Magnitude > ALTAR_RANGE + 4 then return { ok = false, msg = "Подойди к алтарю" } end
+	if (root.Position - map.altarPos).Magnitude > ALTAR_RANGE + 6 then return { ok = false, msg = "Подойди к алтарю" } end
 	local jar = jars[plr]
-	if #jar == 0 then return { ok = false, msg = "Банка пуста" } end
-	local firsts = {}
+	if #jar == 0 then return { ok = false, msg = "Банка пуста — сначала поймай духа" } end
+	local wasOpen = gardenOpen(d)
+	local firsts, gained = {}, 0
 	for _, kind in jar do
+		if (d.saved[kind] or 0) > 0 then
+			gained += Catalog.Rarity[Catalog.Kinds[kind].rarity].material -- дубликат → материал
+		end
 		d.saved[kind] = (d.saved[kind] or 0) + 1
 		if not d.firstSaved[kind] then
 			d.firstSaved[kind] = true
 			table.insert(firsts, kind)
 		end
 	end
+	d.materials += gained
 	local kinds = table.clone(jar)
 	jars[plr] = {}
 	local persisted = persist(plr)
 	pushState(plr)
-	return { ok = true, count = #kinds, kinds = kinds, firsts = firsts, persisted = persisted }
+	return { ok = true, kinds = kinds, firsts = firsts, gained = gained, gardenOpened = not wasOpen and gardenOpen(d), persisted = persisted }
 end
 savePrompt.Triggered:Connect(function(plr)
-	StateEv:FireClient(plr, { saveResult = doSave(plr) })
+	SaveResultEv:FireClient(plr, doSave(plr))
 end)
+
+UpgradeFn.OnServerInvoke = function(plr, which)
+	local d = data[plr]
+	local root = rootOf(plr)
+	if not (d and root) then return { ok = false, msg = "Нет персонажа" } end
+	if (root.Position - map.altarPos).Magnitude > 30 then return { ok = false, msg = "Улучшения — у алтаря" } end
+	local key = which == "lantern" and "lanternLvl" or which == "jar" and "jarLvl" or nil
+	if not key then return { ok = false } end
+	local lvl = d[key]
+	if lvl >= Catalog.MaxLevel then return { ok = false, msg = "Максимальный уровень" } end
+	local cost = Catalog.UpgradeCost[lvl]
+	if d.materials < cost then return { ok = false, msg = ("Нужно ✦%d материала"):format(cost) } end
+	d.materials -= cost
+	d[key] = lvl + 1
+	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
+	if lantern and lantern:FindFirstChild("Beam") then lantern.Beam.Range = Catalog.LanternRange[d.lanternLvl] end
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
 
 EquipFn.OnServerInvoke = function(plr, kind)
 	local d = data[plr]
@@ -827,46 +1155,89 @@ EquipFn.OnServerInvoke = function(plr, kind)
 	else
 		return false
 	end
-	setFollower(plr, d.equipped)
 	persist(plr)
 	pushState(plr)
 	return true
 end
 
------------------------------------------------------------------- жизненный цикл игрока
+TutorialEv.OnServerEvent:Connect(function(plr)
+	local d = data[plr]
+	if d and not d.tutorialDone then
+		d.tutorialDone = true
+		persist(plr)
+		pushState(plr)
+	end
+end)
+
+------------------------------------------------------------------ сторож: сад и вода
+task.spawn(function()
+	while true do
+		for _, plr in Players:GetPlayers() do
+			local r = rootOf(plr)
+			local d = data[plr]
+			if r and d then
+				local p = r.Position
+				if p.Y < -3.5 then
+					-- упал в канал: на ближайший берег
+					plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
+				elseif p.Z < -73 and not gardenOpen(d) then
+					plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -10, 10), 4, -64))
+					NoticeEv:FireClient(plr, ("Сад откроется, когда сохранишь 3 разных духа (%d/3)"):format(distinct(d)))
+				end
+			end
+		end
+		task.wait(0.3)
+	end
+end)
+
+------------------------------------------------------------------ игроки
 Players.PlayerAdded:Connect(function(plr)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
 	local v = Instance.new("IntValue")
-	v.Name = "Saved"
+	v.Name = "Spirits"
 	v.Parent = ls
 	ls.Parent = plr
 
-	local loaded = nil
+	local raw, failed = nil, false
 	if store then
-		local ok, res = pcall(function() return store:GetAsync("u" .. plr.UserId) end)
-		if ok then loaded = res else warn("DataStore load failed:", res) end
+		failed = true
+		for attempt = 1, 3 do
+			local ok, res = pcall(function() return store:GetAsync("u" .. plr.UserId) end)
+			if ok then
+				raw, failed = res, false
+				break
+			end
+			warn("DataStore load failed:", res)
+			task.wait(attempt)
+		end
 	end
-	data[plr] = {
-		saved = (loaded and loaded.saved) or {},
-		equipped = loaded and loaded.equipped,
-		firstSaved = (loaded and loaded.firstSaved) or {},
-	}
+	if not plr.Parent then return end
+	local d = migrate(raw)
+	d.loadFailed = failed or nil
+	data[plr] = d
 	jars[plr] = {}
-	plr.CharacterAdded:Connect(function()
-		task.wait(0.5)
-		if data[plr] then setFollower(plr, data[plr].equipped) end
+	plr.CharacterAdded:Connect(function(char)
+		giveLantern(plr, char)
+		task.wait(0.3)
 		pushState(plr)
 	end)
-	if plr.Character then setFollower(plr, data[plr].equipped) end
+	if plr.Character then giveLantern(plr, plr.Character) end
 	pushState(plr)
-	if moon.active then MoonEv:FireClient(plr, true, moon.endsAt - os.clock()) end
+	if failed then NoticeEv:FireClient(plr, "Не удалось загрузить сохранение — прогресс этой сессии не запишется") end
 end)
 
 Players.PlayerRemoving:Connect(function(plr)
+	stopHold(plr)
 	persist(plr)
-	if followers[plr] then followers[plr]:Destroy() end
-	data[plr], jars[plr], catching[plr], followers[plr] = nil, nil, nil, nil
+	data[plr], jars[plr] = nil, nil
+end)
+
+task.spawn(function()
+	while true do
+		task.wait(60)
+		for _, plr in Players:GetPlayers() do persist(plr) end
+	end
 end)
 
 game:BindToClose(function()
@@ -875,24 +1246,291 @@ end)
 ]]></string>
         </Properties>
       </Item>
+      <Item class="ModuleScript" referent="8">
+        <Properties>
+          <string name="Name">Map</string>
+          <string name="Source"><![CDATA[-- Квартал из трёх районов: улица бумажных фонарей (север), площадь алтаря,
+-- канал с мостами и храмовый сад (юг, за воротами-тории).
+local Map = {}
+
+local WARM = Color3.fromRGB(255, 160, 80)
+local COLD = Color3.fromRGB(110, 210, 255)
+local TEAL = Color3.fromRGB(80, 230, 220)
+local GARDEN = Color3.fromRGB(170, 255, 170)
+local VIOLET = Color3.fromRGB(190, 130, 255)
+
+local world
+local function block(name, size, cf, color, mat, props)
+	local p = Instance.new("Part")
+	p.Name, p.Size, p.CFrame, p.Color = name, size, cf, color
+	p.Anchored = true
+	p.TopSurface, p.BottomSurface = Enum.SurfaceType.Smooth, Enum.SurfaceType.Smooth
+	p.Material = mat or Enum.Material.Slate
+	for k, v in props or {} do p[k] = v end
+	p.Parent = world
+	return p
+end
+local function deco(name, size, cf, color, mat, props)
+	props = props or {}
+	props.CanCollide = false
+	props.CastShadow = false
+	return block(name, size, cf, color, mat, props)
+end
+local function light(parent, color, range, brightness)
+	local l = Instance.new("PointLight")
+	l.Color, l.Range, l.Brightness = color, range, brightness
+	l.Parent = parent
+	return l
+end
+local function wall(size, pos)
+	block("Boundary", size, CFrame.new(pos), Color3.new(), nil, { Transparency = 1, CanQuery = false })
+end
+local function sign(parent, text, color, face)
+	local g = Instance.new("SurfaceGui")
+	g.Face = face or Enum.NormalId.Front
+	g.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	g.PixelsPerStud = 20
+	local t = Instance.new("TextLabel")
+	t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+	t.Text, t.TextColor3, t.TextStrokeTransparency = text, color, 0.3
+	t.Parent = g
+	g.Parent = parent
+	return t
+end
+local function billboard(parent, text, color, offset)
+	local b = Instance.new("BillboardGui")
+	b.Size, b.StudsOffset, b.AlwaysOnTop, b.MaxDistance = UDim2.new(0, 190, 0, 34), offset or Vector3.new(0, 5, 0), true, 600
+	local t = Instance.new("TextLabel")
+	t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBold
+	t.Text, t.TextColor3, t.TextStrokeTransparency = text, color, 0.25
+	t.Parent = b
+	b.Parent = parent
+end
+local function sakura(pos, s)
+	s = s or 1
+	deco("Trunk", Vector3.new(1.2, 7, 1.2) * s, CFrame.new(pos + Vector3.new(0, 3.5 * s, 0)), Color3.fromRGB(90, 55, 45), Enum.Material.Wood, { CanCollide = true })
+	for i, o in { Vector3.new(0, 8, 0), Vector3.new(2, 7, 1), Vector3.new(-2, 7.3, -1), Vector3.new(0.5, 7, -2) } do
+		local c = deco("Blossom", Vector3.new(5, 4, 5) * s, CFrame.new(pos + o * s), Color3.fromRGB(255, 170 + i * 8, 210), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball })
+		if i == 1 then light(c, Color3.fromRGB(255, 180, 220), 12, 0.6) end
+	end
+end
+local function stoneLantern(pos, color)
+	block("StoneLantern", Vector3.new(1.4, 2.4, 1.4), CFrame.new(pos + Vector3.new(0, 1.2, 0)), Color3.fromRGB(130, 130, 135), Enum.Material.Concrete)
+	local f = deco("LanternFire", Vector3.new(1.2, 1, 1.2), CFrame.new(pos + Vector3.new(0, 2.9, 0)), color, Enum.Material.Neon)
+	block("LanternRoof", Vector3.new(2.2, 0.5, 2.2), CFrame.new(pos + Vector3.new(0, 3.6, 0)), Color3.fromRGB(110, 110, 115), Enum.Material.Concrete)
+	light(f, color, 16, 1.4)
+end
+local function torii(z, x, w, h, color)
+	for _, sx in { -1, 1 } do
+		block("ToriiPillar", Vector3.new(1.4, h, 1.4), CFrame.new(x + sx * w / 2, h / 2, z), color, Enum.Material.SmoothPlastic)
+	end
+	block("ToriiBeam", Vector3.new(w + 5, 1.2, 1.8), CFrame.new(x, h + 0.6, z), Color3.fromRGB(40, 30, 30))
+	block("ToriiBeam2", Vector3.new(w + 2, 0.8, 1.2), CFrame.new(x, h - 2, z), color)
+end
+
+function Map.build()
+	world = Instance.new("Folder")
+	world.Name = "World"
+	world.Parent = workspace
+
+	---------------------------------------------------------------- земля (дорога светлая, вода — яркая)
+	block("StreetGround", Vector3.new(40, 1, 106), CFrame.new(0, 0, 83), Color3.fromRGB(115, 100, 92), Enum.Material.Cobblestone)
+	block("StreetPath", Vector3.new(10, 0.1, 106), CFrame.new(0, 0.55, 83), Color3.fromRGB(165, 145, 120), Enum.Material.Cobblestone, { CanCollide = false })
+	block("PlazaGround", Vector3.new(70, 1, 38), CFrame.new(0, 0, 11), Color3.fromRGB(135, 135, 150), Enum.Material.Slate)
+	block("NorthBank", Vector3.new(124, 1, 12), CFrame.new(0, 0, -14), Color3.fromRGB(110, 115, 125), Enum.Material.Slate)
+	block("SouthBank", Vector3.new(124, 1, 32), CFrame.new(0, 0, -56), Color3.fromRGB(110, 115, 125), Enum.Material.Slate)
+	block("GardenGround", Vector3.new(92, 1, 80), CFrame.new(0, 0, -112), Color3.fromRGB(70, 125, 70), Enum.Material.Grass)
+	block("GardenPath", Vector3.new(8, 0.1, 72), CFrame.new(0, 0.55, -112), Color3.fromRGB(175, 165, 140), Enum.Material.Pebble, { CanCollide = false })
+
+	-- канал: вода, дно, стенки и светящаяся кромка, чтобы на телефоне было видно край
+	block("Water", Vector3.new(124, 0.4, 20), CFrame.new(0, -2.5, -30), Color3.fromRGB(40, 120, 210), Enum.Material.Glass,
+		{ Transparency = 0.25, Reflectance = 0.3, CanCollide = false, CanQuery = false })
+	block("CanalBed", Vector3.new(124, 1, 20), CFrame.new(0, -8, -30), Color3.fromRGB(10, 20, 40))
+	for _, z in { -19.6, -40.4 } do
+		block("CanalWall", Vector3.new(124, 7, 0.8), CFrame.new(0, -4, z), Color3.fromRGB(70, 70, 80))
+		deco("WaterEdge", Vector3.new(124, 0.12, 0.5), CFrame.new(0, 0.56, z + (z > -30 and -0.5 or 0.5)), TEAL, Enum.Material.Neon)
+	end
+	local refl = { WARM, Color3.fromRGB(255, 90, 150), TEAL, Color3.fromRGB(255, 210, 90), VIOLET }
+	for i = 1, 22 do
+		local x = -58 + (i - 1) * 5.5
+		deco("Reflection", Vector3.new(0.9, 0.1, 3 + (i % 4) * 2.5), CFrame.new(x, -3.1, -30 + ((i * 7) % 13) - 6), refl[i % 5 + 1], Enum.Material.Neon, { Transparency = 0.3 })
+	end
+
+	---------------------------------------------------------------- границы
+	wall(Vector3.new(1, 80, 144), Vector3.new(35.5, 40, 64)) -- улица+площадь
+	wall(Vector3.new(1, 80, 144), Vector3.new(-35.5, 40, 64))
+	wall(Vector3.new(80, 80, 1), Vector3.new(0, 40, 136.5))
+	wall(Vector3.new(27, 80, 1), Vector3.new(49, 40, -8))
+	wall(Vector3.new(27, 80, 1), Vector3.new(-49, 40, -8))
+	wall(Vector3.new(1, 80, 64), Vector3.new(62.5, 40, -40))
+	wall(Vector3.new(1, 80, 64), Vector3.new(-62.5, 40, -40))
+	wall(Vector3.new(1, 80, 82), Vector3.new(46.5, 40, -112))
+	wall(Vector3.new(1, 80, 82), Vector3.new(-46.5, 40, -112))
+	wall(Vector3.new(96, 80, 1), Vector3.new(0, 40, -152.5))
+
+	---------------------------------------------------------------- УЛИЦА БУМАЖНЫХ ФОНАРЕЙ (тёплый свет)
+	for z = 42, 130, 22 do
+		for _, side in { -1, 1 } do
+			local h = 11 + ((z // 22) % 3) * 4
+			block("House", Vector3.new(14, h, 18), CFrame.new(side * 27, h / 2, z), Color3.fromRGB(105, 80, 85), Enum.Material.Brick)
+			block("Roof", Vector3.new(16, 1, 20), CFrame.new(side * 27, h + 0.5, z), Color3.fromRGB(130, 40, 45), Enum.Material.Slate)
+			deco("Window", Vector3.new(0.3, 3, 5), CFrame.new(side * 19.9, 6, z), Color3.fromRGB(255, 200, 120), Enum.Material.Neon)
+			deco("Noren", Vector3.new(0.2, 2.5, 4), CFrame.new(side * 19.8, 3, z + 5), Color3.fromRGB(60, 70, 160), Enum.Material.Fabric)
+			block("Step", Vector3.new(4, h / 2, 4), CFrame.new(side * 18, h / 4, z + 7.5), Color3.fromRGB(110, 85, 60), Enum.Material.Wood)
+		end
+	end
+	for z = 36, 128, 6 do
+		for _, x in { -13, 13 } do
+			local lantern = deco("PaperLantern", Vector3.new(1.6, 2, 1.6), CFrame.new(x, 9, z), Color3.fromRGB(255, 140, 70), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+			if (z // 6) % 2 == 0 then light(lantern, WARM, 22, 1.5) end
+		end
+		deco("String", Vector3.new(26, 0.1, 0.1), CFrame.new(0, 9.9, z), Color3.fromRGB(40, 30, 30))
+	end
+	-- ориентир: Большой фонарь в конце улицы
+	block("GreatLanternPole", Vector3.new(3, 28, 3), CFrame.new(0, 14, 128), Color3.fromRGB(120, 30, 30), Enum.Material.Wood)
+	local great = deco("GreatLantern", Vector3.new(11, 13, 11), CFrame.new(0, 34, 128), Color3.fromRGB(255, 130, 60), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	light(great, WARM, 60, 3)
+	billboard(great, "🏮 Улица фонарей", WARM, Vector3.new(0, 9, 0))
+
+	---------------------------------------------------------------- ПЛОЩАДЬ И АЛТАРЬ (холодный свет, луч в небо)
+	local altarPos = Vector3.new(0, 0.5, 12)
+	local altar = block("Altar", Vector3.new(8, 3, 8), CFrame.new(altarPos + Vector3.new(0, 1.5, 0)), Color3.fromRGB(180, 195, 210), Enum.Material.Marble)
+	block("AltarStep", Vector3.new(14, 0.6, 14), CFrame.new(altarPos + Vector3.new(0, 0.3, 0)), Color3.fromRGB(150, 160, 175), Enum.Material.Marble)
+	local orb = deco("AltarGlow", Vector3.new(3, 3, 3), CFrame.new(altarPos + Vector3.new(0, 5.5, 0)), COLD, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	light(orb, COLD, 40, 3)
+	deco("AltarBeam", Vector3.new(1.6, 220, 1.6), CFrame.new(altarPos + Vector3.new(0, 115, 0)), COLD, Enum.Material.Neon, { Transparency = 0.35 })
+	for _, x in { -6, 6 } do
+		local pillar = deco("AltarPillar", Vector3.new(1, 10, 1), CFrame.new(x, 5.5, altarPos.Z), COLD, Enum.Material.Neon, { Transparency = 0.2 })
+		light(pillar, COLD, 18, 1.5)
+	end
+	billboard(orb, "⛩ Алтарь", COLD, Vector3.new(0, 4, 0))
+	for _, p in { Vector3.new(-25, 0.5, 24), Vector3.new(25, 0.5, 24), Vector3.new(-25, 0.5, -2), Vector3.new(25, 0.5, -2) } do
+		stoneLantern(p, COLD)
+	end
+
+	---------------------------------------------------------------- КАНАЛ С МОСТАМИ (бирюзовый свет)
+	-- лунный мост — ориентир района (арка, по которой можно пройти)
+	local z0, L, N, H = -43, 26, 10, 4
+	for i = 1, N do
+		local za, zb = z0 + (i - 1) * L / N, z0 + i * L / N
+		local ya, yb = H * math.sin(math.pi * (za - z0) / L), H * math.sin(math.pi * (zb - z0) / L)
+		local ang = math.atan2(yb - ya, zb - za)
+		local len = math.sqrt((zb - za) ^ 2 + (yb - ya) ^ 2) + 0.4
+		local cf = CFrame.new(0, (ya + yb) / 2, (za + zb) / 2) * CFrame.Angles(-ang, 0, 0)
+		block("MoonBridge", Vector3.new(9, 1, len), cf, Color3.fromRGB(200, 50, 45), Enum.Material.Wood)
+		for _, x in { -4.4, 4.4 } do
+			block("MoonRail", Vector3.new(0.5, 2.4, len), cf * CFrame.new(x, 1.7, 0), Color3.fromRGB(230, 70, 55), Enum.Material.Wood)
+		end
+	end
+	for _, z in { -44, -16 } do
+		for _, x in { -5, 5 } do
+			block("BridgePost", Vector3.new(1, 6, 1), CFrame.new(x, 3.5, z), Color3.fromRGB(200, 50, 45), Enum.Material.Wood)
+			local l = deco("BridgeLamp", Vector3.new(1.4, 1.6, 1.4), CFrame.new(x, 7.2, z), WARM, Enum.Material.Neon)
+			light(l, WARM, 18, 1.5)
+		end
+	end
+	billboard(world:FindFirstChild("BridgePost"), "🌉 Лунный мост", TEAL, Vector3.new(5, 8, 0))
+	for _, x in { -32, 32 } do
+		block("Bridge", Vector3.new(8, 1, 24), CFrame.new(x, 0, -30), Color3.fromRGB(130, 100, 70), Enum.Material.WoodPlanks)
+		for _, sx in { -3.8, 3.8 } do
+			block("Rail", Vector3.new(0.4, 2, 24), CFrame.new(x + sx, 1.5, -30), Color3.fromRGB(90, 70, 50), Enum.Material.Wood)
+		end
+	end
+	for x = -56, 56, 16 do
+		for _, z in { -19, -41 } do
+			block("LampPost", Vector3.new(0.6, 7, 0.6), CFrame.new(x, 3.5, z), Color3.fromRGB(40, 50, 60), Enum.Material.Metal)
+			local l = deco("LampHead", Vector3.new(1.2, 1.2, 1.2), CFrame.new(x, 7.3, z), TEAL, Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+			light(l, TEAL, 20, 1.3)
+		end
+	end
+	-- ивы у воды
+	for _, p in { Vector3.new(-48, 0.5, -12), Vector3.new(46, 0.5, -12), Vector3.new(-45, 0.5, -50), Vector3.new(48, 0.5, -52) } do
+		deco("WillowTrunk", Vector3.new(1.2, 8, 1.2), CFrame.new(p + Vector3.new(0, 4, 0)), Color3.fromRGB(70, 55, 45), Enum.Material.Wood, { CanCollide = true })
+		deco("Willow", Vector3.new(7, 7, 7), CFrame.new(p + Vector3.new(0, 8.5, 0)), Color3.fromRGB(70, 140, 120), Enum.Material.Grass, { Shape = Enum.PartType.Ball, Transparency = 0.1 })
+	end
+
+	---------------------------------------------------------------- ХРАМОВЫЙ САД (зелёный и фиолетовый свет)
+	torii(-72, 0, 14, 13, Color3.fromRGB(220, 60, 50))
+	block("GardenFence", Vector3.new(54, 8, 1.5), CFrame.new(35, 4, -72), Color3.fromRGB(120, 110, 100), Enum.Material.Brick)
+	block("GardenFence", Vector3.new(54, 8, 1.5), CFrame.new(-35, 4, -72), Color3.fromRGB(120, 110, 100), Enum.Material.Brick)
+	local barrier = block("GardenBarrier", Vector3.new(14.2, 13, 1), CFrame.new(0, 6.5, -72), VIOLET, Enum.Material.ForceField,
+		{ Transparency = 0.2, CanQuery = false })
+	local barrierText = sign(barrier, "🔒 Храмовый сад\nСохрани 3 разных духа", Color3.new(1, 1, 1), Enum.NormalId.Back)
+	sign(barrier, "Храмовый сад", Color3.new(1, 1, 1), Enum.NormalId.Front)
+	-- пагода — ориентир сада
+	for i = 0, 3 do
+		local w = 16 - i * 3
+		local y = 0.5 + i * 7
+		block("Pagoda", Vector3.new(w - 4, 6, w - 4), CFrame.new(0, y + 3, -138), Color3.fromRGB(150, 50, 45), Enum.Material.Wood)
+		block("PagodaRoof", Vector3.new(w + 2, 1, w + 2), CFrame.new(0, y + 6.5, -138), Color3.fromRGB(40, 70, 60), Enum.Material.Slate)
+		local edge = deco("PagodaEdge", Vector3.new(w + 2.2, 0.25, w + 2.2), CFrame.new(0, y + 6, -138), VIOLET, Enum.Material.Neon)
+		if i == 3 then light(edge, VIOLET, 50, 2.5) end
+	end
+	local spire = deco("PagodaSpire", Vector3.new(0.8, 8, 0.8), CFrame.new(0, 34, -138), Color3.fromRGB(230, 200, 90), Enum.Material.Neon)
+	billboard(spire, "🏯 Храмовый сад", GARDEN, Vector3.new(0, 6, 0))
+	for _, p in { Vector3.new(-25, 0.5, -90), Vector3.new(26, 0.5, -96), Vector3.new(-30, 0.5, -125), Vector3.new(30, 0.5, -130), Vector3.new(-12, 0.5, -108), Vector3.new(16, 0.5, -118) } do
+		sakura(p, 1)
+	end
+	for z = -82, -128, -12 do
+		for _, x in { -6, 6 } do
+			stoneLantern(Vector3.new(x, 0.5, z), (z // 12) % 2 == 0 and GARDEN or VIOLET)
+		end
+	end
+	block("Pond", Vector3.new(16, 0.3, 12), CFrame.new(-22, 0.4, -110), Color3.fromRGB(60, 140, 200), Enum.Material.Glass, { Transparency = 0.2, CanCollide = false })
+	for i = 1, 5 do
+		deco("LilyPad", Vector3.new(0.1, 1.6, 1.6), CFrame.new(-28 + i * 2.4, 0.6, -112 + (i % 2) * 3) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(80, 170, 90), nil, { Shape = Enum.PartType.Cylinder })
+	end
+	local glowArea = deco("GardenFireflies", Vector3.new(80, 1, 70), CFrame.new(0, 4, -112), Color3.new(), nil, { Transparency = 1 })
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = ColorSequence.new(Color3.fromRGB(200, 255, 140))
+	pe.LightEmission, pe.Rate, pe.Lifetime = 1, 18, NumberRange.new(3, 5)
+	pe.Speed, pe.SpreadAngle = NumberRange.new(0.5, 1.5), Vector2.new(180, 180)
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.5, 0.3), NumberSequenceKeypoint.new(1, 0) })
+	pe.Parent = glowArea
+
+	---------------------------------------------------------------- точка появления
+	local spawnCF = CFrame.new(0, 0.6, 24)
+	local spawn = Instance.new("SpawnLocation")
+	spawn.Size, spawn.CFrame, spawn.Anchored, spawn.Transparency, spawn.CanCollide = Vector3.new(6, 1, 6), spawnCF, true, 1, false
+	spawn.Neutral, spawn.Duration = true, 0
+	spawn.Parent = world
+
+	-- красная луна (видна во время события)
+	local moon = deco("RedMoon", Vector3.new(70, 70, 70), CFrame.new(0, 190, -300), Color3.fromRGB(255, 50, 40), Enum.Material.Neon,
+		{ Shape = Enum.PartType.Ball, Transparency = 1 })
+
+	return {
+		altar = altar,
+		altarPos = altarPos,
+		spawnCF = spawnCF,
+		barrier = barrier,
+		barrierText = barrierText,
+		moon = moon,
+	}
+end
+
+return Map
+]]></string>
+        </Properties>
+      </Item>
     </Item>
   </Item>
-  <Item class="StarterPlayer" referent="7">
+  <Item class="StarterPlayer" referent="9">
     <Properties>
       <string name="Name">StarterPlayer</string>
     </Properties>
-    <Item class="StarterPlayerScripts" referent="8">
+    <Item class="StarterPlayerScripts" referent="10">
       <Properties>
         <string name="Name">StarterPlayerScripts</string>
       </Properties>
-      <Item class="Folder" referent="9">
+      <Item class="Folder" referent="11">
         <Properties>
           <string name="Name">Client</string>
         </Properties>
-        <Item class="LocalScript" referent="10">
+        <Item class="LocalScript" referent="12">
           <Properties>
             <string name="Name">Client</string>
-            <string name="Source"><![CDATA[-- Клиент: фонарь с мягким наведением, контекстная кнопка ловли, HUD, эффекты, раскрытие карпа.
+            <string name="Source"><![CDATA[-- Клиент: визуал духов и спутников, фонарь с мягким наведением, ловля, обучение, коллекция, улучшения, эффекты.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -900,23 +1538,28 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 
-local Spirits = require(ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Spirits"))
+local Shared = ReplicatedStorage:WaitForChild("Shared")
+local Catalog = require(Shared:WaitForChild("Catalog"))
+local Spirits = require(Shared:WaitForChild("Spirits"))
 local plr = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local spiritsFolder = workspace:WaitForChild("Spirits")
+local World = workspace:WaitForChild("World")
+local Altar = World:WaitForChild("Altar")
+local Barrier = World:WaitForChild("GardenBarrier")
+local ALTAR_POS = Altar.Position
 
-local AIM_RANGE, AIM_CONE = 32, math.cos(math.rad(45))
-local CATCH_RANGE = 14
 local GOLD = Color3.fromRGB(255, 200, 80)
-local ICON = { PaperFox = "🦊", GoldenCarp = "🐟" }
+local COLD = Color3.fromRGB(120, 210, 255)
 
 local function root()
 	return plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 end
 
------------------------------------------------------------------- UI
+------------------------------------------------------------------ UI-хелперы
 local gui = Instance.new("ScreenGui")
 gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "SpiritHUD", false, true
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = plr:WaitForChild("PlayerGui")
 
 local function corner(o, r)
@@ -924,25 +1567,50 @@ local function corner(o, r)
 	c.CornerRadius = r or UDim.new(0, 10)
 	c.Parent = o
 end
-local function label(text, pos, size, parent)
+local function maxText(o, n)
+	local c = Instance.new("UITextSizeConstraint")
+	c.MaxTextSize = n
+	c.Parent = o
+end
+local function label(text, pos, size, parent, maxSize)
 	local l = Instance.new("TextLabel")
-	l.BackgroundTransparency, l.TextColor3, l.Font, l.TextScaled = 0.35, Color3.new(1, 1, 1), Enum.Font.GothamBold, true
+	l.BackgroundTransparency, l.TextColor3, l.Font, l.TextScaled = 0.3, Color3.new(1, 1, 1), Enum.Font.GothamBold, true
 	l.BackgroundColor3 = Color3.fromRGB(20, 20, 40)
 	l.Text, l.Position, l.Size = text, pos, size
 	corner(l)
+	maxText(l, maxSize or 22)
 	l.Parent = parent or gui
 	return l
 end
-local jarLabel = label("Банка: пусто", UDim2.new(0, 16, 0, 60), UDim2.new(0, 190, 0, 36))
-local savedLabel = label("Коллекция: 0", UDim2.new(0, 16, 0, 100), UDim2.new(0, 190, 0, 28))
-local toast = label("", UDim2.new(0.5, -180, 0, 110), UDim2.new(0, 360, 0, 40))
+local function button(text, pos, size, color, parent)
+	local b = Instance.new("TextButton")
+	b.Text, b.Position, b.Size = text, pos, size
+	b.TextScaled, b.Font, b.TextColor3 = true, Enum.Font.GothamBold, Color3.new(1, 1, 1)
+	b.BackgroundColor3 = color
+	corner(b)
+	maxText(b, 22)
+	b.Parent = parent or gui
+	return b
+end
+
+------------------------------------------------------------------ HUD
+local jarLabel = label("🫙 0/3", UDim2.new(0, 12, 0, 56), UDim2.new(0, 200, 0, 34))
+local infoLabel = label("✦ 0   Сад: 0/3", UDim2.new(0, 12, 0, 94), UDim2.new(0, 200, 0, 26), nil, 18)
+local collBtn = button("📖 Коллекция", UDim2.new(0, 12, 0, 126), UDim2.new(0, 200, 0, 38), Color3.fromRGB(70, 80, 160))
+local upBtn = button("⬆ Улучшения", UDim2.new(0, 12, 0, 170), UDim2.new(0, 200, 0, 38), Color3.fromRGB(60, 140, 170))
+upBtn.Visible = false
+local toast = label("", UDim2.new(0.5, -190, 0, 150), UDim2.new(0, 380, 0, 38))
 toast.Visible = false
-local banner = label("", UDim2.new(0.5, -200, 0, 58), UDim2.new(0, 400, 0, 44))
-banner.BackgroundColor3, banner.Visible = Color3.fromRGB(110, 15, 25), false
+local banner = label("", UDim2.new(0.5, -150, 0, 8), UDim2.new(0, 300, 0, 32), nil, 20)
+local tutPanel = label("", UDim2.new(0.5, -210, 0, 46), UDim2.new(0, 420, 0, 56), nil, 20)
+tutPanel.BackgroundColor3, tutPanel.Visible = Color3.fromRGB(30, 70, 110), false
+local skipBtn = button("Пропустить", UDim2.new(1, -96, 1, 4), UDim2.new(0, 96, 0, 24), Color3.fromRGB(60, 60, 80), tutPanel)
+local districtTitle = label("", UDim2.new(0.5, -170, 0.32, 0), UDim2.new(0, 340, 0, 46), nil, 30)
+districtTitle.BackgroundTransparency, districtTitle.Visible = 1, false
+districtTitle.TextStrokeTransparency = 0.3
 
 -- компактная кнопка ловли слева от стандартной кнопки прыжка; видна только рядом с доступным духом
 local catchBtn = Instance.new("TextButton")
-catchBtn.Name = "Catch"
 catchBtn.AnchorPoint = Vector2.new(1, 1)
 catchBtn.Size, catchBtn.Position = UDim2.new(0, 92, 0, 92), UDim2.new(1, -190, 1, -150)
 catchBtn.Text, catchBtn.TextScaled, catchBtn.Font = "ЛОВИТЬ", true, Enum.Font.GothamBlack
@@ -953,8 +1621,7 @@ local pad = Instance.new("UIPadding")
 pad.PaddingLeft, pad.PaddingRight = UDim.new(0, 10), UDim.new(0, 10)
 pad.Parent = catchBtn
 local stroke = Instance.new("UIStroke")
-stroke.Thickness, stroke.Color = 3, Color3.new(1, 1, 1)
-stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+stroke.Thickness, stroke.Color, stroke.ApplyStrokeMode = 3, Color3.new(1, 1, 1), Enum.ApplyStrokeMode.Border
 stroke.Parent = catchBtn
 catchBtn.Parent = gui
 local fill = Instance.new("Frame")
@@ -963,22 +1630,13 @@ fill.Size, fill.AnchorPoint, fill.Position, fill.ZIndex = UDim2.new(1, 0, 0, 0),
 corner(fill, UDim.new(1, 0))
 fill.Parent = catchBtn
 
-local equipBtn = Instance.new("TextButton")
-equipBtn.Size, equipBtn.Position = UDim2.new(0, 190, 0, 40), UDim2.new(0, 16, 0, 134)
-equipBtn.TextScaled, equipBtn.Font = true, Enum.Font.GothamBold
-equipBtn.BackgroundColor3, equipBtn.TextColor3 = Color3.fromRGB(200, 60, 70), Color3.new(1, 1, 1)
-equipBtn.Visible = false
-corner(equipBtn)
-equipBtn.Parent = gui
-
 local vignette = Instance.new("Frame")
-vignette.Size, vignette.BackgroundTransparency, vignette.Visible = UDim2.fromScale(1, 1), 1, true
+vignette.Size, vignette.BackgroundTransparency = UDim2.fromScale(1, 1), 1
 vignette.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
 vignette.Parent = gui
 
--- подсказка над духом
 local hint = Instance.new("BillboardGui")
-hint.Size, hint.StudsOffset, hint.AlwaysOnTop = UDim2.new(0, 150, 0, 34), Vector3.new(0, 7, 0), true
+hint.Size, hint.AlwaysOnTop = UDim2.new(0, 160, 0, 34), true
 local hintText = Instance.new("TextLabel")
 hintText.Size, hintText.BackgroundTransparency, hintText.TextScaled, hintText.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
 hintText.TextColor3, hintText.TextStrokeTransparency = Color3.new(1, 1, 1), 0.2
@@ -987,14 +1645,149 @@ hint.Parent = gui
 
 local function showToast(text, secs)
 	toast.Text, toast.Visible = text, true
-	task.delay(secs or 2, function()
+	task.delay(secs or 2.2, function()
 		if toast.Text == text then toast.Visible = false end
 	end)
 end
 local function punch(o)
 	local s = o.Size
-	o.Size = UDim2.new(s.X.Scale, s.X.Offset * 1.2, s.Y.Scale, s.Y.Offset * 1.2)
+	o.Size = UDim2.new(s.X.Scale, s.X.Offset * 1.15, s.Y.Scale, s.Y.Offset * 1.15)
 	TweenService:Create(o, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Size = s }):Play()
+end
+
+------------------------------------------------------------------ окна: коллекция и улучшения
+local function modal(title)
+	local f = Instance.new("Frame")
+	f.AnchorPoint, f.Position, f.Size = Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.52), UDim2.fromScale(0.88, 0.8)
+	f.BackgroundColor3, f.BackgroundTransparency, f.Visible = Color3.fromRGB(18, 18, 36), 0.05, false
+	f.ZIndex = 10
+	corner(f, UDim.new(0, 14))
+	local t = label(title, UDim2.new(0, 12, 0, 6), UDim2.new(1, -70, 0, 32), f, 26)
+	t.BackgroundTransparency, t.TextXAlignment = 1, Enum.TextXAlignment.Left
+	local close = button("✕", UDim2.new(1, -48, 0, 6), UDim2.new(0, 40, 0, 34), Color3.fromRGB(160, 50, 60), f)
+	close.Activated:Connect(function() f.Visible = false end)
+	f.Parent = gui
+	return f
+end
+
+local collFrame = modal("Коллекция духов")
+local grid = Instance.new("ScrollingFrame")
+grid.Position, grid.Size = UDim2.new(0, 8, 0, 44), UDim2.new(1, -16, 1, -52)
+grid.BackgroundTransparency, grid.ScrollBarThickness = 1, 6
+grid.AutomaticCanvasSize, grid.CanvasSize = Enum.AutomaticSize.Y, UDim2.new()
+grid.Parent = collFrame
+local layout = Instance.new("UIGridLayout")
+layout.CellSize, layout.CellPadding = UDim2.new(0.25, -8, 0, 150), UDim2.new(0, 8, 0, 8)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Parent = grid
+
+local upFrame = modal("Улучшения у алтаря")
+upFrame.Size = UDim2.fromScale(0.6, 0.62)
+local upInfo = label("", UDim2.new(0, 12, 0, 44), UDim2.new(1, -24, 0, 26), upFrame, 18)
+upInfo.BackgroundTransparency = 1
+local function upRow(y)
+	local l = label("", UDim2.new(0, 12, 0, y), UDim2.new(0.62, -12, 0, 56), upFrame, 18)
+	local b = button("", UDim2.new(0.62, 8, 0, y), UDim2.new(0.38, -20, 0, 56), Color3.fromRGB(70, 160, 100), upFrame)
+	return l, b
+end
+local lanternRow, lanternBtn = upRow(78)
+local jarRow, jarBtn = upRow(142)
+
+------------------------------------------------------------------ состояние игрока
+local state = { jar = {}, cap = 3, saved = {}, materials = 0, lanternLvl = 1, jarLvl = 1, tutorialDone = true, gardenOpen = false, distinct = 0 }
+local cards = {}
+
+local function refreshCollection()
+	for i, kind in Catalog.Order do
+		local info = Catalog.Kinds[kind]
+		local rar = Catalog.Rarity[info.rarity]
+		local c = cards[kind]
+		if not c then
+			c = {}
+			local f = Instance.new("Frame")
+			f.LayoutOrder, f.BackgroundColor3 = i, Color3.fromRGB(35, 35, 60)
+			corner(f)
+			local st = Instance.new("UIStroke")
+			st.Thickness, st.Color = 2, rar.color
+			st.Parent = f
+			c.icon = label("", UDim2.new(0, 4, 0, 4), UDim2.new(1, -8, 0, 40), f, 34)
+			c.icon.BackgroundTransparency = 1
+			c.name = label("", UDim2.new(0, 4, 0, 44), UDim2.new(1, -8, 0, 22), f, 16)
+			c.name.BackgroundTransparency = 1
+			c.rar = label(rar.name, UDim2.new(0, 4, 0, 64), UDim2.new(1, -8, 0, 16), f, 13)
+			c.rar.BackgroundTransparency, c.rar.TextColor3 = 1, rar.color
+			c.hint = label("", UDim2.new(0, 4, 0, 80), UDim2.new(1, -8, 0, 32), f, 12)
+			c.hint.BackgroundTransparency, c.hint.TextColor3, c.hint.Font = 1, Color3.fromRGB(200, 200, 220), Enum.Font.Gotham
+			c.equip = button("", UDim2.new(0, 6, 1, -34), UDim2.new(1, -12, 0, 28), Color3.fromRGB(200, 60, 70), f)
+			c.equip.Activated:Connect(function()
+				remotes.Equip:InvokeServer(state.equipped ~= kind and kind or nil)
+			end)
+			f.Parent = grid
+			cards[kind] = c
+		end
+		local n = state.saved[kind] or 0
+		c.icon.Text = n > 0 and info.icon or "❔"
+		c.name.Text = n > 0 and (info.name .. "  ×" .. n) or "???"
+		c.hint.Text = (n > 0 and "Где: " or "Ищи: ") .. info.hint
+		c.equip.Visible = n > 0
+		c.equip.Text = state.equipped == kind and "Снять" or "Экипировать"
+		c.equip.BackgroundColor3 = state.equipped == kind and Color3.fromRGB(90, 90, 110) or Color3.fromRGB(200, 60, 70)
+	end
+end
+
+local function refreshUpgrades()
+	upInfo.Text = ("Материал: ✦%d   (дубликаты при сохранении дают материал)"):format(state.materials)
+	local function row(lbl, btn, lvl, cur, nxt)
+		if lvl >= Catalog.MaxLevel then
+			lbl.Text = cur .. "  (макс.)"
+			btn.Text, btn.AutoButtonColor, btn.BackgroundColor3 = "Готово", false, Color3.fromRGB(80, 80, 90)
+		else
+			local cost = Catalog.UpgradeCost[lvl]
+			lbl.Text = cur .. "  →  " .. nxt
+			btn.Text = ("Улучшить ✦%d"):format(cost)
+			btn.BackgroundColor3 = state.materials >= cost and Color3.fromRGB(70, 160, 100) or Color3.fromRGB(90, 90, 100)
+		end
+	end
+	local l = state.lanternLvl
+	row(lanternRow, lanternBtn, l, ("🔦 Фонарь ур.%d: %d м, ловля ×%.2g"):format(l, Catalog.LanternRange[l], Catalog.LanternSpeed[l]),
+		l < Catalog.MaxLevel and ("%d м, ×%.2g"):format(Catalog.LanternRange[l + 1], Catalog.LanternSpeed[l + 1]) or "")
+	local j = state.jarLvl
+	row(jarRow, jarBtn, j, ("🫙 Банка ур.%d: %d духа"):format(j, Catalog.JarCap[j]), j < Catalog.MaxLevel and ("%d"):format(Catalog.JarCap[j + 1]) or "")
+end
+local function doUpgrade(which)
+	local r = remotes.Upgrade:InvokeServer(which)
+	if r and r.ok then
+		showToast(which == "lantern" and "Фонарь улучшен!" or "Банка стала вместительнее!")
+		punch(which == "lantern" and lanternRow or jarRow)
+	elseif r and r.msg then
+		showToast(r.msg)
+	end
+end
+lanternBtn.Activated:Connect(function() doUpgrade("lantern") end)
+jarBtn.Activated:Connect(function() doUpgrade("jar") end)
+collBtn.Activated:Connect(function()
+	refreshCollection()
+	collFrame.Visible = not collFrame.Visible
+	upFrame.Visible = false
+end)
+upBtn.Activated:Connect(function()
+	refreshUpgrades()
+	upFrame.Visible = not upFrame.Visible
+	collFrame.Visible = false
+end)
+
+local function refreshHUD()
+	local icons = ""
+	for _, k in state.jar do icons ..= Catalog.Kinds[k].icon end
+	jarLabel.Text = ("🫙 %d/%d %s"):format(#state.jar, state.cap, icons)
+	jarLabel.BackgroundColor3 = #state.jar >= state.cap and Color3.fromRGB(150, 60, 30) or Color3.fromRGB(20, 20, 40)
+	infoLabel.Text = state.gardenOpen and ("✦ %d   Сад открыт"):format(state.materials)
+		or ("✦ %d   Сад: %d/%d вида"):format(state.materials, math.min(state.distinct, Catalog.GardenNeed), Catalog.GardenNeed)
+	-- ворота сада: открыты локально, сервер всё равно проверяет доступ
+	Barrier.CanCollide = not state.gardenOpen
+	Barrier.Transparency = state.gardenOpen and 0.85 or 0.2
+	if collFrame.Visible then refreshCollection() end
+	if upFrame.Visible then refreshUpgrades() end
 end
 
 ------------------------------------------------------------------ эффекты
@@ -1003,12 +1796,10 @@ local function ring(pos, fromSize, toSize, color, secs, upright)
 	r.Shape, r.Anchored, r.CanCollide, r.CanQuery, r.CastShadow = Enum.PartType.Cylinder, true, false, false, false
 	r.Material, r.Color, r.Transparency = Enum.Material.Neon, color, 0.15
 	r.Size = Vector3.new(0.15, fromSize, fromSize)
-	local rot = upright and CFrame.Angles(0, math.rad(90), 0) or CFrame.Angles(0, 0, math.rad(90))
-	r.CFrame = CFrame.new(pos) * rot
+	r.CFrame = CFrame.new(pos) * (upright and CFrame.Angles(0, math.rad(90), 0) or CFrame.Angles(0, 0, math.rad(90)))
 	r.Parent = workspace
 	TweenService:Create(r, TweenInfo.new(secs, Enum.EasingStyle.Quad), { Size = Vector3.new(0.1, toSize, toSize), Transparency = 1 }):Play()
 	task.delay(secs + 0.05, function() r:Destroy() end)
-	return r
 end
 
 local function burst(pos, colors, n)
@@ -1026,20 +1817,21 @@ local function burst(pos, colors, n)
 	task.delay(1.5, function() a:Destroy() end)
 end
 
--- поимка: дух сворачивается, крутясь, в банку на поясе
 local streak, lastCatch = 0, 0
-local function catchEffect(kind, at)
+local function catchEffect(kind, at, coop)
 	local r = root()
 	if not r then return end
+	local info = Catalog.Kinds[kind]
+	local rar = Catalog.Rarity[info.rarity]
 	streak = (os.clock() - lastCatch < 20) and streak + 1 or 1
 	lastCatch = os.clock()
-	local build = Spirits.Builders[kind]
-	local m = build()
+	local m = Spirits.Builders[kind]()
 	if kind == "GoldenCarp" then Spirits.scale(m, 0.6) end
 	m.Parent = workspace
+	local big = info.rarity ~= "common"
+	local dur = big and 0.85 or 0.55
+	ring(at + Vector3.new(0, 2, 0), big and 16 or 8, 2, rar.color, dur, true)
 	local t0 = os.clock()
-	local dur = kind == "GoldenCarp" and 0.9 or 0.55
-	ring(at + Vector3.new(0, 2, 0), kind == "GoldenCarp" and 18 or 8, 2, kind == "GoldenCarp" and GOLD or Color3.fromRGB(255, 220, 170), dur, true)
 	local conn
 	conn = RunService.RenderStepped:Connect(function()
 		local p = math.min((os.clock() - t0) / dur, 1)
@@ -1050,39 +1842,36 @@ local function catchEffect(kind, at)
 		for _, part in m:GetChildren() do
 			if part:IsA("BasePart") then part.Transparency = math.max(part.Transparency, e * 0.9) end
 		end
-		Spirits.animate(m, CFrame.new(pos) * CFrame.Angles(0, p * 12, 0) * CFrame.new(0, 0, 0), os.clock() * 15)
+		Spirits.animate(m, CFrame.new(pos) * CFrame.Angles(0, p * 12, 0), os.clock() * 15)
 		if p >= 1 then
 			conn:Disconnect()
 			m:Destroy()
-			local cols = kind == "GoldenCarp" and ColorSequence.new(GOLD, Color3.fromRGB(255, 150, 40))
-				or ColorSequence.new(Color3.new(1, 1, 1), Color3.fromRGB(220, 50, 60))
-			burst(goal, cols, kind == "GoldenCarp" and 60 or 25)
-			ring(goal, 1, kind == "GoldenCarp" and 14 or 6, kind == "GoldenCarp" and GOLD or Color3.fromRGB(255, 230, 200), 0.35, false)
+			burst(goal, ColorSequence.new(rar.color, Color3.new(1, 1, 1)), big and 50 or 22)
+			ring(goal, 1, big and 12 or 6, rar.color, 0.35, false)
 			punch(jarLabel)
 		end
 	end)
-	if kind == "GoldenCarp" then
-		showToast("✦ ЗОЛОТОЙ КАРП в банке! Неси к алтарю ✦", 3)
-	else
-		showToast(streak > 1 and ("Бумажный лис! Серия x" .. streak) or "Бумажный лис в банке!", 2)
-	end
+	local text = info.icon .. " " .. info.name .. " в банке!"
+	if coop > 1 then text ..= ("  Совместная ловля ×%d"):format(coop)
+	elseif streak > 1 then text ..= "  Серия ×" .. streak end
+	if info.rarity == "legendary" then text = "✦ " .. info.name .. "! Неси к алтарю ✦" end
+	showToast(text, 2.5)
 end
 
--- раскрытие карпа при первом сохранении (~2 с): силуэт → пауза → кольцо → цвет → круг вокруг игрока
+-- раскрытие легендарного духа (~2 с): силуэт → пауза → световое кольцо → цвет и облёт вокруг игрока
 local revealCC = Instance.new("ColorCorrectionEffect")
-revealCC.Name = "RevealDim"
 revealCC.Parent = Lighting
-local function revealCarp()
+local function revealLegendary(kind)
 	local r = root()
 	if not r then return end
-	local m = Spirits.buildGoldenCarp()
+	local m = Spirits.Builders[kind]()
 	Spirits.scale(m, 0.55)
 	local orig = {}
 	for _, p in m:GetDescendants() do
 		if p:IsA("BasePart") then
 			orig[p] = { p.Color, p.Material, p.Transparency, p.Reflectance }
 			if p.Name == "Fin" or p.Name == "Whisker" then
-				p.Color, p.Material, p.Transparency = GOLD, Enum.Material.Neon, 0.25 -- подсвеченные плавники
+				p.Color, p.Material, p.Transparency = GOLD, Enum.Material.Neon, 0.25
 			else
 				p.Color, p.Material, p.Reflectance = Color3.fromRGB(8, 6, 12), Enum.Material.SmoothPlastic, 0
 			end
@@ -1098,18 +1887,15 @@ local function revealCarp()
 	conn = RunService.RenderStepped:Connect(function()
 		local t = os.clock() - t0
 		local cr = root() or r
-		local center = cr.Position + Vector3.new(0, 1.5, 0)
 		local pivot
 		if t < 0.9 then
-			-- силуэт висит перед игроком
 			local front = cr.CFrame * CFrame.new(0, 2, -9)
 			pivot = CFrame.lookAt(front.Position, front.Position + cr.CFrame.RightVector) * CFrame.new(0, math.sin(t * 3) * 0.2, 0)
 		else
-			-- облёт вокруг игрока
-			local a = (t - 0.9) * 5.2 + math.atan2(-(cr.CFrame.LookVector.X), -(cr.CFrame.LookVector.Z))
-			local p = center + Vector3.new(math.sin(a) * 8, 1 + math.sin(t * 4) * 0.5, math.cos(a) * 8)
-			local tangent = Vector3.new(math.cos(a), 0, -math.sin(a))
-			pivot = CFrame.lookAt(p, p + tangent)
+			local look = cr.CFrame.LookVector
+			local a = (t - 0.9) * 5.2 + math.atan2(-look.X, -look.Z)
+			local p = cr.Position + Vector3.new(math.sin(a) * 8, 2.5 + math.sin(t * 4) * 0.5, math.cos(a) * 8)
+			pivot = CFrame.lookAt(p, p + Vector3.new(math.cos(a), 0, -math.sin(a)))
 		end
 		Spirits.animate(m, pivot, t * 4)
 		if t > 0.55 and not ringed then
@@ -1127,87 +1913,101 @@ local function revealCarp()
 			end
 			TweenService:Create(revealCC, TweenInfo.new(0.3), { Brightness = 0, Saturation = 0 }):Play()
 		end
-		if t > 1.85 then
-			for p in orig do
-				TweenService:Create(p, TweenInfo.new(0.25), { Transparency = 1 }):Play()
-			end
+		if t > 1.8 then
+			for p in orig do TweenService:Create(p, TweenInfo.new(0.25), { Transparency = 1 }):Play() end
 		end
-		if t > 2.15 then
+		if t > 2.1 then
 			conn:Disconnect()
 			m:Destroy()
 		end
 	end)
-	showToast("✦ Золотой карп в коллекции! ✦", 2.5)
+	showToast("✦ " .. Catalog.Kinds[kind].name .. " в коллекции! ✦", 2.5)
 end
 
------------------------------------------------------------------- состояние
-local state = { jar = 0, jarKinds = {}, saved = {}, equipped = nil }
-local owned = {}
+------------------------------------------------------------------ обучение (первая минута)
+local tut = { step = 0 }
+local TUT_TEXT = {
+	"1/4  Найди фиолетовую тень у площади и наведи на неё фонарь",
+	"2/4  Подойди и удерживай ЛОВИТЬ, пока дух не окажется в банке",
+	"3/4  Отнеси улов к алтарю (голубой луч) и нажми «Сохранить улов»",
+	"4/4  Открой «📖 Коллекция» и экипируй лиса",
+}
+local arrowPart = Instance.new("Part")
+arrowPart.Anchored, arrowPart.CanCollide, arrowPart.CanQuery, arrowPart.Transparency, arrowPart.Size = true, false, false, 1, Vector3.one
+arrowPart.Parent = workspace
+local arrowAtt = Instance.new("Attachment")
+arrowAtt.Parent = arrowPart
+local arrow = Instance.new("Beam")
+arrow.Attachment1 = arrowAtt
+arrow.Width0, arrow.Width1, arrow.FaceCamera, arrow.LightEmission = 0.6, 0.2, true, 1
+arrow.Color = ColorSequence.new(Color3.fromRGB(140, 230, 255))
+arrow.Transparency = NumberSequence.new(0.2, 0.6)
+arrow.Enabled = false
+arrow.Parent = arrowPart
 
-local function refreshEquip()
-	owned = {}
-	for _, k in { "PaperFox", "GoldenCarp" } do
-		if (state.saved[k] or 0) > 0 then table.insert(owned, k) end
+local function setStep(n)
+	tut.step = n
+	if n >= 1 and n <= 4 then
+		tutPanel.Text, tutPanel.Visible = TUT_TEXT[n], true
+		punch(tutPanel)
+	else
+		tutPanel.Visible = false
+		arrow.Enabled = false
 	end
-	equipBtn.Visible = #owned > 0
-	equipBtn.Text = state.equipped and ("Спутник: " .. Spirits.Names[state.equipped]) or "Экипировать духа"
 end
+local function finishTutorial()
+	if tut.step == 0 or tut.step == 5 then return end
+	setStep(5)
+	remotes.TutorialDone:FireServer()
+	showToast("Обучение пройдено! Сохрани 3 разных духа — откроется Храмовый сад", 4)
+end
+skipBtn.Activated:Connect(finishTutorial)
 
+------------------------------------------------------------------ серверные события
+local firstState = true
 remotes.State.OnClientEvent:Connect(function(s)
-	if s.saveResult then
-		local r = s.saveResult
-		if not r.ok then
-			showToast(r.msg)
-			return
-		end
-		local hasNewCarp = table.find(r.firsts, "GoldenCarp") ~= nil
-		if hasNewCarp then
-			revealCarp()
-		else
-			local cr = root()
-			if cr then
-				ring(cr.Position + Vector3.new(0, 5, 0), 12, 1, Color3.fromRGB(120, 200, 255), 0.5, false)
-				burst(cr.Position + Vector3.new(0, 2, 0), ColorSequence.new(Color3.fromRGB(120, 200, 255), Color3.new(1, 1, 1)), 30)
-			end
-			showToast(("Сохранено духов: %d"):format(r.count) .. (r.persisted and "" or " (без DataStore)"))
-		end
+	state = s
+	refreshHUD()
+	if firstState then
+		firstState = false
+		if not s.tutorialDone then setStep(1) end
+		if s.persistent == false then showToast("Сохранения недоступны в этом запуске", 3) end
+	end
+	if tut.step == 4 and s.equipped then finishTutorial() end
+end)
+
+remotes.SaveResult.OnClientEvent:Connect(function(r)
+	if not r.ok then
+		showToast(r.msg)
 		return
 	end
-	state = s
-	if s.jar == 0 then
-		jarLabel.Text = "Банка: пусто"
-	else
-		local icons = ""
-		for _, k in s.jarKinds do icons ..= (ICON[k] or "?") end
-		jarLabel.Text = "Банка: " .. icons
+	local legendary
+	for _, k in r.firsts do
+		if Catalog.Kinds[k].rarity == "legendary" then legendary = k end
 	end
-	local total = 0
-	for _, n in s.saved do total += n end
-	savedLabel.Text = "Коллекция: " .. total
-	refreshEquip()
+	if legendary then
+		revealLegendary(legendary)
+	else
+		local cr = root()
+		if cr then
+			ring(cr.Position + Vector3.new(0, 5, 0), 12, 1, COLD, 0.5, false)
+			burst(cr.Position + Vector3.new(0, 2, 0), ColorSequence.new(COLD, Color3.new(1, 1, 1)), 30)
+		end
+		local msg = ("Сохранено духов: %d"):format(#r.kinds)
+		if #r.firsts > 0 then msg ..= "  Новые: " .. #r.firsts end
+		if r.gained > 0 then msg ..= ("  +✦%d"):format(r.gained) end
+		if not r.persisted then msg ..= " (без DataStore)" end
+		showToast(msg, 3)
+	end
+	if r.gardenOpened then
+		task.delay(legendary and 2.3 or 1.2, function() showToast("🏯 Храмовый сад открыт! Иди на юг за канал", 4) end)
+	end
+	if tut.step == 3 then setStep(4) end
 end)
 
-equipBtn.Activated:Connect(function()
-	-- по кругу: нет → лис → карп → нет
-	local order = table.clone(owned)
-	table.insert(order, false)
-	local idx = table.find(order, state.equipped or false) or #order
-	local nextKind = order[idx % #order + 1]
-	remotes.Equip:InvokeServer(nextKind or nil)
-end)
-
-remotes.Caught.OnClientEvent:Connect(catchEffect)
-
-local moonEnds = 0
-remotes.Moon.OnClientEvent:Connect(function(active, secs)
-	if active then
-		moonEnds = os.clock() + (secs or 75)
-		banner.Visible = true
-		showToast("Над каналом золотой карп! Сохраниться у алтаря или рискнуть?", 4)
-	else
-		banner.Visible = false
-		showToast("Красная луна ушла", 2)
-	end
+remotes.Caught.OnClientEvent:Connect(function(kind, at, coop)
+	catchEffect(kind, at, coop or 1)
+	if tut.step == 2 or tut.step == 1 then setStep(3) end
 end)
 
 remotes.Hit.OnClientEvent:Connect(function(lost)
@@ -1215,157 +2015,336 @@ remotes.Hit.OnClientEvent:Connect(function(lost)
 	TweenService:Create(vignette, TweenInfo.new(0.8), { BackgroundTransparency = 1 }):Play()
 	showToast(lost > 0 and ("Они разбил банку! Потеряно духов: " .. lost) or "Они попал! Банка была пуста", 3)
 end)
+remotes.Notice.OnClientEvent:Connect(function(text) showToast(text, 2.5) end)
+
+------------------------------------------------------------------ визуал духов
+local visFolder = Instance.new("Folder")
+visFolder.Name = "SpiritVisuals"
+visFolder.Parent = workspace
+local visuals = {}
+
+local function addAnchor(a)
+	if not a:IsA("BasePart") then return end
+	local kind = a:GetAttribute("Kind")
+	local info = kind and Catalog.Kinds[kind]
+	if not info then return end
+	local v = { anchor = a, kind = kind, info = info, seed = math.random() * 10 }
+	if info.move ~= "swim" then
+		v.shadow = Spirits.buildShadow(Catalog.Rarity[info.rarity].shadow)
+		v.shadow.Parent = visFolder
+	end
+	visuals[a] = v
+end
+local function removeAnchor(a)
+	local v = visuals[a]
+	if not v then return end
+	visuals[a] = nil
+	if v.shadow then v.shadow:Destroy() end
+	if v.model then v.model:Destroy() end
+end
+spiritsFolder.ChildAdded:Connect(addAnchor)
+spiritsFolder.ChildRemoved:Connect(removeAnchor)
+for _, a in spiritsFolder:GetChildren() do addAnchor(a) end
+
+-- спутники всех игроков (видны всем)
+local followers = {}
+local function updateFollowers(now)
+	for _, p in Players:GetPlayers() do
+		local kind = p:GetAttribute("Companion")
+		local f = followers[p]
+		if f and f.kind ~= kind then
+			f.model:Destroy()
+			followers[p], f = nil, nil
+		end
+		local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+		if kind and kind ~= "" and Catalog.Kinds[kind] and r then
+			if not f then
+				local m = Spirits.Builders[kind]()
+				Spirits.scale(m, Catalog.Kinds[kind].follow)
+				m.Parent = visFolder
+				f = { kind = kind, model = m, pivot = r.CFrame }
+				followers[p] = f
+			end
+			local goal = r.CFrame * CFrame.new(3, 2.2 + math.sin(now * 2) * 0.4, 2)
+			f.pivot = f.pivot:Lerp(goal, 0.1)
+			Spirits.animate(f.model, f.pivot, now * Catalog.Kinds[kind].animSpeed * 0.6)
+		elseif f then
+			f.model:Destroy()
+			followers[p] = nil
+		end
+	end
+	for p, f in followers do
+		if not p.Parent then
+			f.model:Destroy()
+			followers[p] = nil
+		end
+	end
+end
+
+-- они: модель строится у каждого клиента, сервер двигает опору
+local oniModel, oniT = nil, 0
+local function updateOni(dt)
+	local a = workspace:FindFirstChild("Oni")
+	if not a then
+		if oniModel then oniModel:Destroy() oniModel = nil end
+		return
+	end
+	if not oniModel then
+		oniModel = Spirits.buildOni()
+		oniModel.Parent = visFolder
+	end
+	local st = a:GetAttribute("State")
+	local pose = CFrame.new()
+	if st == "walk" then
+		oniT += dt * 6
+	elseif st == "windup" then
+		pose = CFrame.Angles(math.rad(-12), 0, 0) * CFrame.new(math.sin(os.clock() * 40) * 0.15, 0, 0)
+		oniT = math.pi / 2
+	else
+		pose = CFrame.new(0, 0, -1) * CFrame.Angles(math.rad(18), 0, 0)
+		oniT = -math.pi / 2
+	end
+	Spirits.animate(oniModel, a.CFrame * pose, oniT)
+end
 
 ------------------------------------------------------------------ фонарь и мягкое наведение
-local beamPart
-local function setupLight(char)
-	local r = char:WaitForChild("HumanoidRootPart")
-	beamPart = Instance.new("Part")
-	beamPart.Name = "Lantern"
-	beamPart.Size, beamPart.CanCollide, beamPart.Massless, beamPart.CanQuery = Vector3.new(0.5, 0.7, 0.5), false, true, false
-	beamPart.Material, beamPart.Color = Enum.Material.Neon, Color3.fromRGB(255, 230, 170)
-	beamPart.Parent = char
-	local w = Instance.new("Weld")
-	w.Part0, w.Part1, w.C0 = r, beamPart, CFrame.new(0.9, 0.3, -0.9)
-	w.Parent = beamPart
-	local sl = Instance.new("SpotLight")
-	sl.Range, sl.Angle, sl.Brightness, sl.Face = AIM_RANGE, 40, 6, Enum.NormalId.Front
-	sl.Color = Color3.fromRGB(255, 240, 200)
-	sl.Parent = beamPart
-	local pl = Instance.new("PointLight")
-	pl.Range, pl.Brightness, pl.Color = 8, 0.8, Color3.fromRGB(255, 220, 160)
-	pl.Parent = beamPart
-end
-plr.CharacterAdded:Connect(setupLight)
-if plr.Character then task.spawn(setupLight, plr.Character) end
-
 local highlight = Instance.new("Highlight")
 highlight.FillTransparency, highlight.OutlineColor = 0.7, Color3.fromRGB(255, 230, 150)
-highlight.Parent = gui
+highlight.Parent = visFolder
 
 local target: BasePart? = nil
 local aimTime, revealSent = 0, {}
-local holding, holdStart, holdId, holdTime = false, 0, nil, 1.5
+local holding, holdId = false, nil
+
+local function lanternRange()
+	return Catalog.LanternRange[plr:GetAttribute("LanternLvl") or 1]
+end
 
 local function findTarget(r)
 	local best, bestScore = nil, -math.huge
 	local look = r.CFrame.LookVector
 	local flatLook = Vector3.new(look.X, 0, look.Z).Unit
-	for _, s in spiritsFolder:GetChildren() do
-		if s:IsA("BasePart") and s.Name == "Shadow" then
-			local d = s.Position - r.Position
-			local dist = d.Magnitude
-			local range = s:GetAttribute("Kind") == "GoldenCarp" and AIM_RANGE + 6 or AIM_RANGE
-			if dist < range then
-				local flat = Vector3.new(d.X, 0, d.Z)
-				local dot = flat.Magnitude > 0.5 and flat.Unit:Dot(flatLook) or 1
-				-- рядом стоящий дух можно ловить и сбоку
-				if dot > AIM_CONE or dist < 7 then
-					local score = dot * 2 - dist / range + (s:GetAttribute("Revealed") and 0.3 or 0)
-					if score > bestScore then best, bestScore = s, score end
-				end
+	local range = lanternRange()
+	for a, v in visuals do
+		local d = a.Position - r.Position
+		local dist = d.Magnitude
+		local rng = v.info.move == "swim" and range + 8 or range
+		if dist < rng and (v.anchor.Position.Z > -73 or state.gardenOpen) then
+			local flat = Vector3.new(d.X, 0, d.Z)
+			local dot = flat.Magnitude > 0.5 and flat.Unit:Dot(flatLook) or 1
+			if dot > 0.7 or dist < 8 then
+				local score = dot * 2 - dist / rng + (a:GetAttribute("Revealed") and 0.3 or 0)
+				if score > bestScore then best, bestScore = a, score end
 			end
 		end
 	end
 	return best
 end
 
-local function modelFor(id)
-	for _, m in spiritsFolder:GetChildren() do
-		if m:IsA("Model") and m:GetAttribute("SpiritId") == id then return m end
+local function release()
+	if holding then
+		holding = false
+		remotes.CatchHold:FireServer(nil)
 	end
 end
 
+local currentDistrict = nil
+local districtCC = Instance.new("ColorCorrectionEffect")
+districtCC.Parent = Lighting
+local TINT = {
+	street = Color3.fromRGB(255, 238, 220),
+	plaza = Color3.fromRGB(235, 245, 255),
+	canal = Color3.fromRGB(220, 240, 255),
+	garden = Color3.fromRGB(230, 255, 235),
+}
+
 RunService.RenderStepped:Connect(function(dt)
+	local now = os.clock()
 	local r = root()
-	if not r then return end
-	if banner.Visible then
-		banner.Text = ("🌕 КРАСНАЯ ЛУНА  %d с"):format(math.max(0, math.ceil(moonEnds - os.clock())))
+
+	-- фаза Красной луны
+	local ends = workspace:GetAttribute("PhaseEnds")
+	if ends then
+		local left = math.max(0, math.floor(ends - workspace:GetServerTimeNow()))
+		local timeStr = ("%d:%02d"):format(left // 60, left % 60)
+		if workspace:GetAttribute("MoonActive") then
+			banner.Text = "🌕 КРАСНАЯ ЛУНА " .. timeStr
+			banner.BackgroundColor3, banner.BackgroundTransparency = Color3.fromRGB(130, 15, 25), 0.1
+		else
+			banner.Text = "До Красной луны " .. timeStr
+			banner.BackgroundColor3, banner.BackgroundTransparency = Color3.fromRGB(20, 20, 40), 0.3
+		end
 	end
-	local t = holding and target or findTarget(r)
+
+	-- духи: тени и проявленные модели
+	for a, v in visuals do
+		local cf = a.CFrame
+		local revealed = a:GetAttribute("Revealed")
+		local near = not r or (cf.Position - r.Position).Magnitude < 170
+		if v.shadow then
+			local g = Vector3.new(cf.X, 0.62, cf.Z)
+			v.shadow.CFrame = CFrame.new(g) * CFrame.Angles(0, now * 0.8, math.rad(90))
+			v.shadow.Transparency = revealed and 0.85 or 0.2 + math.sin(now * 3 + v.seed) * 0.1
+		end
+		if revealed and not v.model then
+			v.model = Spirits.Builders[v.kind]()
+			v.model.Parent = visFolder
+			ring(cf.Position + Vector3.new(0, 1, 0), 2, 10, Catalog.Rarity[v.info.rarity].color, 0.4, false)
+			local pe = v.shadow and v.shadow:FindFirstChildOfClass("ParticleEmitter")
+			if pe then pe:Emit(25) pe.Rate = 3 end
+		end
+		if v.model and near then
+			local t = now + v.seed
+			Spirits.animate(v.model, cf * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
+		end
+	end
+	updateFollowers(now)
+	updateOni(dt)
+	if not r then return end
+
+	-- район: подпись и оттенок света
+	local d = Catalog.district(r.Position.Z)
+	if d ~= currentDistrict then
+		currentDistrict = d
+		districtTitle.Text, districtTitle.Visible = Catalog.DistrictNames[d], true
+		districtTitle.TextTransparency = 0
+		TweenService:Create(districtTitle, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 1.6), { TextTransparency = 1 }):Play()
+		TweenService:Create(districtCC, TweenInfo.new(1.5), { TintColor = TINT[d] }):Play()
+	end
+	local nearAltar = (r.Position - ALTAR_POS).Magnitude < 24
+	upBtn.Visible = nearAltar
+	if not nearAltar then upFrame.Visible = false end
+
+	-- выбор цели и мягкое наведение луча
+	local t = (holding and target and target.Parent) and target or findTarget(r)
 	if t ~= target then target, aimTime = t, 0 end
-	-- мягкое наведение луча на ближайшего духа перед игроком
-	if beamPart and beamPart:FindFirstChild("Weld") then
-		local w = beamPart.Weld
+	local lantern = plr.Character:FindFirstChild("Lantern")
+	local weld = lantern and lantern:FindFirstChild("Weld")
+	if weld then
 		local goal = CFrame.new(0.9, 0.3, -0.9)
 		if target and target.Parent then
 			local localDir = r.CFrame:VectorToObjectSpace((target.Position - r.Position).Unit)
 			goal = CFrame.lookAt(goal.Position, goal.Position + localDir)
 		end
-		w.C0 = w.C0:Lerp(goal, math.min(1, dt * 6))
+		weld.C0 = weld.C0:Lerp(goal, math.min(1, dt * 6))
 	end
-	highlight.Adornee = nil
-	hint.Adornee = nil
+
+	highlight.Adornee, hint.Adornee = nil, nil
 	local inRange = false
 	if target and target.Parent then
+		local v = visuals[target]
 		local id = target:GetAttribute("SpiritId")
 		local dist = (target.Position - r.Position).Magnitude
-		local isCarp = target:GetAttribute("Kind") == "GoldenCarp"
+		local rar = v and Catalog.Rarity[v.info.rarity]
 		if target:GetAttribute("Revealed") then
-			highlight.Adornee = modelFor(id)
-			highlight.OutlineColor = isCarp and GOLD or Color3.fromRGB(255, 230, 150)
-			inRange = dist < CATCH_RANGE + (isCarp and 4 or 0)
+			highlight.Adornee = v and v.model
+			highlight.OutlineColor = rar and rar.color or Color3.new(1, 1, 1)
+			inRange = v and dist < Catalog.catchRange(v.kind)
 			hint.Adornee = target
-			hint.StudsOffset = Vector3.new(0, isCarp and 6 or 8, 0)
-			hintText.Text = inRange and "Держи ЛОВИТЬ" or "Подойди ближе"
-			hintText.TextColor3 = inRange and Color3.fromRGB(140, 255, 180) or Color3.new(1, 1, 1)
-		else
-			highlight.Adornee = target
+			hint.StudsOffset = Vector3.new(0, 7, 0)
+			local full = #state.jar >= state.cap
+			local holders = target:GetAttribute("Holders") or 0
+			if full then
+				hintText.Text, hintText.TextColor3 = "Банка полна!", Color3.fromRGB(255, 160, 120)
+			elseif holders > 1 then
+				hintText.Text, hintText.TextColor3 = ("Ловим вместе ×%d"):format(holders), GOLD
+			else
+				hintText.Text = inRange and (v.info.name) or "Подойди ближе"
+				hintText.TextColor3 = inRange and Color3.fromRGB(140, 255, 180) or Color3.new(1, 1, 1)
+			end
+			if tut.step == 1 then setStep(2) end
+		elseif v then
+			highlight.Adornee = v.shadow
+			highlight.OutlineColor = rar.color
 			hint.Adornee = target
 			hint.StudsOffset = Vector3.new(0, 3, 0)
-			hintText.Text = "Свети… " .. string.rep("•", math.clamp(math.floor(aimTime / 0.12), 0, 3))
-			hintText.TextColor3 = Color3.fromRGB(200, 170, 255)
+			local need = rar.revealTime / Catalog.LanternSpeed[plr:GetAttribute("LanternLvl") or 1]
 			aimTime += dt
-			if aimTime > 0.35 and not revealSent[id] then
+			hintText.Text = "Свети… " .. string.rep("•", math.clamp(math.floor(aimTime / need * 3), 0, 3))
+			hintText.TextColor3 = Color3.fromRGB(200, 170, 255)
+			if aimTime > need and not revealSent[id] then
 				revealSent[id] = true
 				remotes.Reveal:FireServer(id)
 			end
 		end
 	end
+
+	-- кнопка ловли (прогресс считает сервер)
 	catchBtn.Visible = inRange or holding
 	if holding then
 		if not inRange or not target or target:GetAttribute("SpiritId") ~= holdId then
-			holding = false
-			remotes.CatchStart:FireServer(nil)
-			showToast("Дух вырвался!", 1)
+			release()
 		else
-			local p = (os.clock() - holdStart) / holdTime
-			fill.Size = UDim2.new(1, 0, math.min(p, 1), 0)
-			catchBtn.Rotation = math.sin(os.clock() * 40) * 4 * p -- банка дрожит
-			if p >= 1 then
-				holding = false
-				remotes.CatchFinish:FireServer(holdId)
-			end
+			local p = target:GetAttribute("Progress") or 0
+			fill.Size = UDim2.new(1, 0, math.clamp(p, 0, 1), 0)
+			catchBtn.Rotation = math.sin(now * 40) * 4 * p
+			local holders = target:GetAttribute("Holders") or 0
+			catchBtn.Text = holders > 1 and ("×" .. holders) or "ЛОВИТЬ"
 		end
 	end
 	if not holding then
 		fill.Size = UDim2.new(1, 0, 0, 0)
 		catchBtn.Rotation = 0
+		catchBtn.Text = #state.jar >= state.cap and "ПОЛНА" or "ЛОВИТЬ"
+	end
+
+	-- стрелка обучения
+	if tut.step >= 1 and tut.step <= 3 then
+		local goalPos
+		if tut.step == 1 then
+			local best, bd = nil, math.huge
+			for a, v in visuals do
+				if not a:GetAttribute("Revealed") and v.kind == "PaperFox" then
+					local dd = (a.Position - r.Position).Magnitude
+					if dd < bd then best, bd = a, dd end
+				end
+			end
+			goalPos = best and best.Position
+		elseif tut.step == 2 then
+			goalPos = target and target.Parent and target.Position
+		else
+			goalPos = ALTAR_POS + Vector3.new(0, 2, 0)
+		end
+		local att = r:FindFirstChild("TutAtt")
+		if not att then
+			att = Instance.new("Attachment")
+			att.Name = "TutAtt"
+			att.Position = Vector3.new(0, -2, 0)
+			att.Parent = r
+		end
+		arrow.Attachment0 = att
+		arrow.Enabled = goalPos ~= nil and (goalPos - r.Position).Magnitude > 6
+		if goalPos then arrowPart.Position = goalPos end
+	elseif tut.step == 4 then
+		arrow.Enabled = false
+		collBtn.BackgroundColor3 = (math.floor(now * 3) % 2 == 0) and Color3.fromRGB(230, 160, 40) or Color3.fromRGB(70, 80, 160)
+	else
+		arrow.Enabled = false
+		collBtn.BackgroundColor3 = Color3.fromRGB(70, 80, 160)
 	end
 end)
 
+------------------------------------------------------------------ ввод
 local function beginHold()
 	local r = root()
 	if not (r and target and target.Parent and target:GetAttribute("Revealed")) then return end
-	holding, holdStart, holdId = true, os.clock(), target:GetAttribute("SpiritId")
-	holdTime = target:GetAttribute("CatchTime") or 1.5
-	remotes.CatchStart:FireServer(holdId)
-end
-local function endHold()
-	if holding then
-		holding = false
-		remotes.CatchStart:FireServer(nil)
+	if #state.jar >= state.cap then
+		showToast("Банка полна — отнеси улов к алтарю")
+		return
 	end
+	holding, holdId = true, target:GetAttribute("SpiritId")
+	remotes.CatchHold:FireServer(holdId)
 end
 catchBtn.MouseButton1Down:Connect(beginHold)
-catchBtn.MouseButton1Up:Connect(endHold)
-catchBtn.MouseLeave:Connect(endHold)
+catchBtn.MouseButton1Up:Connect(release)
+catchBtn.MouseLeave:Connect(release)
+remotes.Caught.OnClientEvent:Connect(function() holding = false end)
 -- ПК/Studio: клавиша F
 UserInputService.InputBegan:Connect(function(i, gp)
 	if not gp and i.KeyCode == Enum.KeyCode.F then beginHold() end
 end)
 UserInputService.InputEnded:Connect(function(i)
-	if i.KeyCode == Enum.KeyCode.F then endHold() end
+	if i.KeyCode == Enum.KeyCode.F then release() end
 end)
 ]]></string>
           </Properties>
