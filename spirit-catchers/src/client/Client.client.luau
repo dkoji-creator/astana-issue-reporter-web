@@ -477,12 +477,17 @@ local function donateCard(order, key, item, isPass)
 	K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 100), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 	local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
 	b.Activated:Connect(function()
-		if item.id == 0 then
-			showToast("Скоро в продаже")
-		elseif isPass then
-			if not (state.passes and state.passes[key]) then MarketplaceService:PromptGamePassPurchase(plr, item.id) end
-		else
+		local owned = isPass and state.passes and state.passes[key]
+		if owned then
+			showToast("Уже куплено навсегда")
+		elseif isPass and item.id ~= 0 then
+			MarketplaceService:PromptGamePassPurchase(plr, item.id)
+		elseif isPass and item.product then
+			MarketplaceService:PromptProductPurchase(plr, item.product)
+		elseif not isPass and item.id ~= 0 then
 			MarketplaceService:PromptProductPurchase(plr, item.id)
+		else
+			showToast("Скоро в продаже")
 		end
 	end)
 	donateCards[key] = { b = b, l = bl, item = item, isPass = isPass }
@@ -492,7 +497,7 @@ for i, key in Money.ProductOrder do donateCard(10 + i, key, Money.Products[key],
 local function refreshDonate()
 	for key, c in donateCards do
 		local owned = c.isPass and state.passes and state.passes[key]
-		if c.item.id == 0 then
+		if c.item.id == 0 and not c.item.product then
 			c.l.Text = "Скоро"
 			K.recolor(c.b, Color3.fromRGB(90, 90, 105))
 		elseif owned then

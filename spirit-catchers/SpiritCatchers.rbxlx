@@ -227,29 +227,30 @@ return {
           <Properties>
             <string name="Name">Monetization</string>
             <string name="Source"><![CDATA[-- Донат: геймпассы (навсегда) и товары (можно покупать много раз). Цены до 199 Robux (~2$).
--- id = 0, пока товар не создан в Roblox: кнопка показывает «Скоро».
+-- id — геймпасс (0 = нет), product — донат-товар с покупкой навсегда (сохраняется в профиле).
+-- Товары: id — донат-товар Roblox.
 local M = {}
 
 M.PassOrder = { "vip", "coins2x", "bigjar", "lucky", "wideBeam" }
 M.Passes = {
 	vip = {
-		id = 0, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
+		id = 0, product = 3732892769, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
 		name = "VIP-ловец", desc = "Золотая табличка VIP над головой, радужный фонарь и +25% монет",
 	},
 	coins2x = {
-		id = 0, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),
+		id = 0, product = 3732892783, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),
 		name = "x2 Монеты", desc = "Все монеты за сданных духов удваиваются",
 	},
 	bigjar = {
-		id = 0, price = 129, icon = "jar", color = Color3.fromRGB(90, 170, 255),
+		id = 0, product = 3732892804, price = 129, icon = "jar", color = Color3.fromRGB(90, 170, 255),
 		name = "Огромная банка", desc = "+5 мест в банке навсегда",
 	},
 	lucky = {
-		id = 0, price = 99, icon = "dust", color = Color3.fromRGB(170, 110, 255),
+		id = 0, product = 3732892821, price = 99, icon = "dust", color = Color3.fromRGB(170, 110, 255),
 		name = "Удача ловца", desc = "15% шанс, что пойманный обычный дух станет Сияющим",
 	},
 	wideBeam = {
-		id = 0, price = 79, icon = "target", color = Color3.fromRGB(80, 210, 140),
+		id = 0, product = 3732892835, price = 79, icon = "target", color = Color3.fromRGB(80, 210, 140),
 		name = "Широкий луч", desc = "Зелёная зона в мини-игре ловли на 40% больше",
 	},
 }
@@ -257,11 +258,11 @@ M.Passes = {
 M.ProductOrder = { "summonMoon", "fireworks" }
 M.Products = {
 	summonMoon = {
-		id = 0, price = 49, icon = "moon", color = Color3.fromRGB(230, 60, 70),
+		id = 3732892660, price = 49, icon = "moon", color = Color3.fromRGB(230, 60, 70),
 		name = "Призвать Красную луну", desc = "Красная луна начнётся сразу для всего сервера (если уже идёт, продлится на 30 с)",
 	},
 	fireworks = {
-		id = 0, price = 15, icon = "gift", color = Color3.fromRGB(255, 120, 190),
+		id = 3732892697, price = 15, icon = "gift", color = Color3.fromRGB(255, 120, 190),
 		name = "Фейерверк", desc = "Салют над площадью для всех игроков с вашим именем",
 	},
 }
@@ -1515,7 +1516,7 @@ local function opened(d: Profile)
 	for name in Catalog.Districts do t[name] = Catalog.unlocked(name, stats(d)) end
 	return t
 end
-local function hasPass(d, key) return d.passes ~= nil and d.passes[key] == true end
+local function hasPass(d, key) return (d.passes ~= nil and d.passes[key] == true) or (d.owned ~= nil and d.owned[key] == true) end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
 local function range(d: Profile) return Catalog.upgradeValue("range", d.levels.range) end
@@ -1567,7 +1568,7 @@ local function migrate(raw): Profile
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
-		variants = {}, total = 0,
+		variants = {}, total = 0, owned = {},
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -1610,6 +1611,11 @@ local function migrate(raw): Profile
 			if raw.version == 5 or raw.version == 6 then
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
+				if typeof(raw.owned) == "table" then
+					for k, v in raw.owned do
+						if Catalog.Money.Passes[k] and v == true then d.owned[k] = true end
+					end
+				end
 				if typeof(raw.receipts) == "table" then
 					d.receipts = {}
 					for _, r in raw.receipts do
@@ -1679,7 +1685,11 @@ local function pushState(plr)
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
-		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = d.passes or {},
+		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
+			local t = {}
+			for key in Money.Passes do t[key] = hasPass(d, key) end
+			return t
+		end)(),
 	})
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls then
@@ -2498,7 +2508,18 @@ MarketplaceService.ProcessReceipt = function(info)
 	d.receipts = d.receipts or {}
 	if table.find(d.receipts, info.PurchaseId) then return Enum.ProductPurchaseDecision.PurchaseGranted end
 	local granted = false
-	if info.ProductId == Money.Products.summonMoon.id and Money.Products.summonMoon.id ~= 0 then
+	for key, p in Money.Passes do
+		if p.product and info.ProductId == p.product then
+			d.owned = d.owned or {}
+			d.owned[key] = true
+			applyPassEffects(plr)
+			NoticeEv:FireClient(plr, "Спасибо! Навсегда: " .. p.name)
+			granted = true
+		end
+	end
+	if granted then
+		-- покупка навсегда
+	elseif info.ProductId == Money.Products.summonMoon.id and Money.Products.summonMoon.id ~= 0 then
 		summonMoon()
 		for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, plr.Name .. " призвал Красную луну!") end
 		granted = true
@@ -3501,12 +3522,17 @@ local function donateCard(order, key, item, isPass)
 	K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 100), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 	local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
 	b.Activated:Connect(function()
-		if item.id == 0 then
-			showToast("Скоро в продаже")
-		elseif isPass then
-			if not (state.passes and state.passes[key]) then MarketplaceService:PromptGamePassPurchase(plr, item.id) end
-		else
+		local owned = isPass and state.passes and state.passes[key]
+		if owned then
+			showToast("Уже куплено навсегда")
+		elseif isPass and item.id ~= 0 then
+			MarketplaceService:PromptGamePassPurchase(plr, item.id)
+		elseif isPass and item.product then
+			MarketplaceService:PromptProductPurchase(plr, item.product)
+		elseif not isPass and item.id ~= 0 then
 			MarketplaceService:PromptProductPurchase(plr, item.id)
+		else
+			showToast("Скоро в продаже")
 		end
 	end)
 	donateCards[key] = { b = b, l = bl, item = item, isPass = isPass }
@@ -3516,7 +3542,7 @@ for i, key in Money.ProductOrder do donateCard(10 + i, key, Money.Products[key],
 local function refreshDonate()
 	for key, c in donateCards do
 		local owned = c.isPass and state.passes and state.passes[key]
-		if c.item.id == 0 then
+		if c.item.id == 0 and not c.item.product then
 			c.l.Text = "Скоро"
 			K.recolor(c.b, Color3.fromRGB(90, 90, 105))
 		elseif owned then

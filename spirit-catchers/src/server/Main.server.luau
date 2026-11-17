@@ -111,7 +111,7 @@ local function opened(d: Profile)
 	for name in Catalog.Districts do t[name] = Catalog.unlocked(name, stats(d)) end
 	return t
 end
-local function hasPass(d, key) return d.passes ~= nil and d.passes[key] == true end
+local function hasPass(d, key) return (d.passes ~= nil and d.passes[key] == true) or (d.owned ~= nil and d.owned[key] == true) end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
 local function power(d: Profile) return Catalog.upgradeValue("power", d.levels.power) end
 local function range(d: Profile) return Catalog.upgradeValue("range", d.levels.range) end
@@ -163,7 +163,7 @@ local function migrate(raw): Profile
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
-		variants = {}, total = 0,
+		variants = {}, total = 0, owned = {},
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -206,6 +206,11 @@ local function migrate(raw): Profile
 			if raw.version == 5 or raw.version == 6 then
 				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
 				d.total = math.floor(num(raw.total, 0, 1e9, 0))
+				if typeof(raw.owned) == "table" then
+					for k, v in raw.owned do
+						if Catalog.Money.Passes[k] and v == true then d.owned[k] = true end
+					end
+				end
 				if typeof(raw.receipts) == "table" then
 					d.receipts = {}
 					for _, r in raw.receipts do
@@ -275,7 +280,11 @@ local function pushState(plr)
 		gardenOpen = gardenOpen(d), opened = opened(d), variants = d.variants, total = d.total,
 		distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
 		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
-		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = d.passes or {},
+		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
+			local t = {}
+			for key in Money.Passes do t[key] = hasPass(d, key) end
+			return t
+		end)(),
 	})
 	local ls = plr:FindFirstChild("leaderstats")
 	if ls then
@@ -1094,7 +1103,18 @@ MarketplaceService.ProcessReceipt = function(info)
 	d.receipts = d.receipts or {}
 	if table.find(d.receipts, info.PurchaseId) then return Enum.ProductPurchaseDecision.PurchaseGranted end
 	local granted = false
-	if info.ProductId == Money.Products.summonMoon.id and Money.Products.summonMoon.id ~= 0 then
+	for key, p in Money.Passes do
+		if p.product and info.ProductId == p.product then
+			d.owned = d.owned or {}
+			d.owned[key] = true
+			applyPassEffects(plr)
+			NoticeEv:FireClient(plr, "Спасибо! Навсегда: " .. p.name)
+			granted = true
+		end
+	end
+	if granted then
+		-- покупка навсегда
+	elseif info.ProductId == Money.Products.summonMoon.id and Money.Products.summonMoon.id ~= 0 then
 		summonMoon()
 		for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, plr.Name .. " призвал Красную луну!") end
 		granted = true
