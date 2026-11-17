@@ -89,7 +89,7 @@ function C.districtsOf(kind: string)
 	for d in C.Kinds[kind].spawn do
 		table.insert(list, d)
 	end
-	if C.Kinds[kind].move == "swim" then table.insert(list, "canal") end
+	if C.Kinds[kind].move == "swim" then table.insert(list, C.Kinds[kind].swimIn or "canal") end
 	return list
 end
 
@@ -409,7 +409,9 @@ S.Order = {
 	"Crane", "InkSnake", "LuckyCat", "JellyLantern",
 	"MoonRabbit", "FoxFire", "TenguMask",
 	"GoldenCarp",
-	"PaperDragon",
+	"SeaHorse", "LighthouseOwl",
+	"PaperWhale",
+	"PaperDragon", "MistKraken",
 	"Kyubi",
 }
 
@@ -417,7 +419,7 @@ S.Kinds = {
 	PaperFox = {
 		name = "Бумажный лис", short = "Лис", rarity = "common", world = "lantern", main = true,
 		move = "walk", speed = 6, height = 0, follow = 0.45, animSpeed = 9, condition = "any",
-		spawn = { street = { w = 50, moon = 30 }, canal = { w = 20, moon = 15 } },
+		spawn = { street = { w = 50, moon = 30 }, canal = { w = 12, moon = 8 } }, habitat = { "lamp", "wall" },
 		hint = "Улица фонарей и берега канала",
 		habit = "Перебегает от фонаря к фонарю и замирает, когда на него светят.",
 		trail = { shape = "print", color = Color3.fromRGB(240, 235, 220), text = "Бумажные отпечатки лап" },
@@ -426,8 +428,8 @@ S.Kinds = {
 	Umbrella = {
 		name = "Зонтик-каса", short = "Зонт", rarity = "common", world = "lantern", main = true,
 		move = "walk", speed = 5, height = 0, follow = 0.5, animSpeed = 6, condition = "any",
-		spawn = { canal = { w = 45, moon = 35 }, market = { w = 15, moon = 10 } },
-		hint = "Берега канала",
+		spawn = { canal = { w = 40, moon = 30 }, market = { w = 10, moon = 8 }, port = { w = 14, moon = 10 } }, habitat = { "water", "stall", "pier" },
+		hint = "Канал, рынок и порт: у воды",
 		habit = "Скачет на одной ноге у воды и крутится, когда радуется.",
 		trail = { shape = "ripple", color = Color3.fromRGB(120, 180, 255), text = "Мокрые следы гэта" },
 		yard = "Стоит у входа и ловит дождь",
@@ -435,8 +437,8 @@ S.Kinds = {
 	Firefly = {
 		name = "Светлячок", short = "Свет", rarity = "common", world = "lantern",
 		move = "float", speed = 4, height = 2.5, follow = 0.8, animSpeed = 8, condition = "any",
-		spawn = { garden = { w = 40, moon = 25 }, grove = { w = 22, moon = 15 } },
-		hint = "Храмовый сад и бамбуковая роща",
+		spawn = { grove = { w = 30, moon = 20 }, garden = { w = 18, moon = 12 } }, habitat = { "bush" },
+		hint = "Бамбуковая роща и сад, в кустах",
 		habit = "Кружит над травой и гаснет, если подойти слишком резко.",
 		trail = { shape = "dot", color = Color3.fromRGB(200, 255, 120), text = "Тающие зелёные искры" },
 		yard = "Мерцает над травой",
@@ -444,8 +446,8 @@ S.Kinds = {
 	PaperMoth = {
 		name = "Мотылёк-оригами", short = "Мотылёк", rarity = "common", world = "lantern",
 		move = "fly", speed = 6, height = 6, follow = 0.6, animSpeed = 10, condition = "any",
-		spawn = { street = { w = 30, moon = 20 }, market = { w = 25, moon = 18 } },
-		hint = "Улица фонарей и ночной рынок",
+		spawn = { street = { w = 30, moon = 20 }, market = { w = 18, moon = 12 } }, habitat = { "lamp" },
+		hint = "Улица и рынок, у фонарей",
 		habit = "Летит на свет и садится на бумажные фонари.",
 		trail = { shape = "scrap", color = Color3.fromRGB(255, 220, 190), text = "Обрывки цветной бумаги" },
 		yard = "Сидит на фонаре",
@@ -453,8 +455,8 @@ S.Kinds = {
 	LanternSpirit = {
 		name = "Дух-фонарь", short = "Фонарь", rarity = "uncommon", world = "lantern",
 		move = "float", speed = 4, height = 1, follow = 0.5, animSpeed = 5, condition = "any",
-		spawn = { street = { w = 22, moon = 22 }, canal = { w = 8, moon = 10 }, market = { w = 20, moon = 18 } },
-		hint = "Улица фонарей, танцует под гирляндами",
+		spawn = { street = { w = 16, moon = 18 }, market = { w = 15, moon = 15 } }, habitat = { "lamp", "stall" },
+		hint = "Улица и рынок, под гирляндами",
 		habit = "Танцует и машет лентами, а от сильного света прячет глаз.",
 		trail = { shape = "dot", color = Color3.fromRGB(255, 170, 90), text = "Капли тёплого воска" },
 		yard = "Освещает двор ночью",
@@ -462,8 +464,8 @@ S.Kinds = {
 	Kodama = {
 		name = "Моховичок", short = "Мох", rarity = "uncommon", world = "lantern",
 		move = "walk", speed = 3, height = 0, follow = 0.6, animSpeed = 4, condition = "any",
-		spawn = { garden = { w = 30, moon = 25 }, grove = { w = 20, moon = 15 } },
-		hint = "Храмовый сад и бамбуковая роща",
+		spawn = { grove = { w = 25, moon = 18 }, garden = { w = 15, moon = 12 } }, habitat = { "bush" },
+		hint = "Роща и сад, между кустами",
 		habit = "Медленно бродит между сакурами и наклоняет голову на звук.",
 		trail = { shape = "dot", color = Color3.fromRGB(110, 200, 110), text = "Ростки мха" },
 		yard = "Растит мох у пруда",
@@ -471,9 +473,9 @@ S.Kinds = {
 	BellTanuki = {
 		name = "Тануки-колокольчик", short = "Тануки", rarity = "uncommon", world = "lantern",
 		move = "walk", speed = 4, height = 0, follow = 0.55, animSpeed = 6, condition = "any",
-		spawn = { canal = { w = 18, moon = 15 } },
+		spawn = { canal = { w = 18, moon = 14 }, market = { w = 8, moon = 6 } }, habitat = { "water", "stall" },
 		spots = { Vector3.new(-32, 0.5, -15), Vector3.new(32, 0.5, -15), Vector3.new(-32, 0.5, -45), Vector3.new(32, 0.5, -45), Vector3.new(0, 0.5, -46) },
-		hint = "Канал, у мостов",
+		hint = "Канал у мостов и рынок",
 		habit = "Переваливается у мостов, а колокольчик выдаёт его за углом.",
 		trail = { shape = "print", color = Color3.fromRGB(150, 110, 70), text = "Листья и звон колокольчика" },
 		yard = "Дремлет у ворот",
@@ -481,8 +483,8 @@ S.Kinds = {
 	Crane = {
 		name = "Бумажный журавлик", short = "Журавль", rarity = "rare", world = "lantern",
 		move = "fly", speed = 8, height = 6, follow = 0.5, animSpeed = 5, condition = "moonBoost",
-		spawn = { garden = { w = 10, moon = 22 }, street = { w = 3, moon = 0 } },
-		hint = "Храмовый сад, чаще в Красную луну",
+		spawn = { grove = { w = 9, moon = 18 }, garden = { w = 12, moon = 22 } }, habitat = { "bush", "lamp" },
+		hint = "Роща и сад, чаще в Красную луну",
 		habit = "Кружит над пагодой, на глади пруда видно его тень.",
 		trail = { shape = "feather", color = Color3.fromRGB(250, 250, 255), text = "Бумажные перья" },
 		yard = "Садится на ворота",
@@ -490,9 +492,9 @@ S.Kinds = {
 	InkSnake = {
 		name = "Чернильный уж", short = "Уж", rarity = "rare", world = "lantern",
 		move = "walk", speed = 4, height = 0.2, follow = 0.45, animSpeed = 5, condition = "any",
-		spawn = { garden = { w = 8, moon = 10 } },
+		spawn = { garden = { w = 12, moon = 12 } }, habitat = { "bush", "water" },
 		spots = { Vector3.new(-22, 0.5, -110), Vector3.new(0, 0.5, -132) },
-		hint = "Храмовый сад, у пруда и пагоды",
+		hint = "Храмовый сад, у пруда",
 		habit = "Скользит по траве, оставляя чернильную строчку.",
 		trail = { shape = "ink", color = Color3.fromRGB(30, 40, 90), text = "Чернильные кляксы" },
 		yard = "Пишет иероглифы на камнях",
@@ -500,7 +502,7 @@ S.Kinds = {
 	MoonRabbit = {
 		name = "Лунный кролик", short = "Кролик", rarity = "epic", world = "lantern",
 		move = "walk", speed = 7, height = 0, follow = 0.5, animSpeed = 6, condition = "moon", moonOnly = true,
-		spawn = { street = { w = 0, moon = 14 }, garden = { w = 0, moon = 8 } },
+		spawn = { street = { w = 0, moon = 10 }, garden = { w = 0, moon = 10 } }, habitat = { "lamp", "bush" },
 		hint = "Только в Красную луну: улица и сад",
 		habit = "Высоко прыгает и оставляет серебряные отпечатки.",
 		trail = { shape = "print", color = Color3.fromRGB(230, 230, 255), text = "Серебряные отпечатки" },
@@ -509,8 +511,8 @@ S.Kinds = {
 	FoxFire = {
 		name = "Лисий огонь", short = "Огонь", rarity = "epic", world = "lantern",
 		move = "float", speed = 6, height = 3, follow = 0.6, animSpeed = 6, condition = "moon", moonOnly = true,
-		spawn = { street = { w = 0, moon = 8 }, canal = { w = 0, moon = 10 } },
-		hint = "Только в Красную луну: улица и канал",
+		spawn = { market = { w = 0, moon = 10 }, canal = { w = 0, moon = 8 } }, habitat = { "stall", "water" },
+		hint = "Только в Красную луну: рынок и канал",
 		habit = "Три голубых огонька водят хоровод и разбегаются от луча.",
 		trail = { shape = "flame", color = Color3.fromRGB(110, 200, 255), text = "Голубые искры" },
 		yard = "Освещает пруд голубым",
@@ -518,9 +520,9 @@ S.Kinds = {
 	Kappa = {
 		name = "Каппа", short = "Каппа", rarity = "uncommon", world = "lantern",
 		move = "walk", speed = 5, height = 0, follow = 0.5, animSpeed = 7, condition = "any",
-		spawn = { grove = { w = 25, moon = 20 }, canal = { w = 6, moon = 5 } },
+		spawn = { canal = { w = 14, moon = 12 }, grove = { w = 12, moon = 10 } }, habitat = { "water" },
 		spots = { Vector3.new(-95, 0.5, 40), Vector3.new(-120, 0.5, 20) },
-		hint = "Бамбуковая роща, у пруда",
+		hint = "Канал и пруд в роще",
 		habit = "Шлёпает у воды и бережёт воду в тарелочке на макушке.",
 		trail = { shape = "ripple", color = Color3.fromRGB(110, 220, 170), text = "Мокрые зелёные шлепки" },
 		yard = "Плещется в пруду",
@@ -528,8 +530,8 @@ S.Kinds = {
 	LuckyCat = {
 		name = "Манэки-нэко", short = "Нэко", rarity = "rare", world = "lantern",
 		move = "walk", speed = 6, height = 0, follow = 0.5, animSpeed = 6, condition = "any",
-		spawn = { market = { w = 12, moon = 12 } },
-		hint = "Ночной рынок, между прилавками",
+		spawn = { market = { w = 12, moon = 12 } }, habitat = { "stall" },
+		hint = "Ночной рынок, у прилавков",
 		habit = "Машет лапкой прохожим и звенит монеткой.",
 		trail = { shape = "dot", color = Color3.fromRGB(255, 210, 60), text = "Золотые монетки" },
 		yard = "Зазывает гостей у ворот",
@@ -537,8 +539,8 @@ S.Kinds = {
 	JellyLantern = {
 		name = "Медуза-фонарь", short = "Медуза", rarity = "rare", world = "lantern",
 		move = "float", speed = 3, height = 4, follow = 0.5, animSpeed = 3, condition = "any",
-		spawn = { canal = { w = 9, moon = 10 }, market = { w = 4, moon = 6 } },
-		hint = "Канал и рынок, парит над головами",
+		spawn = { canal = { w = 5, moon = 6 }, port = { w = 12, moon = 12 } }, habitat = { "water", "pier" },
+		hint = "Канал и порт, над водой",
 		habit = "Медленно плывёт по воздуху, мерцая щупальцами.",
 		trail = { shape = "dot", color = Color3.fromRGB(120, 230, 255), text = "Голубые капли света" },
 		yard = "Парит над прудом",
@@ -546,8 +548,8 @@ S.Kinds = {
 	TenguMask = {
 		name = "Маска тэнгу", short = "Тэнгу", rarity = "epic", world = "lantern",
 		move = "fly", speed = 9, height = 7, follow = 0.55, animSpeed = 5, condition = "moonBoost",
-		spawn = { grove = { w = 3, moon = 10 } },
-		hint = "Бамбуковая роща, чаще в Красную луну",
+		spawn = { grove = { w = 4, moon = 10 }, garden = { w = 3, moon = 6 } }, habitat = { "bush" },
+		hint = "Роща и сад, чаще в Красную луну",
 		habit = "Носится между стволами и дразнит длинным носом.",
 		trail = { shape = "feather", color = Color3.fromRGB(230, 60, 60), text = "Красные перья" },
 		yard = "Висит на воротах и сторожит двор",
@@ -555,8 +557,8 @@ S.Kinds = {
 	PaperDragon = {
 		name = "Бумажный дракон", short = "Дракон", rarity = "mythic", world = "lantern",
 		move = "fly", speed = 10, height = 9, follow = 0.3, animSpeed = 3, condition = "moon", moonOnly = true,
-		spawn = { grove = { w = 0, moon = 3 }, garden = { w = 0, moon = 3 } },
-		hint = "Только в Красную луну: роща и сад, высоко в небе",
+		spawn = { garden = { w = 0, moon = 3 }, port = { w = 0, moon = 2 } }, habitat = { "bush", "pier" },
+		hint = "Только в Красную луну: сад и порт, высоко",
 		habit = "Длинное бумажное тело извивается в небе, оставляя искры.",
 		trail = { shape = "flame", color = Color3.fromRGB(255, 170, 60), text = "Горящие обрывки бумаги" },
 		yard = "Обвивает пагоду",
@@ -564,11 +566,47 @@ S.Kinds = {
 	Kyubi = {
 		name = "Девятихвостая кицунэ", short = "Кицунэ", rarity = "secret", world = "lantern",
 		move = "walk", speed = 8, height = 0, follow = 0.4, animSpeed = 7, condition = "moon", moonOnly = true,
-		spawn = { market = { w = 0, moon = 1 }, street = { w = 0, moon = 1 } },
-		hint = "Секрет. Говорят, её видели в Красную луну у фонарей",
+		spawn = { garden = { w = 0, moon = 1 }, port = { w = 0, moon = 1 } }, habitat = { "lamp", "pier" },
+		hint = "Секрет. Говорят, её видели в Красную луну",
 		habit = "Девять призрачных хвостов, бирюзовый огонь в глазах.",
 		trail = { shape = "flame", color = Color3.fromRGB(60, 255, 220), text = "Бирюзовые огоньки" },
 		yard = "Охраняет весь двор",
+	},
+	SeaHorse = {
+		name = "Морской конёк-фонарь", short = "Конёк", rarity = "uncommon", world = "lantern",
+		move = "float", speed = 3, height = 2.5, follow = 0.6, animSpeed = 4, condition = "any",
+		spawn = { port = { w = 28, moon = 20 } }, habitat = { "pier", "water" },
+		hint = "Туманный порт, у пирсов",
+		habit = "Покачивается в тумане и светит хвостом-фонариком.",
+		trail = { shape = "dot", color = Color3.fromRGB(120, 230, 210), text = "Морские искры" },
+		yard = "Качается над прудом",
+	},
+	LighthouseOwl = {
+		name = "Маяковая сова", short = "Сова", rarity = "epic", world = "lantern",
+		move = "fly", speed = 7, height = 7, follow = 0.5, animSpeed = 4, condition = "any",
+		spawn = { port = { w = 6, moon = 10 } }, habitat = { "pier", "lamp" },
+		hint = "Туманный порт, у маяка",
+		habit = "Глаза светят, как прожекторы маяка. Улетает от яркого луча.",
+		trail = { shape = "feather", color = Color3.fromRGB(240, 220, 160), text = "Светлые перья" },
+		yard = "Сидит на флюгере",
+	},
+	PaperWhale = {
+		name = "Бумажный кит", short = "Кит", rarity = "legendary", world = "lantern", swimIn = "port",
+		move = "swim", speed = 0, height = 0, follow = 0.25, animSpeed = 2, condition = "any",
+		spawn = {}, habitat = { "water" },
+		hint = "Туманный порт: иногда проплывает в небе над морем",
+		habit = "Огромный, медленный, поёт так, что дрожат фонари.",
+		trail = { shape = "ripple", color = Color3.fromRGB(200, 220, 255), text = "Бумажная пена" },
+		yard = "Плывёт над всем двором",
+	},
+	MistKraken = {
+		name = "Туманный кракен", short = "Кракен", rarity = "mythic", world = "lantern", swimIn = "port",
+		move = "swim", speed = 0, height = 0, follow = 0.25, animSpeed = 3, condition = "moon", moonOnly = true,
+		spawn = {}, habitat = { "water" },
+		hint = "Только в Красную луну: из тумана над морем у порта",
+		habit = "Щупальца из тумана, светящиеся присоски. Утаскивает фонари.",
+		trail = { shape = "ink", color = Color3.fromRGB(120, 90, 200), text = "Туманные кляксы" },
+		yard = "Шевелит щупальцами в пруду",
 	},
 	GoldenCarp = {
 		name = "Золотой карп", short = "Карп", rarity = "legendary", world = "lantern", main = true,
@@ -631,48 +669,59 @@ W.Worlds = {
 	},
 }
 
-W.TeleportOrder = { "plaza", "street", "canal", "garden", "grove", "market" }
+W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port" }
 
+-- Районы открываются по уровню, в каждом следующем — более редкие духи и выше удача района.
+-- habitats: «логова» района (теги), где духи прячутся и между которыми перебегают (точки строит Map.luau)
 W.Districts = {
+	plaza = {
+		tp = Vector3.new(0, 3, 26), world = "lantern", name = "Площадь алтаря", max = 0, luck = 1,
+		zones = {}, tint = Color3.fromRGB(235, 242, 255), center = Vector3.new(0, 0.5, 12),
+	},
 	street = {
-		tp = Vector3.new(0, 3, 40), world = "lantern", name = "Улица бумажных фонарей", max = 4,
+		tp = Vector3.new(0, 3, 40), world = "lantern", name = "Улица бумажных фонарей", max = 4, luck = 1,
 		zones = { { x = { -14, 14 }, z = { 34, 124 } } },
 		tint = Color3.fromRGB(255, 240, 225), center = Vector3.new(0, 0.5, 80),
 	},
-	plaza = {
-		tp = Vector3.new(0, 3, 26), world = "lantern", name = "Площадь алтаря", max = 0,
-		zones = {}, tint = Color3.fromRGB(235, 242, 255), center = Vector3.new(0, 0.5, 12),
-	},
 	canal = {
-		tp = Vector3.new(0, 3, -13), world = "lantern", name = "Канал с мостами", max = 4,
+		tp = Vector3.new(0, 3, -13), world = "lantern", name = "Канал с мостами", max = 4, luck = 1.2,
 		zones = { { x = { -56, 56 }, z = { -18, -11 } }, { x = { -56, 56 }, z = { -49, -42 } } },
 		tint = Color3.fromRGB(225, 238, 255), center = Vector3.new(0, 0.5, -30),
-		-- траектория для «плывущих» духов: эллипс над водой
 		swim = { center = Vector3.new(0, 1.8, -30), rx = 22, rz = 6, speed = 0.3 },
-	},
-	garden = {
-		tp = Vector3.new(0, 3, -84), world = "lantern", name = "Храмовый сад", max = 5,
-		zones = { { x = { -38, 38 }, z = { -144, -80 } } },
-		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
-		unlock = { kinds = 3 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
-	},
-	grove = {
-		tp = Vector3.new(-50, 3, 10), world = "lantern", name = "Бамбуковая роща", max = 5,
-		zones = { { x = { -140, -48 }, z = { 2, 62 } } },
-		tint = Color3.fromRGB(225, 255, 240), center = Vector3.new(-95, 0.5, 32),
-		unlock = { level = 3 }, gate = "GroveGate", back = Vector3.new(-28, 4, 10),
+		unlock = { level = 3 }, gate = "CanalGate", back = Vector3.new(0, 4, 2),
 	},
 	market = {
-		tp = Vector3.new(50, 3, 10), world = "lantern", name = "Ночной рынок", max = 5,
+		tp = Vector3.new(50, 3, 10), world = "lantern", name = "Ночной рынок", max = 5, luck = 1.5,
 		zones = { { x = { 48, 140 }, z = { 2, 62 } } },
 		tint = Color3.fromRGB(255, 232, 245), center = Vector3.new(95, 0.5, 32),
-		unlock = { kinds = 8 }, gate = "MarketGate", back = Vector3.new(28, 4, 10),
+		unlock = { level = 6 }, gate = "MarketGate", back = Vector3.new(28, 4, 10),
+	},
+	grove = {
+		tp = Vector3.new(-50, 3, 10), world = "lantern", name = "Бамбуковая роща", max = 5, luck = 2,
+		zones = { { x = { -140, -48 }, z = { 2, 62 } } },
+		tint = Color3.fromRGB(225, 255, 240), center = Vector3.new(-95, 0.5, 32),
+		unlock = { level = 10 }, gate = "GroveGate", back = Vector3.new(-28, 4, 10),
+	},
+	garden = {
+		tp = Vector3.new(0, 3, -84), world = "lantern", name = "Храмовый сад", max = 5, luck = 2.5,
+		zones = { { x = { -38, 38 }, z = { -144, -80 } } },
+		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
+		unlock = { level = 15 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
+	},
+	port = {
+		tp = Vector3.new(78, 3, -47), world = "lantern", name = "Туманный порт", max = 5, luck = 3,
+		zones = { { x = { 70, 124 }, z = { -66, -14 } } },
+		tint = Color3.fromRGB(215, 235, 245), center = Vector3.new(100, 0.5, -40),
+		-- над морем: парящие духи кружат вокруг маяка
+		swim = { center = Vector3.new(150, 3, -40), rx = 14, rz = 22, speed = 0.22 },
+		unlock = { level = 20 }, gate = "PortGate", back = Vector3.new(56, 4, -47),
 	},
 }
 
 -- район по позиции (x, z)
 function W.districtAt(pos: Vector3): string
 	local x, z = pos.X, pos.Z
+	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end
 		if x > 36 then return "market" end
@@ -1321,6 +1370,104 @@ function S.buildKyubi(): Model
 	return m
 end
 
+------------------------------------------------------------------ морской конёк-фонарь (опора — центр)
+function S.buildSeaHorse(): Model
+	local m = Instance.new("Model")
+	m.Name = "SeaHorse"
+	local teal = Color3.fromRGB(70, 190, 180)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.2, 2.2, 1.1), CFrame = CFrame.new(0, 0.3, 0), Color = teal }))
+	ellipsoid(mk(m, { Name = "Belly", Size = Vector3.new(0.9, 1.7, 0.5), CFrame = CFrame.new(0, 0.2, -0.4), Color = Color3.fromRGB(230, 220, 160) }))
+	ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(1, 1, 1.2), CFrame = CFrame.new(0, 1.6, -0.3), Color = teal }))
+	mk(m, { Name = "Snout", Size = Vector3.new(0.35, 0.35, 0.9), CFrame = CFrame.new(0, 1.5, -1.1), Color = teal })
+	for _, x in { -0.35, 0.35 } do
+		mk(m, { Name = "Eye", Shape = Enum.PartType.Ball, Size = Vector3.new(0.3, 0.3, 0.3), CFrame = CFrame.new(x, 1.75, -0.6), Color = Color3.fromRGB(20, 20, 30) })
+	end
+	local fin = mk(m, { Name = "Fin", Size = Vector3.new(0.08, 1.2, 0.8), CFrame = CFrame.new(0, 0.6, 0.6), Color = Color3.fromRGB(180, 255, 240), Material = Enum.Material.Neon, Transparency = 0.4 })
+	joint(fin, Vector3.new(0, 0.6, 0.4), "wagY", 0, 0.8)
+	for i = 1, 3 do
+		local t = ellipsoid(mk(m, { Name = "Tail", Size = Vector3.new(0.6 - i * 0.12, 0.7, 0.6 - i * 0.12), CFrame = CFrame.new(0, -0.8 - i * 0.55, 0.15 * i), Color = teal }))
+		joint(t, Vector3.new(0, -0.7, 0), "swingX", i * 0.6, 0.35)
+	end
+	local lamp = mk(m, { Name = "TailLamp", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), CFrame = CFrame.new(0, -2.7, 0.5), Color = Color3.fromRGB(255, 230, 140), Material = Enum.Material.Neon })
+	joint(lamp, Vector3.new(0, -0.7, 0), "swingX", 1.8, 0.35)
+	light(lamp, Color3.fromRGB(255, 220, 140), 10, 1)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
+------------------------------------------------------------------ маяковая сова (опора — центр)
+function S.buildLighthouseOwl(): Model
+	local m = Instance.new("Model")
+	m.Name = "LighthouseOwl"
+	local brown = Color3.fromRGB(150, 120, 90)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(2, 2.4, 1.8), CFrame = CFrame.new(), Color = brown }))
+	ellipsoid(mk(m, { Name = "Chest", Size = Vector3.new(1.5, 1.8, 0.5), CFrame = CFrame.new(0, -0.1, -0.75), Color = Color3.fromRGB(235, 220, 190) }))
+	for i, x in { -1, 1 } do
+		mk(m, { Name = "EyeRing", Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.15, 0.8, 0.8), CFrame = CFrame.new(x * 0.45, 0.6, -0.86) * CFrame.Angles(0, math.rad(90), 0), Color = Color3.fromRGB(240, 235, 220) })
+		mk(m, { Name = "Eye", Shape = Enum.PartType.Ball, Size = Vector3.new(0.45, 0.45, 0.45), CFrame = CFrame.new(x * 0.45, 0.6, -0.95), Color = Color3.fromRGB(255, 230, 120), Material = Enum.Material.Neon })
+		mk(m, { Name = "Tuft", Size = Vector3.new(0.2, 0.6, 0.4), CFrame = CFrame.new(x * 0.6, 1.35, -0.2), Color = brown }, "WedgePart")
+		local w = mk(m, { Name = "Wing", Size = Vector3.new(2.4, 0.15, 1.4), CFrame = CFrame.new(x * 2, 0.1, 0.1), Color = Color3.fromRGB(120, 95, 70) })
+		joint(w, Vector3.new(x * 0.9, 0.1, 0), "flapZ", i * math.pi, 1.2)
+	end
+	mk(m, { Name = "Beak", Size = Vector3.new(0.25, 0.3, 0.3), CFrame = CFrame.new(0, 0.3, -1.0), Color = Color3.fromRGB(230, 170, 60) }, "WedgePart")
+	light(body, Color3.fromRGB(255, 230, 150), 14, 1)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
+------------------------------------------------------------------ бумажный кит (опора — центр)
+function S.buildPaperWhale(): Model
+	local m = Instance.new("Model")
+	m.Name = "PaperWhale"
+	local paper = Color3.fromRGB(225, 232, 245)
+	local head = mk(m, { Name = "Head", Size = Vector3.new(4, 3.4, 4), CFrame = CFrame.new(0, 0, -3), Color = paper })
+	mk(m, { Name = "Jaw", Size = Vector3.new(3.6, 0.8, 3.6), CFrame = CFrame.new(0, -1.9, -3), Color = Color3.fromRGB(170, 190, 225) })
+	for _, x in { -1, 1 } do
+		mk(m, { Name = "Eye", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), CFrame = CFrame.new(x * 2, 0.4, -4), Color = Color3.fromRGB(30, 30, 50) })
+		local fl = mk(m, { Name = "Flipper", Size = Vector3.new(3, 0.2, 1.6), CFrame = CFrame.new(x * 3.4, -1.2, -1.5) * CFrame.Angles(0, 0, math.rad(x * -20)), Color = paper })
+		joint(fl, Vector3.new(x * 2, -1, -1.5), "flapZ", x > 0 and 0 or math.pi, 0.5)
+	end
+	for i = 1, 4 do
+		local seg = mk(m, { Name = "Seg", Size = Vector3.new(3.8 - i * 0.6, 3.2 - i * 0.5, 2.4), CFrame = CFrame.new(0, 0, -0.6 + i * 2.2), Color = i % 2 == 0 and paper or Color3.fromRGB(205, 215, 240) })
+		joint(seg, Vector3.new(0, 0, -1.6 + i * 2.2), "swingX", -i * 0.6, 0.06 * i)
+	end
+	local tail = mk(m, { Name = "Fin", Size = Vector3.new(4.6, 0.2, 2.2), CFrame = CFrame.new(0, 0, 9.4), Color = paper })
+	joint(tail, Vector3.new(0, 0, 8.2), "swingX", -3, 0.35)
+	for i = 1, 6 do
+		mk(m, { Name = "Fold", Size = Vector3.new(0.08, 3.3, 0.08), CFrame = CFrame.new(1.95, 0, -4.5 + i * 1.4), Color = Color3.fromRGB(160, 175, 210) })
+	end
+	light(head, Color3.fromRGB(190, 210, 255), 24, 1.2)
+	m.PrimaryPart = head
+	S.scale(m, 1.4)
+	return m
+end
+
+------------------------------------------------------------------ туманный кракен (опора — центр)
+function S.buildMistKraken(): Model
+	local m = Instance.new("Model")
+	m.Name = "MistKraken"
+	local violet = Color3.fromRGB(110, 80, 170)
+	local head = ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(4, 4.6, 4), CFrame = CFrame.new(0, 1.6, 0), Color = violet, Material = Enum.Material.Glass, Transparency = 0.15 }))
+	for _, x in { -1, 1 } do
+		mk(m, { Name = "Eye", Shape = Enum.PartType.Ball, Size = Vector3.new(0.9, 0.9, 0.9), CFrame = CFrame.new(x * 1, 1.2, -1.8), Color = Color3.fromRGB(255, 230, 120), Material = Enum.Material.Neon })
+	end
+	for i = 1, 8 do
+		local a = i * math.pi / 4
+		for j = 1, 3 do
+			local p = Vector3.new(math.cos(a) * (1.4 + j * 0.9), -0.6 - j * 1.1, math.sin(a) * (1.4 + j * 0.9))
+			local t = ellipsoid(mk(m, { Name = "Tentacle", Size = Vector3.new(0.9 - j * 0.2, 1.5, 0.9 - j * 0.2), CFrame = CFrame.new(p), Color = j == 3 and Color3.fromRGB(190, 150, 255) or violet,
+				Material = j == 3 and Enum.Material.Neon or Enum.Material.SmoothPlastic, Transparency = 0.1 }))
+			joint(t, Vector3.new(math.cos(a) * 1.2, -0.2, math.sin(a) * 1.2), "swingX", i * 0.8 + j * 0.4, 0.25 + j * 0.05)
+		end
+	end
+	light(head, Color3.fromRGB(170, 120, 255), 26, 1.5)
+	m.PrimaryPart = head
+	S.scale(m, 1.4)
+	return m
+end
+
 ------------------------------------------------------------------ разновидности и аура
 function S.applyVariant(m: Model, variant: string?)
 	if not variant or variant == "normal" then return end
@@ -1437,6 +1584,10 @@ S.Builders = {
 	TenguMask = S.buildTenguMask,
 	PaperDragon = S.buildPaperDragon,
 	Kyubi = S.buildKyubi,
+	SeaHorse = S.buildSeaHorse,
+	LighthouseOwl = S.buildLighthouseOwl,
+	PaperWhale = S.buildPaperWhale,
+	MistKraken = S.buildMistKraken,
 	GoldenCarp = S.buildGoldenCarp,
 }
 
@@ -1460,6 +1611,10 @@ S.Pose = {
 	TenguMask = function(t) return CFrame.new(sin(t * 1.4) * 0.8, sin(t * 2.1) * 0.6, 0) * CFrame.Angles(0, 0, sin(t * 1.2) * 0.3) end,
 	PaperDragon = function(t) return CFrame.new(0, sin(t * 0.8) * 1.2, 0) * CFrame.Angles(sin(t * 0.6) * 0.1, 0, sin(t * 0.7) * 0.15) end,
 	Kyubi = function(t) return CFrame.new(0, abs(sin(t * 3)) * 0.4, 0) end,
+	SeaHorse = function(t) return CFrame.new(0, sin(t * 1.4) * 0.5, 0) * CFrame.Angles(0, 0, sin(t * 0.9) * 0.15) end,
+	LighthouseOwl = function(t) return CFrame.new(sin(t * 0.8) * 0.6, sin(t * 1.6) * 0.5, 0) end,
+	PaperWhale = function(t) return CFrame.new(0, sin(t * 0.5) * 1.5, 0) * CFrame.Angles(sin(t * 0.4) * 0.08, 0, 0) end,
+	MistKraken = function(t) return CFrame.new(0, sin(t * 0.7) * 0.8, 0) * CFrame.Angles(0, t * 0.2, 0) end,
 	Firefly = function(t) return CFrame.new(sin(t * 1.3) * 0.6, sin(t * 2) * 0.6, math.cos(t * 1.1) * 0.6) end,
 	LanternSpirit = function(t)
 		return CFrame.new(0, abs(sin(t * 4)) * 0.9, 0) * CFrame.Angles(0, sin(t * 2) * 0.8, sin(t * 4) * 0.28)
@@ -1908,6 +2063,21 @@ local function zonePoint(district, near: Vector3?, tut: boolean?, kind: string?)
 		return Vector3.new(rnd(-14, 14), 0.5, rnd(34, 62))
 	end
 	local info = kind and Catalog.Kinds[kind]
+	-- логова: дух появляется и перебегает между «своими» местами района
+	local habs = map.habitats[district]
+	if info and info.habitat and habs then
+		local pool, nearPool = {}, {}
+		for _, tag in info.habitat do
+			for _, p in habs[tag] or {} do
+				table.insert(pool, p)
+				if near and (p - Vector3.new(near.X, 0.5, near.Z)).Magnitude < 35 then table.insert(nearPool, p) end
+			end
+		end
+		local list = #nearPool > 1 and nearPool or pool
+		if #list > 0 then
+			return list[math.random(#list)] + Vector3.new(rnd(-2, 2), 0, rnd(-2, 2))
+		end
+	end
 	if info and info.spots then
 		-- любимые места вида (мосты, пруд)
 		local spot = info.spots[math.random(#info.spots)]
@@ -1972,12 +2142,19 @@ local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVaria
 	for i = #Catalog.VariantOrder, 2, -1 do
 		local key = Catalog.VariantOrder[i]
 		local v = Catalog.Variants[key]
-		if (not v.moonOnly or moon.active) and math.random() < v.chance then
+		if (not v.moonOnly or moon.active) and math.random() < v.chance * (Catalog.Districts[district].luck or 1) then
 			variant = key
 			break
 		end
 	end
 	if tut then variant = "normal" end
+	-- редкий гость: сервер предупреждает всех
+	local rk = info.rarity
+	if not tut and (rk == "legendary" or rk == "mythic" or rk == "secret") then
+		for _, p in Players:GetPlayers() do
+			NoticeEv:FireClient(p, ("В районе «%s» замечен %s дух!"):format(Catalog.Districts[district].name, Catalog.Rarity[rk].name:lower()))
+		end
+	end
 	if forceVariant and Catalog.Variants[forceVariant] then variant = forceVariant end
 	s.variant = variant
 	a:SetAttribute("Variant", variant)
@@ -2103,7 +2280,7 @@ RunService.Heartbeat:Connect(function(dt)
 				-- бросок удачи: может улучшить разновидность (каждому участнику — свой)
 				local base = s.variant or "normal"
 				local variant = base
-				local luck = luckOf(data[plr])
+				local luck = luckOf(data[plr]) * (Catalog.Districts[s.district].luck or 1)
 				local baseRank = table.find(Catalog.VariantOrder, base) or 1
 				for vi = #Catalog.VariantOrder, baseRank + 1, -1 do
 					local key = Catalog.VariantOrder[vi]
@@ -2201,26 +2378,43 @@ local function districtCount(d)
 	return n, tutN
 end
 
-newSpirit("PaperFox", "street", true)
-newSpirit("PaperFox", "street", true)
+local lastWhale = 0
 
 task.spawn(function()
 	while true do
 		local now = os.clock()
 		for _, s in live do
 			local held = s.anchor:GetAttribute("Holders") > 0
-			if not held and not Catalog.Kinds[s.kind].moonOnly then
+			if not held and not Catalog.Kinds[s.kind].moonOnly and Catalog.Kinds[s.kind].move ~= "swim" then
 				if (not s.revealed and now - s.born > 110) or (s.revealed and now - s.revealedAt > 35) then removeSpirit(s) end
 			end
 		end
 		for district, dc in Catalog.Districts do
 			local max = dc.max
 			local n, tutN = districtCount(district)
-			if district == "street" and tutN < 2 then
+			local needTut = false
+			for _, p in Players:GetPlayers() do
+				if data[p] and not data[p].tutorialDone then needTut = true end
+			end
+			if district == "street" and needTut and tutN < 2 then
 				newSpirit("PaperFox", "street", true) -- рядом с алтарём всегда есть лис для обучения
 			elseif max > 0 and n < max + (moon.active and 2 or 0) then
 				local kind = pickKind(district)
 				if kind then newSpirit(kind, district) end
+			end
+		end
+		-- бумажный кит иногда проплывает над морем у порта
+		if os.clock() - (lastWhale or 0) > 150 then
+			lastWhale = os.clock()
+			local has = false
+			for _, s in live do
+				if s.kind == "PaperWhale" then has = true end
+			end
+			if not has and (IS_TEST or math.random() < 0.3) then
+				local w = newSpirit("PaperWhale", "port")
+				task.delay(100, function()
+					if live[w.id] == w and w.anchor:GetAttribute("Holders") == 0 then removeSpirit(w) end
+				end)
 			end
 		end
 		task.wait(1.5)
@@ -2345,7 +2539,8 @@ local function startMoon()
 	if IS_TEST or math.random() < 0.5 then newSpirit("MoonRabbit", "street") end
 	if IS_TEST or math.random() < 0.5 then newSpirit("FoxFire", "canal") end
 	if IS_TEST or math.random() < 0.3 then newSpirit("PaperDragon", "grove") end
-	if IS_TEST or math.random() < 0.1 then newSpirit("Kyubi", "market") end
+	if IS_TEST or math.random() < 0.1 then newSpirit("Kyubi", "garden") end
+	if IS_TEST or math.random() < 0.4 then newSpirit("MistKraken", "port") end
 	newSpirit("Crane", "garden")
 	local a = Instance.new("Part")
 	a.Name = "Oni"
@@ -2601,7 +2796,11 @@ task.spawn(function()
 				local p = r.Position
 				if p.Y < -3.5 then
 					-- упал в канал: на ближайший берег
-					plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
+					if p.X > 63 then
+						plr.Character:PivotTo(CFrame.new(118, 4, math.clamp(p.Z, -66, -14)))
+					else
+						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
+					end
 				else
 					local dn = Catalog.district(p)
 					local dc = Catalog.Districts[dn]
@@ -3089,6 +3288,7 @@ local function sign(parent, text, color, face)
 	return t
 end
 local function billboard(parent, text, color, offset)
+	if text ~= "Алтарь" then return end -- парящие названия районов убраны (мешали обзору)
 	local b = Instance.new("BillboardGui")
 	b.Size, b.StudsOffset, b.AlwaysOnTop, b.MaxDistance = UDim2.new(0, 170, 0, 30), offset or Vector3.new(0, 5, 0), false, 220
 	local t = Instance.new("TextLabel")
@@ -3117,6 +3317,13 @@ local function torii(z, x, w, h, color)
 	end
 	block("ToriiBeam", Vector3.new(w + 5, 1.2, 1.8), CFrame.new(x, h + 0.6, z), Color3.fromRGB(40, 30, 30))
 	block("ToriiBeam2", Vector3.new(w + 2, 0.8, 1.2), CFrame.new(x, h - 2, z), color)
+end
+
+local habitats = {}
+local function hab(district, tag, pos)
+	habitats[district] = habitats[district] or {}
+	habitats[district][tag] = habitats[district][tag] or {}
+	table.insert(habitats[district][tag], Vector3.new(pos.X, 0.5, pos.Z))
 end
 
 function Map.build()
@@ -3161,7 +3368,9 @@ function Map.build()
 	wall(Vector3.new(80, 80, 1), Vector3.new(0, 40, 136.5))
 	wall(Vector3.new(27, 80, 1), Vector3.new(49, 40, -8))
 	wall(Vector3.new(27, 80, 1), Vector3.new(-49, 40, -8))
-	wall(Vector3.new(1, 80, 64), Vector3.new(62.5, 40, -40))
+	-- восточная стена канала с проходом в порт (z -52..-42)
+	wall(Vector3.new(1, 80, 20), Vector3.new(62.5, 40, -62))
+	wall(Vector3.new(1, 80, 34), Vector3.new(62.5, 40, -25))
 	wall(Vector3.new(1, 80, 64), Vector3.new(-62.5, 40, -40))
 	wall(Vector3.new(1, 80, 82), Vector3.new(46.5, 40, -112))
 	wall(Vector3.new(1, 80, 82), Vector3.new(-46.5, 40, -112))
@@ -3378,6 +3587,71 @@ function Map.build()
 		block("GateBeam", Vector3.new(1.8, 1.2, 16), CFrame.new(g[2], 14.4, 10), Color3.fromRGB(40, 30, 30), Enum.Material.Wood)
 		gates[g[1]] = barrier
 	end
+	do -- барьер канала (уровень 3) и ворота порта (уровень 20)
+		local canalGate = block("CanalGate", Vector3.new(70, 13, 1), CFrame.new(0, 6.5, -8), Color3.fromRGB(80, 230, 220), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
+		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Back)
+		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Front)
+		gates.CanalGate = canalGate
+		local portGate = block("PortGate", Vector3.new(1, 13, 10), CFrame.new(62.5, 6.5, -47), Color3.fromRGB(150, 200, 230), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
+		sign(portGate, "Туманный порт", Color3.new(1, 1, 1), Enum.NormalId.Right)
+		sign(portGate, "Туманный порт", Color3.new(1, 1, 1), Enum.NormalId.Left)
+		for _, z in { -52.5, -41.5 } do
+			block("GatePost", Vector3.new(1.4, 14, 1.4), CFrame.new(62.5, 7, z), Color3.fromRGB(70, 90, 110), Enum.Material.Wood)
+		end
+		gates.PortGate = portGate
+	end
+
+	---------------------------------------------------------------- ТУМАННЫЙ ПОРТ (восток за каналом, уровень 20)
+	local SEA = Color3.fromRGB(150, 210, 230)
+	block("PortGround", Vector3.new(66, 1, 64), CFrame.new(95.5, 0, -40), Color3.fromRGB(78, 72, 70), Enum.Material.WoodPlanks)
+	block("SeaWater", Vector3.new(44, 0.4, 64), CFrame.new(150, -2.5, -40), Color3.fromRGB(14, 34, 64), Enum.Material.Glass, { Transparency = 0.15, Reflectance = 0.2, CanCollide = false, CanQuery = false })
+	block("SeaBed", Vector3.new(44, 1, 64), CFrame.new(150, -8, -40), Color3.fromRGB(10, 18, 30))
+	block("Quay", Vector3.new(1, 7, 64), CFrame.new(128.5, -4, -40), Color3.fromRGB(70, 70, 75))
+	deco("QuayEdge", Vector3.new(0.5, 0.12, 64), CFrame.new(127.8, 0.56, -40), SEA, Enum.Material.Neon, { Transparency = 0.4 })
+	wall(Vector3.new(1, 80, 66), Vector3.new(172.5, 40, -40))
+	wall(Vector3.new(112, 80, 1), Vector3.new(117, 40, -72.5))
+	wall(Vector3.new(20, 80, 1), Vector3.new(163, 40, -8.5))
+	for _, z in { -22, -40, -58 } do
+		block("Pier", Vector3.new(32, 1, 6), CFrame.new(144, 0, z), Color3.fromRGB(110, 85, 60), Enum.Material.WoodPlanks)
+		for x = 132, 158, 6 do
+			for _, dz in { -3, 3 } do
+				block("PierPost", Vector3.new(0.8, 9, 0.8), CFrame.new(x, -4, z + dz), Color3.fromRGB(70, 55, 40), Enum.Material.Wood)
+			end
+			hab("port", "pier", Vector3.new(x, 0.5, z))
+		end
+		local l = deco("PierLamp", Vector3.new(1, 1.4, 1), CFrame.new(158, 3, z + 3), SEA, Enum.Material.Neon)
+		light(l, SEA, 18, 0.9)
+		hab("port", "lamp", Vector3.new(156, 0.5, z))
+	end
+	for z = -66, -14, 8 do
+		hab("port", "water", Vector3.new(124, 0.5, z))
+	end
+	-- склады и бочки
+	for i, p in { Vector3.new(80, 0, -66), Vector3.new(104, 0, -66), Vector3.new(80, 0, -14), Vector3.new(104, 0, -14) } do
+		block("Warehouse", Vector3.new(18, 10, 9), CFrame.new(p.X, 5.5, p.Z), Color3.fromRGB(70 + i * 6, 62, 60), Enum.Material.WoodPlanks)
+		block("WarehouseRoof", Vector3.new(20, 1, 11), CFrame.new(p.X, 11, p.Z), Color3.fromRGB(45, 50, 60), Enum.Material.Slate)
+		local lamp = deco("DockLamp", Vector3.new(1, 1, 1), CFrame.new(p.X, 7, p.Z + (p.Z < -40 and 5 or -5)), SEA, Enum.Material.Neon)
+		light(lamp, SEA, 16, 0.7)
+		hab("port", "lamp", Vector3.new(p.X, 0.5, p.Z + (p.Z < -40 and 7 or -7)))
+	end
+	-- маяк: башня и вращающийся луч (крутит клиент)
+	for i = 0, 5 do
+		block("Lighthouse", Vector3.new(6 - i * 0.6, 5, 6 - i * 0.6), CFrame.new(166, 2 + i * 5, -66), i % 2 == 0 and Color3.fromRGB(230, 230, 235) or Color3.fromRGB(200, 60, 60), Enum.Material.Concrete)
+	end
+	local lampTop = deco("LighthouseLamp", Vector3.new(3, 3, 3), CFrame.new(166, 32, -66), Color3.fromRGB(255, 240, 180), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	light(lampTop, Color3.fromRGB(255, 240, 180), 50, 2)
+	deco("LighthouseBeam", Vector3.new(60, 2, 2), CFrame.new(166 + 30, 32, -66), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, { Transparency = 0.7 })
+	block("LighthouseRock", Vector3.new(12, 4, 12), CFrame.new(166, -2, -66), Color3.fromRGB(60, 60, 65), Enum.Material.Rock)
+	-- туман над водой
+	for _, z in { -60, -40, -20 } do
+		local fogPart = deco("SeaFog", Vector3.new(40, 1, 16), CFrame.new(150, 1, z), Color3.new(), nil, { Transparency = 1 })
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color = ColorSequence.new(Color3.fromRGB(200, 215, 230))
+		pe.Rate, pe.Lifetime, pe.Speed = 3, NumberRange.new(6, 9), NumberRange.new(0.5, 1)
+		pe.Size = NumberSequence.new(6, 10)
+		pe.Transparency = NumberSequence.new(0.75, 1)
+		pe.Parent = fogPart
+	end
 
 	---------------------------------------------------------------- доска рекордов на площади
 	local board = block("Leaderboard", Vector3.new(14, 9, 0.6), CFrame.new(-26, 6, 20) * CFrame.Angles(0, math.rad(-90), 0), Color3.fromRGB(40, 30, 45), Enum.Material.Wood)
@@ -3426,6 +3700,30 @@ function Map.build()
 	end
 
 	---------------------------------------------------------------- кусты-укрытия в саду и роще (за ними прячутся духи)
+	-- логова: улица, канал, рынок, роща, сад
+	for z = 36, 126, 6 do
+		hab("street", "lamp", Vector3.new(z % 12 == 0 and 11 or -11, 0.5, z))
+	end
+	for z = 38, 124, 9 do
+		hab("street", "wall", Vector3.new(z % 18 < 9 and 16 or -16, 0.5, z))
+	end
+	for x = -54, 54, 9 do
+		hab("canal", "water", Vector3.new(x, 0.5, -17))
+		hab("canal", "water", Vector3.new(x, 0.5, -43))
+	end
+	for x = 52, 140, 16 do
+		hab("market", "stall", Vector3.new(x, 0.5, 25))
+		hab("market", "stall", Vector3.new(x, 0.5, 47))
+		hab("market", "lamp", Vector3.new(x + 8, 0.5, 12))
+	end
+	for a = 0, 330, 30 do
+		hab("grove", "water", Vector3.new(-95 + math.cos(math.rad(a)) * 11, 0.5, 42 + math.sin(math.rad(a)) * 9))
+		hab("garden", "water", Vector3.new(-22 + math.cos(math.rad(a)) * 10, 0.5, -110 + math.sin(math.rad(a)) * 8))
+	end
+	for z = -82, -128, -12 do
+		hab("garden", "lamp", Vector3.new(-9, 0.5, z))
+		hab("garden", "lamp", Vector3.new(9, 0.5, z))
+	end
 	local bush = Random.new(21)
 	for _ = 1, 46 do
 		local inGrove = bush:NextNumber() < 0.5
@@ -3434,6 +3732,7 @@ function Map.build()
 		if math.abs(z - 10) > 6 and math.abs(x) > 6 then
 			local sz = bush:NextNumber(3, 5.5)
 			deco("Bush", Vector3.new(sz, sz * 0.7, sz), CFrame.new(x, 0.5 + sz * 0.3, z), Color3.fromRGB(40 + bush:NextInteger(0, 20), 100 + bush:NextInteger(0, 30), 55), Enum.Material.Grass, { Shape = Enum.PartType.Ball })
+			hab(inGrove and "grove" or "garden", "bush", Vector3.new(x, 0.5, z))
 		end
 	end
 	for _, p in { Vector3.new(-120, 0.5, 50), Vector3.new(-70, 0.5, 58), Vector3.new(30, 0.5, -140), Vector3.new(-32, 0.5, -98) } do
@@ -3453,6 +3752,7 @@ function Map.build()
 
 	return {
 		portals = portals,
+		habitats = habitats,
 		gates = gates,
 		boardGui = boardGui,
 		altar = altar,
@@ -3552,19 +3852,8 @@ do
 	for k, id in Audio.Sfx do
 		sfx[k] = makeSound(id, sfxGroup, false, nil, 0.8)
 	end
-	local soundStatus = "загрузка..."
 	task.spawn(function()
-		local failed = 0
-		pcall(function()
-			ContentProvider:PreloadAsync(allSounds, function(_, status)
-				if status ~= Enum.AssetFetchStatus.Success then failed += 1 end
-			end)
-		end)
-		local loaded = 0
-		for _, s in allSounds do
-			if s.IsLoaded then loaded += 1 end
-		end
-		soundStatus = ("загружено %d из %d"):format(loaded, #allSounds) .. (failed > 0 and (", ошибок: " .. failed) or "")
+		pcall(function() ContentProvider:PreloadAsync(allSounds) end)
 		if music then music:Play() end
 		if moonLayer then moonLayer:Play() end
 	end)
@@ -3644,7 +3933,7 @@ do
 	K.icon(eventPill, "moon", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(-10, -4) })
 	eventL = K.text(eventPill, "", { Size = UDim2.new(1, -48, 1, -10), Position = UDim2.fromOffset(38, 5), MaxText = 20 })
 
-	trackPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 56), Size = UDim2.fromOffset(310, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+	trackPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(310, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
 	K.corner(trackPill, UDim.new(0, 14))
 	K.stroke(trackPill, T.ink, 3)
 	K.gradient(trackPill, Color3.fromRGB(255, 160, 80), Color3.fromRGB(200, 90, 40))
@@ -3695,7 +3984,7 @@ do
 	tutL = K.text(tutPanel, "", { Size = UDim2.new(1, -110, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 17, Font = Enum.Font.GothamBold })
 	skipBtn = K.button(tutPanel, "Пропуск", Color3.fromRGB(90, 90, 120), { Size = UDim2.fromOffset(90, 34), Position = UDim2.new(1, -98, 0, 9), MaxText = 14 })
 
-	districtTitle = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(420, 50), MaxText = 34, Visible = false })
+	districtTitle = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(320, 22), MaxText = 16, Font = Enum.Font.GothamBold, StrokeThickness = 2 })
 
 	-- кнопка ловли: рядом со стандартной кнопкой прыжка, видна только рядом с доступным духом
 	catchBtn = K.make("TextButton", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(100, 100), Position = UDim2.new(1, -180, 1, -140), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, gui)
@@ -3776,7 +4065,7 @@ do
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 	local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
-	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 214), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
@@ -4255,7 +4544,6 @@ do
 	volumeRow(1, "Музыка", "music")
 	volumeRow(2, "Звуки", "sfx")
 	toggleRow(3, "Приглушённые эффекты", "reduced", function() applyReduced() end)
-	if IS_TEST then toggleRow(4, "Диагностика FPS (тест)", "diag") end
 	local codeRow = K.panel(setList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = 6, BackgroundColor3 = T.panel2 })
 	K.icon(codeRow, "code", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 5) })
 	local codeBox = K.make("TextBox", {
@@ -4399,7 +4687,8 @@ do
 		local stt = { distinct = state.distinct, level = state.level }
 		for key, row in tpRows do
 			local open = Catalog.unlocked(key, stt)
-			row.st.Text = open and "Открыт" or Catalog.unlockText(key, stt)
+			local dl = Catalog.Districts[key].luck or 1
+			row.st.Text = open and (dl > 1 and ("Открыт   удача района x%.1f"):format(dl) or "Открыт") or Catalog.unlockText(key, stt)
 			row.bl.Text = open and "Лететь" or "Закрыт"
 			K.recolor(row.b, open and T.purple or Color3.fromRGB(80, 80, 95))
 		end
@@ -5160,7 +5449,7 @@ do
 
 		-- удача: таймер зелья
 		local potionLeft = math.floor((state.luckUntil or 0) - workspace:GetServerTimeNow())
-		luckSub.Text = potionLeft > 0 and ("Зелье %d:%02d"):format(potionLeft // 60, potionLeft % 60) or "нажми: подробнее"
+		luckSub.Text = potionLeft > 0 and ("Зелье %d:%02d"):format(potionLeft // 60, potionLeft % 60) or ""
 
 		-- событие
 		local moonActive = workspace:GetAttribute("MoonActive") == true
@@ -5191,14 +5480,14 @@ do
 					local d = cf.Position - r.Position
 					local fl = Vector3.new(d.X, 0, d.Z)
 					local look = r.CFrame.LookVector
-					lit = dist < 6 or (dist < lanternRange() * 0.8 and fl.Magnitude > 0.1 and fl.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.8)
+					lit = (dist < lanternRange() * 0.8 and fl.Magnitude > 0.1 and fl.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.8)
 				end
 				local goal = revealed and 0.95 or (lit and (0.35 + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
 				v.shadow.Transparency += (goal - v.shadow.Transparency) * math.min(1, dt * 5)
 				local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
 				if pe and not revealed then
 					local sparkle = v.anchor:GetAttribute("Variant")
-					pe.Rate = lit and ((sparkle ~= "normal" and sparkle ~= "giant") and 24 or 8) or ((sparkle ~= "normal" and sparkle ~= "giant") and 2 or 0)
+					pe.Rate = lit and ((sparkle ~= "normal" and sparkle ~= "giant") and 24 or 8) or 0
 				end
 			end
 			if revealed and not v.model then
@@ -5231,6 +5520,11 @@ do
 		end
 		updateFollowers(now)
 		updateOni(dt)
+		local beamPart = World:FindFirstChild("LighthouseBeam")
+		if beamPart then
+			local c = Vector3.new(166, 32, -66)
+			beamPart.CFrame = CFrame.new(c) * CFrame.Angles(0, now * 0.6, 0) * CFrame.new(30, 0, 0)
+		end
 		if math.floor(now * 10) % 2 == 0 then
 			for _, p in Players:GetPlayers() do
 				if p:GetAttribute("Skin") == "vip" then
@@ -5250,16 +5544,8 @@ do
 		local d = Catalog.district(r.Position)
 		if d ~= currentDistrict then
 			currentDistrict = d
-			districtTitle.Text = Catalog.DistrictNames[d]
-			districtTitle.Visible = not introOpen
-			districtTitle.TextTransparency = 0
-			local fadeInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 1.6)
-			local stroke = districtTitle:FindFirstChildOfClass("UIStroke")
-			if stroke then
-				stroke.Transparency = 0
-				TweenService:Create(stroke, fadeInfo, { Transparency = 1 }):Play()
-			end
-			TweenService:Create(districtTitle, fadeInfo, { TextTransparency = 1 }):Play()
+			local dl = Catalog.Districts[d].luck or 1
+			districtTitle.Text = Catalog.DistrictNames[d] .. (dl > 1 and ("   удача района x%.1f"):format(dl) or "")
 			TweenService:Create(districtCC, TweenInfo.new(1.5), { TintColor = Catalog.Districts[d].tint }):Play()
 		end
 		local atAltar = (r.Position - ALTAR_POS).Magnitude < 16
@@ -5277,7 +5563,7 @@ do
 			local info = Catalog.Kinds[trackKind]
 			if best then
 				trackPos = best.Position
-				trackL.Text = ("%s  %d м\nСлед: %s"):format(info.name, math.floor(bd), info.trail.text)
+				trackL.Text = ("%s\nСлед: %s"):format(info.name, info.trail.text)
 			else
 				local places = Catalog.districtsOf(trackKind)
 				local dc = places[1] and Catalog.Districts[places[1]]
@@ -5326,7 +5612,7 @@ do
 					hintText.Text, hintText.TextColor3 = ("Ловим вместе x%d"):format(holders), GOLD
 				else
 					local vn = (v.variant and v.variant ~= "normal") and (Catalog.Variants[v.variant].name .. " ") or ""
-					hintText.Text = inRange and (vn .. v.info.name) or (vn ~= "" and (vn .. v.info.name .. " - ближе!") or "Подойди ближе")
+					hintText.Text = inRange and (vn .. v.info.name) or (vn ~= "" and (vn .. v.info.name) or "")
 					hintText.TextColor3 = inRange and rar.color or Color3.new(1, 1, 1)
 				end
 				if tut.step == 1 then setStep(2) end
@@ -5412,9 +5698,6 @@ do
 			goalPos = target and target.Parent and target.Position
 		elseif tut.step == 3 or #state.jar >= state.cap then
 			goalPos = ALTAR_POS + Vector3.new(0, 2, 0)
-		elseif trackPos then
-			goalPos = trackPos
-			guideCold = false
 		end
 		local att = r:FindFirstChild("GuideAtt")
 		if not att then att = K.make("Attachment", { Name = "GuideAtt", Position = Vector3.new(0, -2, 0) }, r) end
@@ -5458,50 +5741,6 @@ do
 		if i.KeyCode == Enum.KeyCode.F then unpress() end
 	end)
 
-end
------------------------------------------------------------------- диагностика (тест)
-if IS_TEST then
-	local perf = K.panel(gui, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 1, -260), Size = UDim2.fromOffset(240, 50), Visible = false })
-	local perfL = K.text(perf, "", { Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3), MaxText = 13, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
-	local bloomBtn, bloomL = K.button(gui, "", Color3.fromRGB(90, 90, 120), { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 1, -214), Size = UDim2.fromOffset(240, 36), MaxText = 14, Visible = false })
-	local PRESETS = { 0, 0.1, 0.2, 0.35 }
-	local bi = 3
-	local function applyBloom()
-		local b = Lighting:FindFirstChild("Bloom")
-		if b then
-			b.Enabled = PRESETS[bi] > 0 and not reducedFx
-			b.Intensity = PRESETS[bi]
-		end
-		bloomL.Text = PRESETS[bi] > 0 and ("Bloom %.2f"):format(PRESETS[bi]) or "Bloom выкл"
-	end
-	applyBloom()
-	bloomBtn.Activated:Connect(function()
-		bi = bi % #PRESETS + 1
-		applyBloom()
-	end)
-	local win, winN, winMax = 0, 0, 0
-	local bridge = { night = { 0, 0, 0 }, moon = { 0, 0, 0 } }
-	local function fmt(b) return b[2] > 30 and ("%.1f/%.0f"):format(b[1] / b[2] * 1000, b[3] * 1000) or "-" end
-	RunService.Heartbeat:Connect(function(dt)
-		local on = state.settings.diag == true
-		perf.Visible, bloomBtn.Visible = on, on
-		win += dt
-		winN += 1
-		winMax = math.max(winMax, dt)
-		local r = root()
-		if r and math.abs(r.Position.X) < 5 and r.Position.Z > -43 and r.Position.Z < -17 then
-			local b = workspace:GetAttribute("MoonActive") and bridge.moon or bridge.night
-			b[1] += dt
-			b[2] += 1
-			b[3] = math.max(b[3], dt)
-		end
-		if win >= 1 then
-			if on then
-				perfL.Text = ("Кадр %.1f мс (макс %.0f), %d FPS\nМост ср/макс: ночь %s | луна %s"):format(win / winN * 1000, winMax * 1000, winN, fmt(bridge.night), fmt(bridge.moon))
-			end
-			win, winN, winMax = 0, 0, 0
-		end
-	end)
 end
 ]]></string>
           </Properties>

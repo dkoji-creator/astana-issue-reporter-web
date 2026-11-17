@@ -60,7 +60,7 @@ function C.districtsOf(kind: string)
 	for d in C.Kinds[kind].spawn do
 		table.insert(list, d)
 	end
-	if C.Kinds[kind].move == "swim" then table.insert(list, "canal") end
+	if C.Kinds[kind].move == "swim" then table.insert(list, C.Kinds[kind].swimIn or "canal") end
 	return list
 end
 

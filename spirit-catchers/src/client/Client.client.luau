@@ -65,19 +65,8 @@ do
 	for k, id in Audio.Sfx do
 		sfx[k] = makeSound(id, sfxGroup, false, nil, 0.8)
 	end
-	local soundStatus = "загрузка..."
 	task.spawn(function()
-		local failed = 0
-		pcall(function()
-			ContentProvider:PreloadAsync(allSounds, function(_, status)
-				if status ~= Enum.AssetFetchStatus.Success then failed += 1 end
-			end)
-		end)
-		local loaded = 0
-		for _, s in allSounds do
-			if s.IsLoaded then loaded += 1 end
-		end
-		soundStatus = ("загружено %d из %d"):format(loaded, #allSounds) .. (failed > 0 and (", ошибок: " .. failed) or "")
+		pcall(function() ContentProvider:PreloadAsync(allSounds) end)
 		if music then music:Play() end
 		if moonLayer then moonLayer:Play() end
 	end)
@@ -157,7 +146,7 @@ do
 	K.icon(eventPill, "moon", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(-10, -4) })
 	eventL = K.text(eventPill, "", { Size = UDim2.new(1, -48, 1, -10), Position = UDim2.fromOffset(38, 5), MaxText = 20 })
 
-	trackPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 56), Size = UDim2.fromOffset(310, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+	trackPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(310, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
 	K.corner(trackPill, UDim.new(0, 14))
 	K.stroke(trackPill, T.ink, 3)
 	K.gradient(trackPill, Color3.fromRGB(255, 160, 80), Color3.fromRGB(200, 90, 40))
@@ -208,7 +197,7 @@ do
 	tutL = K.text(tutPanel, "", { Size = UDim2.new(1, -110, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 17, Font = Enum.Font.GothamBold })
 	skipBtn = K.button(tutPanel, "Пропуск", Color3.fromRGB(90, 90, 120), { Size = UDim2.fromOffset(90, 34), Position = UDim2.new(1, -98, 0, 9), MaxText = 14 })
 
-	districtTitle = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(420, 50), MaxText = 34, Visible = false })
+	districtTitle = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(320, 22), MaxText = 16, Font = Enum.Font.GothamBold, StrokeThickness = 2 })
 
 	-- кнопка ловли: рядом со стандартной кнопкой прыжка, видна только рядом с доступным духом
 	catchBtn = K.make("TextButton", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(100, 100), Position = UDim2.new(1, -180, 1, -140), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, gui)
@@ -289,7 +278,7 @@ do
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 	local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
-	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 214), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
@@ -768,7 +757,6 @@ do
 	volumeRow(1, "Музыка", "music")
 	volumeRow(2, "Звуки", "sfx")
 	toggleRow(3, "Приглушённые эффекты", "reduced", function() applyReduced() end)
-	if IS_TEST then toggleRow(4, "Диагностика FPS (тест)", "diag") end
 	local codeRow = K.panel(setList, { Size = UDim2.new(1, -10, 0, 54), LayoutOrder = 6, BackgroundColor3 = T.panel2 })
 	K.icon(codeRow, "code", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 5) })
 	local codeBox = K.make("TextBox", {
@@ -912,7 +900,8 @@ do
 		local stt = { distinct = state.distinct, level = state.level }
 		for key, row in tpRows do
 			local open = Catalog.unlocked(key, stt)
-			row.st.Text = open and "Открыт" or Catalog.unlockText(key, stt)
+			local dl = Catalog.Districts[key].luck or 1
+			row.st.Text = open and (dl > 1 and ("Открыт   удача района x%.1f"):format(dl) or "Открыт") or Catalog.unlockText(key, stt)
 			row.bl.Text = open and "Лететь" or "Закрыт"
 			K.recolor(row.b, open and T.purple or Color3.fromRGB(80, 80, 95))
 		end
@@ -1673,7 +1662,7 @@ do
 
 		-- удача: таймер зелья
 		local potionLeft = math.floor((state.luckUntil or 0) - workspace:GetServerTimeNow())
-		luckSub.Text = potionLeft > 0 and ("Зелье %d:%02d"):format(potionLeft // 60, potionLeft % 60) or "нажми: подробнее"
+		luckSub.Text = potionLeft > 0 and ("Зелье %d:%02d"):format(potionLeft // 60, potionLeft % 60) or ""
 
 		-- событие
 		local moonActive = workspace:GetAttribute("MoonActive") == true
@@ -1704,14 +1693,14 @@ do
 					local d = cf.Position - r.Position
 					local fl = Vector3.new(d.X, 0, d.Z)
 					local look = r.CFrame.LookVector
-					lit = dist < 6 or (dist < lanternRange() * 0.8 and fl.Magnitude > 0.1 and fl.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.8)
+					lit = (dist < lanternRange() * 0.8 and fl.Magnitude > 0.1 and fl.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.8)
 				end
 				local goal = revealed and 0.95 or (lit and (0.35 + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
 				v.shadow.Transparency += (goal - v.shadow.Transparency) * math.min(1, dt * 5)
 				local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
 				if pe and not revealed then
 					local sparkle = v.anchor:GetAttribute("Variant")
-					pe.Rate = lit and ((sparkle ~= "normal" and sparkle ~= "giant") and 24 or 8) or ((sparkle ~= "normal" and sparkle ~= "giant") and 2 or 0)
+					pe.Rate = lit and ((sparkle ~= "normal" and sparkle ~= "giant") and 24 or 8) or 0
 				end
 			end
 			if revealed and not v.model then
@@ -1744,6 +1733,11 @@ do
 		end
 		updateFollowers(now)
 		updateOni(dt)
+		local beamPart = World:FindFirstChild("LighthouseBeam")
+		if beamPart then
+			local c = Vector3.new(166, 32, -66)
+			beamPart.CFrame = CFrame.new(c) * CFrame.Angles(0, now * 0.6, 0) * CFrame.new(30, 0, 0)
+		end
 		if math.floor(now * 10) % 2 == 0 then
 			for _, p in Players:GetPlayers() do
 				if p:GetAttribute("Skin") == "vip" then
@@ -1763,16 +1757,8 @@ do
 		local d = Catalog.district(r.Position)
 		if d ~= currentDistrict then
 			currentDistrict = d
-			districtTitle.Text = Catalog.DistrictNames[d]
-			districtTitle.Visible = not introOpen
-			districtTitle.TextTransparency = 0
-			local fadeInfo = TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 1.6)
-			local stroke = districtTitle:FindFirstChildOfClass("UIStroke")
-			if stroke then
-				stroke.Transparency = 0
-				TweenService:Create(stroke, fadeInfo, { Transparency = 1 }):Play()
-			end
-			TweenService:Create(districtTitle, fadeInfo, { TextTransparency = 1 }):Play()
+			local dl = Catalog.Districts[d].luck or 1
+			districtTitle.Text = Catalog.DistrictNames[d] .. (dl > 1 and ("   удача района x%.1f"):format(dl) or "")
 			TweenService:Create(districtCC, TweenInfo.new(1.5), { TintColor = Catalog.Districts[d].tint }):Play()
 		end
 		local atAltar = (r.Position - ALTAR_POS).Magnitude < 16
@@ -1790,7 +1776,7 @@ do
 			local info = Catalog.Kinds[trackKind]
 			if best then
 				trackPos = best.Position
-				trackL.Text = ("%s  %d м\nСлед: %s"):format(info.name, math.floor(bd), info.trail.text)
+				trackL.Text = ("%s\nСлед: %s"):format(info.name, info.trail.text)
 			else
 				local places = Catalog.districtsOf(trackKind)
 				local dc = places[1] and Catalog.Districts[places[1]]
@@ -1839,7 +1825,7 @@ do
 					hintText.Text, hintText.TextColor3 = ("Ловим вместе x%d"):format(holders), GOLD
 				else
 					local vn = (v.variant and v.variant ~= "normal") and (Catalog.Variants[v.variant].name .. " ") or ""
-					hintText.Text = inRange and (vn .. v.info.name) or (vn ~= "" and (vn .. v.info.name .. " - ближе!") or "Подойди ближе")
+					hintText.Text = inRange and (vn .. v.info.name) or (vn ~= "" and (vn .. v.info.name) or "")
 					hintText.TextColor3 = inRange and rar.color or Color3.new(1, 1, 1)
 				end
 				if tut.step == 1 then setStep(2) end
@@ -1925,9 +1911,6 @@ do
 			goalPos = target and target.Parent and target.Position
 		elseif tut.step == 3 or #state.jar >= state.cap then
 			goalPos = ALTAR_POS + Vector3.new(0, 2, 0)
-		elseif trackPos then
-			goalPos = trackPos
-			guideCold = false
 		end
 		local att = r:FindFirstChild("GuideAtt")
 		if not att then att = K.make("Attachment", { Name = "GuideAtt", Position = Vector3.new(0, -2, 0) }, r) end
@@ -1971,48 +1954,4 @@ do
 		if i.KeyCode == Enum.KeyCode.F then unpress() end
 	end)
 
-end
------------------------------------------------------------------- диагностика (тест)
-if IS_TEST then
-	local perf = K.panel(gui, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 1, -260), Size = UDim2.fromOffset(240, 50), Visible = false })
-	local perfL = K.text(perf, "", { Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3), MaxText = 13, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
-	local bloomBtn, bloomL = K.button(gui, "", Color3.fromRGB(90, 90, 120), { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 1, -214), Size = UDim2.fromOffset(240, 36), MaxText = 14, Visible = false })
-	local PRESETS = { 0, 0.1, 0.2, 0.35 }
-	local bi = 3
-	local function applyBloom()
-		local b = Lighting:FindFirstChild("Bloom")
-		if b then
-			b.Enabled = PRESETS[bi] > 0 and not reducedFx
-			b.Intensity = PRESETS[bi]
-		end
-		bloomL.Text = PRESETS[bi] > 0 and ("Bloom %.2f"):format(PRESETS[bi]) or "Bloom выкл"
-	end
-	applyBloom()
-	bloomBtn.Activated:Connect(function()
-		bi = bi % #PRESETS + 1
-		applyBloom()
-	end)
-	local win, winN, winMax = 0, 0, 0
-	local bridge = { night = { 0, 0, 0 }, moon = { 0, 0, 0 } }
-	local function fmt(b) return b[2] > 30 and ("%.1f/%.0f"):format(b[1] / b[2] * 1000, b[3] * 1000) or "-" end
-	RunService.Heartbeat:Connect(function(dt)
-		local on = state.settings.diag == true
-		perf.Visible, bloomBtn.Visible = on, on
-		win += dt
-		winN += 1
-		winMax = math.max(winMax, dt)
-		local r = root()
-		if r and math.abs(r.Position.X) < 5 and r.Position.Z > -43 and r.Position.Z < -17 then
-			local b = workspace:GetAttribute("MoonActive") and bridge.moon or bridge.night
-			b[1] += dt
-			b[2] += 1
-			b[3] = math.max(b[3], dt)
-		end
-		if win >= 1 then
-			if on then
-				perfL.Text = ("Кадр %.1f мс (макс %.0f), %d FPS\nМост ср/макс: ночь %s | луна %s"):format(win / winN * 1000, winMax * 1000, winN, fmt(bridge.night), fmt(bridge.moon))
-			end
-			win, winN, winMax = 0, 0, 0
-		end
-	end)
 end

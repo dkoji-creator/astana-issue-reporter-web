@@ -47,6 +47,7 @@ local function sign(parent, text, color, face)
 	return t
 end
 local function billboard(parent, text, color, offset)
+	if text ~= "Алтарь" then return end -- парящие названия районов убраны (мешали обзору)
 	local b = Instance.new("BillboardGui")
 	b.Size, b.StudsOffset, b.AlwaysOnTop, b.MaxDistance = UDim2.new(0, 170, 0, 30), offset or Vector3.new(0, 5, 0), false, 220
 	local t = Instance.new("TextLabel")
@@ -75,6 +76,13 @@ local function torii(z, x, w, h, color)
 	end
 	block("ToriiBeam", Vector3.new(w + 5, 1.2, 1.8), CFrame.new(x, h + 0.6, z), Color3.fromRGB(40, 30, 30))
 	block("ToriiBeam2", Vector3.new(w + 2, 0.8, 1.2), CFrame.new(x, h - 2, z), color)
+end
+
+local habitats = {}
+local function hab(district, tag, pos)
+	habitats[district] = habitats[district] or {}
+	habitats[district][tag] = habitats[district][tag] or {}
+	table.insert(habitats[district][tag], Vector3.new(pos.X, 0.5, pos.Z))
 end
 
 function Map.build()
@@ -119,7 +127,9 @@ function Map.build()
 	wall(Vector3.new(80, 80, 1), Vector3.new(0, 40, 136.5))
 	wall(Vector3.new(27, 80, 1), Vector3.new(49, 40, -8))
 	wall(Vector3.new(27, 80, 1), Vector3.new(-49, 40, -8))
-	wall(Vector3.new(1, 80, 64), Vector3.new(62.5, 40, -40))
+	-- восточная стена канала с проходом в порт (z -52..-42)
+	wall(Vector3.new(1, 80, 20), Vector3.new(62.5, 40, -62))
+	wall(Vector3.new(1, 80, 34), Vector3.new(62.5, 40, -25))
 	wall(Vector3.new(1, 80, 64), Vector3.new(-62.5, 40, -40))
 	wall(Vector3.new(1, 80, 82), Vector3.new(46.5, 40, -112))
 	wall(Vector3.new(1, 80, 82), Vector3.new(-46.5, 40, -112))
@@ -336,6 +346,71 @@ function Map.build()
 		block("GateBeam", Vector3.new(1.8, 1.2, 16), CFrame.new(g[2], 14.4, 10), Color3.fromRGB(40, 30, 30), Enum.Material.Wood)
 		gates[g[1]] = barrier
 	end
+	do -- барьер канала (уровень 3) и ворота порта (уровень 20)
+		local canalGate = block("CanalGate", Vector3.new(70, 13, 1), CFrame.new(0, 6.5, -8), Color3.fromRGB(80, 230, 220), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
+		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Back)
+		sign(canalGate, "Канал с мостами", Color3.new(1, 1, 1), Enum.NormalId.Front)
+		gates.CanalGate = canalGate
+		local portGate = block("PortGate", Vector3.new(1, 13, 10), CFrame.new(62.5, 6.5, -47), Color3.fromRGB(150, 200, 230), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
+		sign(portGate, "Туманный порт", Color3.new(1, 1, 1), Enum.NormalId.Right)
+		sign(portGate, "Туманный порт", Color3.new(1, 1, 1), Enum.NormalId.Left)
+		for _, z in { -52.5, -41.5 } do
+			block("GatePost", Vector3.new(1.4, 14, 1.4), CFrame.new(62.5, 7, z), Color3.fromRGB(70, 90, 110), Enum.Material.Wood)
+		end
+		gates.PortGate = portGate
+	end
+
+	---------------------------------------------------------------- ТУМАННЫЙ ПОРТ (восток за каналом, уровень 20)
+	local SEA = Color3.fromRGB(150, 210, 230)
+	block("PortGround", Vector3.new(66, 1, 64), CFrame.new(95.5, 0, -40), Color3.fromRGB(78, 72, 70), Enum.Material.WoodPlanks)
+	block("SeaWater", Vector3.new(44, 0.4, 64), CFrame.new(150, -2.5, -40), Color3.fromRGB(14, 34, 64), Enum.Material.Glass, { Transparency = 0.15, Reflectance = 0.2, CanCollide = false, CanQuery = false })
+	block("SeaBed", Vector3.new(44, 1, 64), CFrame.new(150, -8, -40), Color3.fromRGB(10, 18, 30))
+	block("Quay", Vector3.new(1, 7, 64), CFrame.new(128.5, -4, -40), Color3.fromRGB(70, 70, 75))
+	deco("QuayEdge", Vector3.new(0.5, 0.12, 64), CFrame.new(127.8, 0.56, -40), SEA, Enum.Material.Neon, { Transparency = 0.4 })
+	wall(Vector3.new(1, 80, 66), Vector3.new(172.5, 40, -40))
+	wall(Vector3.new(112, 80, 1), Vector3.new(117, 40, -72.5))
+	wall(Vector3.new(20, 80, 1), Vector3.new(163, 40, -8.5))
+	for _, z in { -22, -40, -58 } do
+		block("Pier", Vector3.new(32, 1, 6), CFrame.new(144, 0, z), Color3.fromRGB(110, 85, 60), Enum.Material.WoodPlanks)
+		for x = 132, 158, 6 do
+			for _, dz in { -3, 3 } do
+				block("PierPost", Vector3.new(0.8, 9, 0.8), CFrame.new(x, -4, z + dz), Color3.fromRGB(70, 55, 40), Enum.Material.Wood)
+			end
+			hab("port", "pier", Vector3.new(x, 0.5, z))
+		end
+		local l = deco("PierLamp", Vector3.new(1, 1.4, 1), CFrame.new(158, 3, z + 3), SEA, Enum.Material.Neon)
+		light(l, SEA, 18, 0.9)
+		hab("port", "lamp", Vector3.new(156, 0.5, z))
+	end
+	for z = -66, -14, 8 do
+		hab("port", "water", Vector3.new(124, 0.5, z))
+	end
+	-- склады и бочки
+	for i, p in { Vector3.new(80, 0, -66), Vector3.new(104, 0, -66), Vector3.new(80, 0, -14), Vector3.new(104, 0, -14) } do
+		block("Warehouse", Vector3.new(18, 10, 9), CFrame.new(p.X, 5.5, p.Z), Color3.fromRGB(70 + i * 6, 62, 60), Enum.Material.WoodPlanks)
+		block("WarehouseRoof", Vector3.new(20, 1, 11), CFrame.new(p.X, 11, p.Z), Color3.fromRGB(45, 50, 60), Enum.Material.Slate)
+		local lamp = deco("DockLamp", Vector3.new(1, 1, 1), CFrame.new(p.X, 7, p.Z + (p.Z < -40 and 5 or -5)), SEA, Enum.Material.Neon)
+		light(lamp, SEA, 16, 0.7)
+		hab("port", "lamp", Vector3.new(p.X, 0.5, p.Z + (p.Z < -40 and 7 or -7)))
+	end
+	-- маяк: башня и вращающийся луч (крутит клиент)
+	for i = 0, 5 do
+		block("Lighthouse", Vector3.new(6 - i * 0.6, 5, 6 - i * 0.6), CFrame.new(166, 2 + i * 5, -66), i % 2 == 0 and Color3.fromRGB(230, 230, 235) or Color3.fromRGB(200, 60, 60), Enum.Material.Concrete)
+	end
+	local lampTop = deco("LighthouseLamp", Vector3.new(3, 3, 3), CFrame.new(166, 32, -66), Color3.fromRGB(255, 240, 180), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+	light(lampTop, Color3.fromRGB(255, 240, 180), 50, 2)
+	deco("LighthouseBeam", Vector3.new(60, 2, 2), CFrame.new(166 + 30, 32, -66), Color3.fromRGB(255, 245, 200), Enum.Material.Neon, { Transparency = 0.7 })
+	block("LighthouseRock", Vector3.new(12, 4, 12), CFrame.new(166, -2, -66), Color3.fromRGB(60, 60, 65), Enum.Material.Rock)
+	-- туман над водой
+	for _, z in { -60, -40, -20 } do
+		local fogPart = deco("SeaFog", Vector3.new(40, 1, 16), CFrame.new(150, 1, z), Color3.new(), nil, { Transparency = 1 })
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color = ColorSequence.new(Color3.fromRGB(200, 215, 230))
+		pe.Rate, pe.Lifetime, pe.Speed = 3, NumberRange.new(6, 9), NumberRange.new(0.5, 1)
+		pe.Size = NumberSequence.new(6, 10)
+		pe.Transparency = NumberSequence.new(0.75, 1)
+		pe.Parent = fogPart
+	end
 
 	---------------------------------------------------------------- доска рекордов на площади
 	local board = block("Leaderboard", Vector3.new(14, 9, 0.6), CFrame.new(-26, 6, 20) * CFrame.Angles(0, math.rad(-90), 0), Color3.fromRGB(40, 30, 45), Enum.Material.Wood)
@@ -384,6 +459,30 @@ function Map.build()
 	end
 
 	---------------------------------------------------------------- кусты-укрытия в саду и роще (за ними прячутся духи)
+	-- логова: улица, канал, рынок, роща, сад
+	for z = 36, 126, 6 do
+		hab("street", "lamp", Vector3.new(z % 12 == 0 and 11 or -11, 0.5, z))
+	end
+	for z = 38, 124, 9 do
+		hab("street", "wall", Vector3.new(z % 18 < 9 and 16 or -16, 0.5, z))
+	end
+	for x = -54, 54, 9 do
+		hab("canal", "water", Vector3.new(x, 0.5, -17))
+		hab("canal", "water", Vector3.new(x, 0.5, -43))
+	end
+	for x = 52, 140, 16 do
+		hab("market", "stall", Vector3.new(x, 0.5, 25))
+		hab("market", "stall", Vector3.new(x, 0.5, 47))
+		hab("market", "lamp", Vector3.new(x + 8, 0.5, 12))
+	end
+	for a = 0, 330, 30 do
+		hab("grove", "water", Vector3.new(-95 + math.cos(math.rad(a)) * 11, 0.5, 42 + math.sin(math.rad(a)) * 9))
+		hab("garden", "water", Vector3.new(-22 + math.cos(math.rad(a)) * 10, 0.5, -110 + math.sin(math.rad(a)) * 8))
+	end
+	for z = -82, -128, -12 do
+		hab("garden", "lamp", Vector3.new(-9, 0.5, z))
+		hab("garden", "lamp", Vector3.new(9, 0.5, z))
+	end
 	local bush = Random.new(21)
 	for _ = 1, 46 do
 		local inGrove = bush:NextNumber() < 0.5
@@ -392,6 +491,7 @@ function Map.build()
 		if math.abs(z - 10) > 6 and math.abs(x) > 6 then
 			local sz = bush:NextNumber(3, 5.5)
 			deco("Bush", Vector3.new(sz, sz * 0.7, sz), CFrame.new(x, 0.5 + sz * 0.3, z), Color3.fromRGB(40 + bush:NextInteger(0, 20), 100 + bush:NextInteger(0, 30), 55), Enum.Material.Grass, { Shape = Enum.PartType.Ball })
+			hab(inGrove and "grove" or "garden", "bush", Vector3.new(x, 0.5, z))
 		end
 	end
 	for _, p in { Vector3.new(-120, 0.5, 50), Vector3.new(-70, 0.5, 58), Vector3.new(30, 0.5, -140), Vector3.new(-32, 0.5, -98) } do
@@ -411,6 +511,7 @@ function Map.build()
 
 	return {
 		portals = portals,
+		habitats = habitats,
 		gates = gates,
 		boardGui = boardGui,
 		altar = altar,

@@ -418,6 +418,21 @@ local function zonePoint(district, near: Vector3?, tut: boolean?, kind: string?)
 		return Vector3.new(rnd(-14, 14), 0.5, rnd(34, 62))
 	end
 	local info = kind and Catalog.Kinds[kind]
+	-- логова: дух появляется и перебегает между «своими» местами района
+	local habs = map.habitats[district]
+	if info and info.habitat and habs then
+		local pool, nearPool = {}, {}
+		for _, tag in info.habitat do
+			for _, p in habs[tag] or {} do
+				table.insert(pool, p)
+				if near and (p - Vector3.new(near.X, 0.5, near.Z)).Magnitude < 35 then table.insert(nearPool, p) end
+			end
+		end
+		local list = #nearPool > 1 and nearPool or pool
+		if #list > 0 then
+			return list[math.random(#list)] + Vector3.new(rnd(-2, 2), 0, rnd(-2, 2))
+		end
+	end
 	if info and info.spots then
 		-- любимые места вида (мосты, пруд)
 		local spot = info.spots[math.random(#info.spots)]
@@ -482,12 +497,19 @@ local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVaria
 	for i = #Catalog.VariantOrder, 2, -1 do
 		local key = Catalog.VariantOrder[i]
 		local v = Catalog.Variants[key]
-		if (not v.moonOnly or moon.active) and math.random() < v.chance then
+		if (not v.moonOnly or moon.active) and math.random() < v.chance * (Catalog.Districts[district].luck or 1) then
 			variant = key
 			break
 		end
 	end
 	if tut then variant = "normal" end
+	-- редкий гость: сервер предупреждает всех
+	local rk = info.rarity
+	if not tut and (rk == "legendary" or rk == "mythic" or rk == "secret") then
+		for _, p in Players:GetPlayers() do
+			NoticeEv:FireClient(p, ("В районе «%s» замечен %s дух!"):format(Catalog.Districts[district].name, Catalog.Rarity[rk].name:lower()))
+		end
+	end
 	if forceVariant and Catalog.Variants[forceVariant] then variant = forceVariant end
 	s.variant = variant
 	a:SetAttribute("Variant", variant)
@@ -613,7 +635,7 @@ RunService.Heartbeat:Connect(function(dt)
 				-- бросок удачи: может улучшить разновидность (каждому участнику — свой)
 				local base = s.variant or "normal"
 				local variant = base
-				local luck = luckOf(data[plr])
+				local luck = luckOf(data[plr]) * (Catalog.Districts[s.district].luck or 1)
 				local baseRank = table.find(Catalog.VariantOrder, base) or 1
 				for vi = #Catalog.VariantOrder, baseRank + 1, -1 do
 					local key = Catalog.VariantOrder[vi]
@@ -711,26 +733,43 @@ local function districtCount(d)
 	return n, tutN
 end
 
-newSpirit("PaperFox", "street", true)
-newSpirit("PaperFox", "street", true)
+local lastWhale = 0
 
 task.spawn(function()
 	while true do
 		local now = os.clock()
 		for _, s in live do
 			local held = s.anchor:GetAttribute("Holders") > 0
-			if not held and not Catalog.Kinds[s.kind].moonOnly then
+			if not held and not Catalog.Kinds[s.kind].moonOnly and Catalog.Kinds[s.kind].move ~= "swim" then
 				if (not s.revealed and now - s.born > 110) or (s.revealed and now - s.revealedAt > 35) then removeSpirit(s) end
 			end
 		end
 		for district, dc in Catalog.Districts do
 			local max = dc.max
 			local n, tutN = districtCount(district)
-			if district == "street" and tutN < 2 then
+			local needTut = false
+			for _, p in Players:GetPlayers() do
+				if data[p] and not data[p].tutorialDone then needTut = true end
+			end
+			if district == "street" and needTut and tutN < 2 then
 				newSpirit("PaperFox", "street", true) -- рядом с алтарём всегда есть лис для обучения
 			elseif max > 0 and n < max + (moon.active and 2 or 0) then
 				local kind = pickKind(district)
 				if kind then newSpirit(kind, district) end
+			end
+		end
+		-- бумажный кит иногда проплывает над морем у порта
+		if os.clock() - (lastWhale or 0) > 150 then
+			lastWhale = os.clock()
+			local has = false
+			for _, s in live do
+				if s.kind == "PaperWhale" then has = true end
+			end
+			if not has and (IS_TEST or math.random() < 0.3) then
+				local w = newSpirit("PaperWhale", "port")
+				task.delay(100, function()
+					if live[w.id] == w and w.anchor:GetAttribute("Holders") == 0 then removeSpirit(w) end
+				end)
 			end
 		end
 		task.wait(1.5)
@@ -855,7 +894,8 @@ local function startMoon()
 	if IS_TEST or math.random() < 0.5 then newSpirit("MoonRabbit", "street") end
 	if IS_TEST or math.random() < 0.5 then newSpirit("FoxFire", "canal") end
 	if IS_TEST or math.random() < 0.3 then newSpirit("PaperDragon", "grove") end
-	if IS_TEST or math.random() < 0.1 then newSpirit("Kyubi", "market") end
+	if IS_TEST or math.random() < 0.1 then newSpirit("Kyubi", "garden") end
+	if IS_TEST or math.random() < 0.4 then newSpirit("MistKraken", "port") end
 	newSpirit("Crane", "garden")
 	local a = Instance.new("Part")
 	a.Name = "Oni"
@@ -1111,7 +1151,11 @@ task.spawn(function()
 				local p = r.Position
 				if p.Y < -3.5 then
 					-- упал в канал: на ближайший берег
-					plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
+					if p.X > 63 then
+						plr.Character:PivotTo(CFrame.new(118, 4, math.clamp(p.Z, -66, -14)))
+					else
+						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55, 55), 4, p.Z > -30 and -14 or -46))
+					end
 				else
 					local dn = Catalog.district(p)
 					local dc = Catalog.Districts[dn]
