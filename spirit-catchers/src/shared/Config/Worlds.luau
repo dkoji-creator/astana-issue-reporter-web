@@ -21,7 +21,7 @@ W.Worlds = {
 	},
 	mirror = {
 		name = "Зеркальное озеро",
-		active = false,
+		active = true,
 		blurb = "Духов сначала видно только в отражении. По кругам на воде угадываешь, где они вынырнут.",
 		search = "Смотри в отражения и на круги на воде",
 		star = "Стеклянная цапля, сквозь крылья которой видна луна",
@@ -42,7 +42,7 @@ W.Worlds = {
 	},
 }
 
-W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "yard" }
+W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "mirror", "yard" }
 
 -- Районы открываются по уровню, в каждом следующем — более редкие духи и выше удача района.
 -- habitats: «логова» района (теги), где духи прячутся и между которыми перебегают (точки строит Map.luau)
@@ -81,6 +81,12 @@ W.Districts = {
 		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
 		unlock = { level = 15 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
 	},
+	mirror = { -- второй мир: остров с озером за рощей; духов видно только в отражении
+		tp = Vector3.new(-262, 3, -32), world = "mirror", name = "Зеркальное озеро", max = 8, luck = 3.5,
+		zones = { { x = { -300, -224 }, z = { -12, 62 } } },
+		tint = Color3.fromRGB(220, 235, 255), center = Vector3.new(-262, 0.5, 25),
+		unlock = { level = 25 }, back = Vector3.new(0, 4, 26),
+	},
 	yard = { -- остров дворов игроков (за улицей фонарей); координаты в старом размере
 		tp = Vector3.new(0, 3, 266), world = "lantern", name = "Дворы ловцов", max = 0, luck = 1,
 		zones = {}, tint = Color3.fromRGB(240, 245, 230), center = Vector3.new(0, 0.5, 304),
@@ -115,6 +121,7 @@ end
 function W.districtAt(pos: Vector3): string
 	local x, z = pos.X / W.Scale, pos.Z / W.Scale
 	if z > 245 then return "yard" end
+	if x < -190 then return "mirror" end
 	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end

@@ -496,6 +496,75 @@ function Map.build()
 		stoneLantern(p, Color3.fromRGB(150, 255, 200))
 	end
 
+	---------------------------------------------------------------- ЗЕРКАЛЬНОЕ ОЗЕРО (второй мир, остров за рощей; только телепорт)
+	do
+		local cx, cz = -262, 25
+		local MOONLIGHT = Color3.fromRGB(190, 215, 255)
+		-- берег кольцом (под озером пусто, чтобы были видны отражения)
+		local shore = Color3.fromRGB(58, 84, 92)
+		block("MirrorShore", Vector3.new(130, 1, 20), CFrame.new(cx, 0, cz - 55), shore, Enum.Material.Grass)
+		block("MirrorShore", Vector3.new(130, 1, 20), CFrame.new(cx, 0, cz + 55), shore, Enum.Material.Grass)
+		block("MirrorShore", Vector3.new(20, 1, 90), CFrame.new(cx - 55, 0, cz), shore, Enum.Material.Grass)
+		block("MirrorShore", Vector3.new(20, 1, 90), CFrame.new(cx + 55, 0, cz), shore, Enum.Material.Grass)
+		-- зеркальная гладь: по ней можно ходить, под ней видны отражения духов
+		block("MirrorLake", Vector3.new(90, 0.3, 90), CFrame.new(cx, 0.35, cz), Color3.fromRGB(120, 160, 210), Enum.Material.Glass,
+			{ Transparency = 0.55, Reflectance = 0.25, CastShadow = false })
+		block("MirrorBed", Vector3.new(90, 1, 90), CFrame.new(cx, -10.5, cz), Color3.fromRGB(10, 16, 34), Enum.Material.Slate)
+		for _, w in { { Vector3.new(90, 10.5, 0.6), Vector3.new(cx, -5, cz - 45) }, { Vector3.new(90, 10.5, 0.6), Vector3.new(cx, -5, cz + 45) },
+			{ Vector3.new(0.6, 10.5, 90), Vector3.new(cx - 45, -5, cz) }, { Vector3.new(0.6, 10.5, 90), Vector3.new(cx + 45, -5, cz) } } do
+			block("MirrorWall", w[1], CFrame.new(w[2]), Color3.fromRGB(16, 24, 46), Enum.Material.Slate)
+		end
+		-- звёзды «в воде»
+		local rngM = Random.new(31)
+		for _ = 1, 40 do
+			deco("WaterStar", Vector3.new(0.4, 0.4, 0.4), CFrame.new(cx + rngM:NextNumber(-42, 42), rngM:NextNumber(-9, -3), cz + rngM:NextNumber(-42, 42)),
+				Color3.fromRGB(220, 230, 255), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+		end
+		-- отражение луны в центре озера и тории в воде
+		local moonRef = deco("MoonReflection", Vector3.new(0.2, 12, 12), CFrame.new(cx, -8, cz) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(240, 240, 220), Enum.Material.Neon,
+			{ Shape = Enum.PartType.Cylinder, Transparency = 0.2 })
+		light(moonRef, MOONLIGHT, 40, 0.8)
+		torii(cz + 30, cx, 12, 11, Color3.fromRGB(230, 70, 60))
+		-- границы острова
+		wall(Vector3.new(1, 80, 130), Vector3.new(cx - 65.5, 40, cz))
+		wall(Vector3.new(1, 80, 130), Vector3.new(cx + 65.5, 40, cz))
+		wall(Vector3.new(130, 80, 1), Vector3.new(cx, 40, cz - 65.5))
+		wall(Vector3.new(130, 80, 1), Vector3.new(cx, 40, cz + 65.5))
+		-- ивы, каменные фонари и камыши по берегу
+		for i = 0, 11 do
+			local a = i / 12 * math.pi * 2
+			local p = Vector3.new(cx + math.cos(a) * 54, 0.5, cz + math.sin(a) * 54)
+			if i % 2 == 0 then
+				deco("WillowTrunk", Vector3.new(1.2, 8, 1.2), CFrame.new(p + Vector3.new(0, 4, 0)), Color3.fromRGB(60, 50, 50), Enum.Material.Wood, { CanCollide = true })
+				deco("Willow", Vector3.new(8, 7, 8), CFrame.new(p + Vector3.new(0, 8.5, 0)), Color3.fromRGB(80, 130, 150), Enum.Material.Grass, { Shape = Enum.PartType.Ball, Transparency = 0.1 })
+			else
+				stoneLantern(p, MOONLIGHT)
+			end
+			hab("mirror", "shore", Vector3.new(cx + math.cos(a) * 47, 0.5, cz + math.sin(a) * 47))
+		end
+		for x = -36, 36, 12 do
+			for z = -36, 36, 12 do
+				hab("mirror", "water", Vector3.new(cx + x, 0.5, cz + z))
+			end
+		end
+		-- кувшинки на поверхности
+		for i = 1, 14 do
+			deco("LilyPad", Vector3.new(0.1, 2.2, 2.2), CFrame.new(cx + rngM:NextNumber(-40, 40), 0.55, cz + rngM:NextNumber(-40, 40)) * CFrame.Angles(0, 0, math.rad(90)),
+				Color3.fromRGB(70, 150, 100), nil, { Shape = Enum.PartType.Cylinder })
+			if i % 3 == 0 then
+				deco("LilyFlower", Vector3.new(0.8, 0.6, 0.8), CFrame.new(cx + rngM:NextNumber(-40, 40), 0.85, cz + rngM:NextNumber(-40, 40)), Color3.fromRGB(255, 180, 220), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+			end
+		end
+		-- лёгкий туман над водой
+		local mist = deco("LakeMist", Vector3.new(80, 1, 80), CFrame.new(cx, 2, cz), Color3.new(), nil, { Transparency = 1 })
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color = ColorSequence.new(Color3.fromRGB(200, 215, 240))
+		pe.Rate, pe.Lifetime, pe.Speed = 4, NumberRange.new(6, 9), NumberRange.new(0.3, 0.8)
+		pe.Size = NumberSequence.new(5, 9)
+		pe.Transparency = NumberSequence.new(0.8, 1)
+		pe.Parent = mist
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = scf(CFrame.new(0, 0.6, 24))
 	local spawn = Instance.new("SpawnLocation")

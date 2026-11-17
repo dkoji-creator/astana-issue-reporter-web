@@ -820,6 +820,110 @@ function S.buildShadow(color: Color3?): Part
 	return s
 end
 
+------------------------------------------------------------------ Зеркальное озеро
+function S.buildEchoFirefly(): Model
+	local m = Instance.new("Model")
+	m.Name = "EchoFirefly"
+	local glow = Color3.fromRGB(170, 230, 255)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(0.9, 0.9, 1.4), CFrame = CFrame.new(), Color = glow, Material = Enum.Material.Neon }))
+	mk(m, { Name = "Shell", Size = Vector3.new(1.3, 1.3, 1.3), CFrame = CFrame.new(), Color = Color3.fromRGB(220, 240, 255), Material = Enum.Material.Glass, Transparency = 0.6, Shape = Enum.PartType.Ball })
+	for i, x in { -1, 1 } do
+		local w = mk(m, { Name = "Wing", Size = Vector3.new(1.4, 0.06, 0.8), CFrame = CFrame.new(x * 0.9, 0.4, 0), Color = Color3.fromRGB(230, 245, 255), Transparency = 0.4 })
+		joint(w, Vector3.new(x * 0.3, 0.4, 0), "flapZ", i * math.pi, 1.6)
+	end
+	light(body, glow, 14, 1.6)
+	m.PrimaryPart = body
+	S.scale(m, 1.6)
+	return m
+end
+
+function S.buildLilyFrog(): Model
+	local m = Instance.new("Model")
+	m.Name = "LilyFrog"
+	local green = Color3.fromRGB(110, 200, 120)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(2.2, 1.5, 2.4), CFrame = CFrame.new(0, 0.8, 0), Color = green }))
+	ellipsoid(mk(m, { Name = "Belly", Size = Vector3.new(1.6, 1, 1.4), CFrame = CFrame.new(0, 0.55, -0.6), Color = Color3.fromRGB(230, 240, 200) }))
+	for _, x in { -0.6, 0.6 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.7, 0.7, 0.7), CFrame = CFrame.new(x, 1.6, -0.7), Color = Color3.fromRGB(250, 250, 240), Shape = Enum.PartType.Ball })
+		mk(m, { Name = "Pupil", Size = Vector3.new(0.35, 0.35, 0.2), CFrame = CFrame.new(x, 1.62, -1.02), Color = Color3.fromRGB(20, 20, 30), Shape = Enum.PartType.Ball })
+		local leg = ellipsoid(mk(m, { Name = "Leg", Size = Vector3.new(0.7, 0.5, 1.4), CFrame = CFrame.new(x * 1.6, 0.3, 0.4), Color = green }))
+		joint(leg, Vector3.new(x * 1.2, 0.4, 0), "swingX", x > 0 and 0 or math.pi, 0.8)
+	end
+	-- кувшинка-шляпа
+	mk(m, { Name = "LilyPad", Size = Vector3.new(0.15, 2.2, 2.2), CFrame = CFrame.new(0, 1.75, 0.1) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(70, 160, 90), Shape = Enum.PartType.Cylinder })
+	local flower = mk(m, { Name = "Flower", Size = Vector3.new(0.7, 0.6, 0.7), CFrame = CFrame.new(0.4, 2.1, 0.3), Color = Color3.fromRGB(255, 170, 210), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	light(flower, Color3.fromRGB(255, 190, 220), 10, 0.8)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
+function S.buildMirrorKoi(): Model
+	local m = Instance.new("Model")
+	m.Name = "MirrorKoi"
+	local silver = Color3.fromRGB(225, 230, 245)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.4, 1.6, 4), CFrame = CFrame.new(), Color = silver, Material = Enum.Material.Foil, Reflectance = 0.4 }))
+	mk(m, { Name = "Spot", Size = Vector3.new(1.42, 0.7, 1.2), CFrame = CFrame.new(0, 0.4, -0.4), Color = Color3.fromRGB(120, 170, 255), Material = Enum.Material.Neon, Transparency = 0.3 })
+	local tail = mk(m, { Name = "Tail", Size = Vector3.new(0.12, 1.6, 1.6), CFrame = CFrame.new(0, 0, 2.6) * CFrame.Angles(math.rad(45), 0, 0), Color = Color3.fromRGB(190, 210, 255), Transparency = 0.2 })
+	joint(tail, Vector3.new(0, 0, 1.9), "wagY", 0, 1.2)
+	for _, x in { -1, 1 } do
+		local fin = mk(m, { Name = "Fin", Size = Vector3.new(1, 0.08, 0.7), CFrame = CFrame.new(x * 0.9, -0.3, -0.4), Color = Color3.fromRGB(200, 220, 255), Transparency = 0.3 })
+		joint(fin, Vector3.new(x * 0.6, -0.3, -0.4), "flapZ", x, 0.7)
+		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.25, 0.25), CFrame = CFrame.new(x * 0.55, 0.3, -1.6), Color = Color3.fromRGB(30, 30, 50), Shape = Enum.PartType.Ball })
+	end
+	light(body, Color3.fromRGB(190, 210, 255), 12, 1)
+	m.PrimaryPart = body
+	S.scale(m, 1.4)
+	return m
+end
+
+function S.buildGlassHeron(): Model
+	local m = Instance.new("Model")
+	m.Name = "GlassHeron"
+	local glass = Color3.fromRGB(200, 230, 255)
+	local function g(name, size, cf, extra)
+		local props = { Name = name, Size = size, CFrame = cf, Color = glass, Material = Enum.Material.Glass, Transparency = 0.35, Reflectance = 0.3 }
+		for k, v in extra or {} do props[k] = v end
+		return mk(m, props)
+	end
+	for _, x in { -0.35, 0.35 } do
+		g("Leg", Vector3.new(0.15, 4, 0.15), CFrame.new(x, 2, 0), { Color = Color3.fromRGB(150, 180, 220), Transparency = 0.1 })
+	end
+	local body = ellipsoid(g("Body", Vector3.new(1.6, 1.6, 3.2), CFrame.new(0, 4.6, 0.2)))
+	g("Neck", Vector3.new(0.3, 2.6, 0.3), CFrame.new(0, 6.2, -1) * CFrame.Angles(math.rad(-20), 0, 0))
+	g("Head", Vector3.new(0.5, 0.5, 0.9), CFrame.new(0, 7.5, -1.5))
+	mk(m, { Name = "Beak", Size = Vector3.new(0.14, 0.14, 1.4), CFrame = CFrame.new(0, 7.45, -2.5), Color = Color3.fromRGB(255, 220, 140), Material = Enum.Material.Neon })
+	for i, x in { -1, 1 } do
+		local w = g("Wing", Vector3.new(3.4, 0.08, 2.2), CFrame.new(x * 2, 4.8, 0.3), { Transparency = 0.5 })
+		joint(w, Vector3.new(x * 0.5, 4.8, 0.3), "flapZ", i * math.pi, 0.5)
+	end
+	-- луна внутри груди: видна сквозь стекло
+	local moonCore = mk(m, { Name = "MoonCore", Size = Vector3.new(0.8, 0.8, 0.8), CFrame = CFrame.new(0, 4.7, 0.1), Color = Color3.fromRGB(255, 250, 220), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	light(moonCore, Color3.fromRGB(220, 235, 255), 18, 1.6)
+	m.PrimaryPart = body
+	S.scale(m, 1.2)
+	return m
+end
+
+function S.buildTwinMoon(): Model
+	local m = Instance.new("Model")
+	m.Name = "TwinMoon"
+	local core = mk(m, { Name = "Core", Size = Vector3.new(0.6, 0.6, 0.6), CFrame = CFrame.new(), Color = Color3.fromRGB(255, 120, 120), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	-- два полумесяца из дуг
+	for side = 0, 1 do
+		for i = 0, 6 do
+			local a = math.rad(-70 + i * 23.3) + side * math.pi
+			local col = side == 0 and Color3.fromRGB(255, 235, 200) or Color3.fromRGB(255, 110, 110)
+			local seg = mk(m, { Name = "Arc", Size = Vector3.new(0.7, 0.9 - math.abs(i - 3) * 0.12, 0.5), CFrame = CFrame.new(math.cos(a) * 2.2, math.sin(a) * 2.2, 0) * CFrame.Angles(0, 0, a), Color = col, Material = Enum.Material.Neon })
+			joint(seg, Vector3.new(), "wagY", side * math.pi, 0.4)
+		end
+	end
+	light(core, Color3.fromRGB(255, 140, 140), 20, 1.8)
+	m.PrimaryPart = core
+	S.scale(m, 1.4)
+	return m
+end
+
 S.Builders = {
 	PaperFox = S.buildPaperFox,
 	Umbrella = S.buildUmbrella,
@@ -843,6 +947,11 @@ S.Builders = {
 	PaperWhale = S.buildPaperWhale,
 	MistKraken = S.buildMistKraken,
 	GoldenCarp = S.buildGoldenCarp,
+	EchoFirefly = S.buildEchoFirefly,
+	LilyFrog = S.buildLilyFrog,
+	MirrorKoi = S.buildMirrorKoi,
+	GlassHeron = S.buildGlassHeron,
+	TwinMoon = S.buildTwinMoon,
 }
 
 -- Движение всей модели поверх опоры (прыжки, танец, парение).
@@ -877,6 +986,11 @@ S.Pose = {
 	Crane = function(t) return CFrame.new(0, sin(t * 1.2) * 0.8, 0) * CFrame.Angles(0, 0, sin(t * 0.8) * 0.25) end,
 	MoonRabbit = function(t) return CFrame.new(0, abs(sin(t * 4)) * 1.4, 0) end,
 	GoldenCarp = function(t) return CFrame.new(0, sin(t * 1.3) * 0.6, 0) end,
+	EchoFirefly = function(t) return CFrame.new(sin(t * 1.1) * 0.8, sin(t * 2.2) * 0.5, math.cos(t * 0.9) * 0.8) end,
+	LilyFrog = function(t) return CFrame.new(0, abs(sin(t * 3)) * 1.6, 0) end,
+	MirrorKoi = function(t) return CFrame.new(0, sin(t * 1.2) * 0.5, 0) * CFrame.Angles(0, sin(t * 0.8) * 0.3, 0) end,
+	GlassHeron = function(t) return CFrame.new(0, 0, 0) * CFrame.Angles(sin(t * 0.6) * 0.04, 0, 0) end,
+	TwinMoon = function(t) return CFrame.new(0, sin(t * 0.8) * 0.8, 0) * CFrame.Angles(0, t * 0.6, 0) end,
 }
 
 return S

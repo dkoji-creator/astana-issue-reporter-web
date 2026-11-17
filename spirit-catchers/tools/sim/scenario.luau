@@ -282,6 +282,33 @@ do
 	frames(10)
 end
 
+stage("зеркальное озеро")
+do
+	for _ = 1, 25 do inv("Admin", "level") end
+	local t = inv("Teleport", "mirror")
+	if not (t and t.ok) then table.insert(SIM.errors, "телепорт на озеро: " .. tostring(t and t.msg)) end
+	frames(10)
+	for _, k in { "EchoFirefly", "LilyFrog", "MirrorKoi", "GlassHeron", "TwinMoon" } do
+		local root2 = plr.Character.HumanoidRootPart
+		inv("Admin", "spawn", k)
+		frames(3)
+	end
+	frames(60)
+	local n = 0
+	for _, a in workspace.Spirits:GetChildren() do
+		if Catalog and false then end
+		local kind = a:GetAttribute("Kind")
+		if kind == "GlassHeron" or kind == "EchoFirefly" then n += 1 end
+	end
+	if n == 0 then table.insert(SIM.errors, "духи озера не появились") end
+	local hidden = 0
+	for _, a in workspace.Spirits:GetChildren() do
+		if a.Position.X < -300 and not a:GetAttribute("Revealed") then hidden += 1 end
+	end
+	stage("на озере скрытых духов: " .. hidden)
+	inv("Redeem", "MIRROR")
+end
+
 stage("достижения")
 for _, id in { "first", "c50", "k10", "kall", "golden", "lvl25", "reborn", "legend" } do inv("ClaimAchievement", id) end
 frames(20)

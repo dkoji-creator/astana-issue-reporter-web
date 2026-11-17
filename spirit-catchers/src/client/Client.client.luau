@@ -1080,7 +1080,7 @@ do
 	local skinGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
 	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
 	local donateGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
-	K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 196), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
+	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
 	local shopPages = { { tabUp, upList, T.red }, { tabSkins, skinGrid, T.red }, { tabDonate, donateGrid, T.gold } }
 	local function showShopPage(pair)
 		for _, other in shopPages do
@@ -1104,7 +1104,7 @@ do
 		K.gradient(bg, K.lighten(item.color, 0.15), K.darken(item.color, 0.45))
 		K.icon(bg, item.icon, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(62, 62) })
 		K.text(f, item.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 78), MaxText = 16 })
-		K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 100), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+		K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 56), Position = UDim2.fromOffset(5, 100), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
 		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
 		b.Activated:Connect(function()
 			local owned = isPass and state.passes and state.passes[key]
@@ -2155,6 +2155,22 @@ do
 			end
 			v.shadow.Parent = visFolder
 		end
+		-- Зеркальное озеро: до проявления виден только перевёрнутый двойник под водой
+		if Catalog.district(a.Position) == "mirror" then
+			v.mirror = true
+			local m = Spirits.Builders[kind]()
+			pcall(Spirits.applyVariant, m, a:GetAttribute("Variant"))
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.Color = d.Color:Lerp(Color3.fromRGB(150, 190, 255), 0.35)
+					d.Transparency = math.max(d.Transparency, 0.25)
+				elseif d:IsA("Light") then
+					d.Brightness *= 0.5
+				end
+			end
+			m.Parent = visFolder
+			v.reflect = m
+		end
 		local sid = Audio.Spirit[kind]
 		if sid and sid ~= "" then
 			local snd = makeSound(sid, sfxGroup, true, a, 0.7)
@@ -2171,6 +2187,7 @@ do
 		visuals[a] = nil
 		if v.shadow then v.shadow:Destroy() end
 		if v.model then v.model:Destroy() end
+		if v.reflect then v.reflect:Destroy() end
 	end
 	spiritsFolder.ChildAdded:Connect(addAnchor)
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
@@ -2385,6 +2402,7 @@ do
 				end
 				local litGoal = workspace:GetAttribute("DayMod") == "tracksOnly" and 0.8 or 0.35 -- «Только следы»: тень еле видна
 				local goal = revealed and 0.95 or (lit and (litGoal + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
+				if v.mirror then goal = 1 end -- на озере вместо тени — отражение
 				v.shadow.Transparency += (goal - v.shadow.Transparency) * math.min(1, dt * 5)
 				local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
 				if pe and not revealed then
@@ -2408,6 +2426,19 @@ do
 				if pe then
 					pe:Emit(reducedFx and 6 or 20)
 					pe.Rate = 3
+				end
+			end
+			if v.reflect then
+				if revealed then
+					-- дух выныривает из отражения
+					ring(Vector3.new(cf.X, 0.6, cf.Z), 2, 14, Color3.fromRGB(170, 210, 255), 0.6, false)
+					v.reflect:Destroy()
+					v.reflect = nil
+				elseif dist < 170 then
+					local t = now + v.seed
+					local p = cf.Position
+					local rp = CFrame.new(p.X, 1 - p.Y, p.Z) * cf.Rotation * CFrame.Angles(0, 0, math.pi)
+					Spirits.animate(v.reflect, rp * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
 				end
 			end
 			if v.model and dist < 170 then

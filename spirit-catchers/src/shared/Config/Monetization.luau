@@ -7,7 +7,7 @@ M.PassOrder = { "vip", "coins2x", "bigjar", "lucky", "wideBeam" }
 M.Passes = {
 	vip = {
 		id = 0, product = 3732892769, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
-		name = "VIP-ловец", desc = "Золотая табличка VIP над головой, радужный фонарь и +25% монет",
+		name = "VIP-ловец", desc = "Радужный фонарь: звёзды, радужный шлейф, ореол и салют при поимке. Табличка VIP и +25% монет",
 	},
 	coins2x = {
 		id = 0, product = 3732892783, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),

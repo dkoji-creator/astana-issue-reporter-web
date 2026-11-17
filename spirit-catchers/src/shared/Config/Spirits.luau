@@ -15,6 +15,7 @@ S.Order = {
 	"PaperWhale",
 	"PaperDragon", "MistKraken",
 	"Kyubi",
+	"EchoFirefly", "LilyFrog", "MirrorKoi", "GlassHeron", "TwinMoon",
 }
 
 S.Kinds = {
@@ -218,6 +219,52 @@ S.Kinds = {
 		habit = "Плывёт по воздуху над каналом, сначала его выдаёт плеск.",
 		trail = { shape = "ripple", color = Color3.fromRGB(255, 200, 80), text = "Золотые круги на воде" },
 		yard = "Плавает в пруду",
+	},
+	-- Зеркальное озеро: духов видно только в отражении под водой, пока их не проявит фонарь
+	EchoFirefly = {
+		name = "Эхо-светлячок", short = "Эхо", rarity = "uncommon", world = "mirror",
+		move = "float", speed = 4, height = 2, follow = 0.8, animSpeed = 8, condition = "any",
+		spawn = { mirror = { w = 40, moon = 25 } }, habitat = { "water", "shore" },
+		hint = "Зеркальное озеро: видно только отражение",
+		habit = "В воде светится ярче, чем в воздухе. Мигает в такт кругам на воде.",
+		trail = { shape = "ripple", color = Color3.fromRGB(170, 230, 255), text = "Мерцающие круги" },
+		yard = "Мерцает над прудом",
+	},
+	LilyFrog = {
+		name = "Кувшинковая лягушка", short = "Лягушка", rarity = "rare", world = "mirror",
+		move = "walk", speed = 5, height = 0, follow = 0.6, animSpeed = 7, condition = "any",
+		spawn = { mirror = { w = 30, moon = 20 } }, habitat = { "shore", "water" },
+		hint = "Зеркальное озеро: у берега",
+		habit = "Носит кувшинку как шляпу. Прыгает по отражениям камней.",
+		trail = { shape = "ripple", color = Color3.fromRGB(120, 220, 140), text = "Брызги с лепестками" },
+		yard = "Сидит на кувшинке",
+	},
+	MirrorKoi = {
+		name = "Зеркальный карп", short = "Карп-зеркало", rarity = "epic", world = "mirror",
+		move = "float", speed = 5, height = 1.5, follow = 0.5, animSpeed = 4, condition = "any",
+		spawn = { mirror = { w = 16, moon = 16 } }, habitat = { "water" },
+		hint = "Зеркальное озеро: плавает над серединой",
+		habit = "Чешуя как зеркало: в луче видно сразу два карпа.",
+		trail = { shape = "ripple", color = Color3.fromRGB(230, 235, 255), text = "Серебряные круги" },
+		yard = "Плавает в воздухе над прудом",
+	},
+	GlassHeron = {
+		name = "Стеклянная цапля", short = "Цапля", rarity = "legendary", world = "mirror", main = true,
+		move = "walk", speed = 3, height = 0, follow = 0.4, animSpeed = 3, condition = "any",
+		spawn = { mirror = { w = 5, moon = 8 } }, habitat = { "water" },
+		hint = "Зеркальное озеро: стоит в воде, видна только в отражении",
+		habit = "Сквозь стеклянные крылья видна луна. Стоит неподвижно, пока не посветишь.",
+		trail = { shape = "feather", color = Color3.fromRGB(200, 230, 255), text = "Стеклянные перья" },
+		yard = "Стоит на одной ноге",
+	},
+	TwinMoon = {
+		name = "Двуликая луна", short = "Луна", rarity = "mythic", world = "mirror",
+		move = "float", speed = 3, height = 4, follow = 0.4, animSpeed = 2, condition = "moon", moonOnly = true,
+		spawn = { mirror = { w = 0, moon = 4 } }, habitat = { "water" },
+		hint = "Только в Красную луну: над Зеркальным озером",
+		habit = "Две половинки месяца: одна в небе, другая в воде.",
+		trail = { shape = "dot", color = Color3.fromRGB(255, 120, 120), text = "Красные лунные блики" },
+		yard = "Кружит над двором",
 	},
 }
 

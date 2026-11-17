@@ -411,7 +411,7 @@ M.PassOrder = { "vip", "coins2x", "bigjar", "lucky", "wideBeam" }
 M.Passes = {
 	vip = {
 		id = 0, product = 3732892769, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
-		name = "VIP-ловец", desc = "Золотая табличка VIP над головой, радужный фонарь и +25% монет",
+		name = "VIP-ловец", desc = "Радужный фонарь: звёзды, радужный шлейф, ореол и салют при поимке. Табличка VIP и +25% монет",
 	},
 	coins2x = {
 		id = 0, product = 3732892783, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),
@@ -574,20 +574,22 @@ P.Codes = {
 	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
 	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
 	UPDATE3 = { coins = 1000, dust = 30, text = "Обновление 3! +1000 монет и +30 пыли" },
+	MIRROR = { coins = 1500, dust = 50, text = "Обновление 4: Зеркальное озеро! +1500 монет и +50 пыли" },
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 3
+P.NewsVersion = 4
 P.News = {
-	title = "Обновление 3: Туманный порт",
+	title = "Обновление 4: Зеркальное озеро",
 	lines = {
-		"Районы открываются по уровню: Канал 3, Рынок 6, Роща 10, Сад 15, Порт 20",
-		"Чем дальше район, тем реже духи и выше удача района (до x3)",
-		"Новый район Туманный порт: пирсы, маяк, Бумажный кит и Туманный кракен",
-		"Духи живут в логовах: у фонарей, у воды, в кустах, у прилавков",
-		"Событие «Туманная ночь» чередуется с Красной луной",
-		"Ранги ловца, 14 достижений, сундук каждые 5 уровней, 2 новых таланта",
-		"Код UPDATE3 (Опции)",
+		"Второй мир: Зеркальное озеро (ур. 25). Духов видно только в отражении",
+		"Сезон 1: 30 наград, 4 фонаря, титулы. Испытания и модификатор дня",
+		"Спутники с уровнями: лис ускоряет, карп даёт удачу. Корми их пылью",
+		"Рейд «Тысяча фонарей»: весь сервер светит на Великого духа",
+		"Дворы игроков, лайки, обмен дубликатами и клубы ловцов",
+		"Редчайший улов недели, альбом редких поимок, фото-режим",
+		"Районы стали больше, телепорт только в меню, новые эффекты фонарей",
+		"Код MIRROR (Опции)",
 	},
 }
 
@@ -643,7 +645,7 @@ P.Achievements = {
 	c300 = { name = "Опытный ловец", desc = "Сдай 300 духов", type = "total", need = 300, coins = 900, dust = 20 },
 	c1000 = { name = "Тысяча духов", desc = "Сдай 1000 духов", type = "total", need = 1000, skin = "fog", coins = 2000 },
 	k10 = { name = "Коллекционер", desc = "Собери 10 видов", type = "distinct", need = 10, skin = "sea" },
-	kall = { name = "Весь квартал", desc = "Собери все виды духов", type = "distinct", need = 22, coins = 5000, dust = 120 },
+	kall = { name = "Все духи", desc = "Собери все виды духов", type = "distinct", need = 27, coins = 5000, dust = 120 },
 	golden = { name = "Золотая находка", desc = "Поймай Золотую разновидность", type = "variant", key = "golden", need = 1, coins = 400 },
 	rainbow = { name = "Радуга", desc = "Поймай Радужную разновидность", type = "variant", key = "rainbow", need = 1, coins = 1500 },
 	infinity = { name = "Бесконечность", desc = "Поймай Бесконечную разновидность", type = "variant", key = "infinity", need = 1, coins = 10000, dust = 200 },
@@ -678,6 +680,7 @@ S.Order = {
 	"PaperWhale",
 	"PaperDragon", "MistKraken",
 	"Kyubi",
+	"EchoFirefly", "LilyFrog", "MirrorKoi", "GlassHeron", "TwinMoon",
 }
 
 S.Kinds = {
@@ -882,6 +885,52 @@ S.Kinds = {
 		trail = { shape = "ripple", color = Color3.fromRGB(255, 200, 80), text = "Золотые круги на воде" },
 		yard = "Плавает в пруду",
 	},
+	-- Зеркальное озеро: духов видно только в отражении под водой, пока их не проявит фонарь
+	EchoFirefly = {
+		name = "Эхо-светлячок", short = "Эхо", rarity = "uncommon", world = "mirror",
+		move = "float", speed = 4, height = 2, follow = 0.8, animSpeed = 8, condition = "any",
+		spawn = { mirror = { w = 40, moon = 25 } }, habitat = { "water", "shore" },
+		hint = "Зеркальное озеро: видно только отражение",
+		habit = "В воде светится ярче, чем в воздухе. Мигает в такт кругам на воде.",
+		trail = { shape = "ripple", color = Color3.fromRGB(170, 230, 255), text = "Мерцающие круги" },
+		yard = "Мерцает над прудом",
+	},
+	LilyFrog = {
+		name = "Кувшинковая лягушка", short = "Лягушка", rarity = "rare", world = "mirror",
+		move = "walk", speed = 5, height = 0, follow = 0.6, animSpeed = 7, condition = "any",
+		spawn = { mirror = { w = 30, moon = 20 } }, habitat = { "shore", "water" },
+		hint = "Зеркальное озеро: у берега",
+		habit = "Носит кувшинку как шляпу. Прыгает по отражениям камней.",
+		trail = { shape = "ripple", color = Color3.fromRGB(120, 220, 140), text = "Брызги с лепестками" },
+		yard = "Сидит на кувшинке",
+	},
+	MirrorKoi = {
+		name = "Зеркальный карп", short = "Карп-зеркало", rarity = "epic", world = "mirror",
+		move = "float", speed = 5, height = 1.5, follow = 0.5, animSpeed = 4, condition = "any",
+		spawn = { mirror = { w = 16, moon = 16 } }, habitat = { "water" },
+		hint = "Зеркальное озеро: плавает над серединой",
+		habit = "Чешуя как зеркало: в луче видно сразу два карпа.",
+		trail = { shape = "ripple", color = Color3.fromRGB(230, 235, 255), text = "Серебряные круги" },
+		yard = "Плавает в воздухе над прудом",
+	},
+	GlassHeron = {
+		name = "Стеклянная цапля", short = "Цапля", rarity = "legendary", world = "mirror", main = true,
+		move = "walk", speed = 3, height = 0, follow = 0.4, animSpeed = 3, condition = "any",
+		spawn = { mirror = { w = 5, moon = 8 } }, habitat = { "water" },
+		hint = "Зеркальное озеро: стоит в воде, видна только в отражении",
+		habit = "Сквозь стеклянные крылья видна луна. Стоит неподвижно, пока не посветишь.",
+		trail = { shape = "feather", color = Color3.fromRGB(200, 230, 255), text = "Стеклянные перья" },
+		yard = "Стоит на одной ноге",
+	},
+	TwinMoon = {
+		name = "Двуликая луна", short = "Луна", rarity = "mythic", world = "mirror",
+		move = "float", speed = 3, height = 4, follow = 0.4, animSpeed = 2, condition = "moon", moonOnly = true,
+		spawn = { mirror = { w = 0, moon = 4 } }, habitat = { "water" },
+		hint = "Только в Красную луну: над Зеркальным озером",
+		habit = "Две половинки месяца: одна в небе, другая в воде.",
+		trail = { shape = "dot", color = Color3.fromRGB(255, 120, 120), text = "Красные лунные блики" },
+		yard = "Кружит над двором",
+	},
 }
 
 S.ConditionText = {
@@ -920,7 +969,7 @@ W.Worlds = {
 	},
 	mirror = {
 		name = "Зеркальное озеро",
-		active = false,
+		active = true,
 		blurb = "Духов сначала видно только в отражении. По кругам на воде угадываешь, где они вынырнут.",
 		search = "Смотри в отражения и на круги на воде",
 		star = "Стеклянная цапля, сквозь крылья которой видна луна",
@@ -941,7 +990,7 @@ W.Worlds = {
 	},
 }
 
-W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "yard" }
+W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "mirror", "yard" }
 
 -- Районы открываются по уровню, в каждом следующем — более редкие духи и выше удача района.
 -- habitats: «логова» района (теги), где духи прячутся и между которыми перебегают (точки строит Map.luau)
@@ -980,6 +1029,12 @@ W.Districts = {
 		tint = Color3.fromRGB(232, 255, 236), center = Vector3.new(0, 0.5, -110),
 		unlock = { level = 15 }, gate = "GardenBarrier", back = Vector3.new(0, 4, -64),
 	},
+	mirror = { -- второй мир: остров с озером за рощей; духов видно только в отражении
+		tp = Vector3.new(-262, 3, -32), world = "mirror", name = "Зеркальное озеро", max = 8, luck = 3.5,
+		zones = { { x = { -300, -224 }, z = { -12, 62 } } },
+		tint = Color3.fromRGB(220, 235, 255), center = Vector3.new(-262, 0.5, 25),
+		unlock = { level = 25 }, back = Vector3.new(0, 4, 26),
+	},
 	yard = { -- остров дворов игроков (за улицей фонарей); координаты в старом размере
 		tp = Vector3.new(0, 3, 266), world = "lantern", name = "Дворы ловцов", max = 0, luck = 1,
 		zones = {}, tint = Color3.fromRGB(240, 245, 230), center = Vector3.new(0, 0.5, 304),
@@ -1014,6 +1069,7 @@ end
 function W.districtAt(pos: Vector3): string
 	local x, z = pos.X / W.Scale, pos.Z / W.Scale
 	if z > 245 then return "yard" end
+	if x < -190 then return "mirror" end
 	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end
@@ -1859,6 +1915,110 @@ function S.buildShadow(color: Color3?): Part
 	return s
 end
 
+------------------------------------------------------------------ Зеркальное озеро
+function S.buildEchoFirefly(): Model
+	local m = Instance.new("Model")
+	m.Name = "EchoFirefly"
+	local glow = Color3.fromRGB(170, 230, 255)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(0.9, 0.9, 1.4), CFrame = CFrame.new(), Color = glow, Material = Enum.Material.Neon }))
+	mk(m, { Name = "Shell", Size = Vector3.new(1.3, 1.3, 1.3), CFrame = CFrame.new(), Color = Color3.fromRGB(220, 240, 255), Material = Enum.Material.Glass, Transparency = 0.6, Shape = Enum.PartType.Ball })
+	for i, x in { -1, 1 } do
+		local w = mk(m, { Name = "Wing", Size = Vector3.new(1.4, 0.06, 0.8), CFrame = CFrame.new(x * 0.9, 0.4, 0), Color = Color3.fromRGB(230, 245, 255), Transparency = 0.4 })
+		joint(w, Vector3.new(x * 0.3, 0.4, 0), "flapZ", i * math.pi, 1.6)
+	end
+	light(body, glow, 14, 1.6)
+	m.PrimaryPart = body
+	S.scale(m, 1.6)
+	return m
+end
+
+function S.buildLilyFrog(): Model
+	local m = Instance.new("Model")
+	m.Name = "LilyFrog"
+	local green = Color3.fromRGB(110, 200, 120)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(2.2, 1.5, 2.4), CFrame = CFrame.new(0, 0.8, 0), Color = green }))
+	ellipsoid(mk(m, { Name = "Belly", Size = Vector3.new(1.6, 1, 1.4), CFrame = CFrame.new(0, 0.55, -0.6), Color = Color3.fromRGB(230, 240, 200) }))
+	for _, x in { -0.6, 0.6 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.7, 0.7, 0.7), CFrame = CFrame.new(x, 1.6, -0.7), Color = Color3.fromRGB(250, 250, 240), Shape = Enum.PartType.Ball })
+		mk(m, { Name = "Pupil", Size = Vector3.new(0.35, 0.35, 0.2), CFrame = CFrame.new(x, 1.62, -1.02), Color = Color3.fromRGB(20, 20, 30), Shape = Enum.PartType.Ball })
+		local leg = ellipsoid(mk(m, { Name = "Leg", Size = Vector3.new(0.7, 0.5, 1.4), CFrame = CFrame.new(x * 1.6, 0.3, 0.4), Color = green }))
+		joint(leg, Vector3.new(x * 1.2, 0.4, 0), "swingX", x > 0 and 0 or math.pi, 0.8)
+	end
+	-- кувшинка-шляпа
+	mk(m, { Name = "LilyPad", Size = Vector3.new(0.15, 2.2, 2.2), CFrame = CFrame.new(0, 1.75, 0.1) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(70, 160, 90), Shape = Enum.PartType.Cylinder })
+	local flower = mk(m, { Name = "Flower", Size = Vector3.new(0.7, 0.6, 0.7), CFrame = CFrame.new(0.4, 2.1, 0.3), Color = Color3.fromRGB(255, 170, 210), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	light(flower, Color3.fromRGB(255, 190, 220), 10, 0.8)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
+function S.buildMirrorKoi(): Model
+	local m = Instance.new("Model")
+	m.Name = "MirrorKoi"
+	local silver = Color3.fromRGB(225, 230, 245)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.4, 1.6, 4), CFrame = CFrame.new(), Color = silver, Material = Enum.Material.Foil, Reflectance = 0.4 }))
+	mk(m, { Name = "Spot", Size = Vector3.new(1.42, 0.7, 1.2), CFrame = CFrame.new(0, 0.4, -0.4), Color = Color3.fromRGB(120, 170, 255), Material = Enum.Material.Neon, Transparency = 0.3 })
+	local tail = mk(m, { Name = "Tail", Size = Vector3.new(0.12, 1.6, 1.6), CFrame = CFrame.new(0, 0, 2.6) * CFrame.Angles(math.rad(45), 0, 0), Color = Color3.fromRGB(190, 210, 255), Transparency = 0.2 })
+	joint(tail, Vector3.new(0, 0, 1.9), "wagY", 0, 1.2)
+	for _, x in { -1, 1 } do
+		local fin = mk(m, { Name = "Fin", Size = Vector3.new(1, 0.08, 0.7), CFrame = CFrame.new(x * 0.9, -0.3, -0.4), Color = Color3.fromRGB(200, 220, 255), Transparency = 0.3 })
+		joint(fin, Vector3.new(x * 0.6, -0.3, -0.4), "flapZ", x, 0.7)
+		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.25, 0.25), CFrame = CFrame.new(x * 0.55, 0.3, -1.6), Color = Color3.fromRGB(30, 30, 50), Shape = Enum.PartType.Ball })
+	end
+	light(body, Color3.fromRGB(190, 210, 255), 12, 1)
+	m.PrimaryPart = body
+	S.scale(m, 1.4)
+	return m
+end
+
+function S.buildGlassHeron(): Model
+	local m = Instance.new("Model")
+	m.Name = "GlassHeron"
+	local glass = Color3.fromRGB(200, 230, 255)
+	local function g(name, size, cf, extra)
+		local props = { Name = name, Size = size, CFrame = cf, Color = glass, Material = Enum.Material.Glass, Transparency = 0.35, Reflectance = 0.3 }
+		for k, v in extra or {} do props[k] = v end
+		return mk(m, props)
+	end
+	for _, x in { -0.35, 0.35 } do
+		g("Leg", Vector3.new(0.15, 4, 0.15), CFrame.new(x, 2, 0), { Color = Color3.fromRGB(150, 180, 220), Transparency = 0.1 })
+	end
+	local body = ellipsoid(g("Body", Vector3.new(1.6, 1.6, 3.2), CFrame.new(0, 4.6, 0.2)))
+	g("Neck", Vector3.new(0.3, 2.6, 0.3), CFrame.new(0, 6.2, -1) * CFrame.Angles(math.rad(-20), 0, 0))
+	g("Head", Vector3.new(0.5, 0.5, 0.9), CFrame.new(0, 7.5, -1.5))
+	mk(m, { Name = "Beak", Size = Vector3.new(0.14, 0.14, 1.4), CFrame = CFrame.new(0, 7.45, -2.5), Color = Color3.fromRGB(255, 220, 140), Material = Enum.Material.Neon })
+	for i, x in { -1, 1 } do
+		local w = g("Wing", Vector3.new(3.4, 0.08, 2.2), CFrame.new(x * 2, 4.8, 0.3), { Transparency = 0.5 })
+		joint(w, Vector3.new(x * 0.5, 4.8, 0.3), "flapZ", i * math.pi, 0.5)
+	end
+	-- луна внутри груди: видна сквозь стекло
+	local moonCore = mk(m, { Name = "MoonCore", Size = Vector3.new(0.8, 0.8, 0.8), CFrame = CFrame.new(0, 4.7, 0.1), Color = Color3.fromRGB(255, 250, 220), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	light(moonCore, Color3.fromRGB(220, 235, 255), 18, 1.6)
+	m.PrimaryPart = body
+	S.scale(m, 1.2)
+	return m
+end
+
+function S.buildTwinMoon(): Model
+	local m = Instance.new("Model")
+	m.Name = "TwinMoon"
+	local core = mk(m, { Name = "Core", Size = Vector3.new(0.6, 0.6, 0.6), CFrame = CFrame.new(), Color = Color3.fromRGB(255, 120, 120), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	-- два полумесяца из дуг
+	for side = 0, 1 do
+		for i = 0, 6 do
+			local a = math.rad(-70 + i * 23.3) + side * math.pi
+			local col = side == 0 and Color3.fromRGB(255, 235, 200) or Color3.fromRGB(255, 110, 110)
+			local seg = mk(m, { Name = "Arc", Size = Vector3.new(0.7, 0.9 - math.abs(i - 3) * 0.12, 0.5), CFrame = CFrame.new(math.cos(a) * 2.2, math.sin(a) * 2.2, 0) * CFrame.Angles(0, 0, a), Color = col, Material = Enum.Material.Neon })
+			joint(seg, Vector3.new(), "wagY", side * math.pi, 0.4)
+		end
+	end
+	light(core, Color3.fromRGB(255, 140, 140), 20, 1.8)
+	m.PrimaryPart = core
+	S.scale(m, 1.4)
+	return m
+end
+
 S.Builders = {
 	PaperFox = S.buildPaperFox,
 	Umbrella = S.buildUmbrella,
@@ -1882,6 +2042,11 @@ S.Builders = {
 	PaperWhale = S.buildPaperWhale,
 	MistKraken = S.buildMistKraken,
 	GoldenCarp = S.buildGoldenCarp,
+	EchoFirefly = S.buildEchoFirefly,
+	LilyFrog = S.buildLilyFrog,
+	MirrorKoi = S.buildMirrorKoi,
+	GlassHeron = S.buildGlassHeron,
+	TwinMoon = S.buildTwinMoon,
 }
 
 -- Движение всей модели поверх опоры (прыжки, танец, парение).
@@ -1916,6 +2081,11 @@ S.Pose = {
 	Crane = function(t) return CFrame.new(0, sin(t * 1.2) * 0.8, 0) * CFrame.Angles(0, 0, sin(t * 0.8) * 0.25) end,
 	MoonRabbit = function(t) return CFrame.new(0, abs(sin(t * 4)) * 1.4, 0) end,
 	GoldenCarp = function(t) return CFrame.new(0, sin(t * 1.3) * 0.6, 0) end,
+	EchoFirefly = function(t) return CFrame.new(sin(t * 1.1) * 0.8, sin(t * 2.2) * 0.5, math.cos(t * 0.9) * 0.8) end,
+	LilyFrog = function(t) return CFrame.new(0, abs(sin(t * 3)) * 1.6, 0) end,
+	MirrorKoi = function(t) return CFrame.new(0, sin(t * 1.2) * 0.5, 0) * CFrame.Angles(0, sin(t * 0.8) * 0.3, 0) end,
+	GlassHeron = function(t) return CFrame.new(0, 0, 0) * CFrame.Angles(sin(t * 0.6) * 0.04, 0, 0) end,
+	TwinMoon = function(t) return CFrame.new(0, sin(t * 0.8) * 0.8, 0) * CFrame.Angles(0, t * 0.6, 0) end,
 }
 
 return S
@@ -4701,6 +4871,75 @@ function Map.build()
 		stoneLantern(p, Color3.fromRGB(150, 255, 200))
 	end
 
+	---------------------------------------------------------------- ЗЕРКАЛЬНОЕ ОЗЕРО (второй мир, остров за рощей; только телепорт)
+	do
+		local cx, cz = -262, 25
+		local MOONLIGHT = Color3.fromRGB(190, 215, 255)
+		-- берег кольцом (под озером пусто, чтобы были видны отражения)
+		local shore = Color3.fromRGB(58, 84, 92)
+		block("MirrorShore", Vector3.new(130, 1, 20), CFrame.new(cx, 0, cz - 55), shore, Enum.Material.Grass)
+		block("MirrorShore", Vector3.new(130, 1, 20), CFrame.new(cx, 0, cz + 55), shore, Enum.Material.Grass)
+		block("MirrorShore", Vector3.new(20, 1, 90), CFrame.new(cx - 55, 0, cz), shore, Enum.Material.Grass)
+		block("MirrorShore", Vector3.new(20, 1, 90), CFrame.new(cx + 55, 0, cz), shore, Enum.Material.Grass)
+		-- зеркальная гладь: по ней можно ходить, под ней видны отражения духов
+		block("MirrorLake", Vector3.new(90, 0.3, 90), CFrame.new(cx, 0.35, cz), Color3.fromRGB(120, 160, 210), Enum.Material.Glass,
+			{ Transparency = 0.55, Reflectance = 0.25, CastShadow = false })
+		block("MirrorBed", Vector3.new(90, 1, 90), CFrame.new(cx, -10.5, cz), Color3.fromRGB(10, 16, 34), Enum.Material.Slate)
+		for _, w in { { Vector3.new(90, 10.5, 0.6), Vector3.new(cx, -5, cz - 45) }, { Vector3.new(90, 10.5, 0.6), Vector3.new(cx, -5, cz + 45) },
+			{ Vector3.new(0.6, 10.5, 90), Vector3.new(cx - 45, -5, cz) }, { Vector3.new(0.6, 10.5, 90), Vector3.new(cx + 45, -5, cz) } } do
+			block("MirrorWall", w[1], CFrame.new(w[2]), Color3.fromRGB(16, 24, 46), Enum.Material.Slate)
+		end
+		-- звёзды «в воде»
+		local rngM = Random.new(31)
+		for _ = 1, 40 do
+			deco("WaterStar", Vector3.new(0.4, 0.4, 0.4), CFrame.new(cx + rngM:NextNumber(-42, 42), rngM:NextNumber(-9, -3), cz + rngM:NextNumber(-42, 42)),
+				Color3.fromRGB(220, 230, 255), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+		end
+		-- отражение луны в центре озера и тории в воде
+		local moonRef = deco("MoonReflection", Vector3.new(0.2, 12, 12), CFrame.new(cx, -8, cz) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(240, 240, 220), Enum.Material.Neon,
+			{ Shape = Enum.PartType.Cylinder, Transparency = 0.2 })
+		light(moonRef, MOONLIGHT, 40, 0.8)
+		torii(cz + 30, cx, 12, 11, Color3.fromRGB(230, 70, 60))
+		-- границы острова
+		wall(Vector3.new(1, 80, 130), Vector3.new(cx - 65.5, 40, cz))
+		wall(Vector3.new(1, 80, 130), Vector3.new(cx + 65.5, 40, cz))
+		wall(Vector3.new(130, 80, 1), Vector3.new(cx, 40, cz - 65.5))
+		wall(Vector3.new(130, 80, 1), Vector3.new(cx, 40, cz + 65.5))
+		-- ивы, каменные фонари и камыши по берегу
+		for i = 0, 11 do
+			local a = i / 12 * math.pi * 2
+			local p = Vector3.new(cx + math.cos(a) * 54, 0.5, cz + math.sin(a) * 54)
+			if i % 2 == 0 then
+				deco("WillowTrunk", Vector3.new(1.2, 8, 1.2), CFrame.new(p + Vector3.new(0, 4, 0)), Color3.fromRGB(60, 50, 50), Enum.Material.Wood, { CanCollide = true })
+				deco("Willow", Vector3.new(8, 7, 8), CFrame.new(p + Vector3.new(0, 8.5, 0)), Color3.fromRGB(80, 130, 150), Enum.Material.Grass, { Shape = Enum.PartType.Ball, Transparency = 0.1 })
+			else
+				stoneLantern(p, MOONLIGHT)
+			end
+			hab("mirror", "shore", Vector3.new(cx + math.cos(a) * 47, 0.5, cz + math.sin(a) * 47))
+		end
+		for x = -36, 36, 12 do
+			for z = -36, 36, 12 do
+				hab("mirror", "water", Vector3.new(cx + x, 0.5, cz + z))
+			end
+		end
+		-- кувшинки на поверхности
+		for i = 1, 14 do
+			deco("LilyPad", Vector3.new(0.1, 2.2, 2.2), CFrame.new(cx + rngM:NextNumber(-40, 40), 0.55, cz + rngM:NextNumber(-40, 40)) * CFrame.Angles(0, 0, math.rad(90)),
+				Color3.fromRGB(70, 150, 100), nil, { Shape = Enum.PartType.Cylinder })
+			if i % 3 == 0 then
+				deco("LilyFlower", Vector3.new(0.8, 0.6, 0.8), CFrame.new(cx + rngM:NextNumber(-40, 40), 0.85, cz + rngM:NextNumber(-40, 40)), Color3.fromRGB(255, 180, 220), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+			end
+		end
+		-- лёгкий туман над водой
+		local mist = deco("LakeMist", Vector3.new(80, 1, 80), CFrame.new(cx, 2, cz), Color3.new(), nil, { Transparency = 1 })
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color = ColorSequence.new(Color3.fromRGB(200, 215, 240))
+		pe.Rate, pe.Lifetime, pe.Speed = 4, NumberRange.new(6, 9), NumberRange.new(0.3, 0.8)
+		pe.Size = NumberSequence.new(5, 9)
+		pe.Transparency = NumberSequence.new(0.8, 1)
+		pe.Parent = mist
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = scf(CFrame.new(0, 0.6, 24))
 	local spawn = Instance.new("SpawnLocation")
@@ -6394,7 +6633,7 @@ do
 	local skinGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
 	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
 	local donateGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
-	K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 196), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
+	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
 	local shopPages = { { tabUp, upList, T.red }, { tabSkins, skinGrid, T.red }, { tabDonate, donateGrid, T.gold } }
 	local function showShopPage(pair)
 		for _, other in shopPages do
@@ -6418,7 +6657,7 @@ do
 		K.gradient(bg, K.lighten(item.color, 0.15), K.darken(item.color, 0.45))
 		K.icon(bg, item.icon, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(62, 62) })
 		K.text(f, item.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 78), MaxText = 16 })
-		K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 44), Position = UDim2.fromOffset(5, 100), MaxText = 12, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+		K.text(f, item.desc, { Size = UDim2.new(1, -10, 0, 56), Position = UDim2.fromOffset(5, 100), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
 		local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
 		b.Activated:Connect(function()
 			local owned = isPass and state.passes and state.passes[key]
@@ -7469,6 +7708,22 @@ do
 			end
 			v.shadow.Parent = visFolder
 		end
+		-- Зеркальное озеро: до проявления виден только перевёрнутый двойник под водой
+		if Catalog.district(a.Position) == "mirror" then
+			v.mirror = true
+			local m = Spirits.Builders[kind]()
+			pcall(Spirits.applyVariant, m, a:GetAttribute("Variant"))
+			for _, d in m:GetDescendants() do
+				if d:IsA("BasePart") then
+					d.Color = d.Color:Lerp(Color3.fromRGB(150, 190, 255), 0.35)
+					d.Transparency = math.max(d.Transparency, 0.25)
+				elseif d:IsA("Light") then
+					d.Brightness *= 0.5
+				end
+			end
+			m.Parent = visFolder
+			v.reflect = m
+		end
 		local sid = Audio.Spirit[kind]
 		if sid and sid ~= "" then
 			local snd = makeSound(sid, sfxGroup, true, a, 0.7)
@@ -7485,6 +7740,7 @@ do
 		visuals[a] = nil
 		if v.shadow then v.shadow:Destroy() end
 		if v.model then v.model:Destroy() end
+		if v.reflect then v.reflect:Destroy() end
 	end
 	spiritsFolder.ChildAdded:Connect(addAnchor)
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
@@ -7699,6 +7955,7 @@ do
 				end
 				local litGoal = workspace:GetAttribute("DayMod") == "tracksOnly" and 0.8 or 0.35 -- «Только следы»: тень еле видна
 				local goal = revealed and 0.95 or (lit and (litGoal + math.sin(now * 3 + v.seed) * 0.1) or 0.94)
+				if v.mirror then goal = 1 end -- на озере вместо тени — отражение
 				v.shadow.Transparency += (goal - v.shadow.Transparency) * math.min(1, dt * 5)
 				local pe = v.shadow:FindFirstChildOfClass("ParticleEmitter")
 				if pe and not revealed then
@@ -7722,6 +7979,19 @@ do
 				if pe then
 					pe:Emit(reducedFx and 6 or 20)
 					pe.Rate = 3
+				end
+			end
+			if v.reflect then
+				if revealed then
+					-- дух выныривает из отражения
+					ring(Vector3.new(cf.X, 0.6, cf.Z), 2, 14, Color3.fromRGB(170, 210, 255), 0.6, false)
+					v.reflect:Destroy()
+					v.reflect = nil
+				elseif dist < 170 then
+					local t = now + v.seed
+					local p = cf.Position
+					local rp = CFrame.new(p.X, 1 - p.Y, p.Z) * cf.Rotation * CFrame.Angles(0, 0, math.pi)
+					Spirits.animate(v.reflect, rp * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
 				end
 			end
 			if v.model and dist < 170 then
