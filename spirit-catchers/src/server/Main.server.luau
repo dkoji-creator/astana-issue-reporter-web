@@ -47,6 +47,10 @@ local CaughtEv = remote("Caught")
 local HitEv = remote("Hit")
 local NoticeEv = remote("Notice")
 local SettingsEv = remote("SetSettings")
+local DailyFn = remote("ClaimDaily", "RemoteFunction")
+local SkinFn = remote("Skin", "RemoteFunction")
+local MilestoneFn = remote("ClaimMilestone", "RemoteFunction")
+local RewardEv = remote("Reward") -- всплывающие награды: { coins, dust, xp, levelUp }
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
@@ -74,7 +78,8 @@ type Profile = {
 	version: number, saved: { [string]: number }, firstSaved: { [string]: boolean }, equipped: string?,
 	coins: number, dust: number, levels: { [string]: number }, tutorialDone: boolean,
 	orders: { any }, settings: { music: number, sfx: number, reduced: boolean, diag: boolean },
-	loadFailed: boolean?,
+	xp: number, level: number, daily: { last: number, streak: number }, skins: { [string]: boolean }, skin: string,
+	milestones: { [string]: boolean }, loadFailed: boolean?,
 }
 local data: { [Player]: Profile } = {}
 local jars: { [Player]: { string } } = {}
@@ -142,9 +147,10 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 4, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0,
+		version = 5, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0,
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
+		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
 	}
 	if typeof(raw) == "table" then
 		-- v2+: коллекция
@@ -170,7 +176,7 @@ local function migrate(raw): Profile
 			d.levels.jar = clampLvl(raw.jarLvl)
 			d.tutorialDone = raw.tutorialDone == true
 			d.coins = 20 * distinct(d)
-		elseif raw.version == 4 then
+		elseif raw.version == 4 or raw.version == 5 then
 			d.coins = math.floor(num(raw.coins, 0, 1e9, 0))
 			d.dust = math.floor(num(raw.dust, 0, 1e9, 0))
 			if typeof(raw.levels) == "table" then
@@ -183,6 +189,25 @@ local function migrate(raw): Profile
 				d.settings.sfx = num(raw.settings.sfx, 0, 1, 0.8)
 				d.settings.reduced = raw.settings.reduced == true
 				d.settings.diag = raw.settings.diag == true
+			end
+			if raw.version == 5 then
+				d.xp = math.floor(num(raw.xp, 0, 1e9, 0))
+				d.level = math.floor(num(raw.level, 1, 999, 1))
+				if typeof(raw.daily) == "table" then
+					d.daily.last = math.floor(num(raw.daily.last, 0, 1e7, 0))
+					d.daily.streak = math.floor(num(raw.daily.streak, 0, 7, 0))
+				end
+				if typeof(raw.skins) == "table" then
+					for k, v in raw.skins do
+						if Catalog.Progress.Skins[k] and v == true then d.skins[k] = true end
+					end
+				end
+				if typeof(raw.skin) == "string" and d.skins[raw.skin] then d.skin = raw.skin end
+				if typeof(raw.milestones) == "table" then
+					for k, v in raw.milestones do
+						if typeof(k) == "string" and v == true then d.milestones[k] = true end
+					end
+				end
 			end
 		elseif typeof(raw.saved) == "table" and next(d.saved) then
 			d.coins = 20 * distinct(d) -- v2
@@ -202,6 +227,9 @@ local function persist(plr)
 	return ok
 end
 
+local function today() return math.floor(os.time() / 86400) end
+local function dailyReady(d: Profile) return d.daily.last < today() end
+
 local function pushState(plr)
 	local d = data[plr]
 	if not d then return end
@@ -213,9 +241,14 @@ local function pushState(plr)
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
 		levels = d.levels, tutorialDone = d.tutorialDone, orders = d.orders, settings = d.settings,
 		gardenOpen = gardenOpen(d), distinct = distinct(d), persistent = store ~= nil and not d.loadFailed,
+		xp = d.xp, level = d.level, xpNext = Catalog.Progress.xpToNext(d.level), daily = d.daily, dailyReady = dailyReady(d),
+		skins = d.skins, skin = d.skin, milestones = d.milestones,
 	})
 	local ls = plr:FindFirstChild("leaderstats")
-	if ls then ls.Spirits.Value = distinct(d) end
+	if ls then
+		ls["Духи"].Value = distinct(d)
+		ls["Уровень"].Value = d.level
+	end
 end
 
 local function rootOf(plr)
@@ -231,7 +264,8 @@ local function giveLantern(plr, char)
 	if not root then return end
 	local p = Instance.new("Part")
 	p.Name = "Lantern"
-	p.Size, p.Material, p.Color = Vector3.new(0.6, 0.8, 0.6), Enum.Material.Neon, Color3.fromRGB(255, 225, 160)
+	local skin = Catalog.Progress.Skins[data[plr] and data[plr].skin or "classic"] or Catalog.Progress.Skins.classic
+	p.Size, p.Material, p.Color = Vector3.new(0.6, 0.8, 0.6), Enum.Material.Neon, skin.lamp
 	p.CanCollide, p.CanQuery, p.CanTouch, p.Massless = false, false, false, true
 	p.CFrame = root.CFrame * CFrame.new(0.9, 0.3, -0.9)
 	local w = Instance.new("Weld")
@@ -240,7 +274,7 @@ local function giveLantern(plr, char)
 	local sl = Instance.new("SpotLight")
 	sl.Name, sl.Face, sl.Angle, sl.Brightness = "Beam", Enum.NormalId.Front, 40, 3
 	sl.Range = data[plr] and range(data[plr]) or 30
-	sl.Color = Color3.fromRGB(255, 240, 200)
+	sl.Color = skin.beam
 	sl.Parent = p
 	local pl = Instance.new("PointLight")
 	pl.Range, pl.Brightness, pl.Color = 8, 0.8, Color3.fromRGB(255, 220, 160)
@@ -412,6 +446,18 @@ RunService.Heartbeat:Connect(function(dt)
 			for _, plr in g do
 				table.insert(jars[plr], s.kind)
 				CaughtEv:FireClient(plr, s.kind, s.pos, #g)
+				local d = data[plr]
+				local xp = Catalog.Progress.XP[info.rarity] or 4
+				d.xp += xp
+				local levelUp = nil
+				while d.xp >= Catalog.Progress.xpToNext(d.level) do
+					d.xp -= Catalog.Progress.xpToNext(d.level)
+					d.level += 1
+					local bonus = Catalog.Progress.levelReward(d.level)
+					d.coins += bonus
+					levelUp = { level = d.level, coins = bonus }
+				end
+				RewardEv:FireClient(plr, { xp = xp, levelUp = levelUp })
 				pushState(plr)
 			end
 			removeSpirit(s)
@@ -708,7 +754,6 @@ UpgradeFn.OnServerInvoke = function(plr, which)
 	local d = data[plr]
 	local root = rootOf(plr)
 	if not (d and root) then return { ok = false, msg = "Нет персонажа" } end
-	if (root.Position - map.altarPos).Magnitude > 30 then return { ok = false, msg = "Улучшения покупаются у алтаря" } end
 	local up = typeof(which) == "string" and Catalog.Upgrades[which]
 	if not up then return { ok = false } end
 	local lvl = d.levels[which]
@@ -723,6 +768,76 @@ UpgradeFn.OnServerInvoke = function(plr, which)
 		lantern.Beam.Range = range(d)
 		lantern.Beam.Angle = 36 + d.levels.range * 4
 	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+
+local function grant(d: Profile, r)
+	d.coins += r.coins or 0
+	d.dust += r.dust or 0
+	if r.skin then d.skins[r.skin] = true end
+end
+
+DailyFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if not dailyReady(d) then return { ok = false, msg = "Подарок уже получен, приходи завтра" } end
+	local streak = (d.daily.last == today() - 1) and (d.daily.streak % #Catalog.Progress.Daily) + 1 or 1
+	d.daily = { last = today(), streak = streak }
+	local r = Catalog.Progress.Daily[streak]
+	grant(d, r)
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = r.coins, dust = r.dust, skin = r.skin })
+	return { ok = true, day = streak }
+end
+
+MilestoneFn.OnServerInvoke = function(plr, i)
+	local d = data[plr]
+	local m = typeof(i) == "number" and Catalog.Progress.Milestones[i]
+	if not (d and m) then return { ok = false } end
+	local key = tostring(i)
+	if d.milestones[key] then return { ok = false, msg = "Уже получено" } end
+	if distinct(d) < m.need then return { ok = false, msg = ("Нужно видов: %d"):format(m.need) } end
+	d.milestones[key] = true
+	grant(d, m)
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = m.coins, dust = m.dust, skin = m.skin })
+	return { ok = true }
+end
+
+local function applySkin(plr)
+	local d = data[plr]
+	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
+	local skin = d and Catalog.Progress.Skins[d.skin]
+	if lantern and skin then
+		lantern.Color = skin.lamp
+		if lantern:FindFirstChild("Beam") then lantern.Beam.Color = skin.beam end
+	end
+end
+
+SkinFn.OnServerInvoke = function(plr, action, key)
+	local d = data[plr]
+	local skin = typeof(key) == "string" and Catalog.Progress.Skins[key]
+	if not (d and skin) then return { ok = false } end
+	if action == "buy" then
+		if d.skins[key] then return { ok = false, msg = "Уже куплено" } end
+		if not skin.price then return { ok = false, msg = "Получи: " .. (skin.source or "") } end
+		local du = skin.dust or 0
+		if d.coins < skin.price or d.dust < du then return { ok = false, msg = "Не хватает монет или пыли" } end
+		d.coins -= skin.price
+		d.dust -= du
+		d.skins[key] = true
+		d.skin = key
+	elseif action == "equip" then
+		if not d.skins[key] then return { ok = false, msg = "Облик не открыт" } end
+		d.skin = key
+	else
+		return { ok = false }
+	end
+	applySkin(plr)
 	persist(plr)
 	pushState(plr)
 	return { ok = true }
@@ -787,8 +902,11 @@ Players.PlayerAdded:Connect(function(plr)
 	local ls = Instance.new("Folder")
 	ls.Name = "leaderstats"
 	local v = Instance.new("IntValue")
-	v.Name = "Spirits"
+	v.Name = "Духи"
 	v.Parent = ls
+	local lv = Instance.new("IntValue")
+	lv.Name = "Уровень"
+	lv.Parent = ls
 	ls.Parent = plr
 
 	local raw, failed = nil, false

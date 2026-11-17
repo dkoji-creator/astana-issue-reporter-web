@@ -1,5 +1,7 @@
--- Spirit Catchers, клиент: визуал духов и следов, выслеживание цели из Атласа, ловля фонарём,
--- чистый мобильный интерфейс (банка, действие, таймер события), Атлас, настройки, звук, эффекты.
+-- Spirit Catchers, клиент.
+-- Интерфейс в стиле популярных симуляторов: колонка кнопок слева, валюты и уровень справа, событие сверху,
+-- банка снизу. Атлас с 3D-превью и наградами за коллекцию, задания, магазин, ежедневный подарок, настройки.
+-- Игровая часть: визуал духов и следов, выслеживание, ловля фонарём, эффекты, обучение.
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local TweenService = game:GetService("TweenService")
@@ -7,11 +9,16 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 local Lighting = game:GetService("Lighting")
 local SoundService = game:GetService("SoundService")
+local ContentProvider = game:GetService("ContentProvider")
 
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local Catalog = require(Shared:WaitForChild("Catalog"))
 local Spirits = require(Shared:WaitForChild("Spirits"))
 local Audio = require(Shared:WaitForChild("Config"):WaitForChild("Audio"))
+local K = require(script.Parent:WaitForChild("UIKit"))
+local T = K.T
+local Prog = Catalog.Progress
+
 local plr = Players.LocalPlayer
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local spiritsFolder = workspace:WaitForChild("Spirits")
@@ -20,11 +27,8 @@ local Altar = World:WaitForChild("Altar")
 local Barrier = World:WaitForChild("GardenBarrier")
 local ALTAR_POS = Altar.Position
 local IS_TEST = RunService:IsStudio() or game.PlaceId == 99980756426085
-
 local GOLD = Color3.fromRGB(255, 200, 80)
 local COLD = Color3.fromRGB(120, 210, 255)
-local PANEL = Color3.fromRGB(18, 20, 38)
-local ACCENT = Color3.fromRGB(235, 120, 70)
 
 local function root()
 	return plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
@@ -35,257 +39,504 @@ local state = {
 	jar = {}, cap = 3, saved = {}, coins = 0, dust = 0, levels = { jar = 1, range = 1, power = 1 },
 	tutorialDone = true, gardenOpen = false, distinct = 0, orders = {},
 	settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
+	xp = 0, level = 1, xpNext = 35, daily = { last = 0, streak = 0 }, dailyReady = false,
+	skins = { classic = true }, skin = "classic", milestones = {},
 }
-local trackKind: string? = nil -- цель охоты из Атласа
+local trackKind: string? = nil
 
 ------------------------------------------------------------------ звук
-local musicGroup = Instance.new("SoundGroup")
-musicGroup.Name = "Music"
-musicGroup.Parent = SoundService
-local sfxGroup = Instance.new("SoundGroup")
-sfxGroup.Name = "Sfx"
-sfxGroup.Parent = SoundService
-local function makeSound(id, group, looped, parent)
+local musicGroup = K.make("SoundGroup", { Name = "Music", Volume = 0.6 }, SoundService)
+local sfxGroup = K.make("SoundGroup", { Name = "Sfx", Volume = 0.8 }, SoundService)
+local allSounds = {}
+local function makeSound(id, group, looped, parent, volume)
 	if not id or id == "" then return nil end
-	local s = Instance.new("Sound")
-	s.SoundId = id
-	s.Looped = looped == true
-	s.SoundGroup = group
-	s.Parent = parent or SoundService
+	local s = K.make("Sound", { SoundId = id, Looped = looped == true, SoundGroup = group, Volume = volume or 0.7 }, parent or SoundService)
+	table.insert(allSounds, s)
 	return s
 end
-local music = makeSound(Audio.Music.lantern, musicGroup, true)
-local moonLayer = makeSound(Audio.Music.moonLayer, musicGroup, true)
-if music then music.Volume = 0.6 music:Play() end
-if moonLayer then moonLayer.Volume = 0 moonLayer:Play() end
+local music = makeSound(Audio.Music.lantern, musicGroup, true, nil, 0.55)
+local moonLayer = makeSound(Audio.Music.moonLayer, musicGroup, true, nil, 0)
 local sfx = {}
 for k, id in Audio.Sfx do
-	sfx[k] = makeSound(id, sfxGroup, false)
+	sfx[k] = makeSound(id, sfxGroup, false, nil, 0.8)
 end
+local soundStatus = "загрузка..."
+task.spawn(function()
+	local failed = 0
+	pcall(function()
+		ContentProvider:PreloadAsync(allSounds, function(_, status)
+			if status ~= Enum.AssetFetchStatus.Success then failed += 1 end
+		end)
+	end)
+	local loaded = 0
+	for _, s in allSounds do
+		if s.IsLoaded then loaded += 1 end
+	end
+	soundStatus = ("загружено %d из %d"):format(loaded, #allSounds) .. (failed > 0 and (", ошибок: " .. failed) or "")
+	if music then music:Play() end
+	if moonLayer then moonLayer:Play() end
+end)
 local function play(name)
 	local s = sfx[name]
 	if s then s:Play() end
 end
+K.onClick(function() play("click") end)
 local function applyAudio()
 	musicGroup.Volume = state.settings.music
 	sfxGroup.Volume = state.settings.sfx
 end
 
------------------------------------------------------------------- UI-кит
-local gui = Instance.new("ScreenGui")
-gui.Name, gui.ResetOnSpawn, gui.IgnoreGuiInset = "SpiritHUD", false, true
-gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-gui.Parent = plr:WaitForChild("PlayerGui")
+------------------------------------------------------------------ корень интерфейса
+local gui = K.make("ScreenGui", { Name = "SpiritHUD", ResetOnSpawn = false, IgnoreGuiInset = true, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, plr:WaitForChild("PlayerGui"))
+local uiScale = K.make("UIScale", {}, gui)
+local function rescale()
+	local cam = workspace.CurrentCamera
+	if cam then uiScale.Scale = math.clamp(cam.ViewportSize.Y / 420, 0.72, 1.3) end
+end
+rescale()
+workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(rescale)
+local hud = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, gui)
 
-local function corner(o, r)
-	local c = Instance.new("UICorner")
-	c.CornerRadius = r or UDim.new(0, 10)
-	c.Parent = o
-end
-local function strokeOf(o, color, th)
-	local s = Instance.new("UIStroke")
-	s.Color, s.Thickness, s.Transparency = color or Color3.fromRGB(255, 255, 255), th or 1.5, 0.6
-	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	s.Parent = o
-	return s
-end
-local function maxText(o, n)
-	local c = Instance.new("UITextSizeConstraint")
-	c.MaxTextSize = n
-	c.Parent = o
-end
-local function label(text, pos, size, parent, maxSize, bg)
-	local l = Instance.new("TextLabel")
-	l.BackgroundTransparency = bg == false and 1 or 0.25
-	l.TextColor3, l.Font, l.TextScaled = Color3.new(1, 1, 1), Enum.Font.GothamBold, true
-	l.BackgroundColor3 = PANEL
-	l.Text, l.Position, l.Size = text, pos, size
-	corner(l)
-	maxText(l, maxSize or 20)
-	l.Parent = parent or gui
-	return l
-end
-local function button(text, pos, size, color, parent, maxSize)
-	local b = Instance.new("TextButton")
-	b.Text, b.Position, b.Size = text, pos, size
-	b.TextScaled, b.Font, b.TextColor3 = true, Enum.Font.GothamBold, Color3.new(1, 1, 1)
-	b.BackgroundColor3 = color
-	b.AutoButtonColor = true
-	corner(b)
-	maxText(b, maxSize or 20)
-	b.Parent = parent or gui
-	b.Activated:Connect(function() play("click") end)
-	return b
-end
+------------------------------------------------------------------ HUD: левая колонка
+local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 6), Size = UDim2.fromOffset(150, 230), BackgroundTransparency = 1 }, hud)
+K.make("UIGridLayout", { CellSize = UDim2.fromOffset(68, 68), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
+local btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
+local btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
+local btnShop = K.iconButton(leftCol, "shop", "Магазин", T.red)
+local btnGift = K.iconButton(leftCol, "gift", "Подарок", T.green)
+local btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
+for i, b in { btnAtlas, btnQuests, btnShop, btnGift, btnSettings } do b.LayoutOrder = i end
 
-local toastL
-local function showToast(text, secs)
-	toastL.Text, toastL.Visible = text, true
+------------------------------------------------------------------ HUD: справа валюты и уровень
+local rightCol = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 140), BackgroundTransparency = 1 }, hud)
+K.make("UIListLayout", { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, rightCol)
+local coinPill, coinL = K.pill(rightCol, "coin", Color3.fromRGB(230, 170, 30), 160)
+local dustPill, dustL = K.pill(rightCol, "dust", T.purple, 160)
+coinPill.LayoutOrder, dustPill.LayoutOrder = 1, 2
+local levelPill = K.make("Frame", { Size = UDim2.fromOffset(160, 40), BackgroundColor3 = T.panel, LayoutOrder = 3 }, rightCol)
+K.corner(levelPill, UDim.new(1, 0))
+K.stroke(levelPill, T.ink, 3)
+K.icon(levelPill, "level", { Size = UDim2.fromOffset(46, 46), Position = UDim2.fromOffset(-12, -4) })
+local levelL = K.text(levelPill, "Ур. 1", { Size = UDim2.new(1, -46, 0, 18), Position = UDim2.fromOffset(38, 3), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16 })
+local _, xpFill = K.bar(levelPill, T.gold, { Size = UDim2.new(1, -50, 0, 10), Position = UDim2.fromOffset(38, 24) })
+
+------------------------------------------------------------------ HUD: событие, цель, уведомления
+local eventPill = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(250, 38), BackgroundColor3 = Color3.new(1, 1, 1) }, hud)
+K.corner(eventPill, UDim.new(1, 0))
+K.stroke(eventPill, T.ink, 3)
+local eventGrad = K.gradient(eventPill, Color3.fromRGB(70, 70, 110), Color3.fromRGB(40, 40, 70))
+K.icon(eventPill, "moon", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(-10, -4) })
+local eventL = K.text(eventPill, "", { Size = UDim2.new(1, -48, 1, -10), Position = UDim2.fromOffset(38, 5), MaxText = 20 })
+
+local trackPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 56), Size = UDim2.fromOffset(310, 46), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+K.corner(trackPill, UDim.new(0, 14))
+K.stroke(trackPill, T.ink, 3)
+K.gradient(trackPill, Color3.fromRGB(255, 160, 80), Color3.fromRGB(200, 90, 40))
+K.icon(trackPill, "target", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(4, 3) })
+local trackL = K.text(trackPill, "", { Size = UDim2.new(1, -54, 1, -8), Position = UDim2.fromOffset(48, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16, Font = Enum.Font.GothamBold })
+
+local toast = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 108), Size = UDim2.fromOffset(440, 40), BackgroundColor3 = T.panel, Visible = false }, hud)
+K.corner(toast, UDim.new(0, 12))
+K.stroke(toast, T.ink, 3)
+local toastL = K.text(toast, "", { Size = UDim2.new(1, -20, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 18, Font = Enum.Font.GothamBold })
+local toastSeq = 0
+local function showToast(text, secs, color)
+	toastSeq += 1
+	local my = toastSeq
+	toastL.Text = text
+	toast.BackgroundColor3 = color or T.panel
+	toast.Visible = true
+	K.pop(toast)
 	task.delay(secs or 2.4, function()
-		if toastL.Text == text then toastL.Visible = false end
+		if toastSeq == my then toast.Visible = false end
 	end)
 end
-local function punch(o)
-	local s = o.Size
-	o.Size = UDim2.new(s.X.Scale, s.X.Offset * 1.12, s.Y.Scale, s.Y.Offset * 1.12)
-	TweenService:Create(o, TweenInfo.new(0.3, Enum.EasingStyle.Back), { Size = s }):Play()
+
+------------------------------------------------------------------ HUD: банка снизу по центру
+local jarPanel = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -12), Size = UDim2.fromOffset(320, 50), BackgroundColor3 = T.panel }, hud)
+K.corner(jarPanel, UDim.new(0, 14))
+K.stroke(jarPanel, T.ink, 3)
+K.icon(jarPanel, "jar", { Size = UDim2.fromOffset(56, 56), Position = UDim2.fromOffset(-14, -10) })
+local jarL = K.text(jarPanel, "Банка 0/3", { Size = UDim2.new(0.5, -40, 0, 22), Position = UDim2.fromOffset(46, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+local jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.55, 0, 0, 18), Position = UDim2.new(0.42, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
+local _, jarFill = K.bar(jarPanel, T.cold, { Size = UDim2.new(1, -60, 0, 12), Position = UDim2.fromOffset(46, 30) })
+
+local tutPanel = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -72), Size = UDim2.fromOffset(460, 52), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
+K.corner(tutPanel, UDim.new(0, 14))
+K.stroke(tutPanel, T.ink, 3)
+K.gradient(tutPanel, Color3.fromRGB(70, 140, 220), Color3.fromRGB(40, 80, 160))
+local tutL = K.text(tutPanel, "", { Size = UDim2.new(1, -110, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 17, Font = Enum.Font.GothamBold })
+local skipBtn = K.button(tutPanel, "Пропуск", Color3.fromRGB(90, 90, 120), { Size = UDim2.fromOffset(90, 34), Position = UDim2.new(1, -98, 0, 9), MaxText = 14 })
+
+local districtTitle = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(420, 50), MaxText = 34, Visible = false })
+
+-- кнопка ловли: рядом со стандартной кнопкой прыжка, видна только рядом с доступным духом
+local catchBtn = K.make("TextButton", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(100, 100), Position = UDim2.new(1, -180, 1, -140), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, gui)
+K.corner(catchBtn, UDim.new(1, 0))
+K.stroke(catchBtn, T.ink, 4)
+K.gradient(catchBtn, Color3.fromRGB(120, 240, 160), Color3.fromRGB(40, 170, 90))
+local fill = K.make("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.45, Size = UDim2.fromScale(1, 0), AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1) }, catchBtn)
+K.corner(fill, UDim.new(1, 0))
+K.icon(catchBtn, "paw", { Size = UDim2.fromScale(0.5, 0.5), Position = UDim2.fromScale(0.25, 0.08) })
+local catchL = K.text(catchBtn, "ЛОВИТЬ", { Size = UDim2.new(0.9, 0, 0.3, 0), Position = UDim2.fromScale(0.05, 0.6), MaxText = 18 })
+
+local vignette = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BackgroundColor3 = Color3.fromRGB(200, 0, 0) }, gui)
+
+local hint = K.make("BillboardGui", { Size = UDim2.fromOffset(180, 34), AlwaysOnTop = true }, gui)
+local hintText = K.text(hint, "", { MaxText = 24 })
+
+-- всплывающие награды, летящие к валюте
+local function floatReward(iconKey, text, toPill)
+	local f = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(160, 44), BackgroundTransparency = 1 }, gui)
+	K.icon(f, iconKey, { Size = UDim2.fromOffset(44, 44) })
+	local l = K.text(f, text, { Size = UDim2.new(1, -48, 1, 0), Position = UDim2.fromOffset(48, 0), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 28, TextColor3 = T.gold })
+	local sc = K.make("UIScale", { Scale = 0.3 }, f)
+	TweenService:Create(sc, TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1.1 }):Play()
+	task.delay(0.7, function()
+		local target = toPill and (toPill.AbsolutePosition + toPill.AbsoluteSize / 2) / uiScale.Scale or nil
+		local tw = TweenService:Create(f, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+			Position = target and UDim2.fromOffset(target.X, target.Y) or UDim2.fromScale(0.5, 0.3),
+		})
+		TweenService:Create(sc, TweenInfo.new(0.5), { Scale = 0.5 }):Play()
+		TweenService:Create(l, TweenInfo.new(0.5), { TextTransparency = 1 }):Play()
+		tw:Play()
+		tw.Completed:Wait()
+		if toPill then K.pop(toPill) end
+		f:Destroy()
+	end)
 end
 
------------------------------------------------------------------- HUD: банка, валюта, таймер события, цель
-local jarBox = Instance.new("Frame")
-jarBox.Position, jarBox.Size = UDim2.new(0, 12, 0, 56), UDim2.new(0, 210, 0, 52)
-jarBox.BackgroundColor3, jarBox.BackgroundTransparency = PANEL, 0.25
-corner(jarBox)
-jarBox.Parent = gui
-local jarTitle = label("Банка 0/3", UDim2.new(0, 8, 0, 4), UDim2.new(1, -16, 0, 20), jarBox, 18, false)
-jarTitle.TextXAlignment = Enum.TextXAlignment.Left
-local jarBar = Instance.new("Frame")
-jarBar.Position, jarBar.Size = UDim2.new(0, 8, 0, 26), UDim2.new(1, -16, 0, 6)
-jarBar.BackgroundColor3 = Color3.fromRGB(50, 50, 70)
-corner(jarBar, UDim.new(1, 0))
-jarBar.Parent = jarBox
-local jarFill = Instance.new("Frame")
-jarFill.Size, jarFill.BackgroundColor3 = UDim2.new(0, 0, 1, 0), COLD
-corner(jarFill, UDim.new(1, 0))
-jarFill.Parent = jarBar
-local jarItems = label("", UDim2.new(0, 8, 0, 34), UDim2.new(1, -16, 0, 15), jarBox, 13, false)
-jarItems.TextXAlignment, jarItems.TextColor3, jarItems.Font = Enum.TextXAlignment.Left, Color3.fromRGB(200, 205, 230), Enum.Font.Gotham
-
-local walletL = label("", UDim2.new(0, 12, 0, 112), UDim2.new(0, 210, 0, 22), nil, 15)
-walletL.BackgroundTransparency = 0.45
-
-local atlasBtn = button("Атлас", UDim2.new(0, 12, 0, 140), UDim2.new(0, 102, 0, 34), Color3.fromRGB(70, 80, 160))
-local menuBtn = button("Настройки", UDim2.new(0, 120, 0, 140), UDim2.new(0, 102, 0, 34), Color3.fromRGB(60, 62, 84), nil, 16)
-
-local trackBox = Instance.new("TextButton")
-trackBox.Position, trackBox.Size = UDim2.new(0, 12, 0, 180), UDim2.new(0, 210, 0, 40)
-trackBox.BackgroundColor3, trackBox.BackgroundTransparency, trackBox.Text = Color3.fromRGB(70, 45, 20), 0.15, ""
-trackBox.Visible = false
-corner(trackBox)
-strokeOf(trackBox, ACCENT, 2)
-trackBox.Parent = gui
-local trackL = label("", UDim2.new(0, 8, 0, 2), UDim2.new(1, -16, 1, -4), trackBox, 15, false)
-trackL.TextXAlignment = Enum.TextXAlignment.Left
-
-local banner = label("", UDim2.new(0.5, -140, 0, 8), UDim2.new(0, 280, 0, 30), nil, 18)
-toastL = label("", UDim2.new(0.5, -200, 0, 44), UDim2.new(0, 400, 0, 32), nil, 18)
-toastL.Visible = false
-local tutPanel = label("", UDim2.new(0.5, -210, 1, -96), UDim2.new(0, 420, 0, 52), nil, 18)
-tutPanel.BackgroundColor3, tutPanel.Visible = Color3.fromRGB(30, 70, 110), false
-local skipBtn = button("Пропустить", UDim2.new(1, -96, 0, -28), UDim2.new(0, 96, 0, 24), Color3.fromRGB(60, 60, 80), tutPanel, 14)
-local districtTitle = label("", UDim2.new(0.5, -170, 0.3, 0), UDim2.new(0, 340, 0, 44), nil, 30, false)
-districtTitle.TextStrokeTransparency, districtTitle.Visible = 0.3, false
-
--- кнопка ловли: компактная, слева от стандартной кнопки прыжка, появляется только рядом с доступным духом
-local catchBtn = Instance.new("TextButton")
-catchBtn.AnchorPoint = Vector2.new(1, 1)
-catchBtn.Size, catchBtn.Position = UDim2.new(0, 92, 0, 92), UDim2.new(1, -190, 1, -150)
-catchBtn.Text, catchBtn.TextScaled, catchBtn.Font = "ЛОВИТЬ", true, Enum.Font.GothamBlack
-catchBtn.BackgroundColor3, catchBtn.TextColor3 = Color3.fromRGB(80, 200, 140), Color3.new(1, 1, 1)
-catchBtn.AutoButtonColor, catchBtn.Visible = false, false
-corner(catchBtn, UDim.new(1, 0))
-local cpad = Instance.new("UIPadding")
-cpad.PaddingLeft, cpad.PaddingRight = UDim.new(0, 10), UDim.new(0, 10)
-cpad.Parent = catchBtn
-local cstroke = strokeOf(catchBtn, Color3.new(1, 1, 1), 3)
-cstroke.Transparency = 0
-catchBtn.Parent = gui
-local fill = Instance.new("Frame")
-fill.BackgroundColor3, fill.BackgroundTransparency = Color3.new(1, 1, 1), 0.45
-fill.Size, fill.AnchorPoint, fill.Position, fill.ZIndex = UDim2.new(1, 0, 0, 0), Vector2.new(0, 1), UDim2.new(0, 0, 1, 0), 0
-corner(fill, UDim.new(1, 0))
-fill.Parent = catchBtn
-
-local vignette = Instance.new("Frame")
-vignette.Size, vignette.BackgroundTransparency = UDim2.fromScale(1, 1), 1
-vignette.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
-vignette.Parent = gui
-
-local hint = Instance.new("BillboardGui")
-hint.Size, hint.AlwaysOnTop = UDim2.new(0, 170, 0, 32), true
-local hintText = Instance.new("TextLabel")
-hintText.Size, hintText.BackgroundTransparency, hintText.TextScaled, hintText.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
-hintText.TextColor3, hintText.TextStrokeTransparency = Color3.new(1, 1, 1), 0.2
-hintText.Parent = hint
-hint.Parent = gui
-
------------------------------------------------------------------- окна
-local windows = {}
-local function window(title, w, h)
-	local f = Instance.new("Frame")
-	f.AnchorPoint, f.Position, f.Size = Vector2.new(0.5, 0.5), UDim2.fromScale(0.5, 0.53), UDim2.fromScale(w, h)
-	f.BackgroundColor3, f.BackgroundTransparency, f.Visible = PANEL, 0.04, false
-	f.ZIndex = 10
-	corner(f, UDim.new(0, 14))
-	strokeOf(f, Color3.fromRGB(120, 130, 200), 1.5)
-	local t = label(title, UDim2.new(0, 14, 0, 6), UDim2.new(0.5, -190, 0, 30), f, 22, false)
-	t.TextXAlignment = Enum.TextXAlignment.Left
-	local close = button("Закрыть", UDim2.new(1, -96, 0, 6), UDim2.new(0, 88, 0, 30), Color3.fromRGB(150, 50, 60), f, 16)
-	close.Activated:Connect(function() f.Visible = false end)
-	f.Parent = gui
-	table.insert(windows, f)
-	return f
+------------------------------------------------------------------ окно: Атлас
+local atlasW, atlasBody = K.window(gui, "Атлас духов", "atlas", T.blue)
+local atlasTop = K.make("Frame", { Size = UDim2.new(1, 0, 0, 62), BackgroundTransparency = 1 }, atlasBody)
+local collectL = K.text(atlasTop, "", { Size = UDim2.new(0.38, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 20 })
+local _, collectFill = K.bar(atlasTop, T.gold, { Size = UDim2.new(0.38, 0, 0, 14), Position = UDim2.fromOffset(0, 30) })
+local mileRow = K.make("Frame", { Position = UDim2.new(0.41, 0, 0, 0), Size = UDim2.new(0.59, 0, 1, -4), BackgroundTransparency = 1 }, atlasTop)
+K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Right }, mileRow)
+local mileBtns = {}
+for i in Prog.Milestones do
+	local b, l = K.button(mileRow, "", T.panel2, { Size = UDim2.new(0.24, -4, 1, 0), MaxText = 13 })
+	K.icon(b, "trophy", { Size = UDim2.fromOffset(26, 26), Position = UDim2.fromOffset(2, 2) })
+	l.Size, l.Position = UDim2.new(1, -30, 1, -8), UDim2.fromOffset(28, 4)
+	mileBtns[i] = { b = b, l = l }
+	b.Activated:Connect(function()
+		local r = remotes.ClaimMilestone:InvokeServer(i)
+		if r and not r.ok and r.msg then showToast(r.msg) end
+	end)
 end
-local function openOnly(f)
-	for _, w in windows do
-		if w ~= f then w.Visible = false end
+local atlasTabs = K.make("Frame", { Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, atlasBody)
+K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
+local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+local spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
+K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 214), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
+K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
+local worldList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
+K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, worldList)
+tabSpirits.Activated:Connect(function()
+	spiritGrid.Visible, worldList.Visible = true, false
+	K.recolor(tabSpirits, T.blue)
+	K.recolor(tabWorlds, T.panel2)
+end)
+tabWorlds.Activated:Connect(function()
+	spiritGrid.Visible, worldList.Visible = false, true
+	K.recolor(tabSpirits, T.panel2)
+	K.recolor(tabWorlds, T.blue)
+end)
+for i, key in Catalog.Worlds.Order do
+	local w = Catalog.Worlds.Worlds[key]
+	local f = K.panel(worldList, { Size = UDim2.new(1, -10, 0, 96), LayoutOrder = i, BackgroundColor3 = w.active and Color3.fromRGB(46, 58, 96) or Color3.fromRGB(36, 34, 54) })
+	if not w.active then K.icon(f, "lock", { Size = UDim2.fromOffset(40, 40), Position = UDim2.new(1, -52, 0, 8) }) end
+	K.text(f, w.name .. (w.active and "  - открыт" or "  - скоро"), { Size = UDim2.new(1, -70, 0, 26), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 20, TextColor3 = w.active and T.gold or T.sub })
+	K.text(f, w.blurb .. "\nГлавная цель: " .. w.star, { Size = UDim2.new(1, -24, 0, 56), Position = UDim2.fromOffset(12, 34), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+end
+
+local cards = {}
+local function setTrack(kind)
+	trackKind = kind
+	trackPill.Visible = kind ~= nil
+	if kind then
+		local info = Catalog.Kinds[kind]
+		showToast("Цель: " .. info.name .. ". След: " .. info.trail.text, 3, Color3.fromRGB(150, 80, 30))
 	end
-	f.Visible = not f.Visible
+end
+trackPill.Activated:Connect(function()
+	setTrack(nil)
+	showToast("Охота отменена", 1.5)
+end)
+
+local function silhouette(m)
+	for _, p in m:GetDescendants() do
+		if p:IsA("BasePart") then
+			p.Color, p.Material, p.Transparency = Color3.fromRGB(20, 18, 30), Enum.Material.SmoothPlastic, math.min(p.Transparency, 0.2)
+		elseif p:IsA("Light") or p:IsA("Trail") then
+			p.Enabled = false
+		end
+	end
 end
 
--- Атлас с вкладками
-local atlasW = window("Атлас духов", 0.9, 0.82)
-local tabs = {}
-local pages = {}
-local tabNames = { { "atlas", "Атлас" }, { "orders", "Заказы" }, { "upgrades", "Улучшения" }, { "worlds", "Миры" } }
-local currentTab = "atlas"
-local function showTab(key)
-	currentTab = key
-	for k, p in pages do p.Visible = k == key end
-	for k, b in tabs do b.BackgroundColor3 = k == key and ACCENT or Color3.fromRGB(50, 52, 80) end
+local function buildCard(i, kind)
+	local info = Catalog.Kinds[kind]
+	local rar = Catalog.Rarity[info.rarity]
+	local c = { kind = kind }
+	local f = K.panel(spiritGrid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+	f:FindFirstChildOfClass("UIStroke").Color = rar.color
+	c.frame = f
+	local vpHolder = K.make("Frame", { Size = UDim2.new(1, -8, 0, 92), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+	K.corner(vpHolder, UDim.new(0, 10))
+	K.gradient(vpHolder, K.darken(rar.color, 0.45), K.darken(rar.color, 0.8))
+	c.vpHolder = vpHolder
+	c.name = K.text(f, info.name, { Size = UDim2.new(1, -10, 0, 20), Position = UDim2.fromOffset(5, 98), MaxText = 15 })
+	c.rar = K.text(f, rar.name, { Size = UDim2.new(1, -10, 0, 14), Position = UDim2.fromOffset(5, 118), MaxText = 12, TextColor3 = rar.color, StrokeThickness = 1 })
+	c.info = K.text(f, "", { Size = UDim2.new(1, -10, 0, 30), Position = UDim2.fromOffset(5, 134), MaxText = 11, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
+	local trackB, trackBL = K.button(f, "Выследить", T.orange, { Size = UDim2.new(0.5, -6, 0, 34), Position = UDim2.new(0, 4, 1, -40), MaxText = 12 })
+	local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(0.5, -6, 0, 34), Position = UDim2.new(0.5, 2, 1, -40), MaxText = 12 })
+	c.trackL, c.equip, c.equipL = trackBL, equipB, equipBL
+	trackB.Activated:Connect(function()
+		setTrack(trackKind ~= kind and kind or nil)
+		K.close(atlasW)
+	end)
+	equipB.Activated:Connect(function()
+		remotes.Equip:InvokeServer(state.equipped ~= kind and kind or nil)
+	end)
+	cards[kind] = c
 end
-for i, t in tabNames do
-	local b = button(t[2], UDim2.new(0.5, -170 + (i - 1) * 86, 0, 6), UDim2.new(0, 82, 0, 30), Color3.fromRGB(50, 52, 80), atlasW, 15)
-	b.Activated:Connect(function() showTab(t[1]) end)
-	tabs[t[1]] = b
-	local p = Instance.new("ScrollingFrame")
-	p.Position, p.Size = UDim2.new(0, 8, 0, 44), UDim2.new(1, -16, 1, -52)
-	p.BackgroundTransparency, p.ScrollBarThickness = 1, 6
-	p.AutomaticCanvasSize, p.CanvasSize = Enum.AutomaticSize.Y, UDim2.new()
-	p.Visible = false
-	p.Parent = atlasW
-	pages[t[1]] = p
-end
-local grid = Instance.new("UIGridLayout")
-grid.CellSize, grid.CellPadding = UDim2.new(0.25, -8, 0, 176), UDim2.new(0, 8, 0, 8)
-grid.SortOrder = Enum.SortOrder.LayoutOrder
-grid.Parent = pages.atlas
-for _, k in { "orders", "upgrades", "worlds" } do
-	local l = Instance.new("UIListLayout")
-	l.Padding, l.SortOrder = UDim.new(0, 8), Enum.SortOrder.LayoutOrder
-	l.Parent = pages[k]
+for i, kind in Catalog.Order do buildCard(i, kind) end
+
+local function refreshCard(c)
+	local info = Catalog.Kinds[c.kind]
+	local n = state.saved[c.kind] or 0
+	local known = n > 0
+	if c.known ~= known then
+		c.known = known
+		if c.vp then c.vp:Destroy() end
+		local m = Spirits.Builders[c.kind]()
+		if not known then silhouette(m) end
+		c.vp, c.setAngle = K.viewport(c.vpHolder, m)
+	end
+	c.name.TextColor3 = known and T.text or T.sub
+	c.rar.Text = Catalog.Rarity[info.rarity].name .. (known and ("  x" .. n) or "")
+	c.info.Text = known and info.habit or ("Где: " .. info.hint)
+	c.trackL.Text = trackKind == c.kind and "Цель" or "Выследить"
+	c.equip.Visible = known
+	c.equipL.Text = state.equipped == c.kind and "Снять" or "Спутник"
 end
 
--- Настройки
-local setW = window("Настройки", 0.6, 0.7)
-local setList = Instance.new("Frame")
-setList.Position, setList.Size, setList.BackgroundTransparency = UDim2.new(0, 14, 0, 46), UDim2.new(1, -28, 1, -56), 1
-setList.Parent = setW
-local setLayout = Instance.new("UIListLayout")
-setLayout.Padding = UDim.new(0, 8)
-setLayout.Parent = setList
-
-local function sendSettings()
-	remotes.SetSettings:FireServer(state.settings)
+local function refreshAtlas()
+	for _, c in cards do refreshCard(c) end
+	local total = #Catalog.Order
+	collectL.Text = ("Собрано %d/%d видов"):format(state.distinct, total)
+	collectFill.Size = UDim2.fromScale(math.clamp(state.distinct / total, 0, 1), 1)
+	for i, m in Prog.Milestones do
+		local mb = mileBtns[i]
+		local claimed = state.milestones[tostring(i)]
+		local ready = not claimed and state.distinct >= m.need
+		mb.l.Text = claimed and "Есть" or (ready and "Забрать!" or ("%d видов"):format(m.need))
+		K.recolor(mb.b, ready and T.green or (claimed and Color3.fromRGB(70, 70, 90) or T.panel2))
+	end
 end
-local function volumeRow(title, key)
-	local row = Instance.new("Frame")
-	row.Size, row.BackgroundTransparency = UDim2.new(1, 0, 0, 36), 1
-	row.Parent = setList
-	local l = label("", UDim2.new(0, 0, 0, 0), UDim2.new(0.55, 0, 1, 0), row, 18, false)
-	l.TextXAlignment = Enum.TextXAlignment.Left
-	local minus = button("-", UDim2.new(0.58, 0, 0, 0), UDim2.new(0.2, -4, 1, 0), Color3.fromRGB(60, 62, 90), row, 22)
-	local plus = button("+", UDim2.new(0.8, 0, 0, 0), UDim2.new(0.2, 0, 1, 0), Color3.fromRGB(60, 62, 90), row, 22)
+
+------------------------------------------------------------------ окно: Задания
+local questW, questBody = K.window(gui, "Задания алтаря", "quests", T.orange, 0.7, 0.72)
+local questList = K.scroll(questBody)
+K.make("UIListLayout", { Padding = UDim.new(0, 10), SortOrder = Enum.SortOrder.LayoutOrder }, questList)
+local questRows = {}
+for i = 1, Catalog.OrderSlots do
+	local f = K.panel(questList, { Size = UDim2.new(1, -10, 0, 92), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+	K.icon(f, "quests", { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(8, 14) })
+	local title = K.text(f, "", { Size = UDim2.new(0.6, -80, 0, 24), Position = UDim2.fromOffset(76, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+	local _, bar = K.bar(f, T.green, { Size = UDim2.new(0.6, -80, 0, 14), Position = UDim2.fromOffset(76, 40) })
+	local reward = K.text(f, "", { Size = UDim2.new(0.6, -80, 0, 18), Position = UDim2.fromOffset(76, 62), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, TextColor3 = T.gold, Font = Enum.Font.GothamBold })
+	local go = K.button(f, "Выследить", T.orange, { Size = UDim2.new(0.36, 0, 0, 46), Position = UDim2.new(0.62, 0, 0, 23), MaxText = 16 })
+	go.Activated:Connect(function()
+		local o = state.orders[i]
+		if o and o.type == "kind" then
+			setTrack(o.kind)
+			K.close(questW)
+		end
+	end)
+	questRows[i] = { title = title, bar = bar, reward = reward, go = go }
+end
+K.text(questList, "Задание засчитывается, когда сдаёшь банку у алтаря. Новое появляется сразу.", { Size = UDim2.new(1, -10, 0, 22), LayoutOrder = 10, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+local function refreshQuests()
+	for i, r in questRows do
+		local o = state.orders[i]
+		if o then
+			r.title.Text = o.type == "kind" and ("Принеси: %s"):format(Catalog.Kinds[o.kind].name) or ("Принеси духов: %s"):format(Catalog.Rarity[o.rarity].name)
+			r.bar.Size = UDim2.fromScale(math.clamp(o.have / o.need, 0, 1), 1)
+			r.reward.Text = ("%d/%d   Награда: %d монет, %d пыли"):format(o.have, o.need, o.coins, o.dust)
+			r.go.Visible = o.type == "kind"
+		end
+	end
+end
+
+------------------------------------------------------------------ окно: Магазин
+local shopW, shopBody = K.window(gui, "Магазин", "shop", T.red, 0.8, 0.8)
+local shopTabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, shopBody)
+K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, shopTabs)
+local tabUp = K.button(shopTabs, "Улучшения", T.red, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
+local tabSkins = K.button(shopTabs, "Фонари", T.panel2, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
+local upList = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42) })
+K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, upList)
+local skinGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
+K.make("UIGridLayout", { CellSize = UDim2.new(0.333, -8, 0, 150), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
+tabUp.Activated:Connect(function()
+	upList.Visible, skinGrid.Visible = true, false
+	K.recolor(tabUp, T.red)
+	K.recolor(tabSkins, T.panel2)
+end)
+tabSkins.Activated:Connect(function()
+	upList.Visible, skinGrid.Visible = false, true
+	K.recolor(tabUp, T.panel2)
+	K.recolor(tabSkins, T.red)
+end)
+local UP_ICON = { jar = "jar", range = "target", power = "upgrade" }
+local upRows = {}
+for i, key in Catalog.UpgradeOrder do
+	local up = Catalog.Upgrades[key]
+	local f = K.panel(upList, { Size = UDim2.new(1, -10, 0, 84), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+	K.icon(f, UP_ICON[key], { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(8, 12) })
+	local title = K.text(f, "", { Size = UDim2.new(0.6, -80, 0, 24), Position = UDim2.fromOffset(76, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+	K.text(f, up.desc, { Size = UDim2.new(0.6, -80, 0, 16), Position = UDim2.fromOffset(76, 34), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local dots = K.make("Frame", { Size = UDim2.new(0.5, -80, 0, 14), Position = UDim2.fromOffset(76, 58), BackgroundTransparency = 1 }, f)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, dots)
+	local dotList = {}
+	for d = 1, Catalog.MaxLevel do
+		local dot = K.make("Frame", { Size = UDim2.fromOffset(24, 12), BackgroundColor3 = T.ink }, dots)
+		K.corner(dot, UDim.new(1, 0))
+		dotList[d] = dot
+	end
+	local buy, buyL = K.button(f, "", T.green, { Size = UDim2.new(0.36, 0, 0, 50), Position = UDim2.new(0.62, 0, 0, 17), MaxText = 16 })
+	buy.Activated:Connect(function()
+		local res = remotes.Upgrade:InvokeServer(key)
+		if res and res.ok then
+			play("save")
+			showToast(up.name .. ": новый уровень!", 2, Color3.fromRGB(40, 120, 70))
+		elseif res and res.msg then
+			showToast(res.msg)
+		end
+	end)
+	upRows[key] = { title = title, dots = dotList, buy = buy, buyL = buyL }
+end
+local function refreshUpgrades()
+	for key, r in upRows do
+		local up = Catalog.Upgrades[key]
+		local lvl = state.levels[key] or 1
+		for d, dot in r.dots do dot.BackgroundColor3 = d <= lvl and T.green or T.ink end
+		if lvl >= Catalog.MaxLevel then
+			r.title.Text = ("%s: %s (макс.)"):format(up.name, up.fmt:format(up.values[lvl]))
+			r.buyL.Text = "Максимум"
+			K.recolor(r.buy, Color3.fromRGB(80, 80, 95))
+		else
+			r.title.Text = ("%s: %s -> %s"):format(up.name, up.fmt:format(up.values[lvl]), up.fmt:format(up.values[lvl + 1]))
+			local c, du = up.coins[lvl], up.dust[lvl]
+			r.buyL.Text = du > 0 and ("%d монет + %d пыли"):format(c, du) or ("%d монет"):format(c)
+			K.recolor(r.buy, (state.coins >= c and state.dust >= du) and T.green or Color3.fromRGB(90, 90, 105))
+		end
+	end
+end
+local skinCards = {}
+for i, key in Prog.SkinOrder do
+	local sk = Prog.Skins[key]
+	local f = K.panel(skinGrid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+	local glow = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(56, 56), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+	K.corner(glow, UDim.new(1, 0))
+	K.stroke(glow, T.ink, 3)
+	K.gradient(glow, K.lighten(sk.lamp, 0.5), sk.lamp)
+	K.text(f, sk.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 68), MaxText = 16 })
+	local b, bl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 14 })
+	b.Activated:Connect(function()
+		local owned = state.skins[key]
+		local res = remotes.Skin:InvokeServer(owned and "equip" or "buy", key)
+		if res and res.ok then
+			play("save")
+			showToast(owned and ("Фонарь: " .. sk.name) or ("Куплен фонарь: " .. sk.name), 2)
+		elseif res and res.msg then
+			showToast(res.msg)
+		end
+	end)
+	skinCards[key] = { b = b, l = bl }
+end
+local function refreshSkins()
+	for key, c in skinCards do
+		local sk = Prog.Skins[key]
+		if state.skin == key then
+			c.l.Text = "Надет"
+			K.recolor(c.b, Color3.fromRGB(80, 80, 95))
+		elseif state.skins[key] then
+			c.l.Text = "Надеть"
+			K.recolor(c.b, T.blue)
+		elseif sk.price then
+			c.l.Text = sk.dust and ("%d + %d пыли"):format(sk.price, sk.dust) or ("%d монет"):format(sk.price)
+			K.recolor(c.b, state.coins >= sk.price and T.green or Color3.fromRGB(90, 90, 105))
+		else
+			c.l.Text = sk.source or ""
+			K.recolor(c.b, Color3.fromRGB(70, 70, 90))
+		end
+	end
+end
+
+------------------------------------------------------------------ окно: Подарок дня
+local giftW, giftBody = K.window(gui, "Ежедневный подарок", "gift", T.green, 0.8, 0.66)
+local dayRow = K.make("Frame", { Size = UDim2.new(1, 0, 0.62, 0), BackgroundTransparency = 1 }, giftBody)
+K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, dayRow)
+local dayTiles = {}
+for i, r in Prog.Daily do
+	local f = K.panel(dayRow, { Size = UDim2.new(1 / 7, -6, 1, 0), BackgroundColor3 = T.panel2, LayoutOrder = i })
+	K.text(f, "День " .. i, { Size = UDim2.new(1, -6, 0, 18), Position = UDim2.fromOffset(3, 4), MaxText = 14 })
+	local ic = r.skin and "shop" or (r.coins and "coin" or "dust")
+	K.icon(f, ic, { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(46, 46), Position = UDim2.new(0.5, 0, 0, 26) })
+	local parts = {}
+	if r.coins then table.insert(parts, r.coins .. " мон.") end
+	if r.dust then table.insert(parts, r.dust .. " пыли") end
+	if r.skin then table.insert(parts, "фонарь") end
+	K.text(f, table.concat(parts, "\n"), { Size = UDim2.new(1, -6, 0, 34), Position = UDim2.new(0, 3, 1, -38), MaxText = 13, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
+	dayTiles[i] = f
+end
+local giftBtn, giftL = K.button(giftBody, "Забрать", T.green, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, 0, 1, -4), MaxText = 22 })
+giftBtn.Activated:Connect(function()
+	local r = remotes.ClaimDaily:InvokeServer()
+	if r and r.ok then
+		play("legendary")
+		showToast(("Подарок дня %d получен!"):format(r.day), 2.5, Color3.fromRGB(40, 120, 70))
+	elseif r and r.msg then
+		showToast(r.msg)
+	end
+end)
+local function refreshGift()
+	local today = math.floor(workspace:GetServerTimeNow() / 86400)
+	local nextDay
+	if state.dailyReady then
+		nextDay = (state.daily.last == today - 1) and (state.daily.streak % 7) + 1 or 1
+	else
+		nextDay = state.daily.streak
+	end
+	for i, f in dayTiles do
+		local st = f:FindFirstChildOfClass("UIStroke")
+		if i == nextDay and state.dailyReady then
+			st.Color, st.Thickness = T.gold, 4
+			f.BackgroundColor3 = Color3.fromRGB(70, 100, 60)
+		else
+			st.Color, st.Thickness = T.ink, 3
+			f.BackgroundColor3 = (i < nextDay or (not state.dailyReady and i <= nextDay)) and Color3.fromRGB(36, 36, 50) or T.panel2
+		end
+	end
+	giftL.Text = state.dailyReady and "Забрать" or "Новый подарок завтра"
+	K.recolor(giftBtn, state.dailyReady and T.green or Color3.fromRGB(80, 80, 95))
+end
+
+------------------------------------------------------------------ окно: Настройки
+local setW, setBody = K.window(gui, "Настройки", "settings", Color3.fromRGB(110, 115, 145), 0.6, 0.78)
+local setList = K.scroll(setBody)
+K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, setList)
+local applyReduced
+local function sendSettings() remotes.SetSettings:FireServer(state.settings) end
+local setRefreshers = {}
+local function volumeRow(order, title, key)
+	local f = K.panel(setList, { Size = UDim2.new(1, -10, 0, 50), LayoutOrder = order, BackgroundColor3 = T.panel2 })
+	local l = K.text(f, "", { Size = UDim2.new(0.5, -10, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+	local minus = K.button(f, "-", T.blue, { Size = UDim2.new(0.22, -6, 1, -12), Position = UDim2.new(0.52, 0, 0, 6), MaxText = 24 })
+	local plus = K.button(f, "+", T.blue, { Size = UDim2.new(0.22, -6, 1, -12), Position = UDim2.new(0.76, 0, 0, 6), MaxText = 24 })
 	local function refresh() l.Text = ("%s: %d%%"):format(title, math.floor(state.settings[key] * 100 + 0.5)) end
 	local function step(d)
 		state.settings[key] = math.clamp(math.floor(state.settings[key] * 10 + 0.5 + d) / 10, 0, 1)
@@ -295,13 +546,13 @@ local function volumeRow(title, key)
 	end
 	minus.Activated:Connect(function() step(-1) end)
 	plus.Activated:Connect(function() step(1) end)
-	return refresh
+	table.insert(setRefreshers, refresh)
 end
-local function toggleRow(title, key, onChange)
-	local b = button("", UDim2.new(), UDim2.new(1, 0, 0, 36), Color3.fromRGB(60, 62, 90), setList, 18)
+local function toggleRow(order, title, key, onChange)
+	local b, l = K.button(setList, "", T.panel2, { Size = UDim2.new(1, -10, 0, 46), LayoutOrder = order, MaxText = 18 })
 	local function refresh()
-		b.Text = title .. ": " .. (state.settings[key] and "вкл" or "выкл")
-		b.BackgroundColor3 = state.settings[key] and Color3.fromRGB(60, 140, 100) or Color3.fromRGB(60, 62, 90)
+		l.Text = title .. ": " .. (state.settings[key] and "ВКЛ" or "ВЫКЛ")
+		K.recolor(b, state.settings[key] and T.green or T.panel2)
 	end
 	b.Activated:Connect(function()
 		state.settings[key] = not state.settings[key]
@@ -309,226 +560,64 @@ local function toggleRow(title, key, onChange)
 		sendSettings()
 		if onChange then onChange() end
 	end)
-	return refresh
+	table.insert(setRefreshers, refresh)
 end
-local refreshMusic = volumeRow("Музыка", "music")
-local refreshSfx = volumeRow("Звуки", "sfx")
-local applyReduced
-local refreshReduced = toggleRow("Приглушённые эффекты", "reduced", function() applyReduced() end)
-local refreshDiag
-if IS_TEST then
-	refreshDiag = toggleRow("Диагностика FPS (тест)", "diag", nil)
-end
-local soundNote = label("", UDim2.new(), UDim2.new(1, 0, 0, 40), setList, 14, false)
-soundNote.TextColor3, soundNote.Font, soundNote.TextWrapped = Color3.fromRGB(180, 185, 210), Enum.Font.Gotham, true
-soundNote.Text = (Audio.Music.lantern == "") and "Музыка и звуки появятся после загрузки аудио в Roblox." or "Камера: чувствительность меняется в меню Roblox."
-local function refreshSettings()
-	refreshMusic()
-	refreshSfx()
-	refreshReduced()
-	if refreshDiag then refreshDiag() end
-end
+volumeRow(1, "Музыка", "music")
+volumeRow(2, "Звуки", "sfx")
+toggleRow(3, "Приглушённые эффекты", "reduced", function() applyReduced() end)
+if IS_TEST then toggleRow(4, "Диагностика FPS (тест)", "diag") end
+local _, soundTestL = K.button(setList, "Проверить звук", T.blue, { Size = UDim2.new(1, -10, 0, 46), LayoutOrder = 5, MaxText = 18 })
+soundTestL.Parent.Activated:Connect(function()
+	play("catchRare")
+	soundTestL.Text = "Звук: " .. soundStatus
+end)
+K.text(setList, "Чувствительность камеры и графика — в меню Roblox (кнопка вверху слева).", { Size = UDim2.new(1, -10, 0, 34), LayoutOrder = 9, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 
------------------------------------------------------------------- заполнение Атласа
-local function trailText(info) return info.trail and info.trail.text or "" end
-local cards = {}
-local function setTrack(kind)
-	trackKind = kind
-	trackBox.Visible = kind ~= nil
-	if kind then
-		showToast("Цель охоты: " .. Catalog.Kinds[kind].name .. ". Ищи след: " .. trailText(Catalog.Kinds[kind]), 3)
+------------------------------------------------------------------ навигация по окнам
+local allWindows = { atlasW, questW, shopW, giftW, setW }
+local function toggleWindow(w, refresh)
+	local willOpen = not w.Visible
+	for _, x in allWindows do K.close(x) end
+	if willOpen then
+		if refresh then refresh() end
+		K.open(w)
 	end
 end
-trackBox.Activated:Connect(function() setTrack(nil) end)
-
-local function refreshAtlas()
-	for i, kind in Catalog.Order do
-		local info = Catalog.Kinds[kind]
-		local rar = Catalog.Rarity[info.rarity]
-		local c = cards[kind]
-		if not c then
-			c = {}
-			local f = Instance.new("Frame")
-			f.LayoutOrder, f.BackgroundColor3 = i, Color3.fromRGB(32, 34, 60)
-			corner(f)
-			local st = strokeOf(f, rar.color, 2)
-			st.Transparency = 0.2
-			c.name = label("", UDim2.new(0, 6, 0, 4), UDim2.new(1, -12, 0, 20), f, 15, false)
-			c.rar = label(rar.name, UDim2.new(0, 6, 0, 24), UDim2.new(1, -12, 0, 14), f, 12, false)
-			c.rar.TextColor3 = rar.color
-			c.count = label("", UDim2.new(0, 6, 0, 38), UDim2.new(1, -12, 0, 14), f, 12, false)
-			c.count.TextColor3 = Color3.fromRGB(200, 205, 230)
-			c.info = label("", UDim2.new(0, 6, 0, 54), UDim2.new(1, -12, 0, 54), f, 12, false)
-			c.info.TextColor3, c.info.Font, c.info.TextWrapped = Color3.fromRGB(205, 210, 230), Enum.Font.Gotham, true
-			c.info.TextYAlignment = Enum.TextYAlignment.Top
-			c.track = button("Выследить", UDim2.new(0, 6, 1, -64), UDim2.new(1, -12, 0, 28), ACCENT, f, 14)
-			c.track.Activated:Connect(function()
-				setTrack(trackKind ~= kind and kind or nil)
-				atlasW.Visible = false
-			end)
-			c.equip = button("", UDim2.new(0, 6, 1, -32), UDim2.new(1, -12, 0, 26), Color3.fromRGB(200, 60, 70), f, 14)
-			c.equip.Activated:Connect(function()
-				remotes.Equip:InvokeServer(state.equipped ~= kind and kind or nil)
-			end)
-			f.Parent = pages.atlas
-			cards[kind] = c
-		end
-		local n = state.saved[kind] or 0
-		c.name.Text = info.name
-		c.name.TextColor3 = n > 0 and Color3.new(1, 1, 1) or Color3.fromRGB(150, 150, 170)
-		c.count.Text = n > 0 and ("Поймано: %d"):format(n) or "Не найден"
-		local places = {}
-		for _, d in Catalog.districtsOf(kind) do table.insert(places, Catalog.DistrictNames[d]) end
-		c.info.Text = (n > 0 and info.habit or info.hint) .. "\n" .. Catalog.ConditionText[info.condition] .. ". След: " .. trailText(info)
-		c.track.Text = trackKind == kind and "Цель выбрана" or "Выследить"
-		c.track.BackgroundColor3 = trackKind == kind and Color3.fromRGB(90, 90, 110) or ACCENT
-		c.equip.Visible = n > 0
-		c.equip.Text = state.equipped == kind and "Снять спутника" or "Взять спутником"
-	end
-	local total = 0
-	for _ in state.saved do total += 1 end
-end
-
-local orderRows = {}
-local function orderText(o)
-	if o.type == "kind" then
-		return ("Принеси: %s  %d/%d"):format(Catalog.Kinds[o.kind].name, o.have, o.need)
-	end
-	return ("Принеси духов «%s»: %d/%d"):format(Catalog.Rarity[o.rarity].name, o.have, o.need)
-end
-local function refreshOrders()
-	for i = 1, Catalog.OrderSlots do
-		local o = state.orders[i]
-		local r = orderRows[i]
-		if not r then
-			r = {}
-			local f = Instance.new("Frame")
-			f.Size, f.BackgroundColor3, f.LayoutOrder = UDim2.new(1, 0, 0, 64), Color3.fromRGB(32, 34, 60), i
-			corner(f)
-			r.title = label("", UDim2.new(0, 10, 0, 6), UDim2.new(0.7, -10, 0, 24), f, 18, false)
-			r.title.TextXAlignment = Enum.TextXAlignment.Left
-			r.reward = label("", UDim2.new(0, 10, 0, 34), UDim2.new(0.7, -10, 0, 20), f, 14, false)
-			r.reward.TextXAlignment, r.reward.TextColor3 = Enum.TextXAlignment.Left, GOLD
-			r.go = button("Выследить", UDim2.new(0.72, 0, 0, 14), UDim2.new(0.28, -10, 0, 36), ACCENT, f, 16)
-			r.go.Activated:Connect(function()
-				local ord = state.orders[i]
-				if ord and ord.type == "kind" then
-					setTrack(ord.kind)
-					atlasW.Visible = false
-				end
-			end)
-			f.Parent = pages.orders
-			orderRows[i] = r
-		end
-		if o then
-			r.title.Text = orderText(o)
-			r.reward.Text = ("Награда: %d монет, %d пыли"):format(o.coins, o.dust)
-			r.go.Visible = o.type == "kind"
-		else
-			r.title.Text, r.reward.Text, r.go.Visible = "Новый заказ появится после сдачи улова", "", false
-		end
-	end
-	if not pages.orders:FindFirstChild("Note") then
-		local note = label("Заказы засчитываются, когда сдаёшь банку у алтаря.", UDim2.new(), UDim2.new(1, 0, 0, 24), pages.orders, 14, false)
-		note.Name, note.LayoutOrder, note.TextColor3 = "Note", 10, Color3.fromRGB(180, 185, 210)
-	end
-end
-
-local upRows = {}
-local function refreshUpgrades()
-	for i, key in Catalog.UpgradeOrder do
-		local up = Catalog.Upgrades[key]
-		local r = upRows[key]
-		if not r then
-			r = {}
-			local f = Instance.new("Frame")
-			f.Size, f.BackgroundColor3, f.LayoutOrder = UDim2.new(1, 0, 0, 64), Color3.fromRGB(32, 34, 60), i
-			corner(f)
-			r.title = label("", UDim2.new(0, 10, 0, 6), UDim2.new(0.62, -10, 0, 24), f, 18, false)
-			r.title.TextXAlignment = Enum.TextXAlignment.Left
-			r.desc = label(up.desc, UDim2.new(0, 10, 0, 34), UDim2.new(0.62, -10, 0, 20), f, 14, false)
-			r.desc.TextXAlignment, r.desc.TextColor3 = Enum.TextXAlignment.Left, Color3.fromRGB(190, 195, 220)
-			r.buy = button("", UDim2.new(0.64, 0, 0, 12), UDim2.new(0.36, -10, 0, 40), Color3.fromRGB(70, 160, 100), f, 15)
-			r.buy.Activated:Connect(function()
-				local res = remotes.Upgrade:InvokeServer(key)
-				if res and res.ok then
-					showToast(up.name .. ": новый уровень!")
-					play("save")
-					punch(r.title)
-				elseif res and res.msg then
-					showToast(res.msg)
-				end
-			end)
-			f.Parent = pages.upgrades
-			upRows[key] = r
-		end
-		local lvl = state.levels[key] or 1
-		local cur = up.fmt:format(up.values[lvl])
-		if lvl >= Catalog.MaxLevel then
-			r.title.Text = ("%s ур.%d: %s (макс.)"):format(up.name, lvl, cur)
-			r.buy.Text, r.buy.BackgroundColor3 = "Максимум", Color3.fromRGB(80, 80, 90)
-		else
-			r.title.Text = ("%s ур.%d: %s -> %s"):format(up.name, lvl, cur, up.fmt:format(up.values[lvl + 1]))
-			local c, d = up.coins[lvl], up.dust[lvl]
-			r.buy.Text = d > 0 and ("%d монет + %d пыли"):format(c, d) or ("%d монет"):format(c)
-			r.buy.BackgroundColor3 = (state.coins >= c and state.dust >= d) and Color3.fromRGB(70, 160, 100) or Color3.fromRGB(90, 90, 100)
-		end
-	end
-	if not pages.upgrades:FindFirstChild("Note") then
-		local note = label("Покупка — у алтаря. Монеты дают сданные духи и заказы, пыль — дубликаты.", UDim2.new(), UDim2.new(1, 0, 0, 30), pages.upgrades, 14, false)
-		note.Name, note.LayoutOrder, note.TextColor3, note.TextWrapped = "Note", 10, Color3.fromRGB(180, 185, 210), true
-	end
-end
-
-local function refreshWorlds()
-	if pages.worlds:FindFirstChild("Built") then return end
-	local marker = Instance.new("BoolValue")
-	marker.Name = "Built"
-	marker.Parent = pages.worlds
-	for i, key in Catalog.Worlds.Order do
-		local w = Catalog.Worlds.Worlds[key]
-		local f = Instance.new("Frame")
-		f.Size, f.BackgroundColor3, f.LayoutOrder = UDim2.new(1, 0, 0, 92), w.active and Color3.fromRGB(40, 50, 80) or Color3.fromRGB(30, 30, 44), i
-		corner(f)
-		local t = label(w.name .. (w.active and "  (открыт)" or "  (скоро)"), UDim2.new(0, 10, 0, 4), UDim2.new(1, -20, 0, 24), f, 18, false)
-		t.TextXAlignment = Enum.TextXAlignment.Left
-		t.TextColor3 = w.active and GOLD or Color3.fromRGB(170, 170, 190)
-		local b = label(w.blurb .. "\nГлавная цель: " .. w.star, UDim2.new(0, 10, 0, 30), UDim2.new(1, -20, 0, 58), f, 14, false)
-		b.TextXAlignment, b.TextYAlignment, b.TextWrapped = Enum.TextXAlignment.Left, Enum.TextYAlignment.Top, true
-		b.Font, b.TextColor3 = Enum.Font.Gotham, Color3.fromRGB(205, 210, 230)
-		f.Parent = pages.worlds
-	end
-end
-
-local function refreshWindows()
-	if atlasW.Visible then
-		refreshAtlas()
-		refreshOrders()
+btnAtlas.Activated:Connect(function() toggleWindow(atlasW, refreshAtlas) end)
+btnQuests.Activated:Connect(function() toggleWindow(questW, refreshQuests) end)
+btnShop.Activated:Connect(function()
+	toggleWindow(shopW, function()
 		refreshUpgrades()
-		refreshWorlds()
-	end
-end
-atlasBtn.Activated:Connect(function()
-	openOnly(atlasW)
-	refreshWindows()
-	showTab(currentTab)
+		refreshSkins()
+	end)
 end)
-menuBtn.Activated:Connect(function()
-	openOnly(setW)
-	refreshSettings()
+btnGift.Activated:Connect(function() toggleWindow(giftW, refreshGift) end)
+btnSettings.Activated:Connect(function()
+	toggleWindow(setW, function()
+		for _, r in setRefreshers do r() end
+	end)
 end)
 
------------------------------------------------------------------- HUD и ворота сада
+------------------------------------------------------------------ HUD-обновление
 local function refreshHUD()
 	local n = #state.jar
-	jarTitle.Text = ("Банка %d/%d"):format(n, state.cap)
-	jarFill.Size = UDim2.new(math.clamp(n / math.max(state.cap, 1), 0, 1), 0, 1, 0)
-	jarFill.BackgroundColor3 = n >= state.cap and Color3.fromRGB(240, 120, 60) or COLD
+	jarL.Text = ("Банка %d/%d"):format(n, state.cap)
+	jarFill.Size = UDim2.fromScale(math.clamp(n / math.max(state.cap, 1), 0, 1), 1)
 	local names = {}
 	for _, k in state.jar do table.insert(names, Catalog.Kinds[k].short) end
-	jarItems.Text = n > 0 and table.concat(names, ", ") or "пусто"
-	walletL.Text = ("Монеты %d   Пыль %d"):format(state.coins, state.dust)
-	-- ворота сада и табличка показывают фактическое состояние
+	jarNames.Text = n > 0 and table.concat(names, ", ") or "пусто"
+	jarNames.TextColor3 = n >= state.cap and Color3.fromRGB(255, 160, 100) or T.sub
+	coinL.Text = tostring(state.coins)
+	dustL.Text = tostring(state.dust)
+	levelL.Text = ("Ур. %d"):format(state.level)
+	xpFill.Size = UDim2.fromScale(math.clamp(state.xp / math.max(state.xpNext, 1), 0, 1), 1)
+	btnGift.Badge.Visible = state.dailyReady
+	local claimable = false
+	for i, m in Prog.Milestones do
+		if not state.milestones[tostring(i)] and state.distinct >= m.need then claimable = true end
+	end
+	btnAtlas.Badge.Visible = claimable
+	-- ворота и табличка сада
 	Barrier.CanCollide = not state.gardenOpen
 	Barrier.Transparency = state.gardenOpen and 0.9 or 0.2
 	for _, g in Barrier:GetChildren() do
@@ -538,10 +627,16 @@ local function refreshHUD()
 				or ("Храмовый сад закрыт\nСохрани 3 разных духа: %d/%d"):format(math.min(state.distinct, Catalog.GardenNeed), Catalog.GardenNeed)
 		end
 	end
-	refreshWindows()
+	if atlasW.Visible then refreshAtlas() end
+	if questW.Visible then refreshQuests() end
+	if shopW.Visible then
+		refreshUpgrades()
+		refreshSkins()
+	end
+	if giftW.Visible then refreshGift() end
 end
 
------------------------------------------------------------------- эффекты
+------------------------------------------------------------------ эффекты в мире
 local reducedFx = false
 applyReduced = function()
 	reducedFx = state.settings.reduced
@@ -550,28 +645,23 @@ applyReduced = function()
 end
 
 local function ring(pos, fromSize, toSize, color, secs, upright)
-	local r = Instance.new("Part")
-	r.Shape, r.Anchored, r.CanCollide, r.CanQuery, r.CastShadow = Enum.PartType.Cylinder, true, false, false, false
-	r.Material, r.Color, r.Transparency = Enum.Material.Neon, color, reducedFx and 0.5 or 0.15
-	r.Size = Vector3.new(0.15, fromSize, fromSize)
-	r.CFrame = CFrame.new(pos) * (upright and CFrame.Angles(0, math.rad(90), 0) or CFrame.Angles(0, 0, math.rad(90)))
-	r.Parent = workspace
+	local r = K.make("Part", {
+		Shape = Enum.PartType.Cylinder, Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+		Material = Enum.Material.Neon, Color = color, Transparency = reducedFx and 0.5 or 0.15, Size = Vector3.new(0.15, fromSize, fromSize),
+		CFrame = CFrame.new(pos) * (upright and CFrame.Angles(0, math.rad(90), 0) or CFrame.Angles(0, 0, math.rad(90))),
+	}, workspace)
 	TweenService:Create(r, TweenInfo.new(secs, Enum.EasingStyle.Quad), { Size = Vector3.new(0.1, toSize, toSize), Transparency = 1 }):Play()
 	task.delay(secs + 0.05, function() r:Destroy() end)
 end
 
 local function burst(pos, colors, n)
 	if reducedFx then n = math.floor(n / 3) end
-	local a = Instance.new("Part")
-	a.Anchored, a.CanCollide, a.CanQuery, a.Transparency, a.Size, a.Position = true, false, false, 1, Vector3.one, pos
-	a.Parent = workspace
-	local pe = Instance.new("ParticleEmitter")
-	pe.Color = colors
-	pe.Rate, pe.Lifetime, pe.Speed = 0, NumberRange.new(0.6, 1.1), NumberRange.new(8, 16)
-	pe.SpreadAngle, pe.RotSpeed = Vector2.new(180, 180), NumberRange.new(-200, 200)
-	pe.Size = NumberSequence.new(0.5, 0.1)
-	pe.LightEmission, pe.Acceleration = 0.3, Vector3.new(0, -14, 0)
-	pe.Parent = a
+	local a = K.make("Part", { Anchored = true, CanCollide = false, CanQuery = false, Transparency = 1, Size = Vector3.one, Position = pos }, workspace)
+	local pe = K.make("ParticleEmitter", {
+		Color = colors, Rate = 0, Lifetime = NumberRange.new(0.6, 1.1), Speed = NumberRange.new(8, 16),
+		SpreadAngle = Vector2.new(180, 180), RotSpeed = NumberRange.new(-200, 200), Size = NumberSequence.new(0.5, 0.1),
+		LightEmission = 0.3, Acceleration = Vector3.new(0, -14, 0),
+	}, a)
 	pe:Emit(n)
 	task.delay(1.5, function() a:Destroy() end)
 end
@@ -608,7 +698,7 @@ local function catchEffect(kind, at, coop)
 			m:Destroy()
 			burst(goal, ColorSequence.new(rar.color, Color3.new(1, 1, 1)), big and 50 or 22)
 			ring(goal, 1, big and 12 or 6, rar.color, 0.35, false)
-			punch(jarBox)
+			K.pop(jarPanel)
 		end
 	end)
 	local text = info.name .. " в банке!"
@@ -619,13 +709,11 @@ local function catchEffect(kind, at, coop)
 		text ..= "  Цель поймана!"
 		setTrack(nil)
 	end
-	showToast(text, 2.5)
+	showToast(text, 2.5, K.darken(rar.color, 0.55))
 end
 
--- раскрытие легендарного духа (~2 с): приглушённый алтарь, тёмный силуэт сбоку от игрока → пауза →
--- световое кольцо → модель в цвете целиком в кадре, плывёт и оставляет золотой след
-local revealCC = Instance.new("ColorCorrectionEffect")
-revealCC.Parent = Lighting
+-- раскрытие легендарного духа (~2 с)
+local revealCC = K.make("ColorCorrectionEffect", {}, Lighting)
 local function dimAltar(on)
 	for _, p in World:GetChildren() do
 		if p:IsA("BasePart") and (p.Name == "AltarGlow" or p.Name == "AltarPillar" or p.Name == "AltarBeam") then
@@ -704,46 +792,73 @@ local function revealLegendary(kind)
 			m:Destroy()
 		end
 	end)
-	showToast(Catalog.Kinds[kind].name .. " в коллекции!", 2.5)
+	showToast(Catalog.Kinds[kind].name .. " в коллекции!", 2.5, Color3.fromRGB(150, 110, 20))
 end
 
 ------------------------------------------------------------------ обучение
 local tut = { step = 0 }
 local TUT_TEXT = {
-	"1/4  Найди тень у площади и наведи на неё фонарь",
-	"2/4  Подойди и удерживай ЛОВИТЬ, пока дух не окажется в банке",
-	"3/4  Отнеси банку к алтарю (голубой луч) и сохрани улов",
+	"1/4  Найди тень рядом с площадью и наведи на неё фонарь",
+	"2/4  Подойди и держи ЛОВИТЬ, пока дух не окажется в банке",
+	"3/4  Неси банку к алтарю (голубой луч) и сохрани улов",
 	"4/4  Открой Атлас и возьми лиса спутником",
 }
-local arrowPart = Instance.new("Part")
-arrowPart.Anchored, arrowPart.CanCollide, arrowPart.CanQuery, arrowPart.Transparency, arrowPart.Size = true, false, false, 1, Vector3.one
-arrowPart.Parent = workspace
-local arrowAtt = Instance.new("Attachment")
-arrowAtt.Parent = arrowPart
-local arrow = Instance.new("Beam")
-arrow.Attachment1 = arrowAtt
-arrow.Width0, arrow.Width1, arrow.FaceCamera, arrow.LightEmission = 0.6, 0.2, true, 1
-arrow.Color = ColorSequence.new(Color3.fromRGB(140, 230, 255))
-arrow.Transparency = NumberSequence.new(0.2, 0.6)
-arrow.Enabled = false
-arrow.Parent = arrowPart
+local arrowPart = K.make("Part", { Anchored = true, CanCollide = false, CanQuery = false, Transparency = 1, Size = Vector3.one }, workspace)
+local arrowAtt = K.make("Attachment", {}, arrowPart)
+local arrow = K.make("Beam", {
+	Attachment1 = arrowAtt, Width0 = 0.7, Width1 = 0.25, FaceCamera = true, LightEmission = 1,
+	Color = ColorSequence.new(Color3.fromRGB(140, 230, 255)), Transparency = NumberSequence.new(0.15, 0.6), Enabled = false,
+}, arrowPart)
 
 local function setStep(n)
 	tut.step = n
 	if n >= 1 and n <= 4 then
-		tutPanel.Text, tutPanel.Visible = TUT_TEXT[n], true
-		punch(tutPanel)
+		tutL.Text = TUT_TEXT[n]
+		tutPanel.Visible = true
+		K.pop(tutPanel)
 	else
 		tutPanel.Visible = false
+		K.recolor(btnAtlas, T.blue)
 	end
 end
 local function finishTutorial()
 	if tut.step == 0 or tut.step == 5 then return end
 	setStep(5)
 	remotes.TutorialDone:FireServer()
-	showToast("Обучение пройдено! Открой Атлас, выбери цель и выследи её", 4)
+	showToast("Обучение пройдено! Открой Атлас, выбери духа и выследи его", 4, Color3.fromRGB(40, 100, 160))
 end
 skipBtn.Activated:Connect(finishTutorial)
+
+------------------------------------------------------------------ стартовый экран
+local intro = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), ZIndex = 50 }, gui)
+K.gradient(intro, Color3.fromRGB(40, 30, 80), Color3.fromRGB(10, 8, 24))
+local introVp = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(300, 220), BackgroundTransparency = 1, ZIndex = 51 }, intro)
+local _, introAngle = K.viewport(introVp, Spirits.buildPaperFox(), { ZIndex = 51 })
+K.text(intro, "SPIRIT CATCHERS", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.06, 0), Size = UDim2.fromOffset(620, 70), MaxText = 64, TextColor3 = T.gold, ZIndex = 52, StrokeThickness = 4 })
+K.text(intro, "Лови духов ночного квартала", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.06, 74), Size = UDim2.fromOffset(520, 30), MaxText = 26, ZIndex = 52 })
+local playBtn = K.button(intro, "ИГРАТЬ", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.94, 0), Size = UDim2.fromOffset(260, 66), MaxText = 34, ZIndex = 52 })
+for _, d in playBtn:GetDescendants() do
+	if d:IsA("GuiObject") then d.ZIndex = 53 end
+end
+hud.Visible = false
+local introOpen = true
+playBtn.Activated:Connect(function()
+	if not introOpen then return end
+	introOpen = false
+	TweenService:Create(intro, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
+	for _, d in intro:GetDescendants() do
+		if d:IsA("TextLabel") then TweenService:Create(d, TweenInfo.new(0.3), { TextTransparency = 1 }):Play() end
+		if d:IsA("UIStroke") then TweenService:Create(d, TweenInfo.new(0.3), { Transparency = 1 }):Play() end
+	end
+	task.delay(0.42, function()
+		intro:Destroy()
+		hud.Visible = true
+		if not state.tutorialDone and tut.step == 0 then setStep(1) end
+		if state.dailyReady then
+			task.delay(1.2, function() toggleWindow(giftW, refreshGift) end)
+		end
+	end)
+end)
 
 ------------------------------------------------------------------ серверные события
 local firstState = true
@@ -755,11 +870,25 @@ remotes.State.OnClientEvent:Connect(function(s)
 		firstState = false
 		applyAudio()
 		applyReduced()
-		if not s.tutorialDone then setStep(1) end
+		if not s.tutorialDone and not introOpen then setStep(1) end
 		if s.persistent == false then showToast("Сохранения недоступны в этом запуске", 3) end
 	end
 	refreshHUD()
 	if tut.step == 4 and s.equipped then finishTutorial() end
+end)
+
+remotes.Reward.OnClientEvent:Connect(function(r)
+	if r.coins and r.coins > 0 then floatReward("coin", "+" .. r.coins, coinPill) end
+	if r.dust and r.dust > 0 then task.delay(0.15, function() floatReward("dust", "+" .. r.dust, dustPill) end) end
+	if r.xp then K.pop(levelPill) end
+	if r.skin then showToast("Новый облик фонаря: " .. Prog.Skins[r.skin].name, 3, Color3.fromRGB(120, 60, 120)) end
+	if r.levelUp then
+		play("legendary")
+		task.delay(0.3, function()
+			showToast(("Новый уровень %d!  +%d монет"):format(r.levelUp.level, r.levelUp.coins), 3, Color3.fromRGB(150, 110, 20))
+			floatReward("level", "Ур. " .. r.levelUp.level, levelPill)
+		end)
+	end
 end)
 
 remotes.SaveResult.OnClientEvent:Connect(function(r)
@@ -780,22 +909,25 @@ remotes.SaveResult.OnClientEvent:Connect(function(r)
 			ring(cr.Position + Vector3.new(0, 5, 0), 12, 1, COLD, 0.5, false)
 			burst(cr.Position + Vector3.new(0, 2, 0), ColorSequence.new(COLD, Color3.new(1, 1, 1)), 30)
 		end
-		local msg = ("Сдано духов: %d  +%d монет"):format(#r.kinds, r.coins)
-		if r.dust > 0 then msg ..= (", +%d пыли"):format(r.dust) end
+		local msg = ("Сдано духов: %d"):format(#r.kinds)
 		if #r.firsts > 0 then msg ..= ("  Новых в Атласе: %d"):format(#r.firsts) end
 		if not r.persisted then msg ..= " (без сохранения)" end
-		showToast(msg, 3)
+		showToast(msg, 3, Color3.fromRGB(30, 90, 140))
 	end
+	if r.coins > 0 then floatReward("coin", "+" .. r.coins, coinPill) end
+	if r.dust > 0 then task.delay(0.2, function() floatReward("dust", "+" .. r.dust, dustPill) end) end
 	if #r.orders > 0 then
-		task.delay(legendary and 2.3 or 1.6, function() showToast(("Заказ выполнен! (%d)"):format(#r.orders), 2.5) end)
+		task.delay(legendary and 2.3 or 1.6, function() showToast(("Задание выполнено! (%d)"):format(#r.orders), 2.5, Color3.fromRGB(150, 90, 30)) end)
 	end
 	if r.gardenOpened then
-		task.delay(legendary and 4.6 or 3.2, function() showToast("Храмовый сад открыт! Иди на юг за канал", 4) end)
+		task.delay(legendary and 4.6 or 3.2, function() showToast("Храмовый сад открыт! Иди на юг за канал", 4, Color3.fromRGB(40, 110, 60)) end)
 	end
 	if tut.step == 3 then setStep(4) end
 end)
 
+local holding = false
 remotes.Caught.OnClientEvent:Connect(function(kind, at, coop)
+	holding = false
 	catchEffect(kind, at, coop or 1)
 	if tut.step == 2 or tut.step == 1 then setStep(3) end
 end)
@@ -804,17 +936,13 @@ remotes.Hit.OnClientEvent:Connect(function(lost)
 	play("oniHit")
 	vignette.BackgroundTransparency = 0.55
 	TweenService:Create(vignette, TweenInfo.new(0.8), { BackgroundTransparency = 1 }):Play()
-	showToast(lost > 0 and ("Они разбил банку! Потеряно духов: " .. lost) or "Они попал! Банка была пуста", 3)
+	showToast(lost > 0 and ("Они разбил банку! Потеряно духов: " .. lost) or "Они попал! Банка была пуста", 3, Color3.fromRGB(140, 30, 40))
 end)
 remotes.Notice.OnClientEvent:Connect(function(text) showToast(text, 2.5) end)
 
 ------------------------------------------------------------------ визуал духов и следы
-local visFolder = Instance.new("Folder")
-visFolder.Name = "SpiritVisuals"
-visFolder.Parent = workspace
-local trailFolder = Instance.new("Folder")
-trailFolder.Name = "Trails"
-trailFolder.Parent = workspace
+local visFolder = K.make("Folder", { Name = "SpiritVisuals" }, workspace)
+local trailFolder = K.make("Folder", { Name = "Trails" }, workspace)
 local visuals = {}
 
 local TRAIL_SHAPE = {
@@ -829,29 +957,28 @@ local TRAIL_SHAPE = {
 local function dropTrail(v, pos, dir)
 	local tr = v.info.trail
 	if not tr then return end
-	local target = trackKind == v.kind
-	if reducedFx and not target then return end
+	local isTarget = trackKind == v.kind
+	if reducedFx and not isTarget then return end
 	local sh = TRAIL_SHAPE[tr.shape] or TRAIL_SHAPE.dot
-	local p = Instance.new("Part")
-	p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
-	p.Shape, p.Size, p.Color = sh.shape, sh.size * (target and 1.6 or 1), tr.color
-	p.Material = target and Enum.Material.Neon or Enum.Material.SmoothPlastic
-	p.Transparency = target and 0.1 or 0.35
 	local ground = Vector3.new(pos.X, 0.58, pos.Z)
+	local cf
 	if sh.shape == Enum.PartType.Cylinder then
-		p.CFrame = CFrame.new(ground) * CFrame.Angles(0, math.atan2(dir.X, dir.Z), math.rad(90))
+		cf = CFrame.new(ground) * CFrame.Angles(0, math.atan2(dir.X, dir.Z), math.rad(90))
 	elseif tr.shape == "dot" or tr.shape == "flame" then
-		p.CFrame = CFrame.new(ground + Vector3.new(0, 0.3, 0))
+		cf = CFrame.new(ground + Vector3.new(0, 0.3, 0))
 	else
-		p.CFrame = CFrame.new(ground) * CFrame.Angles(0, math.random() * 6.28, 0)
+		cf = CFrame.new(ground) * CFrame.Angles(0, math.random() * 6.28, 0)
 	end
-	p.Parent = trailFolder
-	local life = target and 14 or 8
+	local p = K.make("Part", {
+		Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+		Shape = sh.shape, Size = sh.size * (isTarget and 1.6 or 1), Color = tr.color, CFrame = cf,
+		Material = isTarget and Enum.Material.Neon or Enum.Material.SmoothPlastic, Transparency = isTarget and 0.1 or 0.35,
+	}, trailFolder)
+	local life = isTarget and 14 or 8
 	TweenService:Create(p, TweenInfo.new(life, Enum.EasingStyle.Linear), { Transparency = 1 }):Play()
 	task.delay(life, function() p:Destroy() end)
 end
 
-local spiritSounds = {}
 local function addAnchor(a)
 	if not a:IsA("BasePart") then return end
 	local kind = a:GetAttribute("Kind")
@@ -862,14 +989,12 @@ local function addAnchor(a)
 		v.shadow = Spirits.buildShadow(Catalog.Rarity[info.rarity].shadow)
 		v.shadow.Parent = visFolder
 	end
-	-- редкий дух слышен за углом
 	local sid = Audio.Spirit[kind]
 	if sid and sid ~= "" then
-		local snd = makeSound(sid, sfxGroup, true, a)
+		local snd = makeSound(sid, sfxGroup, true, a, 0.7)
 		if snd then
-			snd.RollOffMaxDistance, snd.RollOffMinDistance, snd.Volume = 60, 8, 0.7
+			snd.RollOffMaxDistance, snd.RollOffMinDistance = 60, 8
 			snd:Play()
-			spiritSounds[a] = snd
 		end
 	end
 	visuals[a] = v
@@ -878,7 +1003,6 @@ local function removeAnchor(a)
 	local v = visuals[a]
 	if not v then return end
 	visuals[a] = nil
-	spiritSounds[a] = nil
 	if v.shadow then v.shadow:Destroy() end
 	if v.model then v.model:Destroy() end
 end
@@ -886,7 +1010,6 @@ spiritsFolder.ChildAdded:Connect(addAnchor)
 spiritsFolder.ChildRemoved:Connect(removeAnchor)
 for _, a in spiritsFolder:GetChildren() do addAnchor(a) end
 
--- спутники всех игроков
 local followers = {}
 local function updateFollowers(now)
 	for _, p in Players:GetPlayers() do
@@ -921,7 +1044,6 @@ local function updateFollowers(now)
 	end
 end
 
--- они
 local oniModel, oniT, oniWarned = nil, 0, false
 local function updateOni(dt)
 	local a = workspace:FindFirstChild("Oni")
@@ -953,20 +1075,13 @@ local function updateOni(dt)
 end
 
 ------------------------------------------------------------------ фонарь, наведение, ловля
-local highlight = Instance.new("Highlight")
-highlight.FillTransparency, highlight.OutlineColor = 0.75, Color3.fromRGB(255, 230, 150)
-highlight.Parent = visFolder
-
+local highlight = K.make("Highlight", { FillTransparency = 0.75, OutlineColor = Color3.fromRGB(255, 230, 150) }, visFolder)
 local target: BasePart? = nil
 local aimTime, revealSent = 0, {}
-local holding, holdId = false, nil
+local holdId = nil
 
-local function lanternRange()
-	return Catalog.upgradeValue("range", plr:GetAttribute("RangeLvl") or 1)
-end
-local function lanternPower()
-	return Catalog.upgradeValue("power", plr:GetAttribute("PowerLvl") or 1)
-end
+local function lanternRange() return Catalog.upgradeValue("range", plr:GetAttribute("RangeLvl") or 1) end
+local function lanternPower() return Catalog.upgradeValue("power", plr:GetAttribute("PowerLvl") or 1) end
 
 local function findTarget(r)
 	local best, bestScore = nil, -math.huge
@@ -998,40 +1113,40 @@ local function release()
 end
 
 local currentDistrict = nil
-local districtCC = Instance.new("ColorCorrectionEffect")
-districtCC.Parent = Lighting
+local districtCC = K.make("ColorCorrectionEffect", {}, Lighting)
 local wasMoon = false
 
 RunService.RenderStepped:Connect(function(dt)
 	local now = os.clock()
 	local r = root()
+	if introOpen and introAngle then introAngle(now * 0.8) end
+	if atlasW.Visible and spiritGrid.Visible then
+		for _, c in cards do
+			if c.setAngle then c.setAngle(now * 0.7 + c.frame.LayoutOrder) end
+		end
+	end
 
-	-- таймер события и музыкальный слой Красной луны
+	-- событие
 	local moonActive = workspace:GetAttribute("MoonActive") == true
 	local ends = workspace:GetAttribute("PhaseEnds")
 	if ends then
 		local left = math.max(0, math.floor(ends - workspace:GetServerTimeNow()))
 		local timeStr = ("%d:%02d"):format(left // 60, left % 60)
-		if moonActive then
-			banner.Text = "КРАСНАЯ ЛУНА " .. timeStr
-			banner.BackgroundColor3, banner.BackgroundTransparency = Color3.fromRGB(130, 15, 25), 0.1
-		else
-			banner.Text = "До Красной луны " .. timeStr
-			banner.BackgroundColor3, banner.BackgroundTransparency = PANEL, 0.35
-		end
+		eventL.Text = moonActive and ("КРАСНАЯ ЛУНА  " .. timeStr) or ("Красная луна через " .. timeStr)
 	end
 	if moonActive ~= wasMoon then
 		wasMoon = moonActive
+		eventGrad.Color = moonActive and ColorSequence.new(Color3.fromRGB(240, 70, 80), Color3.fromRGB(140, 20, 30)) or ColorSequence.new(Color3.fromRGB(70, 70, 110), Color3.fromRGB(40, 40, 70))
+		K.pop(eventPill)
 		if moonLayer then TweenService:Create(moonLayer, TweenInfo.new(3), { Volume = moonActive and 0.7 or 0 }):Play() end
-		if moonActive then showToast("Красная луна! Редкие духи вышли, но по улицам ходит они", 3.5) end
+		if moonActive then showToast("Красная луна! Редкие духи вышли, но по улицам ходит они", 3.5, Color3.fromRGB(140, 30, 40)) end
 	end
 
-	-- духи: тени, модели, следы
+	-- духи
 	for a, v in visuals do
 		local cf = a.CFrame
 		local revealed = a:GetAttribute("Revealed")
 		local dist = r and (cf.Position - r.Position).Magnitude or 0
-		local near = dist < 170
 		if v.shadow then
 			v.shadow.CFrame = CFrame.new(cf.X, 0.62, cf.Z) * CFrame.Angles(0, now * 0.8, math.rad(90))
 			v.shadow.Transparency = revealed and 0.88 or 0.3 + math.sin(now * 3 + v.seed) * 0.1
@@ -1039,12 +1154,15 @@ RunService.RenderStepped:Connect(function(dt)
 		if revealed and not v.model then
 			v.model = Spirits.Builders[v.kind]()
 			v.model.Parent = visFolder
-			play("reveal")
+			if dist < 60 then play("reveal") end
 			ring(cf.Position + Vector3.new(0, 1, 0), 2, 10, Catalog.Rarity[v.info.rarity].color, 0.4, false)
 			local pe = v.shadow and v.shadow:FindFirstChildOfClass("ParticleEmitter")
-			if pe then pe:Emit(reducedFx and 6 or 20) pe.Rate = 3 end
+			if pe then
+				pe:Emit(reducedFx and 6 or 20)
+				pe.Rate = 3
+			end
 		end
-		if v.model and near then
+		if v.model and dist < 170 then
 			local t = now + v.seed
 			Spirits.animate(v.model, cf * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
 		end
@@ -1057,18 +1175,19 @@ RunService.RenderStepped:Connect(function(dt)
 	updateOni(dt)
 	if not r then return end
 
-	-- район: подпись и мягкий оттенок
+	-- район
 	local d = Catalog.district(r.Position.Z)
 	if d ~= currentDistrict then
 		currentDistrict = d
-		districtTitle.Text, districtTitle.Visible = Catalog.DistrictNames[d], true
+		districtTitle.Text = Catalog.DistrictNames[d]
+		districtTitle.Visible = not introOpen
 		districtTitle.TextTransparency = 0
 		TweenService:Create(districtTitle, TweenInfo.new(1, Enum.EasingStyle.Linear, Enum.EasingDirection.In, 0, false, 1.6), { TextTransparency = 1 }):Play()
 		TweenService:Create(districtCC, TweenInfo.new(1.5), { TintColor = Catalog.Districts[d].tint }):Play()
 	end
 	local atAltar = (r.Position - ALTAR_POS).Magnitude < 16
 
-	-- выслеживание цели из Атласа
+	-- выслеживание
 	local trackPos
 	if trackKind then
 		local best, bd = nil, math.huge
@@ -1081,22 +1200,22 @@ RunService.RenderStepped:Connect(function(dt)
 		local info = Catalog.Kinds[trackKind]
 		if best then
 			trackPos = best.Position
-			trackL.Text = ("Цель: %s  %d м\nСлед: %s"):format(info.short, math.floor(bd), info.trail.text)
+			trackL.Text = ("%s  %d м\nСлед: %s"):format(info.name, math.floor(bd), info.trail.text)
 		else
 			local places = Catalog.districtsOf(trackKind)
 			local dc = places[1] and Catalog.Districts[places[1]]
 			if info.moonOnly and not moonActive then
-				trackL.Text = ("Цель: %s\nПоявится в Красную луну"):format(info.short)
+				trackL.Text = ("%s\nПоявится в Красную луну"):format(info.name)
 			elseif dc and dc.locked and not state.gardenOpen then
-				trackL.Text = ("Цель: %s\nСначала открой сад"):format(info.short)
+				trackL.Text = ("%s\nСначала открой сад"):format(info.name)
 			else
-				trackL.Text = ("Цель: %s\nИщи: %s"):format(info.short, info.hint)
+				trackL.Text = ("%s\nИщи: %s"):format(info.name, info.hint)
 				trackPos = dc and dc.center
 			end
 		end
 	end
 
-	-- наведение фонаря
+	-- наведение
 	local t = (holding and target and target.Parent) and target or findTarget(r)
 	if t ~= target then target, aimTime = t, 0 end
 	local lantern = plr.Character:FindFirstChild("Lantern")
@@ -1130,7 +1249,7 @@ RunService.RenderStepped:Connect(function(dt)
 				hintText.Text, hintText.TextColor3 = ("Ловим вместе x%d"):format(holders), GOLD
 			else
 				hintText.Text = inRange and v.info.name or "Подойди ближе"
-				hintText.TextColor3 = inRange and Color3.fromRGB(140, 255, 180) or Color3.new(1, 1, 1)
+				hintText.TextColor3 = inRange and rar.color or Color3.new(1, 1, 1)
 			end
 			if tut.step == 1 then setStep(2) end
 		elseif v then
@@ -1149,27 +1268,28 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	-- кнопка ловли (прогресс считает сервер)
-	catchBtn.Visible = inRange or holding
+	-- кнопка ловли
+	catchBtn.Visible = (inRange or holding) and not introOpen
 	if holding then
 		if not inRange or not target or target:GetAttribute("SpiritId") ~= holdId then
 			release()
 		else
 			local p = target:GetAttribute("Progress") or 0
-			fill.Size = UDim2.new(1, 0, math.clamp(p, 0, 1), 0)
+			fill.Size = UDim2.fromScale(1, math.clamp(p, 0, 1))
 			catchBtn.Rotation = reducedFx and 0 or math.sin(now * 40) * 4 * p
 			local holders = target:GetAttribute("Holders") or 0
-			catchBtn.Text = holders > 1 and ("x" .. holders) or "ЛОВИТЬ"
+			catchL.Text = holders > 1 and ("ВМЕСТЕ x" .. holders) or "ЛОВИТЬ"
 		end
 	end
 	if not holding then
-		fill.Size = UDim2.new(1, 0, 0, 0)
+		fill.Size = UDim2.fromScale(1, 0)
 		catchBtn.Rotation = 0
-		catchBtn.Text = #state.jar >= state.cap and "ПОЛНА" or "ЛОВИТЬ"
+		catchL.Text = #state.jar >= state.cap and "ПОЛНА" or "ЛОВИТЬ"
 	end
 
-	-- указатель: обучение важнее цели охоты
+	-- указатель: обучение > полная банка > цель охоты
 	local goalPos
+	local guideCold = true
 	if tut.step == 1 then
 		local best, bd = nil, math.huge
 		for a, v in visuals do
@@ -1181,26 +1301,20 @@ RunService.RenderStepped:Connect(function(dt)
 		goalPos = best and best.Position
 	elseif tut.step == 2 then
 		goalPos = target and target.Parent and target.Position
-	elseif tut.step == 3 or (#state.jar >= state.cap) then
+	elseif tut.step == 3 or #state.jar >= state.cap then
 		goalPos = ALTAR_POS + Vector3.new(0, 2, 0)
 	elseif trackPos then
 		goalPos = trackPos
+		guideCold = false
 	end
 	local att = r:FindFirstChild("GuideAtt")
-	if not att then
-		att = Instance.new("Attachment")
-		att.Name = "GuideAtt"
-		att.Position = Vector3.new(0, -2, 0)
-		att.Parent = r
-	end
+	if not att then att = K.make("Attachment", { Name = "GuideAtt", Position = Vector3.new(0, -2, 0) }, r) end
 	arrow.Attachment0 = att
-	arrow.Color = ColorSequence.new((tut.step >= 1 and tut.step <= 3 or #state.jar >= state.cap) and Color3.fromRGB(140, 230, 255) or ACCENT)
-	arrow.Enabled = goalPos ~= nil and (goalPos - r.Position).Magnitude > 7
+	arrow.Color = ColorSequence.new(guideCold and Color3.fromRGB(140, 230, 255) or T.orange)
+	arrow.Enabled = goalPos ~= nil and (goalPos - r.Position).Magnitude > 7 and not introOpen
 	if goalPos then arrowPart.Position = goalPos end
 	if tut.step == 4 then
-		atlasBtn.BackgroundColor3 = (math.floor(now * 3) % 2 == 0) and Color3.fromRGB(230, 160, 40) or Color3.fromRGB(70, 80, 160)
-	else
-		atlasBtn.BackgroundColor3 = Color3.fromRGB(70, 80, 160)
+		K.recolor(btnAtlas, (math.floor(now * 3) % 2 == 0) and T.gold or T.blue)
 	end
 end)
 
@@ -1209,16 +1323,16 @@ local function beginHold()
 	local r = root()
 	if not (r and target and target.Parent and target:GetAttribute("Revealed")) then return end
 	if #state.jar >= state.cap then
-		showToast("Банка полна — отнеси улов к алтарю")
+		showToast("Банка полна — неси улов к алтарю")
 		return
 	end
 	holding, holdId = true, target:GetAttribute("SpiritId")
+	K.bounce(catchBtn)
 	remotes.CatchHold:FireServer(holdId)
 end
 catchBtn.MouseButton1Down:Connect(beginHold)
 catchBtn.MouseButton1Up:Connect(release)
 catchBtn.MouseLeave:Connect(release)
-remotes.Caught.OnClientEvent:Connect(function() holding = false end)
 UserInputService.InputBegan:Connect(function(i, gp)
 	if not gp and i.KeyCode == Enum.KeyCode.F then beginHold() end
 end)
@@ -1226,28 +1340,29 @@ UserInputService.InputEnded:Connect(function(i)
 	if i.KeyCode == Enum.KeyCode.F then release() end
 end)
 
------------------------------------------------------------------- диагностика (тест): FPS, время кадра на мосту, Bloom
+------------------------------------------------------------------ диагностика (тест)
 if IS_TEST then
-	local perf = label("", UDim2.new(1, -230, 0, 46), UDim2.new(0, 218, 0, 46), nil, 13)
-	perf.BackgroundTransparency, perf.Visible = 0.4, false
-	local bloomBtn = button("", UDim2.new(1, -230, 0, 96), UDim2.new(0, 218, 0, 26), Color3.fromRGB(60, 60, 80), nil, 14)
-	bloomBtn.Visible = false
+	local perf = K.panel(gui, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 1, -260), Size = UDim2.fromOffset(240, 50), Visible = false })
+	local perfL = K.text(perf, "", { Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3), MaxText = 13, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
+	local bloomBtn, bloomL = K.button(gui, "", Color3.fromRGB(90, 90, 120), { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -10, 1, -214), Size = UDim2.fromOffset(240, 36), MaxText = 14, Visible = false })
 	local PRESETS = { 0, 0.1, 0.2, 0.35 }
 	local bi = 3
 	local function applyBloom()
 		local b = Lighting:FindFirstChild("Bloom")
-		if b then b.Enabled = PRESETS[bi] > 0 and not reducedFx b.Intensity = PRESETS[bi] end
-		bloomBtn.Text = PRESETS[bi] > 0 and ("Bloom %.2f"):format(PRESETS[bi]) or "Bloom выкл"
+		if b then
+			b.Enabled = PRESETS[bi] > 0 and not reducedFx
+			b.Intensity = PRESETS[bi]
+		end
+		bloomL.Text = PRESETS[bi] > 0 and ("Bloom %.2f"):format(PRESETS[bi]) or "Bloom выкл"
 	end
+	applyBloom()
 	bloomBtn.Activated:Connect(function()
 		bi = bi % #PRESETS + 1
 		applyBloom()
 	end)
 	local win, winN, winMax = 0, 0, 0
 	local bridge = { night = { 0, 0, 0 }, moon = { 0, 0, 0 } }
-	local function fmt(b)
-		return b[2] > 30 and ("%.1f/%.0f"):format(b[1] / b[2] * 1000, b[3] * 1000) or "-"
-	end
+	local function fmt(b) return b[2] > 30 and ("%.1f/%.0f"):format(b[1] / b[2] * 1000, b[3] * 1000) or "-" end
 	RunService.Heartbeat:Connect(function(dt)
 		local on = state.settings.diag == true
 		perf.Visible, bloomBtn.Visible = on, on
@@ -1263,12 +1378,9 @@ if IS_TEST then
 		end
 		if win >= 1 then
 			if on then
-				if bloomBtn.Text == "" then applyBloom() end
-				perf.Text = ("Кадр %.1f мс (макс %.0f), %d FPS\nМост ср/макс: ночь %s | луна %s"):format(win / winN * 1000, winMax * 1000, winN, fmt(bridge.night), fmt(bridge.moon))
+				perfL.Text = ("Кадр %.1f мс (макс %.0f), %d FPS\nМост ср/макс: ночь %s | луна %s"):format(win / winN * 1000, winMax * 1000, winN, fmt(bridge.night), fmt(bridge.moon))
 			end
 			win, winN, winMax = 0, 0, 0
 		end
 	end)
 end
-
-showTab("atlas")

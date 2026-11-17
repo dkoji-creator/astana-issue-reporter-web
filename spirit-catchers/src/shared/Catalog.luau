@@ -3,6 +3,7 @@ local Config = script.Parent:WaitForChild("Config")
 local Worlds = require(Config:WaitForChild("Worlds"))
 local SpiritCfg = require(Config:WaitForChild("Spirits"))
 local Economy = require(Config:WaitForChild("Economy"))
+local Progress = require(Config:WaitForChild("Progress"))
 
 local C = {}
 C.Worlds = Worlds
@@ -16,6 +17,7 @@ C.UpgradeOrder = Economy.UpgradeOrder
 C.MaxLevel = Economy.MaxLevel
 C.GardenNeed = Economy.GardenNeed
 C.OrderSlots = Economy.OrderSlots
+C.Progress = Progress
 C.Districts = Worlds.Districts
 C.district = Worlds.districtAt
 
