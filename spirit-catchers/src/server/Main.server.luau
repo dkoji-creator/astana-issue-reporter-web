@@ -44,6 +44,7 @@ local CatchZoneEv = remote("CatchZone") -- мини-игра: метка дух�
 Social.remotes(remote)
 local updateBoard -- доска рекордов (ниже)
 local startRaid -- рейд «Тысяча фонарей» (ниже)
+local startBossCmd -- ночной страж (ниже)
 local RaidHitEv = remote("RaidHit")
 local EquipFn = remote("Equip", "RemoteFunction")
 local UpgradeFn = remote("Upgrade", "RemoteFunction")
@@ -80,6 +81,9 @@ local SeasonFn = remote("ClaimSeason", "RemoteFunction")
 local TitleFn = remote("SetTitle", "RemoteFunction")
 local EvolveFn = remote("Evolve", "RemoteFunction")
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
+local StoryFn = remote("Story", "RemoteFunction")
+local StoryOpenEv = remote("StoryOpen")
+local BossHitEv = remote("BossHit")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
@@ -236,10 +240,27 @@ local function weeklyCatch(plr, d, kind: string, variant: string)
 		if weekInfo then pcall(function() weekInfo:SetAsync(week .. "_" .. plr.UserId, { k = kind, v = variant }) end) end
 	end)
 end
+-- сюжет Хранителя: прогресс текущей главы
+local function storyEvent(plr, d, typ: string, info)
+	if typeof(d.story) ~= "table" then d.story = { ch = 1, prog = 0 } end
+	local ch = Live.Story[d.story.ch]
+	if not ch or ch.type ~= typ or d.story.prog >= ch.need then return end
+	info = info or {}
+	if typ == "kind" and info.kind ~= ch.kind then return end
+	if typ == "district" and info.district ~= ch.district then return end
+	if typ == "rarity" and RARITY_RANK[info.rarity] < RARITY_RANK[ch.min] then return end
+	if typ == "variant" and info.variant == "normal" then return end
+	d.story.prog = math.min(ch.need, d.story.prog + 1)
+	if d.story.prog >= ch.need then
+		NoticeEv:FireClient(plr, ("Глава «%s» выполнена! Поговори с Хранителем у алтаря"):format(ch.title))
+	end
+end
 local function liveOnCatch(plr, d, kind: string, district: string, variant: string)
 	local rar = Catalog.Kinds[kind].rarity
 	weeklyCatch(plr, d, kind, variant)
 	Social.clubCatch(plr)
+	local sinfo = { kind = kind, district = district, rarity = rar, variant = variant }
+	for _, typ in { "kind", "district", "rarity", "variant" } do storyEvent(plr, d, typ, sinfo) end
 	-- альбом редких поимок
 	local vOdds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
 	if RARITY_RANK[rar] >= RARITY_RANK[Live.AlbumMinRarity] or vOdds >= Live.AlbumMinOdds then
@@ -366,7 +387,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {},
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {}, story = { ch = 1, prog = 0 },
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -510,6 +531,9 @@ local function migrate(raw): Profile
 			end
 		end
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
+		if typeof(raw.story) == "table" then
+			d.story = { ch = math.floor(num(raw.story.ch, 1, #Live.Story + 1, 1)), prog = math.floor(num(raw.story.prog, 0, 1e6, 0)) }
+		end
 		for _, f in { "evolved", "furniture" } do
 			if typeof(raw[f]) == "table" then
 				for k, v in raw[f] do
@@ -625,7 +649,7 @@ local function pushState(plr)
 			return { list = t, all = ch.all }
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
-		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture,
+		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -1421,6 +1445,7 @@ local function doSave(plr)
 	coins = math.floor(coins * (1 + compPct(d, "coins")) * (dayMod() == "goldRush" and 1.5 or 1))
 	dust = math.floor(dust * (1 + 0.1 * (d.talents.collector or 0)) * (1 + compPct(d, "dust")) + 0.5)
 	chalProgress(plr, d, function(c) return c.type == "deliver" and 1 or 0 end)
+	storyEvent(plr, d, "deliver")
 	if hasPass(d, "coins2x") then coins *= 2 end
 	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	d.coins += coins
@@ -1870,6 +1895,7 @@ EvolveFn.OnServerInvoke = function(plr, kind)
 	d.dust -= cost
 	d.saved[kind] -= Live.EvolveDupes
 	d.evolved[kind] = true
+	storyEvent(plr, d, "evolve")
 	applySpeed(plr)
 	Social.refreshYard(plr)
 	persist(plr)
@@ -1889,6 +1915,25 @@ FurnitureFn.OnServerInvoke = function(plr, id)
 	Social.refreshYard(plr)
 	persist(plr)
 	pushState(plr)
+	return { ok = true }
+end
+StoryFn.OnServerInvoke = function(plr, action)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	local ch = Live.Story[d.story.ch]
+	if action ~= "claim" or not ch then return { ok = false } end
+	if d.story.prog < ch.need then return { ok = false, msg = "Глава ещё не выполнена" } end
+	d.coins += ch.coins or 0
+	d.dust += ch.dust or 0
+	if ch.title2 then
+		d.titles[ch.title2] = true
+		d.title = ch.title2
+	end
+	d.story = { ch = d.story.ch + 1, prog = 0 }
+	addSeasonXp(d, 100)
+	persist(plr)
+	pushState(plr)
+	RewardEv:FireClient(plr, { coins = ch.coins, dust = ch.dust })
 	return { ok = true }
 end
 TitleFn.OnServerInvoke = function(plr, title)
@@ -1974,6 +2019,8 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		for _, p in Players:GetPlayers() do pushState(p) end
 	elseif cmd == "raid" then
 		startRaid()
+	elseif cmd == "boss" then
+		if startBossCmd then startBossCmd(typeof(a1) == "string" and a1 or nil) end
 	elseif cmd == "season" then
 		addSeasonXp(d, Live.Season.tierXp * 3)
 	elseif cmd == "fast" then
@@ -2166,6 +2213,7 @@ local function endRaid()
 			d.coins += coins
 			d.dust += dust
 			addSeasonXp(d, math.floor(RAID.reward.sxp * share))
+			storyEvent(plr, d, "raid")
 			persist(plr)
 			pushState(plr)
 			RewardEv:FireClient(plr, { coins = coins, dust = dust })
@@ -2242,6 +2290,150 @@ end)
 Players.PlayerRemoving:Connect(function(plr)
 	raid.contrib[plr] = nil
 	raid.lastHit[plr] = nil
+end)
+
+------------------------------------------------------------------ Хранитель алтаря (NPC сюжета)
+do
+	local SC2 = Catalog.Worlds.Scale
+	local base = Vector3.new(16 * SC2 / 1.6, 0.5, 4 * SC2)
+	local npc = Instance.new("Model")
+	npc.Name = "AltarKeeper"
+	local function np(name, size, offset, color, mat, shape)
+		local p = Instance.new("Part")
+		p.Name, p.Size, p.Color, p.Material = name, size, color, mat or Enum.Material.SmoothPlastic
+		p.Anchored, p.CanCollide = true, name == "Robe"
+		if shape then p.Shape = shape end
+		p.CFrame = CFrame.new(base + offset) * CFrame.Angles(0, math.rad(200), 0)
+		p.Parent = npc
+		return p
+	end
+	local robe = np("Robe", Vector3.new(3, 5, 3), Vector3.new(0, 2.5, 0), Color3.fromRGB(70, 60, 120), Enum.Material.Fabric)
+	np("Sash", Vector3.new(3.1, 0.6, 3.1), Vector3.new(0, 3.4, 0), Color3.fromRGB(200, 60, 50), Enum.Material.Fabric)
+	np("Head", Vector3.new(1.8, 1.8, 1.8), Vector3.new(0, 5.9, 0), Color3.fromRGB(240, 220, 200), nil, Enum.PartType.Ball)
+	np("Beard", Vector3.new(1.2, 1.4, 0.6), Vector3.new(0, 5.1, -0.8), Color3.fromRGB(235, 235, 240))
+	np("Hat", Vector3.new(3.6, 0.5, 3.6), Vector3.new(0, 7, 0), Color3.fromRGB(150, 120, 70), Enum.Material.Wood, Enum.PartType.Cylinder).CFrame = CFrame.new(base + Vector3.new(0, 7, 0)) * CFrame.Angles(0, 0, math.rad(90))
+	np("Staff", Vector3.new(0.3, 7, 0.3), Vector3.new(1.8, 3.5, -0.4), Color3.fromRGB(90, 60, 40), Enum.Material.Wood)
+	local lantern = np("Lantern", Vector3.new(1, 1.2, 1), Vector3.new(1.8, 7.2, -0.4), Color3.fromRGB(255, 190, 100), Enum.Material.Neon, Enum.PartType.Ball)
+	local pl = Instance.new("PointLight")
+	pl.Range, pl.Brightness, pl.Color = 16, 1, Color3.fromRGB(255, 190, 110)
+	pl.Parent = lantern
+	npc.PrimaryPart = robe
+	local tag = Instance.new("BillboardGui")
+	tag.Size, tag.StudsOffset, tag.MaxDistance = UDim2.fromOffset(200, 26), Vector3.new(0, 5.5, 0), 70
+	local tl = Instance.new("TextLabel")
+	tl.Size, tl.BackgroundTransparency, tl.TextScaled, tl.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+	tl.Text, tl.TextColor3, tl.TextStrokeTransparency = "Хранитель алтаря", Color3.fromRGB(255, 220, 140), 0.2
+	tl.Parent = tag
+	tag.Parent = robe
+	local prompt = Instance.new("ProximityPrompt")
+	prompt.ActionText, prompt.ObjectText = "Поговорить", "Хранитель"
+	prompt.HoldDuration, prompt.MaxActivationDistance, prompt.RequiresLineOfSight = 0, 12, false
+	prompt.Parent = robe
+	prompt.Triggered:Connect(function(plr) StoryOpenEv:FireClient(plr) end)
+	npc.Parent = workspace
+end
+
+------------------------------------------------------------------ ночные стражи
+local BOSS = Live.Boss
+local boss = { active = false }
+local nextBoss = os.clock() + BOSS.first
+workspace:SetAttribute("BossActive", false)
+local function endBoss(win: boolean)
+	if not boss.active then return end
+	boss.active = false
+	if boss.anchor then boss.anchor:Destroy() end
+	workspace:SetAttribute("BossActive", false)
+	for plr, n in boss.contrib do
+		local d = data[plr]
+		if d and plr.Parent and n >= 3 then
+			local share = win and 1 or 0.25
+			local coins = math.floor((BOSS.reward.coins + n * 2) * share)
+			local dust = math.floor(BOSS.reward.dust * share)
+			d.coins += coins
+			d.dust += dust
+			addSeasonXp(d, math.floor(BOSS.reward.sxp * share))
+			if win then storyEvent(plr, d, "boss") end
+			persist(plr)
+			pushState(plr)
+			RewardEv:FireClient(plr, { coins = coins, dust = dust })
+			NoticeEv:FireClient(plr, win and ("%s повержен! +%d монет, +%d пыли"):format(boss.name, coins, dust) or ("%s ушёл. Утешительная награда +%d монет"):format(boss.name, coins))
+		end
+	end
+	if win then
+		for _ = 1, 2 do
+			local kind = pickKind(boss.district)
+			if kind then newSpirit(kind, boss.district, false, nil, "golden") end
+		end
+	end
+	boss.contrib = {}
+	nextBoss = os.clock() + BOSS.every
+end
+local function startBoss(district: string?)
+	if boss.active then return end
+	-- район, где есть хотя бы один игрок с открытым доступом
+	local options = {}
+	for dn, b in BOSS.list do
+		for _, p in Players:GetPlayers() do
+			local d = data[p]
+			if d and Catalog.unlocked(dn, stats(d)) and #Catalog.Districts[dn].zones > 0 then
+				table.insert(options, dn)
+				break
+			end
+		end
+	end
+	district = district or options[math.random(math.max(#options, 1))]
+	local b = district and BOSS.list[district]
+	if not b then return end
+	local dc = Catalog.Districts[district]
+	local hp = math.clamp(BOSS.hpPerPlayer * #Players:GetPlayers(), BOSS.minHp, BOSS.maxHp)
+	local a = Instance.new("Part")
+	a.Name, a.Size, a.Transparency, a.Anchored, a.CanCollide, a.CanQuery = "NightBoss", Vector3.new(4, 4, 4), 1, true, false, false
+	a.CFrame = CFrame.new(dc.center + Vector3.new(0, 3, 0))
+	a:SetAttribute("Kind", b.kind)
+	a:SetAttribute("BossName", b.name)
+	a:SetAttribute("District", district)
+	a:SetAttribute("HP", hp)
+	a:SetAttribute("MaxHP", hp)
+	a:SetAttribute("Ends", os.time() + BOSS.duration)
+	a.Parent = workspace
+	boss = { active = true, anchor = a, hp = hp, contrib = {}, lastHit = {}, district = district, name = b.name, endClock = os.clock() + BOSS.duration, center = dc.center }
+	workspace:SetAttribute("BossActive", true)
+	for _, p in Players:GetPlayers() do
+		NoticeEv:FireClient(p, ("Ночной страж %s проснулся: %s! Свети на него вместе с другими"):format(b.name, dc.name))
+	end
+end
+startBossCmd = startBoss
+BossHitEv.OnServerEvent:Connect(function(plr)
+	if not (boss.active and boss.anchor) then return end
+	local root = rootOf(plr)
+	local d = data[plr]
+	if not (root and d) then return end
+	local now = os.clock()
+	if now - (boss.lastHit[plr] or 0) < BOSS.hitEvery then return end
+	boss.lastHit[plr] = now
+	if (root.Position - boss.anchor.Position).Magnitude > BOSS.radius then return end
+	local dmg = 1 + math.floor((d.levels.power - 1) / 2)
+	boss.hp -= dmg
+	boss.contrib[plr] = (boss.contrib[plr] or 0) + dmg
+	boss.anchor:SetAttribute("HP", math.max(0, boss.hp))
+	if boss.hp <= 0 then endBoss(true) end
+end)
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		local now = os.clock()
+		if boss.active then
+			if boss.anchor then
+				local t = now * 0.3
+				local pos = boss.center + Vector3.new(math.cos(t) * 14, 3 + math.sin(now * 1.5) * 0.6, math.sin(t * 0.8) * 10)
+				boss.anchor.CFrame = CFrame.lookAt(pos, pos + Vector3.new(-math.sin(t), 0, math.cos(t * 0.8)))
+			end
+			if now >= boss.endClock then endBoss(false) end
+		elseif now >= nextBoss and not workspace:GetAttribute("RaidActive") and #Players:GetPlayers() > 0 then
+			startBoss()
+			if not boss.active then nextBoss = now + 30 end
+		end
+	end
 end)
 
 game:GetService("StarterPlayer").CameraMaxZoomDistance = 40

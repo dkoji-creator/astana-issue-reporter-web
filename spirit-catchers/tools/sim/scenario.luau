@@ -320,6 +320,34 @@ do
 	frames(30)
 end
 
+stage("сюжет и ночной страж")
+do
+	local keeper = workspace:FindFirstChild("AltarKeeper")
+	if not keeper then table.insert(SIM.errors, "нет Хранителя алтаря") end
+	local pp = keeper and keeper:FindFirstChild("Robe") and keeper.Robe:FindFirstChildOfClass("ProximityPrompt")
+	if pp then pp.Triggered:Fire(plr) end
+	frames(5)
+	inv("Story", "claim")
+	inv("Admin", "boss", "street")
+	frames(5)
+	local a = workspace:FindFirstChild("NightBoss")
+	if not a then
+		table.insert(SIM.errors, "ночной страж не появился")
+	else
+		local from = a.Position + Vector3.new(0, 0, 15)
+		plr.Character.HumanoidRootPart.CFrame = CFrame.lookAt(from, Vector3.new(a.Position.X, from.Y, a.Position.Z))
+		for _ = 1, 30 do
+			plr.Character.HumanoidRootPart.CFrame = CFrame.lookAt(a.Position + Vector3.new(0, 0, 15), a.Position)
+			remotes.BossHit:FireServer()
+			frames(5)
+		end
+		local hp = a.Parent and a:GetAttribute("HP") or 0
+		if a.Parent and hp >= a:GetAttribute("MaxHP") then table.insert(SIM.errors, "страж: удары не засчитаны") end
+		frames(2500)
+		if workspace:FindFirstChild("NightBoss") then table.insert(SIM.errors, "страж не ушёл") end
+	end
+end
+
 stage("достижения")
 for _, id in { "first", "c50", "k10", "kall", "golden", "lvl25", "reborn", "legend" } do inv("ClaimAchievement", id) end
 frames(20)

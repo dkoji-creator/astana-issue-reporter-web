@@ -49,6 +49,7 @@ do
 end
 local enterPhoto -- фото-режим (ниже)
 local toggleWindow -- открыть одно окно, закрыть остальные (ниже)
+local openStory -- диалог Хранителя (ниже)
 -- бонус способности спутника (доля), например compBonus("reveal") = 0.12
 local function compBonus(key)
 	local c = state.comp
@@ -644,6 +645,11 @@ do
 		end)
 		questRows[i] = { title = title, bar = bar, reward = reward, go = go }
 	end
+	local storyB = K.button(questList, "Сюжет: задания Хранителя алтаря", T.gold, { Size = UDim2.new(1, -10, 0, 50), LayoutOrder = 0, MaxText = 18 })
+	storyB.Activated:Connect(function()
+		K.close(questW)
+		if openStory then openStory() end
+	end)
 	K.text(questList, "Задание засчитывается, когда сдаёшь банку у алтаря. Новое появляется сразу.", { Size = UDim2.new(1, -10, 0, 22), LayoutOrder = 10, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
 	refreshQuests = function()
 		for i, r in questRows do
@@ -1160,6 +1166,117 @@ do
 			clubMembers.Text = "Участники: " .. table.concat(c.members, ", ")
 		end
 	end
+end
+------------------------------------------------------------------ сюжет Хранителя и ночные стражи
+do
+	local Live = Catalog.Live
+	-- диалог с Хранителем алтаря
+	local dlg = K.panel(gui, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.new(0.8, 0, 0, 200), Visible = false, ZIndex = 15, BackgroundColor3 = Color3.fromRGB(40, 34, 60) })
+	K.make("UISizeConstraint", { MaxSize = Vector2.new(820, 220) }, dlg)
+	K.stroke(dlg, T.gold, 3)
+	local who = K.text(dlg, "Хранитель алтаря", { Size = UDim2.new(1, -24, 0, 26), Position = UDim2.fromOffset(12, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 20, TextColor3 = T.gold, ZIndex = 15 })
+	local say = K.text(dlg, "", { Size = UDim2.new(1, -24, 0, 60), Position = UDim2.fromOffset(12, 38), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 17, Font = Enum.Font.GothamBold, TextWrapped = true, ZIndex = 15 })
+	local goal = K.text(dlg, "", { Size = UDim2.new(0.62, -12, 0, 24), Position = UDim2.new(0, 12, 0, 104), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextColor3 = Color3.fromRGB(255, 220, 150), ZIndex = 15 })
+	local _, gFill = K.bar(dlg, T.gold, { Size = UDim2.new(0.62, -12, 0, 12), Position = UDim2.new(0, 12, 0, 134), ZIndex = 15 })
+	local claimB, claimL = K.button(dlg, "", T.green, { Size = UDim2.new(0.36, -12, 0, 46), Position = UDim2.new(0.64, 0, 0, 104), MaxText = 17, ZIndex = 15 })
+	local closeB = K.button(dlg, "Закрыть", Color3.fromRGB(110, 110, 140), { Size = UDim2.new(0.36, -12, 0, 36), Position = UDim2.new(0.64, 0, 1, -44), MaxText = 15, ZIndex = 15 })
+	local function refresh()
+		local st = state.story or { ch = 1, prog = 0 }
+		local ch = Live.Story[st.ch]
+		if not ch then
+			who.Text = "Хранитель алтаря"
+			say.Text = "Ты прошёл все мои испытания, ученик. Скоро будут новые истории."
+			goal.Text = ("Все главы пройдены: %d/%d"):format(#Live.Story, #Live.Story)
+			gFill.Size = UDim2.fromScale(1, 1)
+			claimB.Visible = false
+			return
+		end
+		claimB.Visible = true
+		who.Text = ("Хранитель алтаря  -  глава %d/%d: %s"):format(st.ch, #Live.Story, ch.title)
+		say.Text = ch.say
+		local reward = {}
+		if ch.coins then table.insert(reward, ch.coins .. " монет") end
+		if ch.dust then table.insert(reward, ch.dust .. " пыли") end
+		goal.Text = ("Прогресс %d/%d   Награда: %s"):format(math.min(st.prog, ch.need), ch.need, table.concat(reward, ", "))
+		gFill.Size = UDim2.fromScale(math.clamp(st.prog / ch.need, 0, 1), 1)
+		local ready = st.prog >= ch.need
+		claimL.Text = ready and "Забрать награду" or "В процессе"
+		K.recolor(claimB, ready and T.green or Color3.fromRGB(80, 80, 100))
+	end
+	openStory = function()
+		refresh()
+		dlg.Visible = true
+		K.pop(dlg)
+	end
+	closeB.Activated:Connect(function() dlg.Visible = false end)
+	claimB.Activated:Connect(function()
+		local r = remotes.Story:InvokeServer("claim")
+		if r and r.ok then
+			play("legendary")
+			showToast("Глава пройдена!", 2, Color3.fromRGB(150, 110, 20))
+			task.wait(0.3)
+			refresh()
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
+	remotes.StoryOpen.OnClientEvent:Connect(openStory)
+	remotes.State.OnClientEvent:Connect(function()
+		if dlg.Visible then task.defer(refresh) end
+	end)
+
+	-- ночной страж: модель, полоса здоровья, удары лучом
+	local bossBar = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -124), Size = UDim2.fromOffset(400, 46), BackgroundColor3 = Color3.fromRGB(70, 20, 30), Visible = false }, hud)
+	K.corner(bossBar, UDim.new(0, 14))
+	K.stroke(bossBar, T.ink, 3)
+	local bossL = K.text(bossBar, "", { Size = UDim2.new(1, -16, 0, 22), Position = UDim2.fromOffset(8, 3), MaxText = 17 })
+	local _, bossFill = K.bar(bossBar, Color3.fromRGB(255, 80, 90), { Size = UDim2.new(1, -16, 0, 12), Position = UDim2.fromOffset(8, 28) })
+	local bossModel, bossKind = nil, nil
+	RunService.RenderStepped:Connect(function()
+		local a = workspace:FindFirstChild("NightBoss")
+		if not a then
+			if bossModel then bossModel:Destroy() bossModel = nil end
+			return
+		end
+		local kind = a:GetAttribute("Kind")
+		if not bossModel or bossKind ~= kind then
+			if bossModel then bossModel:Destroy() end
+			bossKind = kind
+			if Spirits.Builders[kind] then
+				bossModel = Spirits.Builders[kind]()
+				Spirits.scale(bossModel, 3)
+				Spirits.aura(bossModel, Color3.fromRGB(255, 60, 70))
+				bossModel.Parent = workspace
+			end
+		end
+		if bossModel then
+			local t = os.clock()
+			Spirits.animate(bossModel, a.CFrame * (Spirits.Pose[kind] and Spirits.Pose[kind](t) or CFrame.new()), t * 2)
+		end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(0.2)
+			local a = workspace:FindFirstChild("NightBoss")
+			bossBar.Visible = a ~= nil
+			if a then
+				local hp, max = a:GetAttribute("HP") or 0, math.max(a:GetAttribute("MaxHP") or 1, 1)
+				local left = math.max(0, (a:GetAttribute("Ends") or 0) - os.time())
+				local dc = Catalog.Districts[a:GetAttribute("District") or ""]
+				bossL.Text = ("%s (%s)  %d/%d   %d:%02d"):format(a:GetAttribute("BossName") or "Страж", dc and dc.name or "", hp, max, left // 60, left % 60)
+				bossFill.Size = UDim2.fromScale(math.clamp(hp / max, 0, 1), 1)
+				local r = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+				if r then
+					local d = a.Position - r.Position
+					local flat = Vector3.new(d.X, 0, d.Z)
+					local look = r.CFrame.LookVector
+					if d.Magnitude < Live.Boss.radius and flat.Magnitude > 0.1 and flat.Unit:Dot(Vector3.new(look.X, 0, look.Z).Unit) > 0.6 then
+						remotes.BossHit:FireServer()
+					end
+				end
+			end
+		end
+	end)
 end
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
