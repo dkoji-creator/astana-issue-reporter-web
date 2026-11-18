@@ -156,7 +156,7 @@ end
 local eventPill, eventGrad, eventL, trackPill, trackL, showToast, modPill, modL, compPill, compL
 do
 	-- модификатор дня под таймером события
-	modPill = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(250, 26), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
+	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(240, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(modPill, UDim.new(1, 0))
 	K.stroke(modPill, T.ink, 2)
 	modL = K.text(modPill, "", { Size = UDim2.new(1, -16, 1, -6), Position = UDim2.fromOffset(8, 3), MaxText = 15 })
@@ -286,9 +286,9 @@ end
 local atlasW, atlasBody, _, collectFill, spiritGrid, cards, setTrack, refreshAtlas
 do
 	atlasW, atlasBody = K.window(gui, "Атлас духов", "atlas", T.blue)
-	local atlasTop = K.make("Frame", { Size = UDim2.new(1, 0, 0, 62), BackgroundTransparency = 1 }, atlasBody)
-	local collectL = K.text(atlasTop, "", { Size = UDim2.new(0.46, 0, 0, 28), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 22 })
-	_, collectFill = K.bar(atlasTop, T.gold, { Size = UDim2.new(0.46, 0, 0, 16), Position = UDim2.fromOffset(0, 36) })
+	local atlasTop = K.make("Frame", { Size = UDim2.new(1, 0, 0, 48), BackgroundTransparency = 1 }, atlasBody)
+	local collectL = K.text(atlasTop, "", { Size = UDim2.new(0.46, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 22 })
+	_, collectFill = K.bar(atlasTop, T.gold, { Size = UDim2.new(0.46, 0, 0, 12), Position = UDim2.fromOffset(0, 30) })
 	-- одна понятная карточка «следующая награда коллекции» вместо ряда одинаковых плашек
 	local mileCard = K.panel(atlasTop, { Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, 0, 1, -4), BackgroundColor3 = Color3.fromRGB(58, 50, 34) })
 	K.icon(mileCard, "trophy", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 7) })
@@ -301,22 +301,22 @@ do
 		local r = remotes.ClaimMilestone:InvokeServer(mileIndex)
 		if r and not r.ok and r.msg then showToast(r.msg) end
 	end)
-	local atlasTabs = K.make("Frame", { Position = UDim2.fromOffset(0, 66), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, atlasBody)
+	local atlasTabs = K.make("Frame", { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, atlasBody)
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 	local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	local tabAlbum = K.button(atlasTabs, "Альбом", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
-	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106) })
+	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
-	local worldList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
+	local worldList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, worldList)
-	local tierList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
+	local tierList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tierList)
 	-- достижения
-	local achList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), Visible = false })
+	local achList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, achList)
 	local achRows = {}
 	for i, id in Prog.AchievementOrder do
@@ -360,7 +360,7 @@ do
 		end
 	end
 	-- альбом редких поимок: карточка с 3D-моделью, разновидностью, датой и районом
-	local albumPage = K.make("Frame", { Position = UDim2.fromOffset(0, 106), Size = UDim2.new(1, 0, 1, -106), BackgroundTransparency = 1, Visible = false }, atlasBody)
+	local albumPage = K.make("Frame", { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), BackgroundTransparency = 1, Visible = false }, atlasBody)
 	local albumHead = K.text(albumPage, "Сюда попадают эпические духи и редкие разновидности", { Size = UDim2.new(0.68, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextWrapped = true })
 	local photoB = K.button(albumPage, "Фото-режим", T.pink, { Size = UDim2.new(0.3, 0, 0, 34), Position = UDim2.new(0.7, 0, 0, 0), MaxText = 16 })
 	local albumGrid = K.scroll(albumPage, { Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40) })
@@ -2468,6 +2468,15 @@ do
 			beamPart.CFrame = CFrame.new(c) * CFrame.Angles(0, now * 0.6, 0) * CFrame.new(48, 0, 0)
 		end
 		if math.floor(now * 10) % 2 == 0 then
+			-- свой фонарь светит мягче: частицы у камеры не должны засвечивать персонажа
+			local myLamp = plr.Character and plr.Character:FindFirstChild("Lantern")
+			local fx = myLamp and myLamp:FindFirstChild("Fx")
+			local glow = fx and fx:FindFirstChild("Glow")
+			if glow and not glow:GetAttribute("Calm") then
+				glow:SetAttribute("Calm", true)
+				glow.Rate = glow.Rate * 0.4
+				glow.LightEmission = 0.3
+			end
 			for _, p in Players:GetPlayers() do
 				if p:GetAttribute("Skin") == "vip" then
 					local lamp = p.Character and p.Character:FindFirstChild("Lantern")

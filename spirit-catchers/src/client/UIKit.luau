@@ -154,7 +154,13 @@ function K.window(parent, title, iconKey, color, w, h)
 	}, parent)
 	K.corner(f, UDim.new(0, 18))
 	K.stroke(f, T.ink, 4)
-	make("UISizeConstraint", { MaxSize = Vector2.new(980, 620) }, f)
+	make("UISizeConstraint", { MaxSize = Vector2.new(1200, 760) }, f)
+	-- на телефоне окна почти во весь экран: так текст и карточки крупнее
+	local cam = workspace.CurrentCamera
+	if cam and cam.ViewportSize.Y > 0 and cam.ViewportSize.Y < 560 then
+		f.Size = UDim2.fromScale(0.95, 0.93)
+		f.Position = UDim2.fromScale(0.5, 0.52)
+	end
 	local head = make("Frame", { Size = UDim2.new(1, 0, 0, 50), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
 	K.corner(head, UDim.new(0, 18))
 	K.gradient(head, lighten(color, 0.2), darken(color, 0.1))

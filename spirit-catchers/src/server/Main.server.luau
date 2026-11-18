@@ -91,7 +91,7 @@ local cc = Instance.new("ColorCorrectionEffect")
 cc.Parent = Lighting
 local bloom = Instance.new("BloomEffect")
 bloom.Name = "Bloom"
-bloom.Intensity, bloom.Size, bloom.Threshold = 0.2, 14, 1.6
+bloom.Intensity, bloom.Size, bloom.Threshold = 0.15, 12, 2
 bloom.Parent = Lighting
 local atm = Instance.new("Atmosphere")
 atm.Density, atm.Haze, atm.Color, atm.Decay = 0.3, 1.1, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
@@ -653,7 +653,7 @@ local function lanternFx(lantern, skin)
 	pe.Name = "Glow"
 	pe.Texture = FX_TEX[f.tex] or FX_TEX.sparkles
 	pe.Color = seq(f.colors)
-	pe.LightEmission, pe.Rate = 1, f.rate
+	pe.LightEmission, pe.Rate = 0.55, f.rate * 0.6
 	pe.Lifetime = NumberRange.new(f.life * 0.7, f.life)
 	pe.Speed = NumberRange.new(f.speed * 0.5, f.speed)
 	pe.SpreadAngle = Vector2.new(180, 180)
@@ -661,7 +661,7 @@ local function lanternFx(lantern, skin)
 	pe.Drag = 1
 	pe.RotSpeed = NumberRange.new(-90, 90)
 	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, f.size), NumberSequenceKeypoint.new(1, 0) })
-	pe.Transparency = NumberSequence.new(f.tex == "smoke" and 0.6 or 0.1, 1)
+	pe.Transparency = NumberSequence.new(f.tex == "smoke" and 0.7 or 0.3, 1)
 	pe.Parent = lantern
 	pe.Parent = folder
 	-- шлейф при беге: два крепления сверху и снизу фонаря
@@ -677,7 +677,7 @@ local function lanternFx(lantern, skin)
 		tr.Name = "Trail"
 		tr.Attachment0, tr.Attachment1 = a0, a1
 		tr.Color = seq(f.trail)
-		tr.LightEmission = 0.8
+		tr.LightEmission = 0.4
 		tr.Lifetime = 0.55
 		tr.Transparency = NumberSequence.new(0.25, 1)
 		tr.WidthScale = NumberSequence.new(1, 0.2)
@@ -695,7 +695,7 @@ local function lanternFx(lantern, skin)
 	end
 	if f.aura then
 		local aura = Instance.new("PointLight")
-		aura.Name, aura.Range, aura.Brightness, aura.Color = "Aura", 14, 1.2, skin.lamp
+		aura.Name, aura.Range, aura.Brightness, aura.Color = "Aura", 10, 0.45, skin.lamp
 		aura.Shadows = false
 		aura.Parent = folder
 	end

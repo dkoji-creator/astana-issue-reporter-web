@@ -882,7 +882,7 @@ function S.buildGlassHeron(): Model
 	m.Name = "GlassHeron"
 	local glass = Color3.fromRGB(200, 230, 255)
 	local function g(name, size, cf, extra)
-		local props = { Name = name, Size = size, CFrame = cf, Color = glass, Material = Enum.Material.Glass, Transparency = 0.35, Reflectance = 0.3 }
+		local props = { Name = name, Size = size, CFrame = cf, Color = glass, Material = Enum.Material.Glass, Transparency = 0.35, Reflectance = 0.1 }
 		for k, v in extra or {} do props[k] = v end
 		return mk(m, props)
 	end
@@ -899,7 +899,7 @@ function S.buildGlassHeron(): Model
 	end
 	-- луна внутри груди: видна сквозь стекло
 	local moonCore = mk(m, { Name = "MoonCore", Size = Vector3.new(0.8, 0.8, 0.8), CFrame = CFrame.new(0, 4.7, 0.1), Color = Color3.fromRGB(255, 250, 220), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
-	light(moonCore, Color3.fromRGB(220, 235, 255), 18, 1.6)
+	light(moonCore, Color3.fromRGB(220, 235, 255), 14, 0.8)
 	m.PrimaryPart = body
 	S.scale(m, 1.2)
 	return m
