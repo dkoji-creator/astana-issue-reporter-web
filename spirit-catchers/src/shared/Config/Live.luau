@@ -222,4 +222,23 @@ L.Boss = {
 	},
 }
 
+------------------------------------------------------------------ праздники: лимитированные духи
+-- from/to = { месяц, день } включительно; период может переходить через Новый год
+L.Holidays = {
+	{ id = "halloween", name = "Ночь тыкв", from = { 10, 20 }, to = { 11, 5 }, kind = "PumpkinLantern" },
+	{ id = "autumn", name = "Осенний фестиваль", from = { 11, 1 }, to = { 11, 30 }, kind = "MapleSpirit" },
+	{ id = "newyear", name = "Новогодние огни", from = { 12, 15 }, to = { 1, 15 }, kind = "SnowSpirit" },
+}
+L.HolidayChance = 0.07 -- доля появлений праздничного духа в районах
+function L.activeHolidays(t: number)
+	local d = os.date("!*t", t)
+	local now = d.month * 100 + d.day
+	local out = {}
+	for _, h in L.Holidays do
+		local a, b = h.from[1] * 100 + h.from[2], h.to[1] * 100 + h.to[2]
+		if (a <= b and now >= a and now <= b) or (a > b and (now >= a or now <= b)) then table.insert(out, h) end
+	end
+	return out
+end
+
 return L

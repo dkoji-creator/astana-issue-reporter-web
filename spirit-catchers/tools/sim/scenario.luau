@@ -320,6 +320,25 @@ do
 	frames(30)
 end
 
+stage("небесный рынок и праздник")
+do
+	for _ = 1, 10 do inv("Admin", "level") end
+	local t = inv("Teleport", "skymarket")
+	if not (t and t.ok) then table.insert(SIM.errors, "телепорт на небесный рынок: " .. tostring(t and t.msg)) end
+	inv("Admin", "holiday")
+	frames(200)
+	local hidden = 0
+	for _, a in workspace.Spirits:GetChildren() do
+		if a.Position.X > 300 and not a:GetAttribute("Revealed") then hidden += 1 end
+	end
+	stage("на небесном рынке скрытых духов: " .. hidden)
+	if hidden == 0 then table.insert(SIM.errors, "на небесном рынке нет духов") end
+	-- падение с крыши возвращает на рынок
+	plr.Character.HumanoidRootPart.CFrame = CFrame.new(265 * 1.6 + 29, -10, 30 * 1.6)
+	frames(10)
+	if plr.Character.HumanoidRootPart.Position.Y < -3 then table.insert(SIM.errors, "после падения не вернуло на крышу") end
+end
+
 stage("сюжет и ночной страж")
 do
 	local keeper = workspace:FindFirstChild("AltarKeeper")

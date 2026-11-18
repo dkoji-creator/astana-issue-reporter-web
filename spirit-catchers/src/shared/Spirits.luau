@@ -947,6 +947,139 @@ function S.buildTwinMoon(): Model
 	return m
 end
 
+------------------------------------------------------------------ Небесный рынок и праздники
+function S.buildPaperBalloon(): Model
+	local m = Instance.new("Model")
+	m.Name = "PaperBalloon"
+	local body = mk(m, { Name = "Body", Size = Vector3.new(3, 3.4, 3), CFrame = CFrame.new(0, 2.4, 0), Color = Color3.fromRGB(255, 190, 140), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball, Transparency = 0.15 })
+	for i = 0, 3 do
+		local a = i * math.pi / 2
+		mk(m, { Name = "Rib", Size = Vector3.new(0.12, 3.4, 0.12), CFrame = CFrame.new(math.cos(a) * 1.45, 2.4, math.sin(a) * 1.45), Color = Color3.fromRGB(140, 70, 50) })
+	end
+	mk(m, { Name = "Basket", Size = Vector3.new(1.2, 0.8, 1.2), CFrame = CFrame.new(0, 0.2, 0), Color = Color3.fromRGB(150, 100, 60), Material = Enum.Material.Wood })
+	for _, x in { -0.5, 0.5 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.35, 0.45, 0.2), CFrame = CFrame.new(x, 2.6, -1.45), Color = Color3.fromRGB(40, 30, 30) })
+	end
+	light(body, Color3.fromRGB(255, 190, 130), 14, 1)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
+function S.buildWindChime(): Model
+	local m = Instance.new("Model")
+	m.Name = "WindChime"
+	local glass = mk(m, { Name = "Bell", Size = Vector3.new(2, 1.8, 2), CFrame = CFrame.new(0, 2, 0), Color = Color3.fromRGB(170, 220, 255), Material = Enum.Material.Glass, Transparency = 0.3, Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Rim", Size = Vector3.new(2.2, 0.2, 2.2), CFrame = CFrame.new(0, 1.3, 0), Color = Color3.fromRGB(90, 160, 230), Material = Enum.Material.Neon })
+	local tongue = mk(m, { Name = "Tongue", Size = Vector3.new(0.3, 0.8, 0.3), CFrame = CFrame.new(0, 1.2, 0), Color = Color3.fromRGB(255, 220, 120), Material = Enum.Material.Neon })
+	joint(tongue, Vector3.new(0, 1.6, 0), "swingX", 0, 1.4)
+	local paper = mk(m, { Name = "Strip", Size = Vector3.new(0.9, 2.2, 0.05), CFrame = CFrame.new(0, -0.3, 0), Color = Color3.fromRGB(255, 120, 140) })
+	joint(paper, Vector3.new(0, 0.8, 0), "swingX", 1, 1.2)
+	for _, x in { -0.4, 0.4 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.3, 0.1), CFrame = CFrame.new(x, 2.1, -0.98), Color = Color3.fromRGB(30, 40, 70) })
+	end
+	light(glass, Color3.fromRGB(170, 220, 255), 12, 1)
+	m.PrimaryPart = glass
+	S.scale(m, 1.3)
+	return m
+end
+
+function S.buildCloudCat(): Model
+	local m = Instance.new("Model")
+	m.Name = "CloudCat"
+	local white = Color3.fromRGB(245, 248, 255)
+	local body = mk(m, { Name = "Body", Size = Vector3.new(2.4, 2, 3.2), CFrame = CFrame.new(0, 1.4, 0), Color = white, Shape = Enum.PartType.Ball })
+	for i, o in { Vector3.new(0.9, 1.9, 0.6), Vector3.new(-0.9, 1.8, -0.4), Vector3.new(0, 2.1, 1) } do
+		mk(m, { Name = "Puff", Size = Vector3.new(1.6, 1.4, 1.6) * (1 + i * 0.05), CFrame = CFrame.new(o), Color = white, Shape = Enum.PartType.Ball })
+	end
+	local head = mk(m, { Name = "Head", Size = Vector3.new(1.8, 1.6, 1.6), CFrame = CFrame.new(0, 2.4, -1.6), Color = white, Shape = Enum.PartType.Ball })
+	for _, x in { -0.55, 0.55 } do
+		mk(m, { Name = "Ear", Size = Vector3.new(0.5, 0.7, 0.3), CFrame = CFrame.new(x, 3.3, -1.6), Color = white }, "WedgePart")
+		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.3, 0.1), CFrame = CFrame.new(x * 0.6, 2.5, -2.4), Color = Color3.fromRGB(90, 160, 255), Material = Enum.Material.Neon })
+		local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.6, 0.9, 0.6), CFrame = CFrame.new(x * 1.3, 0.45, 0.6), Color = white, Shape = Enum.PartType.Ball })
+		joint(leg, Vector3.new(x, 0.9, 0.6), "swingX", x > 0 and 0 or math.pi, 0.7)
+	end
+	local tail = mk(m, { Name = "Tail", Size = Vector3.new(0.7, 0.7, 2.2), CFrame = CFrame.new(0, 2, 2.2), Color = white })
+	joint(tail, Vector3.new(0, 1.8, 1.4), "wagY", 0, 1)
+	light(head, Color3.fromRGB(200, 220, 255), 10, 0.6)
+	m.PrimaryPart = body
+	S.scale(m, 1.2)
+	return m
+end
+
+function S.buildKiteDragon(): Model
+	local m = Instance.new("Model")
+	m.Name = "KiteDragon"
+	local red = Color3.fromRGB(230, 60, 60)
+	local head = mk(m, { Name = "Head", Size = Vector3.new(2.4, 1.8, 2.2), CFrame = CFrame.new(0, 0, -2), Color = red })
+	mk(m, { Name = "Horn", Size = Vector3.new(0.3, 1.4, 0.3), CFrame = CFrame.new(-0.7, 1.4, -1.8) * CFrame.Angles(0, 0, 0.3), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon })
+	mk(m, { Name = "Horn", Size = Vector3.new(0.3, 1.4, 0.3), CFrame = CFrame.new(0.7, 1.4, -1.8) * CFrame.Angles(0, 0, -0.3), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon })
+	for _, x in { -0.6, 0.6 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.4, 0.4, 0.1), CFrame = CFrame.new(x, 0.3, -3.12), Color = Color3.fromRGB(255, 240, 120), Material = Enum.Material.Neon })
+	end
+	local colors = { Color3.fromRGB(255, 200, 60), Color3.fromRGB(80, 180, 255), Color3.fromRGB(120, 230, 120), red }
+	for i = 1, 8 do
+		local seg = mk(m, { Name = "Flag", Size = Vector3.new(1.8 - i * 0.12, 1.2 - i * 0.07, 0.1), CFrame = CFrame.new(0, 0, i * 1.3), Color = colors[i % 4 + 1] })
+		joint(seg, Vector3.new(0, 0, i * 1.3 - 0.6), "wagY", i * 0.6, 0.6 + i * 0.05)
+	end
+	light(head, Color3.fromRGB(255, 120, 90), 16, 1.2)
+	m.PrimaryPart = head
+	S.scale(m, 1.4)
+	return m
+end
+
+function S.buildMapleSpirit(): Model
+	local m = Instance.new("Model")
+	m.Name = "MapleSpirit"
+	local core = mk(m, { Name = "Core", Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(0, 1.6, 0), Color = Color3.fromRGB(255, 160, 60), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	for i = 0, 4 do
+		local a = i / 5 * math.pi * 2
+		local leaf = mk(m, { Name = "Leaf", Size = Vector3.new(1.1, 0.1, 1.6), CFrame = CFrame.new(math.cos(a) * 1.1, 1.6, math.sin(a) * 1.1) * CFrame.Angles(0, -a, 0.3), Color = i % 2 == 0 and Color3.fromRGB(230, 70, 40) or Color3.fromRGB(255, 150, 40) })
+		joint(leaf, Vector3.new(0, 1.6, 0), "flapZ", i, 0.4)
+	end
+	light(core, Color3.fromRGB(255, 140, 60), 12, 1)
+	m.PrimaryPart = core
+	S.scale(m, 1.5)
+	return m
+end
+
+function S.buildPumpkinLantern(): Model
+	local m = Instance.new("Model")
+	m.Name = "PumpkinLantern"
+	local body = mk(m, { Name = "Pumpkin", Size = Vector3.new(2.6, 2.2, 2.6), CFrame = CFrame.new(0, 1.2, 0), Color = Color3.fromRGB(240, 130, 30), Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Stem", Size = Vector3.new(0.35, 0.7, 0.35), CFrame = CFrame.new(0, 2.5, 0), Color = Color3.fromRGB(80, 110, 50) })
+	for _, x in { -0.55, 0.55 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.5, 0.45, 0.1), CFrame = CFrame.new(x, 1.5, -1.28), Color = Color3.fromRGB(255, 230, 120), Material = Enum.Material.Neon }, "WedgePart")
+	end
+	mk(m, { Name = "Mouth", Size = Vector3.new(1.2, 0.3, 0.1), CFrame = CFrame.new(0, 0.85, -1.28), Color = Color3.fromRGB(255, 230, 120), Material = Enum.Material.Neon })
+	for _, x in { -0.7, 0.7 } do
+		local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.4, 0.6, 0.4), CFrame = CFrame.new(x, 0.2, 0), Color = Color3.fromRGB(60, 90, 40) })
+		joint(leg, Vector3.new(x, 0.5, 0), "swingX", x > 0 and 0 or math.pi, 0.8)
+	end
+	light(body, Color3.fromRGB(255, 170, 70), 14, 1.2)
+	m.PrimaryPart = body
+	S.scale(m, 1.4)
+	return m
+end
+
+function S.buildSnowSpirit(): Model
+	local m = Instance.new("Model")
+	m.Name = "SnowSpirit"
+	local snow = Color3.fromRGB(240, 248, 255)
+	local base = mk(m, { Name = "Base", Size = Vector3.new(2.4, 2.2, 2.4), CFrame = CFrame.new(0, 1.1, 0), Color = snow, Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Head", Size = Vector3.new(1.7, 1.6, 1.7), CFrame = CFrame.new(0, 2.7, 0), Color = snow, Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Scarf", Size = Vector3.new(1.9, 0.35, 1.9), CFrame = CFrame.new(0, 2.05, 0), Color = Color3.fromRGB(220, 50, 60), Material = Enum.Material.Fabric })
+	mk(m, { Name = "Nose", Size = Vector3.new(0.25, 0.25, 0.7), CFrame = CFrame.new(0, 2.7, -1), Color = Color3.fromRGB(255, 140, 40) })
+	for _, x in { -0.35, 0.35 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.2, 0.2, 0.1), CFrame = CFrame.new(x, 2.95, -0.82), Color = Color3.fromRGB(40, 60, 100), Material = Enum.Material.Neon })
+	end
+	local hat = mk(m, { Name = "Hat", Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(0, 3.6, 0), Color = Color3.fromRGB(80, 160, 255), Material = Enum.Material.Neon }, "WedgePart")
+	light(hat, Color3.fromRGB(180, 220, 255), 12, 1)
+	m.PrimaryPart = base
+	S.scale(m, 1.4)
+	return m
+end
+
 S.Builders = {
 	PaperFox = S.buildPaperFox,
 	Umbrella = S.buildUmbrella,
@@ -975,6 +1108,13 @@ S.Builders = {
 	MirrorKoi = S.buildMirrorKoi,
 	GlassHeron = S.buildGlassHeron,
 	TwinMoon = S.buildTwinMoon,
+	PaperBalloon = S.buildPaperBalloon,
+	WindChime = S.buildWindChime,
+	CloudCat = S.buildCloudCat,
+	KiteDragon = S.buildKiteDragon,
+	MapleSpirit = S.buildMapleSpirit,
+	PumpkinLantern = S.buildPumpkinLantern,
+	SnowSpirit = S.buildSnowSpirit,
 }
 
 -- Движение всей модели поверх опоры (прыжки, танец, парение).
@@ -1009,6 +1149,13 @@ S.Pose = {
 	Crane = function(t) return CFrame.new(0, sin(t * 1.2) * 0.8, 0) * CFrame.Angles(0, 0, sin(t * 0.8) * 0.25) end,
 	MoonRabbit = function(t) return CFrame.new(0, abs(sin(t * 4)) * 1.4, 0) end,
 	GoldenCarp = function(t) return CFrame.new(0, sin(t * 1.3) * 0.6, 0) end,
+	PaperBalloon = function(t) return CFrame.new(0, sin(t * 0.9) * 0.8, 0) * CFrame.Angles(0, sin(t * 0.4) * 0.3, 0) end,
+	WindChime = function(t) return CFrame.new(0, sin(t * 1.4) * 0.4, 0) * CFrame.Angles(sin(t * 2) * 0.15, 0, sin(t * 1.7) * 0.15) end,
+	CloudCat = function(t) return CFrame.new(0, abs(sin(t * 3)) * 0.5, 0) end,
+	KiteDragon = function(t) return CFrame.new(sin(t * 0.7) * 1.5, sin(t * 1.1) * 1.2, 0) * CFrame.Angles(0, sin(t * 0.5) * 0.3, sin(t * 0.9) * 0.2) end,
+	MapleSpirit = function(t) return CFrame.new(sin(t * 1.2) * 0.5, sin(t * 1.8) * 0.5, 0) * CFrame.Angles(0, t * 1.5, 0) end,
+	PumpkinLantern = function(t) return CFrame.new(0, abs(sin(t * 3.5)) * 0.6, 0) * CFrame.Angles(0, 0, sin(t * 3.5) * 0.1) end,
+	SnowSpirit = function(t) return CFrame.new(0, abs(sin(t * 2.5)) * 0.4, 0) * CFrame.Angles(0, 0, sin(t * 2.5) * 0.12) end,
 	EchoFirefly = function(t) return CFrame.new(sin(t * 1.1) * 0.8, sin(t * 2.2) * 0.5, math.cos(t * 0.9) * 0.8) end,
 	LilyFrog = function(t) return CFrame.new(0, abs(sin(t * 3)) * 1.6, 0) end,
 	MirrorKoi = function(t) return CFrame.new(0, sin(t * 1.2) * 0.5, 0) * CFrame.Angles(0, sin(t * 0.8) * 0.3, 0) end,

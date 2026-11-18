@@ -477,6 +477,25 @@ L.Boss = {
 	},
 }
 
+------------------------------------------------------------------ праздники: лимитированные духи
+-- from/to = { месяц, день } включительно; период может переходить через Новый год
+L.Holidays = {
+	{ id = "halloween", name = "Ночь тыкв", from = { 10, 20 }, to = { 11, 5 }, kind = "PumpkinLantern" },
+	{ id = "autumn", name = "Осенний фестиваль", from = { 11, 1 }, to = { 11, 30 }, kind = "MapleSpirit" },
+	{ id = "newyear", name = "Новогодние огни", from = { 12, 15 }, to = { 1, 15 }, kind = "SnowSpirit" },
+}
+L.HolidayChance = 0.07 -- доля появлений праздничного духа в районах
+function L.activeHolidays(t: number)
+	local d = os.date("!*t", t)
+	local now = d.month * 100 + d.day
+	local out = {}
+	for _, h in L.Holidays do
+		local a, b = h.from[1] * 100 + h.from[2], h.to[1] * 100 + h.to[2]
+		if (a <= b and now >= a and now <= b) or (a > b and (now >= a or now <= b)) then table.insert(out, h) end
+	end
+	return out
+end
+
 return L
 ]]></string>
           </Properties>
@@ -747,7 +766,7 @@ P.Achievements = {
 	c300 = { name = "Опытный ловец", desc = "Сдай 300 духов", type = "total", need = 300, coins = 900, dust = 20 },
 	c1000 = { name = "Тысяча духов", desc = "Сдай 1000 духов", type = "total", need = 1000, skin = "fog", coins = 2000 },
 	k10 = { name = "Коллекционер", desc = "Собери 10 видов", type = "distinct", need = 10, skin = "sea" },
-	kall = { name = "Все духи", desc = "Собери все виды духов", type = "distinct", need = 27, coins = 5000, dust = 120 },
+	kall = { name = "Все духи", desc = "Собери все постоянные виды духов (31)", type = "distinct", need = 31, coins = 5000, dust = 120 },
 	golden = { name = "Золотая находка", desc = "Поймай Золотую разновидность", type = "variant", key = "golden", need = 1, coins = 400 },
 	rainbow = { name = "Радуга", desc = "Поймай Радужную разновидность", type = "variant", key = "rainbow", need = 1, coins = 1500 },
 	infinity = { name = "Бесконечность", desc = "Поймай Бесконечную разновидность", type = "variant", key = "infinity", need = 1, coins = 10000, dust = 200 },
@@ -785,6 +804,8 @@ S.Order = {
 	"PaperDragon", "MistKraken",
 	"Kyubi",
 	"EchoFirefly", "LilyFrog", "MirrorKoi", "GlassHeron", "TwinMoon",
+	"PaperBalloon", "WindChime", "CloudCat", "KiteDragon",
+	"MapleSpirit", "PumpkinLantern", "SnowSpirit",
 }
 
 S.Kinds = {
@@ -1035,6 +1056,71 @@ S.Kinds = {
 		trail = { shape = "dot", color = Color3.fromRGB(255, 120, 120), text = "Красные лунные блики" },
 		yard = "Кружит над двором",
 	},
+	-- Небесный рынок: крыши над облаками, над духом развевается лента
+	PaperBalloon = {
+		name = "Бумажный шар", short = "Шар", rarity = "uncommon", world = "skymarket",
+		move = "float", speed = 3, height = 3, follow = 0.6, animSpeed = 3, condition = "any",
+		spawn = { skymarket = { w = 40, moon = 25 } }, habitat = { "roof", "stall" },
+		hint = "Небесный рынок: ищи ленту на ветру",
+		habit = "Надувается, когда радуется, и улетает выше крыш, если испугать.",
+		trail = { shape = "scrap", color = Color3.fromRGB(255, 200, 150), text = "Обрывки рисовой бумаги" },
+		yard = "Висит над домиком",
+	},
+	WindChime = {
+		name = "Дух-колокольчик", short = "Колокольчик", rarity = "rare", world = "skymarket",
+		move = "float", speed = 4, height = 4, follow = 0.6, animSpeed = 6, condition = "any",
+		spawn = { skymarket = { w = 28, moon = 20 } }, habitat = { "stall", "roof" },
+		hint = "Небесный рынок: у прилавков",
+		habit = "Звенит от каждого порыва ветра. Чем ближе, тем громче.",
+		trail = { shape = "dot", color = Color3.fromRGB(150, 220, 255), text = "Звенящие искры" },
+		yard = "Звенит у входа",
+	},
+	CloudCat = {
+		name = "Облачный кот", short = "Кот-облако", rarity = "epic", world = "skymarket",
+		move = "walk", speed = 6, height = 0, follow = 0.5, animSpeed = 7, condition = "any",
+		spawn = { skymarket = { w = 14, moon = 14 } }, habitat = { "roof" },
+		hint = "Небесный рынок: гуляет по крышам",
+		habit = "Пушистый, как облако. Прыгает с крыши на крышу и не падает.",
+		trail = { shape = "print", color = Color3.fromRGB(240, 245, 255), text = "Облачные отпечатки лап" },
+		yard = "Дремлет на крыше",
+	},
+	KiteDragon = {
+		name = "Дракон-воздушный змей", short = "Змей", rarity = "legendary", world = "skymarket", main = true,
+		move = "fly", speed = 6, height = 8, follow = 0.35, animSpeed = 3, condition = "any",
+		spawn = { skymarket = { w = 4, moon = 7 } }, habitat = { "roof" },
+		hint = "Небесный рынок: высоко над крышами",
+		habit = "Хвост из флажков. Ленты на ветру показывают, над какой крышей он кружит.",
+		trail = { shape = "scrap", color = Color3.fromRGB(255, 90, 90), text = "Флажки с хвоста" },
+		yard = "Парит над двором",
+	},
+	-- праздничные (лимитированные): появляются только в свой праздник, во всех районах
+	MapleSpirit = {
+		name = "Кленовый дух", short = "Клён", rarity = "epic", world = "lantern", holiday = "autumn",
+		move = "float", speed = 4, height = 2, follow = 0.6, animSpeed = 4, condition = "any",
+		spawn = {}, habitat = { "lamp", "bush", "water", "stall", "pier", "roof", "shore" },
+		hint = "Лимитированный: Осенний фестиваль (1-30 ноября)",
+		habit = "Кружится, как лист на ветру, и оставляет красные листья.",
+		trail = { shape = "scrap", color = Color3.fromRGB(230, 80, 40), text = "Красные кленовые листья" },
+		yard = "Кружит над двором",
+	},
+	PumpkinLantern = {
+		name = "Тыквенный фонарь", short = "Тыква", rarity = "epic", world = "lantern", holiday = "halloween",
+		move = "walk", speed = 5, height = 0, follow = 0.5, animSpeed = 5, condition = "any",
+		spawn = {}, habitat = { "lamp", "bush", "water", "stall", "pier", "roof", "shore" },
+		hint = "Лимитированный: Ночь тыкв (20 октября - 5 ноября)",
+		habit = "Внутри горит свеча. Хихикает и прячется за фонарями.",
+		trail = { shape = "flame", color = Color3.fromRGB(255, 150, 40), text = "Оранжевые огоньки" },
+		yard = "Светится у крыльца",
+	},
+	SnowSpirit = {
+		name = "Снежный дух", short = "Снежок", rarity = "legendary", world = "lantern", holiday = "newyear",
+		move = "walk", speed = 4, height = 0, follow = 0.5, animSpeed = 5, condition = "any",
+		spawn = {}, habitat = { "lamp", "bush", "water", "stall", "pier", "roof", "shore" },
+		hint = "Лимитированный: Новогодние огни (15 декабря - 15 января)",
+		habit = "Пахнет мандаринами. Там, где он прошёл, падает снег.",
+		trail = { shape = "dot", color = Color3.fromRGB(230, 245, 255), text = "Снежинки" },
+		yard = "Лепит снеговика",
+	},
 }
 
 S.ConditionText = {
@@ -1080,7 +1166,7 @@ W.Worlds = {
 	},
 	skymarket = {
 		name = "Небесный рынок",
-		active = false,
+		active = true,
 		blurb = "Бумажные ленты летят по ветру и показывают, над какой крышей искать следующую тень.",
 		search = "Следи за лентами на ветру",
 		star = "Дракон из воздушных змеев с хвостом из флажков",
@@ -1094,7 +1180,7 @@ W.Worlds = {
 	},
 }
 
-W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "mirror", "yard" }
+W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "mirror", "skymarket", "yard" }
 
 -- Районы открываются по уровню, в каждом следующем — более редкие духи и выше удача района.
 -- habitats: «логова» района (теги), где духи прячутся и между которыми перебегают (точки строит Map.luau)
@@ -1139,6 +1225,12 @@ W.Districts = {
 		tint = Color3.fromRGB(220, 235, 255), center = Vector3.new(-262, 0.5, 25),
 		unlock = { level = 25 }, back = Vector3.new(0, 4, 26),
 	},
+	skymarket = { -- третий мир: крыши над облаками к востоку от рынка; ленты на ветру выдают духов
+		tp = Vector3.new(265, 3, 30), world = "skymarket", name = "Небесный рынок", max = 9, luck = 4,
+		zones = { { x = { 222, 308 }, z = { -13, 73 } } },
+		tint = Color3.fromRGB(255, 240, 230), center = Vector3.new(265, 0.5, 30),
+		unlock = { level = 30 }, back = Vector3.new(0, 4, 26),
+	},
 	yard = { -- остров дворов игроков (за улицей фонарей); координаты в старом размере
 		tp = Vector3.new(0, 3, 266), world = "lantern", name = "Дворы ловцов", max = 0, luck = 1,
 		zones = {}, tint = Color3.fromRGB(240, 245, 230), center = Vector3.new(0, 0.5, 304),
@@ -1174,6 +1266,7 @@ function W.districtAt(pos: Vector3): string
 	local x, z = pos.X / W.Scale, pos.Z / W.Scale
 	if z > 245 then return "yard" end
 	if x < -190 then return "mirror" end
+	if x > 190 then return "skymarket" end
 	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end
@@ -2146,6 +2239,139 @@ function S.buildTwinMoon(): Model
 	return m
 end
 
+------------------------------------------------------------------ Небесный рынок и праздники
+function S.buildPaperBalloon(): Model
+	local m = Instance.new("Model")
+	m.Name = "PaperBalloon"
+	local body = mk(m, { Name = "Body", Size = Vector3.new(3, 3.4, 3), CFrame = CFrame.new(0, 2.4, 0), Color = Color3.fromRGB(255, 190, 140), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball, Transparency = 0.15 })
+	for i = 0, 3 do
+		local a = i * math.pi / 2
+		mk(m, { Name = "Rib", Size = Vector3.new(0.12, 3.4, 0.12), CFrame = CFrame.new(math.cos(a) * 1.45, 2.4, math.sin(a) * 1.45), Color = Color3.fromRGB(140, 70, 50) })
+	end
+	mk(m, { Name = "Basket", Size = Vector3.new(1.2, 0.8, 1.2), CFrame = CFrame.new(0, 0.2, 0), Color = Color3.fromRGB(150, 100, 60), Material = Enum.Material.Wood })
+	for _, x in { -0.5, 0.5 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.35, 0.45, 0.2), CFrame = CFrame.new(x, 2.6, -1.45), Color = Color3.fromRGB(40, 30, 30) })
+	end
+	light(body, Color3.fromRGB(255, 190, 130), 14, 1)
+	m.PrimaryPart = body
+	S.scale(m, 1.3)
+	return m
+end
+
+function S.buildWindChime(): Model
+	local m = Instance.new("Model")
+	m.Name = "WindChime"
+	local glass = mk(m, { Name = "Bell", Size = Vector3.new(2, 1.8, 2), CFrame = CFrame.new(0, 2, 0), Color = Color3.fromRGB(170, 220, 255), Material = Enum.Material.Glass, Transparency = 0.3, Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Rim", Size = Vector3.new(2.2, 0.2, 2.2), CFrame = CFrame.new(0, 1.3, 0), Color = Color3.fromRGB(90, 160, 230), Material = Enum.Material.Neon })
+	local tongue = mk(m, { Name = "Tongue", Size = Vector3.new(0.3, 0.8, 0.3), CFrame = CFrame.new(0, 1.2, 0), Color = Color3.fromRGB(255, 220, 120), Material = Enum.Material.Neon })
+	joint(tongue, Vector3.new(0, 1.6, 0), "swingX", 0, 1.4)
+	local paper = mk(m, { Name = "Strip", Size = Vector3.new(0.9, 2.2, 0.05), CFrame = CFrame.new(0, -0.3, 0), Color = Color3.fromRGB(255, 120, 140) })
+	joint(paper, Vector3.new(0, 0.8, 0), "swingX", 1, 1.2)
+	for _, x in { -0.4, 0.4 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.3, 0.1), CFrame = CFrame.new(x, 2.1, -0.98), Color = Color3.fromRGB(30, 40, 70) })
+	end
+	light(glass, Color3.fromRGB(170, 220, 255), 12, 1)
+	m.PrimaryPart = glass
+	S.scale(m, 1.3)
+	return m
+end
+
+function S.buildCloudCat(): Model
+	local m = Instance.new("Model")
+	m.Name = "CloudCat"
+	local white = Color3.fromRGB(245, 248, 255)
+	local body = mk(m, { Name = "Body", Size = Vector3.new(2.4, 2, 3.2), CFrame = CFrame.new(0, 1.4, 0), Color = white, Shape = Enum.PartType.Ball })
+	for i, o in { Vector3.new(0.9, 1.9, 0.6), Vector3.new(-0.9, 1.8, -0.4), Vector3.new(0, 2.1, 1) } do
+		mk(m, { Name = "Puff", Size = Vector3.new(1.6, 1.4, 1.6) * (1 + i * 0.05), CFrame = CFrame.new(o), Color = white, Shape = Enum.PartType.Ball })
+	end
+	local head = mk(m, { Name = "Head", Size = Vector3.new(1.8, 1.6, 1.6), CFrame = CFrame.new(0, 2.4, -1.6), Color = white, Shape = Enum.PartType.Ball })
+	for _, x in { -0.55, 0.55 } do
+		mk(m, { Name = "Ear", Size = Vector3.new(0.5, 0.7, 0.3), CFrame = CFrame.new(x, 3.3, -1.6), Color = white }, "WedgePart")
+		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.3, 0.1), CFrame = CFrame.new(x * 0.6, 2.5, -2.4), Color = Color3.fromRGB(90, 160, 255), Material = Enum.Material.Neon })
+		local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.6, 0.9, 0.6), CFrame = CFrame.new(x * 1.3, 0.45, 0.6), Color = white, Shape = Enum.PartType.Ball })
+		joint(leg, Vector3.new(x, 0.9, 0.6), "swingX", x > 0 and 0 or math.pi, 0.7)
+	end
+	local tail = mk(m, { Name = "Tail", Size = Vector3.new(0.7, 0.7, 2.2), CFrame = CFrame.new(0, 2, 2.2), Color = white })
+	joint(tail, Vector3.new(0, 1.8, 1.4), "wagY", 0, 1)
+	light(head, Color3.fromRGB(200, 220, 255), 10, 0.6)
+	m.PrimaryPart = body
+	S.scale(m, 1.2)
+	return m
+end
+
+function S.buildKiteDragon(): Model
+	local m = Instance.new("Model")
+	m.Name = "KiteDragon"
+	local red = Color3.fromRGB(230, 60, 60)
+	local head = mk(m, { Name = "Head", Size = Vector3.new(2.4, 1.8, 2.2), CFrame = CFrame.new(0, 0, -2), Color = red })
+	mk(m, { Name = "Horn", Size = Vector3.new(0.3, 1.4, 0.3), CFrame = CFrame.new(-0.7, 1.4, -1.8) * CFrame.Angles(0, 0, 0.3), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon })
+	mk(m, { Name = "Horn", Size = Vector3.new(0.3, 1.4, 0.3), CFrame = CFrame.new(0.7, 1.4, -1.8) * CFrame.Angles(0, 0, -0.3), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon })
+	for _, x in { -0.6, 0.6 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.4, 0.4, 0.1), CFrame = CFrame.new(x, 0.3, -3.12), Color = Color3.fromRGB(255, 240, 120), Material = Enum.Material.Neon })
+	end
+	local colors = { Color3.fromRGB(255, 200, 60), Color3.fromRGB(80, 180, 255), Color3.fromRGB(120, 230, 120), red }
+	for i = 1, 8 do
+		local seg = mk(m, { Name = "Flag", Size = Vector3.new(1.8 - i * 0.12, 1.2 - i * 0.07, 0.1), CFrame = CFrame.new(0, 0, i * 1.3), Color = colors[i % 4 + 1] })
+		joint(seg, Vector3.new(0, 0, i * 1.3 - 0.6), "wagY", i * 0.6, 0.6 + i * 0.05)
+	end
+	light(head, Color3.fromRGB(255, 120, 90), 16, 1.2)
+	m.PrimaryPart = head
+	S.scale(m, 1.4)
+	return m
+end
+
+function S.buildMapleSpirit(): Model
+	local m = Instance.new("Model")
+	m.Name = "MapleSpirit"
+	local core = mk(m, { Name = "Core", Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(0, 1.6, 0), Color = Color3.fromRGB(255, 160, 60), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	for i = 0, 4 do
+		local a = i / 5 * math.pi * 2
+		local leaf = mk(m, { Name = "Leaf", Size = Vector3.new(1.1, 0.1, 1.6), CFrame = CFrame.new(math.cos(a) * 1.1, 1.6, math.sin(a) * 1.1) * CFrame.Angles(0, -a, 0.3), Color = i % 2 == 0 and Color3.fromRGB(230, 70, 40) or Color3.fromRGB(255, 150, 40) })
+		joint(leaf, Vector3.new(0, 1.6, 0), "flapZ", i, 0.4)
+	end
+	light(core, Color3.fromRGB(255, 140, 60), 12, 1)
+	m.PrimaryPart = core
+	S.scale(m, 1.5)
+	return m
+end
+
+function S.buildPumpkinLantern(): Model
+	local m = Instance.new("Model")
+	m.Name = "PumpkinLantern"
+	local body = mk(m, { Name = "Pumpkin", Size = Vector3.new(2.6, 2.2, 2.6), CFrame = CFrame.new(0, 1.2, 0), Color = Color3.fromRGB(240, 130, 30), Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Stem", Size = Vector3.new(0.35, 0.7, 0.35), CFrame = CFrame.new(0, 2.5, 0), Color = Color3.fromRGB(80, 110, 50) })
+	for _, x in { -0.55, 0.55 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.5, 0.45, 0.1), CFrame = CFrame.new(x, 1.5, -1.28), Color = Color3.fromRGB(255, 230, 120), Material = Enum.Material.Neon }, "WedgePart")
+	end
+	mk(m, { Name = "Mouth", Size = Vector3.new(1.2, 0.3, 0.1), CFrame = CFrame.new(0, 0.85, -1.28), Color = Color3.fromRGB(255, 230, 120), Material = Enum.Material.Neon })
+	for _, x in { -0.7, 0.7 } do
+		local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.4, 0.6, 0.4), CFrame = CFrame.new(x, 0.2, 0), Color = Color3.fromRGB(60, 90, 40) })
+		joint(leg, Vector3.new(x, 0.5, 0), "swingX", x > 0 and 0 or math.pi, 0.8)
+	end
+	light(body, Color3.fromRGB(255, 170, 70), 14, 1.2)
+	m.PrimaryPart = body
+	S.scale(m, 1.4)
+	return m
+end
+
+function S.buildSnowSpirit(): Model
+	local m = Instance.new("Model")
+	m.Name = "SnowSpirit"
+	local snow = Color3.fromRGB(240, 248, 255)
+	local base = mk(m, { Name = "Base", Size = Vector3.new(2.4, 2.2, 2.4), CFrame = CFrame.new(0, 1.1, 0), Color = snow, Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Head", Size = Vector3.new(1.7, 1.6, 1.7), CFrame = CFrame.new(0, 2.7, 0), Color = snow, Shape = Enum.PartType.Ball })
+	mk(m, { Name = "Scarf", Size = Vector3.new(1.9, 0.35, 1.9), CFrame = CFrame.new(0, 2.05, 0), Color = Color3.fromRGB(220, 50, 60), Material = Enum.Material.Fabric })
+	mk(m, { Name = "Nose", Size = Vector3.new(0.25, 0.25, 0.7), CFrame = CFrame.new(0, 2.7, -1), Color = Color3.fromRGB(255, 140, 40) })
+	for _, x in { -0.35, 0.35 } do
+		mk(m, { Name = "Eye", Size = Vector3.new(0.2, 0.2, 0.1), CFrame = CFrame.new(x, 2.95, -0.82), Color = Color3.fromRGB(40, 60, 100), Material = Enum.Material.Neon })
+	end
+	local hat = mk(m, { Name = "Hat", Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(0, 3.6, 0), Color = Color3.fromRGB(80, 160, 255), Material = Enum.Material.Neon }, "WedgePart")
+	light(hat, Color3.fromRGB(180, 220, 255), 12, 1)
+	m.PrimaryPart = base
+	S.scale(m, 1.4)
+	return m
+end
+
 S.Builders = {
 	PaperFox = S.buildPaperFox,
 	Umbrella = S.buildUmbrella,
@@ -2174,6 +2400,13 @@ S.Builders = {
 	MirrorKoi = S.buildMirrorKoi,
 	GlassHeron = S.buildGlassHeron,
 	TwinMoon = S.buildTwinMoon,
+	PaperBalloon = S.buildPaperBalloon,
+	WindChime = S.buildWindChime,
+	CloudCat = S.buildCloudCat,
+	KiteDragon = S.buildKiteDragon,
+	MapleSpirit = S.buildMapleSpirit,
+	PumpkinLantern = S.buildPumpkinLantern,
+	SnowSpirit = S.buildSnowSpirit,
 }
 
 -- Движение всей модели поверх опоры (прыжки, танец, парение).
@@ -2208,6 +2441,13 @@ S.Pose = {
 	Crane = function(t) return CFrame.new(0, sin(t * 1.2) * 0.8, 0) * CFrame.Angles(0, 0, sin(t * 0.8) * 0.25) end,
 	MoonRabbit = function(t) return CFrame.new(0, abs(sin(t * 4)) * 1.4, 0) end,
 	GoldenCarp = function(t) return CFrame.new(0, sin(t * 1.3) * 0.6, 0) end,
+	PaperBalloon = function(t) return CFrame.new(0, sin(t * 0.9) * 0.8, 0) * CFrame.Angles(0, sin(t * 0.4) * 0.3, 0) end,
+	WindChime = function(t) return CFrame.new(0, sin(t * 1.4) * 0.4, 0) * CFrame.Angles(sin(t * 2) * 0.15, 0, sin(t * 1.7) * 0.15) end,
+	CloudCat = function(t) return CFrame.new(0, abs(sin(t * 3)) * 0.5, 0) end,
+	KiteDragon = function(t) return CFrame.new(sin(t * 0.7) * 1.5, sin(t * 1.1) * 1.2, 0) * CFrame.Angles(0, sin(t * 0.5) * 0.3, sin(t * 0.9) * 0.2) end,
+	MapleSpirit = function(t) return CFrame.new(sin(t * 1.2) * 0.5, sin(t * 1.8) * 0.5, 0) * CFrame.Angles(0, t * 1.5, 0) end,
+	PumpkinLantern = function(t) return CFrame.new(0, abs(sin(t * 3.5)) * 0.6, 0) * CFrame.Angles(0, 0, sin(t * 3.5) * 0.1) end,
+	SnowSpirit = function(t) return CFrame.new(0, abs(sin(t * 2.5)) * 0.4, 0) * CFrame.Angles(0, 0, sin(t * 2.5) * 0.12) end,
 	EchoFirefly = function(t) return CFrame.new(sin(t * 1.1) * 0.8, sin(t * 2.2) * 0.5, math.cos(t * 0.9) * 0.8) end,
 	LilyFrog = function(t) return CFrame.new(0, abs(sin(t * 3)) * 1.6, 0) end,
 	MirrorKoi = function(t) return CFrame.new(0, sin(t * 1.2) * 0.5, 0) * CFrame.Angles(0, sin(t * 0.8) * 0.3, 0) end,
@@ -3167,7 +3407,19 @@ local function removeSpirit(s: Spirit)
 	s.anchor:Destroy()
 end
 
+local holidayOverride: string? = nil
 local function pickKind(district)
+	-- праздник: иногда вместо обычного духа приходит лимитированный
+	if district ~= "plaza" and district ~= "yard" then
+		local hs = Catalog.Live.activeHolidays(os.time())
+		if holidayOverride then
+			hs = {}
+			for _, h in Catalog.Live.Holidays do
+				if h.id == holidayOverride then table.insert(hs, h) end
+			end
+		end
+		if #hs > 0 and math.random() < Catalog.Live.HolidayChance then return hs[math.random(#hs)].kind end
+	end
 	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
 	if not tbl or next(tbl) == nil then return nil end
 	local total = 0
@@ -3837,8 +4089,10 @@ task.spawn(function()
 			if r and d then
 				local p = r.Position
 				if p.Y < -3.5 then
-					-- упал в канал: на ближайший берег
-					if p.X > 63 * SC then
+					-- упал в канал: на ближайший берег (с Небесного рынка — обратно на крыши)
+					if Catalog.district(p) == "skymarket" then
+						plr.Character:PivotTo(CFrame.new(Catalog.Districts.skymarket.tp))
+					elseif p.X > 63 * SC then
 						plr.Character:PivotTo(CFrame.new(118 * SC, 4, math.clamp(p.Z, -66 * SC, -14 * SC)))
 					else
 						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55 * SC, 55 * SC), 4, p.Z > -30 * SC and -14 * SC or -46 * SC))
@@ -4254,6 +4508,12 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		for _, p in Players:GetPlayers() do pushState(p) end
 	elseif cmd == "raid" then
 		startRaid()
+	elseif cmd == "holiday" then
+		-- по кругу: праздники по очереди, потом снова по календарю
+		local ids = { "autumn", "halloween", "newyear" }
+		local idx = holidayOverride and table.find(ids, holidayOverride) or 0
+		holidayOverride = ids[idx + 1]
+		workspace:SetAttribute("HolidayOverride", holidayOverride or "")
 	elseif cmd == "boss" then
 		if startBossCmd then startBossCmd(typeof(a1) == "string" and a1 or nil) end
 	elseif cmd == "season" then
@@ -5314,6 +5574,76 @@ function Map.build()
 		pe.Size = NumberSequence.new(5, 9)
 		pe.Transparency = NumberSequence.new(0.8, 1)
 		pe.Parent = mist
+	end
+
+	---------------------------------------------------------------- НЕБЕСНЫЙ РЫНОК (третий мир, крыши над облаками; только телепорт)
+	do
+		local cx, cz = 265, 30
+		local roofs = { Color3.fromRGB(170, 60, 60), Color3.fromRGB(60, 110, 170), Color3.fromRGB(70, 140, 100), Color3.fromRGB(190, 130, 50) }
+		local walls = { Color3.fromRGB(230, 215, 190), Color3.fromRGB(210, 190, 170), Color3.fromRGB(200, 205, 220) }
+		local awn = { Color3.fromRGB(220, 60, 80), Color3.fromRGB(70, 110, 210), Color3.fromRGB(240, 170, 50), Color3.fromRGB(150, 70, 200) }
+		local i = 0
+		for _, dz in { -36, 0, 36 } do
+			for _, dx in { -36, 0, 36 } do
+				i += 1
+				local x, z = cx + dx, cz + dz
+				block("SkyRoof", Vector3.new(26, 1, 26), CFrame.new(x, 0, z), roofs[i % 4 + 1], Enum.Material.Slate)
+				block("SkyHouse", Vector3.new(24, 30, 24), CFrame.new(x, -15.5, z), walls[i % 3 + 1], Enum.Material.Plaster)
+				for _, wy in { -6, -14, -22 } do
+					for _, wx in { -6, 6 } do
+						deco("SkyWindow", Vector3.new(3, 3, 0.2), CFrame.new(x + wx, wy, z - 12.05), Color3.fromRGB(255, 200, 120), Enum.Material.Neon)
+					end
+				end
+				-- бортики по краю крыши (в проходах к мостам — разрывы)
+				for _, side in { -1, 1 } do
+					block("RoofRail", Vector3.new(9, 1.2, 0.5), CFrame.new(x - 8.5, 1.1, z + side * 12.8), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+					block("RoofRail", Vector3.new(9, 1.2, 0.5), CFrame.new(x + 8.5, 1.1, z + side * 12.8), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+					block("RoofRail", Vector3.new(0.5, 1.2, 9), CFrame.new(x + side * 12.8, 1.1, z - 8.5), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+					block("RoofRail", Vector3.new(0.5, 1.2, 9), CFrame.new(x + side * 12.8, 1.1, z + 8.5), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+				end
+				-- прилавок с навесом и фонарём
+				local sx = x + (i % 2 == 0 and 5 or -5)
+				block("SkyStall", Vector3.new(7, 2.4, 2.6), CFrame.new(sx, 1.7, z + 4), Color3.fromRGB(120, 80, 50), Enum.Material.Wood)
+				block("SkyAwning", Vector3.new(8, 0.4, 4.6), CFrame.new(sx, 6.4, z + 3.2) * CFrame.Angles(math.rad(12), 0, 0), awn[i % 4 + 1], Enum.Material.Fabric)
+				for _, px in { -3.6, 3.6 } do
+					block("SkyPost", Vector3.new(0.4, 6, 0.4), CFrame.new(sx + px, 3.5, z + 5.2), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+				end
+				local l = deco("SkyLamp", Vector3.new(1.2, 1.5, 1.2), CFrame.new(sx, 5, z + 1.6), Color3.fromRGB(255, 160, 90), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+				light(l, Color3.fromRGB(255, 170, 100), 18, 0.8)
+				hab("skymarket", "stall", Vector3.new(sx, 0.5, z + 1))
+				-- труба и флюгер
+				block("Chimney", Vector3.new(2, 5, 2), CFrame.new(x - 8, 3, z - 8), Color3.fromRGB(110, 90, 85), Enum.Material.Brick)
+				for _, o in { Vector3.new(-7, 0, -7), Vector3.new(7, 0, -7), Vector3.new(-7, 0, 7), Vector3.new(7, 0, 7), Vector3.new(0, 0, -2) } do
+					hab("skymarket", "roof", Vector3.new(x + o.X, 0.5, z + o.Z))
+				end
+			end
+		end
+		-- мосты между крышами
+		for _, dz in { -36, 0, 36 } do
+			for _, dx in { -18, 18 } do
+				block("SkyBridge", Vector3.new(10.5, 0.6, 5), CFrame.new(cx + dx, 0.2, cz + dz), Color3.fromRGB(150, 110, 70), Enum.Material.WoodPlanks)
+			end
+		end
+		for _, dx in { -36, 0, 36 } do
+			for _, dz in { -18, 18 } do
+				block("SkyBridge", Vector3.new(5, 0.6, 10.5), CFrame.new(cx + dx, 0.2, cz + dz), Color3.fromRGB(150, 110, 70), Enum.Material.WoodPlanks)
+			end
+		end
+		-- облака внизу и вокруг
+		local rngS = Random.new(41)
+		for _ = 1, 26 do
+			deco("Cloud", Vector3.new(1, 1, 1) * rngS:NextNumber(12, 22), CFrame.new(cx + rngS:NextNumber(-70, 70), rngS:NextNumber(-34, -18), cz + rngS:NextNumber(-70, 70)),
+				Color3.fromRGB(235, 225, 245), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, Transparency = 0.25 })
+		end
+		-- воздушные змеи и гирлянды над рынком
+		for k = 0, 5 do
+			local a = k / 6 * math.pi * 2
+			deco("Kite", Vector3.new(3, 3, 0.2), CFrame.new(cx + math.cos(a) * 50, 18 + k, cz + math.sin(a) * 50) * CFrame.Angles(0, -a, math.rad(45)), awn[k % 4 + 1], Enum.Material.Fabric)
+		end
+		wall(Vector3.new(1, 80, 120), Vector3.new(cx - 55.5, 40, cz))
+		wall(Vector3.new(1, 80, 120), Vector3.new(cx + 55.5, 40, cz))
+		wall(Vector3.new(120, 80, 1), Vector3.new(cx, 40, cz - 55.5))
+		wall(Vector3.new(120, 80, 1), Vector3.new(cx, 40, cz + 55.5))
 	end
 
 	---------------------------------------------------------------- точка появления
@@ -7318,6 +7648,13 @@ do
 		end
 	end)
 end
+task.delay(12, function()
+	local hs = Catalog.Live.activeHolidays(os.time())
+	if #hs > 0 and showToast then
+		local h = hs[1]
+		showToast(("Праздник «%s»: лимитированный дух %s во всех районах!"):format(h.name, Catalog.Kinds[h.kind].name), 5, Color3.fromRGB(160, 70, 30))
+	end
+end)
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
 do
@@ -8407,6 +8744,15 @@ do
 			end
 			v.shadow.Parent = visFolder
 		end
+		-- Небесный рынок: над спрятанным духом развевается лента, её видно издалека
+		if Catalog.district(a.Position) == "skymarket" then
+			local col = Color3.fromHSV(math.random(), 0.6, 1)
+			local ribbon = K.make("Part", { Name = "Ribbon", Size = Vector3.new(0.6, 0.06, 9), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+				Material = Enum.Material.Neon, Color = col, Transparency = 0.15 }, visFolder)
+			K.make("Part", { Name = "RibbonPole", Size = Vector3.new(0.25, 10, 0.25), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+				Material = Enum.Material.Wood, Color = Color3.fromRGB(90, 70, 55), Parent = ribbon })
+			v.ribbon = ribbon
+		end
 		-- Зеркальное озеро: до проявления виден только перевёрнутый двойник под водой
 		if Catalog.district(a.Position) == "mirror" then
 			v.mirror = true
@@ -8440,6 +8786,7 @@ do
 		if v.shadow then v.shadow:Destroy() end
 		if v.model then v.model:Destroy() end
 		if v.reflect then v.reflect:Destroy() end
+		if v.ribbon then v.ribbon:Destroy() end
 	end
 	spiritsFolder.ChildAdded:Connect(addAnchor)
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
@@ -8681,6 +9028,19 @@ do
 				if pe then
 					pe:Emit(reducedFx and 6 or 20)
 					pe.Rate = 3
+				end
+			end
+			if v.ribbon then
+				if revealed then
+					v.ribbon:Destroy()
+					v.ribbon = nil
+				else
+					-- шест на крыше, лента колышется по ветру
+					local base = Vector3.new(cf.X, 0.5, cf.Z)
+					local wave = math.sin(now * 3 + v.seed) * 0.35
+					v.ribbon.CFrame = CFrame.new(base + Vector3.new(0, 10, 0)) * CFrame.Angles(0, now * 0.3 + v.seed, wave) * CFrame.new(0, 0, 4.5)
+					local pole = v.ribbon:FindFirstChild("RibbonPole")
+					if pole then pole.CFrame = CFrame.new(base + Vector3.new(0, 5.5, 0)) end
 				end
 			end
 			if v.reflect then

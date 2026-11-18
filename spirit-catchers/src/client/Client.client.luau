@@ -1278,6 +1278,13 @@ do
 		end
 	end)
 end
+task.delay(12, function()
+	local hs = Catalog.Live.activeHolidays(os.time())
+	if #hs > 0 and showToast then
+		local h = hs[1]
+		showToast(("Праздник «%s»: лимитированный дух %s во всех районах!"):format(h.name, Catalog.Kinds[h.kind].name), 5, Color3.fromRGB(160, 70, 30))
+	end
+end)
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
 do
@@ -2367,6 +2374,15 @@ do
 			end
 			v.shadow.Parent = visFolder
 		end
+		-- Небесный рынок: над спрятанным духом развевается лента, её видно издалека
+		if Catalog.district(a.Position) == "skymarket" then
+			local col = Color3.fromHSV(math.random(), 0.6, 1)
+			local ribbon = K.make("Part", { Name = "Ribbon", Size = Vector3.new(0.6, 0.06, 9), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+				Material = Enum.Material.Neon, Color = col, Transparency = 0.15 }, visFolder)
+			K.make("Part", { Name = "RibbonPole", Size = Vector3.new(0.25, 10, 0.25), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+				Material = Enum.Material.Wood, Color = Color3.fromRGB(90, 70, 55), Parent = ribbon })
+			v.ribbon = ribbon
+		end
 		-- Зеркальное озеро: до проявления виден только перевёрнутый двойник под водой
 		if Catalog.district(a.Position) == "mirror" then
 			v.mirror = true
@@ -2400,6 +2416,7 @@ do
 		if v.shadow then v.shadow:Destroy() end
 		if v.model then v.model:Destroy() end
 		if v.reflect then v.reflect:Destroy() end
+		if v.ribbon then v.ribbon:Destroy() end
 	end
 	spiritsFolder.ChildAdded:Connect(addAnchor)
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
@@ -2641,6 +2658,19 @@ do
 				if pe then
 					pe:Emit(reducedFx and 6 or 20)
 					pe.Rate = 3
+				end
+			end
+			if v.ribbon then
+				if revealed then
+					v.ribbon:Destroy()
+					v.ribbon = nil
+				else
+					-- шест на крыше, лента колышется по ветру
+					local base = Vector3.new(cf.X, 0.5, cf.Z)
+					local wave = math.sin(now * 3 + v.seed) * 0.35
+					v.ribbon.CFrame = CFrame.new(base + Vector3.new(0, 10, 0)) * CFrame.Angles(0, now * 0.3 + v.seed, wave) * CFrame.new(0, 0, 4.5)
+					local pole = v.ribbon:FindFirstChild("RibbonPole")
+					if pole then pole.CFrame = CFrame.new(base + Vector3.new(0, 5.5, 0)) end
 				end
 			end
 			if v.reflect then

@@ -932,7 +932,19 @@ local function removeSpirit(s: Spirit)
 	s.anchor:Destroy()
 end
 
+local holidayOverride: string? = nil
 local function pickKind(district)
+	-- праздник: иногда вместо обычного духа приходит лимитированный
+	if district ~= "plaza" and district ~= "yard" then
+		local hs = Catalog.Live.activeHolidays(os.time())
+		if holidayOverride then
+			hs = {}
+			for _, h in Catalog.Live.Holidays do
+				if h.id == holidayOverride then table.insert(hs, h) end
+			end
+		end
+		if #hs > 0 and math.random() < Catalog.Live.HolidayChance then return hs[math.random(#hs)].kind end
+	end
 	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
 	if not tbl or next(tbl) == nil then return nil end
 	local total = 0
@@ -1602,8 +1614,10 @@ task.spawn(function()
 			if r and d then
 				local p = r.Position
 				if p.Y < -3.5 then
-					-- упал в канал: на ближайший берег
-					if p.X > 63 * SC then
+					-- упал в канал: на ближайший берег (с Небесного рынка — обратно на крыши)
+					if Catalog.district(p) == "skymarket" then
+						plr.Character:PivotTo(CFrame.new(Catalog.Districts.skymarket.tp))
+					elseif p.X > 63 * SC then
 						plr.Character:PivotTo(CFrame.new(118 * SC, 4, math.clamp(p.Z, -66 * SC, -14 * SC)))
 					else
 						plr.Character:PivotTo(CFrame.new(math.clamp(p.X, -55 * SC, 55 * SC), 4, p.Z > -30 * SC and -14 * SC or -46 * SC))
@@ -2019,6 +2033,12 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		for _, p in Players:GetPlayers() do pushState(p) end
 	elseif cmd == "raid" then
 		startRaid()
+	elseif cmd == "holiday" then
+		-- по кругу: праздники по очереди, потом снова по календарю
+		local ids = { "autumn", "halloween", "newyear" }
+		local idx = holidayOverride and table.find(ids, holidayOverride) or 0
+		holidayOverride = ids[idx + 1]
+		workspace:SetAttribute("HolidayOverride", holidayOverride or "")
 	elseif cmd == "boss" then
 		if startBossCmd then startBossCmd(typeof(a1) == "string" and a1 or nil) end
 	elseif cmd == "season" then

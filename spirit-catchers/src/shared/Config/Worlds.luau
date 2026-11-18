@@ -28,7 +28,7 @@ W.Worlds = {
 	},
 	skymarket = {
 		name = "Небесный рынок",
-		active = false,
+		active = true,
 		blurb = "Бумажные ленты летят по ветру и показывают, над какой крышей искать следующую тень.",
 		search = "Следи за лентами на ветру",
 		star = "Дракон из воздушных змеев с хвостом из флажков",
@@ -42,7 +42,7 @@ W.Worlds = {
 	},
 }
 
-W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "mirror", "yard" }
+W.TeleportOrder = { "plaza", "street", "canal", "market", "grove", "garden", "port", "mirror", "skymarket", "yard" }
 
 -- Районы открываются по уровню, в каждом следующем — более редкие духи и выше удача района.
 -- habitats: «логова» района (теги), где духи прячутся и между которыми перебегают (точки строит Map.luau)
@@ -87,6 +87,12 @@ W.Districts = {
 		tint = Color3.fromRGB(220, 235, 255), center = Vector3.new(-262, 0.5, 25),
 		unlock = { level = 25 }, back = Vector3.new(0, 4, 26),
 	},
+	skymarket = { -- третий мир: крыши над облаками к востоку от рынка; ленты на ветру выдают духов
+		tp = Vector3.new(265, 3, 30), world = "skymarket", name = "Небесный рынок", max = 9, luck = 4,
+		zones = { { x = { 222, 308 }, z = { -13, 73 } } },
+		tint = Color3.fromRGB(255, 240, 230), center = Vector3.new(265, 0.5, 30),
+		unlock = { level = 30 }, back = Vector3.new(0, 4, 26),
+	},
 	yard = { -- остров дворов игроков (за улицей фонарей); координаты в старом размере
 		tp = Vector3.new(0, 3, 266), world = "lantern", name = "Дворы ловцов", max = 0, luck = 1,
 		zones = {}, tint = Color3.fromRGB(240, 245, 230), center = Vector3.new(0, 0.5, 304),
@@ -122,6 +128,7 @@ function W.districtAt(pos: Vector3): string
 	local x, z = pos.X / W.Scale, pos.Z / W.Scale
 	if z > 245 then return "yard" end
 	if x < -190 then return "mirror" end
+	if x > 190 then return "skymarket" end
 	if x > 63 and z < -8 and z > -73 then return "port" end
 	if z > -8 and z < 72 then
 		if x < -36 then return "grove" end

@@ -565,6 +565,76 @@ function Map.build()
 		pe.Parent = mist
 	end
 
+	---------------------------------------------------------------- НЕБЕСНЫЙ РЫНОК (третий мир, крыши над облаками; только телепорт)
+	do
+		local cx, cz = 265, 30
+		local roofs = { Color3.fromRGB(170, 60, 60), Color3.fromRGB(60, 110, 170), Color3.fromRGB(70, 140, 100), Color3.fromRGB(190, 130, 50) }
+		local walls = { Color3.fromRGB(230, 215, 190), Color3.fromRGB(210, 190, 170), Color3.fromRGB(200, 205, 220) }
+		local awn = { Color3.fromRGB(220, 60, 80), Color3.fromRGB(70, 110, 210), Color3.fromRGB(240, 170, 50), Color3.fromRGB(150, 70, 200) }
+		local i = 0
+		for _, dz in { -36, 0, 36 } do
+			for _, dx in { -36, 0, 36 } do
+				i += 1
+				local x, z = cx + dx, cz + dz
+				block("SkyRoof", Vector3.new(26, 1, 26), CFrame.new(x, 0, z), roofs[i % 4 + 1], Enum.Material.Slate)
+				block("SkyHouse", Vector3.new(24, 30, 24), CFrame.new(x, -15.5, z), walls[i % 3 + 1], Enum.Material.Plaster)
+				for _, wy in { -6, -14, -22 } do
+					for _, wx in { -6, 6 } do
+						deco("SkyWindow", Vector3.new(3, 3, 0.2), CFrame.new(x + wx, wy, z - 12.05), Color3.fromRGB(255, 200, 120), Enum.Material.Neon)
+					end
+				end
+				-- бортики по краю крыши (в проходах к мостам — разрывы)
+				for _, side in { -1, 1 } do
+					block("RoofRail", Vector3.new(9, 1.2, 0.5), CFrame.new(x - 8.5, 1.1, z + side * 12.8), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+					block("RoofRail", Vector3.new(9, 1.2, 0.5), CFrame.new(x + 8.5, 1.1, z + side * 12.8), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+					block("RoofRail", Vector3.new(0.5, 1.2, 9), CFrame.new(x + side * 12.8, 1.1, z - 8.5), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+					block("RoofRail", Vector3.new(0.5, 1.2, 9), CFrame.new(x + side * 12.8, 1.1, z + 8.5), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+				end
+				-- прилавок с навесом и фонарём
+				local sx = x + (i % 2 == 0 and 5 or -5)
+				block("SkyStall", Vector3.new(7, 2.4, 2.6), CFrame.new(sx, 1.7, z + 4), Color3.fromRGB(120, 80, 50), Enum.Material.Wood)
+				block("SkyAwning", Vector3.new(8, 0.4, 4.6), CFrame.new(sx, 6.4, z + 3.2) * CFrame.Angles(math.rad(12), 0, 0), awn[i % 4 + 1], Enum.Material.Fabric)
+				for _, px in { -3.6, 3.6 } do
+					block("SkyPost", Vector3.new(0.4, 6, 0.4), CFrame.new(sx + px, 3.5, z + 5.2), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+				end
+				local l = deco("SkyLamp", Vector3.new(1.2, 1.5, 1.2), CFrame.new(sx, 5, z + 1.6), Color3.fromRGB(255, 160, 90), Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+				light(l, Color3.fromRGB(255, 170, 100), 18, 0.8)
+				hab("skymarket", "stall", Vector3.new(sx, 0.5, z + 1))
+				-- труба и флюгер
+				block("Chimney", Vector3.new(2, 5, 2), CFrame.new(x - 8, 3, z - 8), Color3.fromRGB(110, 90, 85), Enum.Material.Brick)
+				for _, o in { Vector3.new(-7, 0, -7), Vector3.new(7, 0, -7), Vector3.new(-7, 0, 7), Vector3.new(7, 0, 7), Vector3.new(0, 0, -2) } do
+					hab("skymarket", "roof", Vector3.new(x + o.X, 0.5, z + o.Z))
+				end
+			end
+		end
+		-- мосты между крышами
+		for _, dz in { -36, 0, 36 } do
+			for _, dx in { -18, 18 } do
+				block("SkyBridge", Vector3.new(10.5, 0.6, 5), CFrame.new(cx + dx, 0.2, cz + dz), Color3.fromRGB(150, 110, 70), Enum.Material.WoodPlanks)
+			end
+		end
+		for _, dx in { -36, 0, 36 } do
+			for _, dz in { -18, 18 } do
+				block("SkyBridge", Vector3.new(5, 0.6, 10.5), CFrame.new(cx + dx, 0.2, cz + dz), Color3.fromRGB(150, 110, 70), Enum.Material.WoodPlanks)
+			end
+		end
+		-- облака внизу и вокруг
+		local rngS = Random.new(41)
+		for _ = 1, 26 do
+			deco("Cloud", Vector3.new(1, 1, 1) * rngS:NextNumber(12, 22), CFrame.new(cx + rngS:NextNumber(-70, 70), rngS:NextNumber(-34, -18), cz + rngS:NextNumber(-70, 70)),
+				Color3.fromRGB(235, 225, 245), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, Transparency = 0.25 })
+		end
+		-- воздушные змеи и гирлянды над рынком
+		for k = 0, 5 do
+			local a = k / 6 * math.pi * 2
+			deco("Kite", Vector3.new(3, 3, 0.2), CFrame.new(cx + math.cos(a) * 50, 18 + k, cz + math.sin(a) * 50) * CFrame.Angles(0, -a, math.rad(45)), awn[k % 4 + 1], Enum.Material.Fabric)
+		end
+		wall(Vector3.new(1, 80, 120), Vector3.new(cx - 55.5, 40, cz))
+		wall(Vector3.new(1, 80, 120), Vector3.new(cx + 55.5, 40, cz))
+		wall(Vector3.new(120, 80, 1), Vector3.new(cx, 40, cz - 55.5))
+		wall(Vector3.new(120, 80, 1), Vector3.new(cx, 40, cz + 55.5))
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = scf(CFrame.new(0, 0.6, 24))
 	local spawn = Instance.new("SpawnLocation")

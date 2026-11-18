@@ -16,6 +16,8 @@ S.Order = {
 	"PaperDragon", "MistKraken",
 	"Kyubi",
 	"EchoFirefly", "LilyFrog", "MirrorKoi", "GlassHeron", "TwinMoon",
+	"PaperBalloon", "WindChime", "CloudCat", "KiteDragon",
+	"MapleSpirit", "PumpkinLantern", "SnowSpirit",
 }
 
 S.Kinds = {
@@ -265,6 +267,71 @@ S.Kinds = {
 		habit = "Две половинки месяца: одна в небе, другая в воде.",
 		trail = { shape = "dot", color = Color3.fromRGB(255, 120, 120), text = "Красные лунные блики" },
 		yard = "Кружит над двором",
+	},
+	-- Небесный рынок: крыши над облаками, над духом развевается лента
+	PaperBalloon = {
+		name = "Бумажный шар", short = "Шар", rarity = "uncommon", world = "skymarket",
+		move = "float", speed = 3, height = 3, follow = 0.6, animSpeed = 3, condition = "any",
+		spawn = { skymarket = { w = 40, moon = 25 } }, habitat = { "roof", "stall" },
+		hint = "Небесный рынок: ищи ленту на ветру",
+		habit = "Надувается, когда радуется, и улетает выше крыш, если испугать.",
+		trail = { shape = "scrap", color = Color3.fromRGB(255, 200, 150), text = "Обрывки рисовой бумаги" },
+		yard = "Висит над домиком",
+	},
+	WindChime = {
+		name = "Дух-колокольчик", short = "Колокольчик", rarity = "rare", world = "skymarket",
+		move = "float", speed = 4, height = 4, follow = 0.6, animSpeed = 6, condition = "any",
+		spawn = { skymarket = { w = 28, moon = 20 } }, habitat = { "stall", "roof" },
+		hint = "Небесный рынок: у прилавков",
+		habit = "Звенит от каждого порыва ветра. Чем ближе, тем громче.",
+		trail = { shape = "dot", color = Color3.fromRGB(150, 220, 255), text = "Звенящие искры" },
+		yard = "Звенит у входа",
+	},
+	CloudCat = {
+		name = "Облачный кот", short = "Кот-облако", rarity = "epic", world = "skymarket",
+		move = "walk", speed = 6, height = 0, follow = 0.5, animSpeed = 7, condition = "any",
+		spawn = { skymarket = { w = 14, moon = 14 } }, habitat = { "roof" },
+		hint = "Небесный рынок: гуляет по крышам",
+		habit = "Пушистый, как облако. Прыгает с крыши на крышу и не падает.",
+		trail = { shape = "print", color = Color3.fromRGB(240, 245, 255), text = "Облачные отпечатки лап" },
+		yard = "Дремлет на крыше",
+	},
+	KiteDragon = {
+		name = "Дракон-воздушный змей", short = "Змей", rarity = "legendary", world = "skymarket", main = true,
+		move = "fly", speed = 6, height = 8, follow = 0.35, animSpeed = 3, condition = "any",
+		spawn = { skymarket = { w = 4, moon = 7 } }, habitat = { "roof" },
+		hint = "Небесный рынок: высоко над крышами",
+		habit = "Хвост из флажков. Ленты на ветру показывают, над какой крышей он кружит.",
+		trail = { shape = "scrap", color = Color3.fromRGB(255, 90, 90), text = "Флажки с хвоста" },
+		yard = "Парит над двором",
+	},
+	-- праздничные (лимитированные): появляются только в свой праздник, во всех районах
+	MapleSpirit = {
+		name = "Кленовый дух", short = "Клён", rarity = "epic", world = "lantern", holiday = "autumn",
+		move = "float", speed = 4, height = 2, follow = 0.6, animSpeed = 4, condition = "any",
+		spawn = {}, habitat = { "lamp", "bush", "water", "stall", "pier", "roof", "shore" },
+		hint = "Лимитированный: Осенний фестиваль (1-30 ноября)",
+		habit = "Кружится, как лист на ветру, и оставляет красные листья.",
+		trail = { shape = "scrap", color = Color3.fromRGB(230, 80, 40), text = "Красные кленовые листья" },
+		yard = "Кружит над двором",
+	},
+	PumpkinLantern = {
+		name = "Тыквенный фонарь", short = "Тыква", rarity = "epic", world = "lantern", holiday = "halloween",
+		move = "walk", speed = 5, height = 0, follow = 0.5, animSpeed = 5, condition = "any",
+		spawn = {}, habitat = { "lamp", "bush", "water", "stall", "pier", "roof", "shore" },
+		hint = "Лимитированный: Ночь тыкв (20 октября - 5 ноября)",
+		habit = "Внутри горит свеча. Хихикает и прячется за фонарями.",
+		trail = { shape = "flame", color = Color3.fromRGB(255, 150, 40), text = "Оранжевые огоньки" },
+		yard = "Светится у крыльца",
+	},
+	SnowSpirit = {
+		name = "Снежный дух", short = "Снежок", rarity = "legendary", world = "lantern", holiday = "newyear",
+		move = "walk", speed = 4, height = 0, follow = 0.5, animSpeed = 5, condition = "any",
+		spawn = {}, habitat = { "lamp", "bush", "water", "stall", "pier", "roof", "shore" },
+		hint = "Лимитированный: Новогодние огни (15 декабря - 15 января)",
+		habit = "Пахнет мандаринами. Там, где он прошёл, падает снег.",
+		trail = { shape = "dot", color = Color3.fromRGB(230, 245, 255), text = "Снежинки" },
+		yard = "Лепит снеговика",
 	},
 }
 
