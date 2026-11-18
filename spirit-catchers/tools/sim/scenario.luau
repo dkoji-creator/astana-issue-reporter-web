@@ -376,6 +376,19 @@ do
 	end
 end
 
+stage("траты монет")
+do
+	for _ = 1, 30 do inv("Admin", "coins") end
+	inv("Teleport", "street")
+	frames(5)
+	for _, a in { { "shrine" }, { "exchange", 100 }, { "potion" }, { "summon" } } do
+		local r = inv("CoinShop", a[1], a[2])
+		if not (r and r.ok) then table.insert(SIM.errors, "монеты " .. a[1] .. ": " .. tostring(r and r.msg)) end
+	end
+	local up = inv("Upgrade", "jar")
+	frames(10)
+end
+
 stage("достижения")
 for _, id in { "first", "c50", "k10", "kall", "golden", "lvl25", "reborn", "legend" } do inv("ClaimAchievement", id) end
 frames(20)

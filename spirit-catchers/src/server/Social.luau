@@ -225,6 +225,24 @@ local FURN = {
 		end
 	end,
 }
+FURN.goldPagoda = function(f, o)
+	for i = 0, 2 do
+		local w = 7 - i * 1.8
+		part(f, "Pagoda", Vector3.new(w - 1.5, 2.6, w - 1.5), CFrame.new(o + Vector3.new(0, 1.8 + i * 3.2, 0)), Color3.fromRGB(150, 50, 45), Enum.Material.Wood)
+		part(f, "PagodaRoof", Vector3.new(w + 1, 0.6, w + 1), CFrame.new(o + Vector3.new(0, 3.4 + i * 3.2, 0)), Color3.fromRGB(240, 190, 60), Enum.Material.Metal)
+	end
+	lamp(f, o + Vector3.new(0, 11.2, 0), Color3.fromRGB(255, 220, 120))
+end
+FURN.moonGate = function(f, o)
+	for i = 0, 15 do
+		local a = i / 16 * math.pi * 2
+		part(f, "MoonGate", Vector3.new(1.4, 1.6, 1.2), CFrame.new(o + Vector3.new(math.cos(a) * 4.5, 5 + math.sin(a) * 4.5, 0)) * CFrame.Angles(0, 0, a), Color3.fromRGB(200, 205, 215), Enum.Material.Marble)
+	end
+	local disc = part(f, "MoonGlow", Vector3.new(0.2, 7.6, 7.6), CFrame.new(o + Vector3.new(0, 5, 0)) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(190, 215, 255), Enum.Material.Neon, { Shape = Enum.PartType.Cylinder, Transparency = 0.6, CanCollide = false })
+	local pl = Instance.new("PointLight")
+	pl.Range, pl.Brightness, pl.Color = 18, 0.8, Color3.fromRGB(190, 215, 255)
+	pl.Parent = disc
+end
 local function buildFurniture(p, d)
 	local old = p.folder:FindFirstChild("Furniture")
 	if old then old:Destroy() end

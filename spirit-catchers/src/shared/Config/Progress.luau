@@ -35,7 +35,7 @@ P.Milestones = {
 -- price = монеты (dust = пыль); source = где получить; tier = ценность облика (подпись в магазине)
 -- fx: tex = sparkles | fire | smoke, colors = цвета частиц, rate/size/life/speed, up = подъём (+) или падение (-),
 --     trail = цвета шлейфа при беге, aura = большой мягкий свет вокруг игрока, burst = вспышка при поимке духа
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "lotus", "starlight", "phoenix", "eclipse", "vip" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "lotus", "starlight", "phoenix", "eclipse", "crystal", "imperial", "solar", "vip" }
 local rgb = Color3.fromRGB
 P.SkinTiers = {
 	common = { name = "Обычный", color = rgb(190, 195, 215) },
@@ -117,6 +117,18 @@ P.Skins = {
 		desc = "Чёрное солнце с фиолетовой короной",
 		fx = { tex = "smoke", colors = { rgb(120, 60, 220), rgb(30, 10, 60) }, rate = 12, size = 1.4, life = 2.5, speed = 1, up = 1,
 			trail = { rgb(180, 110, 255), rgb(20, 10, 40) }, aura = true, burst = true } },
+	crystal = { name = "Хрустальный", tier = "legendary", lamp = rgb(190, 240, 255), beam = rgb(220, 250, 255), price = 50000,
+		desc = "Ледяные кристаллы и голубой шлейф",
+		fx = { tex = "sparkles", colors = { rgb(200, 245, 255), rgb(120, 200, 255) }, rate = 22, size = 0.5, life = 1.8, speed = 1.8, up = 0.5,
+			trail = { rgb(200, 245, 255), rgb(80, 150, 230) }, aura = true, burst = true } },
+	imperial = { name = "Императорский", tier = "mythic", lamp = rgb(255, 215, 90), beam = rgb(255, 240, 180), price = 250000,
+		desc = "Золото и пурпур: императорский шлейф и корона искр",
+		fx = { tex = "sparkles", colors = { rgb(255, 215, 90), rgb(170, 70, 200) }, rate = 28, size = 0.6, life = 2, speed = 2.2, up = 1.5,
+			trail = { rgb(255, 215, 90), rgb(150, 50, 180) }, aura = true, burst = true } },
+	solar = { name = "Солнечный", tier = "mythic", lamp = rgb(255, 245, 200), beam = rgb(255, 250, 220), price = 1000000,
+		desc = "Маленькое солнце: протуберанцы, огненный шлейф и вспышка",
+		fx = { tex = "fire", colors = { rgb(255, 255, 220), rgb(255, 190, 60), rgb(255, 90, 30) }, rate = 32, size = 0.9, life = 1.1, speed = 2.6, up = 3,
+			trail = { rgb(255, 250, 200), rgb(255, 140, 40), rgb(200, 50, 20) }, aura = true, burst = true } },
 	vip = { name = "Радужный VIP", tier = "vip", lamp = rgb(255, 120, 220), beam = rgb(200, 220, 255), source = "VIP-ловец", rainbow = true,
 		desc = "Радужные звёзды, радужный шлейф, ореол и салют при поимке",
 		fx = { tex = "sparkles", colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) },

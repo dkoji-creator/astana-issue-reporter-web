@@ -1375,13 +1375,70 @@ do
 	local tabUp = K.button(shopTabs, "Улучшения", T.red, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
 	local tabSkins = K.button(shopTabs, "Фонари", T.panel2, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
 	local tabDonate = K.button(shopTabs, "Донат", T.gold, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
+	local tabCoins = K.button(shopTabs, "Святилище", T.panel2, { Size = UDim2.fromOffset(150, 34), MaxText = 16 })
 	local upList = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42) })
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, upList)
 	local skinGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
 	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, skinGrid)
 	local donateGrid = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
 	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 214), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, donateGrid)
-	local shopPages = { { tabUp, upList, T.red }, { tabSkins, skinGrid, T.red }, { tabDonate, donateGrid, T.gold } }
+	-- траты монет: святилище удачи, обмен на пыль, призыв редкого духа, зелье
+	local coinList = K.scroll(shopBody, { Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, coinList)
+	local coinRows = {}
+	local function coinRow(order, icon, title, act, arg)
+		local f = K.panel(coinList, { Size = UDim2.new(1, -10, 0, 74), LayoutOrder = order, BackgroundColor3 = T.panel2 })
+		K.icon(f, icon, { Size = UDim2.fromOffset(54, 54), Position = UDim2.fromOffset(8, 10) })
+		local t = K.text(f, title, { Size = UDim2.new(0.62, -70, 0, 26), Position = UDim2.fromOffset(68, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 19 })
+		local sub = K.text(f, "", { Size = UDim2.new(0.62, -70, 0, 30), Position = UDim2.fromOffset(68, 36), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
+		local b, l = K.button(f, "", T.green, { Size = UDim2.new(0.36, -8, 1, -16), Position = UDim2.new(0.64, 0, 0, 8), MaxText = 17 })
+		b.Activated:Connect(function()
+			local r = remotes.CoinShop:InvokeServer(act, arg)
+			if r and r.ok then
+				play("save")
+				if act == "summon" then
+					K.close(shopW)
+					showToast("Дух появился прямо перед тобой! Лови", 3, Color3.fromRGB(120, 60, 140))
+				end
+			elseif r and r.msg then
+				showToast(r.msg, 2.5)
+			end
+		end)
+		coinRows[act .. tostring(arg or "")] = { t = t, sub = sub, b = b, l = l }
+	end
+	local Live = Catalog.Live
+	coinRow(1, "luck", "Святилище удачи", "shrine")
+	coinRow(2, "dust", "Обмен: 10 пыли", "exchange", 10)
+	coinRow(3, "dust", "Обмен: 100 пыли", "exchange", 100)
+	coinRow(4, "dust", "Обмен: 1000 пыли", "exchange", 1000)
+	coinRow(5, "target", "Призвать духа", "summon")
+	coinRow(6, "potion", "Зелье удачи x2", "potion")
+	local function refreshCoinShop()
+		local CS = Live.CoinShop
+		local lvl = state.shrine or 0
+		local r = coinRows.shrine
+		r.t.Text = ("Святилище удачи: ур. %d/%d"):format(lvl, CS.shrineMax)
+		r.sub.Text = ("Навсегда +%d%% удачи за уровень. Сейчас +%d%%"):format(math.floor(CS.shrinePer * 100), math.floor(lvl * CS.shrinePer * 100))
+		local cost = Live.shrineCost(lvl)
+		r.l.Text = lvl >= CS.shrineMax and "Максимум" or ("%d монет"):format(cost)
+		K.recolor(r.b, (lvl < CS.shrineMax and state.coins >= cost) and T.green or Color3.fromRGB(90, 90, 105))
+		for _, n in { 10, 100, 1000 } do
+			local x = coinRows["exchange" .. n]
+			x.sub.Text = ("Пыль нужна для пробуждения, кормления спутника и улучшений (%d монет за 1 пыль)"):format(CS.exchangeRate)
+			x.l.Text = ("%d монет"):format(n * CS.exchangeRate)
+			K.recolor(x.b, state.coins >= n * CS.exchangeRate and T.green or Color3.fromRGB(90, 90, 105))
+		end
+		local sc = Live.summonCost(state.level or 1)
+		local sr = coinRows.summon
+		sr.sub.Text = "Самый редкий вид этого района появится прямо перед тобой. В дальних районах духи редче"
+		sr.l.Text = ("%d монет"):format(sc)
+		K.recolor(sr.b, state.coins >= sc and T.green or Color3.fromRGB(90, 90, 105))
+		local pr = coinRows.potion
+		pr.sub.Text = "Удача x2 на 15 минут, время складывается"
+		pr.l.Text = ("%d монет"):format(CS.potionCoins)
+		K.recolor(pr.b, state.coins >= CS.potionCoins and T.green or Color3.fromRGB(90, 90, 105))
+	end
+	local shopPages = { { tabUp, upList, T.red }, { tabSkins, skinGrid, T.red }, { tabDonate, donateGrid, T.gold }, { tabCoins, coinList, T.green } }
 	local function showShopPage(pair)
 		for _, other in shopPages do
 			other[2].Visible = other == pair
@@ -1392,6 +1449,10 @@ do
 		pair[1].Activated:Connect(function() showShopPage(pair) end)
 	end
 	showShopPage(shopPages[1])
+	tabCoins.Activated:Connect(refreshCoinShop)
+	remotes.State.OnClientEvent:Connect(function()
+		if coinList.Visible then task.defer(refreshCoinShop) end
+	end)
 	-- донат-карточки: геймпассы и товары
 	local MarketplaceService = game:GetService("MarketplaceService")
 	local Money = Catalog.Money

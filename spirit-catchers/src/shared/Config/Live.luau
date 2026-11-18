@@ -159,7 +159,7 @@ L.EvolvedMult = 1.5
 
 ------------------------------------------------------------------ мебель для двора
 -- slot = место на участке (x вправо, z к выходу; зеркалится для верхнего ряда)
-L.FurnitureOrder = { "lanternPost", "bench", "bonsai", "stoneGarden", "sakura", "garland", "bell", "bridge", "torii", "fountain", "koiPond", "shrine", "spiritStatue" }
+L.FurnitureOrder = { "goldPagoda", "moonGate", "lanternPost", "bench", "bonsai", "stoneGarden", "sakura", "garland", "bell", "bridge", "torii", "fountain", "koiPond", "shrine", "spiritStatue" }
 L.Furniture = {
 	lanternPost = { name = "Фонарный столб", coins = 300, slot = Vector3.new(-20, 0, -20) },
 	bench = { name = "Скамейка", coins = 400, slot = Vector3.new(-14, 0, 2) },
@@ -171,6 +171,8 @@ L.Furniture = {
 	bridge = { name = "Мостик", coins = 1200, slot = Vector3.new(0, 0, -6) },
 	torii = { name = "Тории", coins = 1500, dust = 20, slot = Vector3.new(0, 0, -22) },
 	fountain = { name = "Фонтан духов", coins = 2000, dust = 30, slot = Vector3.new(10, 0, -14) },
+	goldPagoda = { name = "Золотая пагода", coins = 100000, slot = Vector3.new(21, 0, -21) },
+	moonGate = { name = "Лунные врата", coins = 300000, slot = Vector3.new(-12, 0, -23) },
 	koiPond = { name = "Пруд с карпами", premium = true, slot = Vector3.new(-6, 0, -14) },
 	shrine = { name = "Святилище", premium = true, slot = Vector3.new(14, 0, 16) },
 	spiritStatue = { name = "Статуя духа", premium = true, slot = Vector3.new(-13, 0, 17) },
@@ -262,5 +264,19 @@ L.ClubWar = {
 		{ coins = 1500, dust = 50 },
 	},
 }
+
+------------------------------------------------------------------ траты монет: святилище удачи, обмен на пыль, призыв духа, зелье
+L.CoinShop = {
+	shrineMax = 50, shrinePer = 0.02, -- +2% удачи за уровень святилища (до +100%)
+	exchangeRate = 120, -- монет за 1 пыль
+	summonBase = 3000, summonPerLevel = 150, -- призыв редкого духа рядом с тобой
+	potionCoins = 12000, -- зелье удачи x2 на 15 минут за монеты
+}
+function L.shrineCost(level: number): number
+	return math.floor(3000 * 1.28 ^ level)
+end
+function L.summonCost(level: number): number
+	return L.CoinShop.summonBase + level * L.CoinShop.summonPerLevel
+end
 
 return L

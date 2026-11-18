@@ -80,6 +80,7 @@ local FeedFn = remote("FeedCompanion", "RemoteFunction")
 local SeasonFn = remote("ClaimSeason", "RemoteFunction")
 local TitleFn = remote("SetTitle", "RemoteFunction")
 local EvolveFn = remote("Evolve", "RemoteFunction")
+local CoinShopFn = remote("CoinShop", "RemoteFunction")
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
 local StoryOpenEv = remote("StoryOpen")
@@ -308,6 +309,11 @@ local function luckOf(d)
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
 	end
+	local shrine = (d.shrine or 0) * Live.CoinShop.shrinePer
+	if shrine > 0 then
+		mult *= 1 + shrine
+		table.insert(parts, ("Святилище +%d%%"):format(math.floor(shrine * 100 + 0.5)))
+	end
 	local club = Social.clubLuck(d)
 	if club > 0 then
 		mult *= 1 + club
@@ -532,6 +538,7 @@ local function migrate(raw): Profile
 		end
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
 		d.clubWarChecked = math.floor(num(raw.clubWarChecked, 0, 1e7, 0))
+		d.shrine = math.floor(num(raw.shrine, 0, Live.CoinShop.shrineMax, 0))
 		if typeof(raw.raceDay) == "table" then d.raceDay = { day = math.floor(num(raw.raceDay.day, 0, 1e7, 0)), n = math.floor(num(raw.raceDay.n, 0, 1000, 0)) } end
 		if typeof(raw.story) == "table" then
 			d.story = { ch = math.floor(num(raw.story.ch, 1, #Live.Story + 1, 1)), prog = math.floor(num(raw.story.prog, 0, 1e6, 0)) }
@@ -651,7 +658,7 @@ local function pushState(plr)
 			return { list = t, all = ch.all }
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
-		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story,
+		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -1898,6 +1905,59 @@ SeasonFn.OnServerInvoke = function(plr, tier, premium)
 	RewardEv:FireClient(plr, { coins = r.coins, dust = r.dust, skin = r.skin })
 	return { ok = true }
 end
+CoinShopFn.OnServerInvoke = function(plr, action, arg)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	local CS = Live.CoinShop
+	if action == "shrine" then
+		local lvl = d.shrine or 0
+		if lvl >= CS.shrineMax then return { ok = false, msg = "Святилище на максимуме" } end
+		local cost = Live.shrineCost(lvl)
+		if d.coins < cost then return { ok = false, msg = ("Нужно %d монет"):format(cost) } end
+		d.coins -= cost
+		d.shrine = lvl + 1
+	elseif action == "exchange" then
+		local n = (arg == 100 or arg == 1000) and arg or 10
+		local cost = n * CS.exchangeRate
+		if d.coins < cost then return { ok = false, msg = ("Нужно %d монет"):format(cost) } end
+		d.coins -= cost
+		d.dust += n
+	elseif action == "potion" then
+		if d.coins < CS.potionCoins then return { ok = false, msg = ("Нужно %d монет"):format(CS.potionCoins) } end
+		d.coins -= CS.potionCoins
+		addPotion(d)
+	elseif action == "summon" then
+		local root = rootOf(plr)
+		if not root then return { ok = false } end
+		local district = Catalog.district(root.Position)
+		local dc = Catalog.Districts[district]
+		if not dc or dc.max == 0 then return { ok = false, msg = "Призыв работает в районах с духами" } end
+		if not Catalog.unlocked(district, stats(d)) then return { ok = false } end
+		local cost = Live.summonCost(d.level)
+		if d.coins < cost then return { ok = false, msg = ("Нужно %d монет"):format(cost) } end
+		-- только редкие и выше из этого района
+		-- самые редкие из обычных духов района (редкие и выше, иначе необычные, иначе любые)
+		local pool = {}
+		for _, minR in { "rare", "uncommon", "common" } do
+			for kind, info in Catalog.Kinds do
+				if info.spawn[district] and RARITY_RANK[info.rarity] >= RARITY_RANK[minR] and not info.moonOnly then table.insert(pool, kind) end
+			end
+			if #pool > 0 then break end
+		end
+		if #pool == 0 then return { ok = false, msg = "Здесь нельзя призвать духа" } end
+		d.coins -= cost
+		local at = root.Position + root.CFrame.LookVector * 10
+		local sp = newSpirit(pool[math.random(#pool)], district, false, Vector3.new(at.X, 0.5, at.Z))
+		sp.revealed = true
+		sp.revealedAt = os.clock()
+		sp.anchor:SetAttribute("Revealed", true)
+	else
+		return { ok = false }
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
 EvolveFn.OnServerInvoke = function(plr, kind)
 	local d = data[plr]
 	local info = d and typeof(kind) == "string" and Catalog.Kinds[kind]
@@ -2526,6 +2586,41 @@ task.spawn(function()
 		for _, plr in Players:GetPlayers() do persist(plr) end
 	end
 end)
+
+------------------------------------------------------------------ обновление: старые серверы переносят игроков на новую версию
+do
+	local migrating = false
+	local function migrate()
+		if migrating or (game.PlaceVersion or 0) == 0 then return end
+		migrating = true
+		for _, p in Players:GetPlayers() do NoticeEv:FireClient(p, "Вышло обновление! Через 20 секунд перенесём тебя на новый сервер") end
+		task.wait(20)
+		for _, p in Players:GetPlayers() do persist(p) end
+		local list = Players:GetPlayers()
+		if #list > 0 then
+			pcall(function() game:GetService("TeleportService"):TeleportAsync(game.PlaceId, list) end)
+		end
+	end
+	task.spawn(function()
+		pcall(function()
+			MessagingService:SubscribeAsync("SC_Version", function(msg)
+				local v = typeof(msg.Data) == "table" and msg.Data.v
+				if typeof(v) == "number" and v > (game.PlaceVersion or 0) then task.spawn(migrate) end
+			end)
+		end)
+		-- новый сервер сообщает свою версию остальным (и повторяет для поздно запущенных)
+		while true do
+			pcall(function() MessagingService:PublishAsync("SC_Version", { v = game.PlaceVersion or 0 }) end)
+			task.wait(300)
+		end
+	end)
+	Players.PlayerAdded:Connect(function(p)
+		if migrating then
+			task.wait(5)
+			pcall(function() game:GetService("TeleportService"):TeleportAsync(game.PlaceId, { p }) end)
+		end
+	end)
+end
 
 game:BindToClose(function()
 	for _, plr in Players:GetPlayers() do persist(plr) end
