@@ -930,10 +930,79 @@ do
 	local tabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1 }, body)
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, tabs)
 	local TEAL = Color3.fromRGB(70, 170, 190)
-	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
-	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
-	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
-	local tabFurn = K.button(tabs, "Мебель", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabFurn = K.button(tabs, "Мебель", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabRace = K.button(tabs, "Забег", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabFriends = K.button(tabs, "Друзья", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	-- забег спутников
+	local racePage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, body)
+	local raceInfo = K.text(racePage, "Твой спутник бежит против других. Скорость: редкость, уровень и пробуждение. Жми «Подбодрить!» во время забега.",
+		{ Size = UDim2.new(0.62, 0, 0, 44), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, Font = Enum.Font.GothamBold, TextWrapped = true, TextColor3 = T.sub, StrokeThickness = 1 })
+	local raceB, raceBL = K.button(racePage, "Записаться", T.green, { Position = UDim2.new(0.64, 0, 0, 0), Size = UDim2.new(0.36, 0, 0, 44), MaxText = 17 })
+	local lanes = K.make("Frame", { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 1, -52), BackgroundTransparency = 1 }, racePage)
+	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lanes)
+	local raceState = nil
+	local function drawRace()
+		for _, c in lanes:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		local rs = raceState
+		if not rs or rs.phase == "idle" then
+			raceBL.Text = "Записаться"
+			K.recolor(raceB, T.green)
+			return
+		end
+		raceBL.Text = rs.phase == "lobby" and ("Старт через %d"):format(rs.lobbyLeft) or (rs.phase == "run" and "Подбодрить!" or "Финиш")
+		K.recolor(raceB, rs.phase == "run" and T.orange or Color3.fromRGB(80, 80, 100))
+		for i, e in rs.list do
+			local mine = e.me == plr.UserId
+			local row = K.panel(lanes, { Size = UDim2.new(1, -6, 0, 44), LayoutOrder = i, BackgroundColor3 = mine and Color3.fromRGB(50, 80, 60) or T.panel2 })
+			local kinfo = Catalog.Kinds[e.kind]
+			K.text(row, ("%s%s"):format(e.place and (e.place .. ". ") or "", e.name), { Size = UDim2.new(0.3, -8, 0, 20), Position = UDim2.fromOffset(8, 2), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15 })
+			K.text(row, kinfo and kinfo.name or "", { Size = UDim2.new(0.3, -8, 0, 16), Position = UDim2.fromOffset(8, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+			local _, fill = K.bar(row, mine and T.green or T.orange, { Size = UDim2.new(0.68, -10, 0, 16), Position = UDim2.new(0.31, 0, 0, 14) })
+			fill.Size = UDim2.fromScale(math.clamp(e.pos / math.max(rs.length, 1), 0, 1), 1)
+		end
+	end
+	raceB.Activated:Connect(function()
+		local action = (raceState and raceState.phase == "run") and "cheer" or "join"
+		local r = remotes.Race:InvokeServer(action)
+		if r and r.msg then showToast(r.msg) end
+		if action == "cheer" and r and r.ok then play("click") end
+	end)
+	remotes.RaceState.OnClientEvent:Connect(function(v)
+		raceState = v
+		if racePage.Visible then drawRace() end
+	end)
+	-- друзья на других серверах
+	local friendPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, friendPage)
+	local fHead = K.text(friendPage, "Друзья, которые сейчас ловят духов на других серверах:", { Size = UDim2.new(1, -10, 0, 30), LayoutOrder = 0, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextXAlignment = Enum.TextXAlignment.Left })
+	local function drawFriends()
+		for _, c in friendPage:GetChildren() do
+			if c:IsA("Frame") then c:Destroy() end
+		end
+		local ok, list = pcall(function() return plr:GetFriendsOnline(50) end)
+		local n = 0
+		for _, f in (ok and list) or {} do
+			if f.PlaceId == game.PlaceId and f.GameId and f.GameId ~= game.JobId then
+				n += 1
+				local row = K.panel(friendPage, { Size = UDim2.new(1, -10, 0, 56), LayoutOrder = n, BackgroundColor3 = T.panel2 })
+				K.text(row, f.DisplayName or f.UserName or "Друг", { Size = UDim2.new(0.6, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+				local jb = K.button(row, "Присоединиться", T.blue, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 0, 0, 6), MaxText = 15 })
+				jb.Activated:Connect(function()
+					showToast("Переходим к другу...", 3)
+					local r = remotes.JoinFriend:InvokeServer(f.VisitorId, f.GameId)
+					if r and not r.ok and r.msg then showToast(r.msg, 3) end
+				end)
+			end
+		end
+		fHead.Text = n > 0 and "Друзья, которые сейчас ловят духов на других серверах:" or "Сейчас никто из друзей не играет на другом сервере"
+	end
+	tabFriends.Activated:Connect(drawFriends)
+	tabRace.Activated:Connect(drawRace)
 	local furnPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 120), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, furnPage)
 	local furnCards = {}
@@ -1090,6 +1159,18 @@ do
 	local clubInfo = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 50), Position = UDim2.fromOffset(0, 40), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16, Font = Enum.Font.GothamBold, TextWrapped = true })
 	local _, clubFill = K.bar(inClub, T.gold, { Size = UDim2.new(1, 0, 0, 14), Position = UDim2.fromOffset(0, 96) })
 	local clubMembers = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 170), Position = UDim2.fromOffset(0, 118), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true, TextColor3 = T.sub, StrokeThickness = 1 })
+	local warL = K.text(clubPage, "", { Size = UDim2.new(1, -10, 0, 210), LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true })
+	tabClub.Activated:Connect(function()
+		warL.Text = "Войны клубов: загрузка..."
+		task.spawn(function()
+			local top = remotes.ClubTop:InvokeServer() or {}
+			local lines = { "Войны клубов, неделя (поймано духов):" }
+			for i, e in top do table.insert(lines, ("%d. %s  -  %d"):format(i, e.name, e.value)) end
+			if #top == 0 then table.insert(lines, "Пока пусто. Лови духов в клубе!") end
+			table.insert(lines, "Топ-3 клуба в понедельник получают монеты и пыль, 1 место - титул «Чемпион клубов»")
+			warL.Text = table.concat(lines, "\n")
+		end)
+	end)
 	local function clubCall(action, arg)
 		local r = remotes.Club:InvokeServer(action, arg)
 		if r and r.msg then showToast(r.msg, 3) end
@@ -1098,7 +1179,7 @@ do
 	joinB.Activated:Connect(function() clubCall("join", codeBox.Text) end)
 	leaveB.Activated:Connect(function() clubCall("leave") end)
 
-	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage }, { tabFurn, furnPage } }
+	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage }, { tabFurn, furnPage }, { tabRace, racePage }, { tabFriends, friendPage } }
 	for _, pair in pages do
 		pair[1].Activated:Connect(function()
 			for _, o in pages do

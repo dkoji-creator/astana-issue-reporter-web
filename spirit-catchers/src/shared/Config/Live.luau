@@ -241,4 +241,26 @@ function L.activeHolidays(t: number)
 	return out
 end
 
+------------------------------------------------------------------ забеги спутников
+-- запись открывает лобби на 20 с; если игроков меньше 4, добавляются духи-соперники
+L.Race = {
+	lobby = 20, length = 100, tick = 0.25, cheerEvery = 2, cheerBoost = 1.2,
+	rivals = { { name = "Лис соседа", kind = "PaperFox", speed = 3.2 }, { name = "Кот с рынка", kind = "LuckyCat", speed = 3.4 }, { name = "Тануки-бегун", kind = "BellTanuki", speed = 3.1 } },
+	prizes = { { coins = 400, dust = 12 }, { coins = 200, dust = 6 }, { coins = 100, dust = 3 } }, participation = { coins = 40 },
+	dailyPrizes = 12, -- забегов с наградой в день
+}
+-- скорость спутника в забеге: редкость, уровень и пробуждение
+function L.raceSpeed(rarity: string, level: number, evolved: boolean): number
+	return 2.6 + (L.RarityPower[rarity] or 1) * 0.35 + level * 0.08 + (evolved and 0.4 or 0)
+end
+
+------------------------------------------------------------------ войны клубов (недельный рейтинг клубов по поимкам)
+L.ClubWar = {
+	prizes = {
+		{ coins = 5000, dust = 150, title = "Чемпион клубов" },
+		{ coins = 3000, dust = 90 },
+		{ coins = 1500, dust = 50 },
+	},
+}
+
 return L

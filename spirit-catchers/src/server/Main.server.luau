@@ -531,6 +531,8 @@ local function migrate(raw): Profile
 			end
 		end
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
+		d.clubWarChecked = math.floor(num(raw.clubWarChecked, 0, 1e7, 0))
+		if typeof(raw.raceDay) == "table" then d.raceDay = { day = math.floor(num(raw.raceDay.day, 0, 1e7, 0)), n = math.floor(num(raw.raceDay.n, 0, 1000, 0)) } end
 		if typeof(raw.story) == "table" then
 			d.story = { ch = math.floor(num(raw.story.ch, 1, #Live.Story + 1, 1)), prog = math.floor(num(raw.story.prog, 0, 1e6, 0)) }
 		end
@@ -2461,7 +2463,7 @@ game:GetService("StarterPlayer").CameraMaxZoomDistance = 40
 ------------------------------------------------------------------ игроки
 Social.init({
 	data = data, Catalog = Catalog, pushState = pushState, persist = persist, rootOf = rootOf,
-	NoticeEv = NoticeEv, stopHold = stopHold, distinct = distinct,
+	NoticeEv = NoticeEv, stopHold = stopHold, distinct = distinct, compOf = compOf,
 })
 
 Players.PlayerAdded:Connect(function(plr)

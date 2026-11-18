@@ -496,6 +496,28 @@ function L.activeHolidays(t: number)
 	return out
 end
 
+------------------------------------------------------------------ забеги спутников
+-- запись открывает лобби на 20 с; если игроков меньше 4, добавляются духи-соперники
+L.Race = {
+	lobby = 20, length = 100, tick = 0.25, cheerEvery = 2, cheerBoost = 1.2,
+	rivals = { { name = "Лис соседа", kind = "PaperFox", speed = 3.2 }, { name = "Кот с рынка", kind = "LuckyCat", speed = 3.4 }, { name = "Тануки-бегун", kind = "BellTanuki", speed = 3.1 } },
+	prizes = { { coins = 400, dust = 12 }, { coins = 200, dust = 6 }, { coins = 100, dust = 3 } }, participation = { coins = 40 },
+	dailyPrizes = 12, -- забегов с наградой в день
+}
+-- скорость спутника в забеге: редкость, уровень и пробуждение
+function L.raceSpeed(rarity: string, level: number, evolved: boolean): number
+	return 2.6 + (L.RarityPower[rarity] or 1) * 0.35 + level * 0.08 + (evolved and 0.4 or 0)
+end
+
+------------------------------------------------------------------ войны клубов (недельный рейтинг клубов по поимкам)
+L.ClubWar = {
+	prizes = {
+		{ coins = 5000, dust = 150, title = "Чемпион клубов" },
+		{ coins = 3000, dust = 90 },
+		{ coins = 1500, dust = 50 },
+	},
+}
+
 return L
 ]]></string>
           </Properties>
@@ -695,22 +717,22 @@ P.Codes = {
 	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
 	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
 	UPDATE3 = { coins = 1000, dust = 30, text = "Обновление 3! +1000 монет и +30 пыли" },
+	SKY = { coins = 2000, dust = 60, text = "Обновление 5: Небесный рынок! +2000 монет и +60 пыли" },
 	MIRROR = { coins = 1500, dust = 50, text = "Обновление 4: Зеркальное озеро! +1500 монет и +50 пыли" },
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 4
+P.NewsVersion = 5
 P.News = {
-	title = "Обновление 4: Зеркальное озеро",
+	title = "Обновление 5: Небесный рынок",
 	lines = {
-		"Второй мир: Зеркальное озеро (ур. 25). Духов видно только в отражении",
-		"Сезон 1: 30 наград, 4 фонаря, титулы. Испытания и модификатор дня",
-		"Спутники с уровнями: лис ускоряет, карп даёт удачу. Корми их пылью",
-		"Рейд «Тысяча фонарей»: весь сервер светит на Великого духа",
-		"Дворы игроков, лайки, обмен дубликатами и клубы ловцов",
-		"Редчайший улов недели, альбом редких поимок, фото-режим",
-		"Районы стали больше, телепорт только в меню, новые эффекты фонарей",
-		"Код MIRROR (Опции)",
+		"Третий мир: Небесный рынок (ур. 30). Ленты на ветру показывают духов",
+		"Пробуждение: 10 дубликатов + пыль = пробуждённый дух (способность и монеты x1.5)",
+		"Сюжет: 12 глав от Хранителя алтаря у площади",
+		"Ночные стражи: мини-боссы в районах, побеждайте вместе",
+		"Мебель для двора, забеги спутников, войны клубов, переход к друзьям",
+		"Премиум-трек сезона (только косметика) и праздничные духи: Кленовый дух до 30 ноября",
+		"Код SKY (Опции)",
 	},
 }
 
@@ -3006,6 +3028,8 @@ local function migrate(raw): Profile
 			end
 		end
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
+		d.clubWarChecked = math.floor(num(raw.clubWarChecked, 0, 1e7, 0))
+		if typeof(raw.raceDay) == "table" then d.raceDay = { day = math.floor(num(raw.raceDay.day, 0, 1e7, 0)), n = math.floor(num(raw.raceDay.n, 0, 1000, 0)) } end
 		if typeof(raw.story) == "table" then
 			d.story = { ch = math.floor(num(raw.story.ch, 1, #Live.Story + 1, 1)), prog = math.floor(num(raw.story.prog, 0, 1e6, 0)) }
 		end
@@ -4936,7 +4960,7 @@ game:GetService("StarterPlayer").CameraMaxZoomDistance = 40
 ------------------------------------------------------------------ игроки
 Social.init({
 	data = data, Catalog = Catalog, pushState = pushState, persist = persist, rootOf = rootOf,
-	NoticeEv = NoticeEv, stopHold = stopHold, distinct = distinct,
+	NoticeEv = NoticeEv, stopHold = stopHold, distinct = distinct, compOf = compOf,
 })
 
 Players.PlayerAdded:Connect(function(plr)
@@ -5683,6 +5707,7 @@ local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 
 local Social = {}
+local memWeek -- поимки клубов за неделю в памяти (если DataStore недоступен)
 local R = {} -- remotes
 local ctx -- данные и функции из Main
 
@@ -5692,6 +5717,10 @@ function Social.remotes(remote)
 	R.Trade = remote("Trade", "RemoteFunction")
 	R.TradeEv = remote("TradeState")
 	R.Club = remote("Club", "RemoteFunction")
+	R.Race = remote("Race", "RemoteFunction")
+	R.RaceEv = remote("RaceState")
+	R.JoinFriend = remote("JoinFriend", "RemoteFunction")
+	R.ClubTop = remote("ClubTop", "RemoteFunction")
 end
 
 ------------------------------------------------------------------ дворы
@@ -6284,6 +6313,161 @@ local function clubAction(plr, action, arg)
 	return { ok = false }
 end
 
+------------------------------------------------------------------ войны клубов: недельный рейтинг клубов
+local clubWeekStores = {}
+memWeek = {}
+function Social.clubWeekStore(week: number)
+	if not clubWeekStores[week] then
+		pcall(function() clubWeekStores[week] = DataStoreService:GetOrderedDataStore("SC_ClubWeek_" .. week) end)
+	end
+	return clubWeekStores[week]
+end
+local function clubTop(week: number, n: number)
+	local out = {}
+	local st = Social.clubWeekStore(week)
+	local ok, pages = false, nil
+	if st then ok, pages = pcall(function() return st:GetSortedAsync(false, n) end) end
+	if ok and pages then
+		for _, e in pages:GetCurrentPage() do table.insert(out, { code = e.key, value = e.value }) end
+	elseif week == ctx.Catalog.Live.week(os.time()) then
+		for code, v in memWeek do table.insert(out, { code = code, value = v }) end
+		table.sort(out, function(a, b) return a.value > b.value end)
+	end
+	for _, e in out do
+		local rec = loadClub(e.code)
+		e.name = rec and rec.name or e.code
+	end
+	return out
+end
+-- награда за прошлую неделю: проверяется при входе игрока
+local function checkClubWar(plr)
+	local d = ctx.data[plr]
+	local week = ctx.Catalog.Live.week(os.time())
+	if not (d and d.club) or (d.clubWarChecked or 0) >= week then return end
+	d.clubWarChecked = week
+	local top = clubTop(week - 1, 3)
+	for rank, e in top do
+		if e.code == d.club then
+			local pz = ctx.Catalog.Live.ClubWar.prizes[rank]
+			d.coins += pz.coins
+			d.dust += pz.dust
+			if pz.title then
+				d.titles[pz.title] = true
+			end
+			ctx.NoticeEv:FireClient(plr, ("Войны клубов: твой клуб занял %d место за прошлую неделю! +%d монет, +%d пыли"):format(rank, pz.coins, pz.dust))
+			ctx.pushState(plr)
+		end
+	end
+end
+
+------------------------------------------------------------------ забеги спутников (показываются в окне, без постройки трассы)
+local race = { phase = "idle", entrants = {} }
+local function raceView()
+	local list = {}
+	for _, e in race.entrants do
+		table.insert(list, { name = e.name, kind = e.kind, pos = e.pos, place = e.place, me = e.uid })
+	end
+	return { phase = race.phase, list = list, lobbyLeft = race.lobbyEnd and math.max(0, math.ceil(race.lobbyEnd - os.clock())) or 0, length = ctx.Catalog.Live.Race.length }
+end
+local function raceBroadcast()
+	local v = raceView()
+	for _, e in race.entrants do
+		if e.plr and e.plr.Parent then R.RaceEv:FireClient(e.plr, v) end
+	end
+end
+local function runRace()
+	local RC = ctx.Catalog.Live.Race
+	-- соперники-духи, если людей меньше 4
+	local i = 1
+	while #race.entrants < 4 and RC.rivals[i] do
+		local rv = RC.rivals[i]
+		table.insert(race.entrants, { name = rv.name, kind = rv.kind, speed = rv.speed, pos = 0, boost = 0 })
+		i += 1
+	end
+	race.phase = "run"
+	local finished = 0
+	local t0 = os.clock()
+	while finished < #race.entrants and os.clock() - t0 < 45 do
+		task.wait(RC.tick)
+		for _, e in race.entrants do
+			if not e.place then
+				e.pos += (e.speed * (0.8 + math.random() * 0.45) + e.boost) * RC.tick * 3
+				e.boost = math.max(0, e.boost - RC.cheerBoost * 0.5)
+				if e.pos >= RC.length then
+					e.pos = RC.length
+					finished += 1
+					e.place = finished
+				end
+			end
+		end
+		raceBroadcast()
+	end
+	race.phase = "done"
+	raceBroadcast()
+	-- награды людям по месту
+	local day = math.floor(os.time() / 86400)
+	for _, e in race.entrants do
+		local d = e.plr and ctx.data[e.plr]
+		if d then
+			if typeof(d.raceDay) ~= "table" or d.raceDay.day ~= day then d.raceDay = { day = day, n = 0 } end
+			if d.raceDay.n < RC.dailyPrizes then
+				d.raceDay.n += 1
+				local pz = RC.prizes[e.place or 99] or RC.participation
+				d.coins += pz.coins
+				d.dust += pz.dust or 0
+				ctx.NoticeEv:FireClient(e.plr, ("Забег: %s место! +%d монет"):format(e.place and tostring(e.place) or "-", pz.coins))
+				ctx.pushState(e.plr)
+			else
+				ctx.NoticeEv:FireClient(e.plr, "Забег окончен. Награды на сегодня уже получены")
+			end
+		end
+	end
+	task.wait(4)
+	race = { phase = "idle", entrants = {} }
+end
+local function raceAction(plr, action)
+	local d = ctx.data[plr]
+	if not d then return { ok = false } end
+	local RC = ctx.Catalog.Live.Race
+	if action == "join" then
+		if race.phase == "run" or race.phase == "done" then return { ok = false, msg = "Забег уже идёт, подожди следующий" } end
+		local c = ctx.compOf(d)
+		if not c then return { ok = false, msg = "Сначала выбери спутника в Атласе" } end
+		for _, e in race.entrants do
+			if e.plr == plr then return { ok = false, msg = "Ты уже записан" } end
+		end
+		if #race.entrants >= 8 then return { ok = false, msg = "Все дорожки заняты" } end
+		table.insert(race.entrants, { plr = plr, uid = plr.UserId, name = plr.DisplayName, kind = c.kind,
+			speed = 0, pos = 0, boost = 0 })
+		local e = race.entrants[#race.entrants]
+		e.speed = ctx.Catalog.Live.raceSpeed(ctx.Catalog.Kinds[c.kind].rarity, c.level, c.evolved)
+		if race.phase == "idle" then
+			race.phase = "lobby"
+			race.lobbyEnd = os.clock() + RC.lobby
+			for _, p in Players:GetPlayers() do
+				if p ~= plr then ctx.NoticeEv:FireClient(p, plr.DisplayName .. " открыл забег спутников! Окно «Ловцы», вкладка «Забег»") end
+			end
+			task.delay(RC.lobby, function()
+				if race.phase == "lobby" then runRace() end
+			end)
+		end
+		raceBroadcast()
+		return { ok = true }
+	elseif action == "cheer" then
+		if race.phase ~= "run" then return { ok = false } end
+		for _, e in race.entrants do
+			if e.plr == plr then
+				local now = os.clock()
+				if now - (e.lastCheer or 0) < RC.cheerEvery then return { ok = false } end
+				e.lastCheer = now
+				e.boost += RC.cheerBoost
+				return { ok = true }
+			end
+		end
+	end
+	return { ok = false }
+end
+
 ------------------------------------------------------------------ подключение
 function Social.init(c)
 	ctx = c
@@ -6305,6 +6489,22 @@ function Social.init(c)
 		return { ok = true }
 	end
 	R.Trade.OnServerInvoke = tradeAction
+	R.Race.OnServerInvoke = raceAction
+	R.ClubTop.OnServerInvoke = function(plr)
+		return clubTop(ctx.Catalog.Live.week(os.time()), 10)
+	end
+	-- переход на сервер друга: только этот же плейс и только к другу
+	R.JoinFriend.OnServerInvoke = function(plr, friendId, jobId)
+		if typeof(friendId) ~= "number" or typeof(jobId) ~= "string" or #jobId < 10 or #jobId > 64 or jobId == game.JobId then return { ok = false } end
+		local ok, isFriend = pcall(function() return plr:IsFriendsWith(friendId) end)
+		if not (ok and isFriend) then return { ok = false, msg = "Это не твой друг" } end
+		local tpOk, err = pcall(function()
+			game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, jobId, plr)
+		end)
+		if not tpOk then return { ok = false, msg = "Не получилось перейти: " .. tostring(err) } end
+		ctx.persist(plr)
+		return { ok = true }
+	end
 	R.Club.OnServerInvoke = clubAction
 	-- клубы: обновление кэша и запись накопленных поимок
 	task.spawn(function()
@@ -6325,6 +6525,12 @@ function Social.init(c)
 					end
 					clubs[d.club] = nil
 					saveClub(d.club, { fn = function(r) r.total = (r.total or 0) + pending end })
+					if pending > 0 then
+						local code = d.club
+						local st = Social.clubWeekStore(ctx.Catalog.Live.week(os.time()))
+						if st then pcall(function() st:IncrementAsync(code, pending) end) end
+						memWeek[code] = (memWeek[code] or 0) + pending
+					end
 				end
 			end
 		end
@@ -6336,6 +6542,7 @@ function Social.playerReady(plr)
 	if d and d.club then
 		task.spawn(function()
 			if not loadClub(d.club) then d.club = nil end
+			checkClubWar(plr)
 			ctx.pushState(plr)
 		end)
 	end
@@ -7300,10 +7507,79 @@ do
 	local tabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1 }, body)
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, tabs)
 	local TEAL = Color3.fromRGB(70, 170, 190)
-	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
-	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
-	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
-	local tabFurn = K.button(tabs, "Мебель", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabFurn = K.button(tabs, "Мебель", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabRace = K.button(tabs, "Забег", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	local tabFriends = K.button(tabs, "Друзья", T.panel2, { Size = UDim2.fromOffset(118, 36), MaxText = 16 })
+	-- забег спутников
+	local racePage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, body)
+	local raceInfo = K.text(racePage, "Твой спутник бежит против других. Скорость: редкость, уровень и пробуждение. Жми «Подбодрить!» во время забега.",
+		{ Size = UDim2.new(0.62, 0, 0, 44), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, Font = Enum.Font.GothamBold, TextWrapped = true, TextColor3 = T.sub, StrokeThickness = 1 })
+	local raceB, raceBL = K.button(racePage, "Записаться", T.green, { Position = UDim2.new(0.64, 0, 0, 0), Size = UDim2.new(0.36, 0, 0, 44), MaxText = 17 })
+	local lanes = K.make("Frame", { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 1, -52), BackgroundTransparency = 1 }, racePage)
+	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, lanes)
+	local raceState = nil
+	local function drawRace()
+		for _, c in lanes:GetChildren() do
+			if c:IsA("GuiObject") then c:Destroy() end
+		end
+		local rs = raceState
+		if not rs or rs.phase == "idle" then
+			raceBL.Text = "Записаться"
+			K.recolor(raceB, T.green)
+			return
+		end
+		raceBL.Text = rs.phase == "lobby" and ("Старт через %d"):format(rs.lobbyLeft) or (rs.phase == "run" and "Подбодрить!" or "Финиш")
+		K.recolor(raceB, rs.phase == "run" and T.orange or Color3.fromRGB(80, 80, 100))
+		for i, e in rs.list do
+			local mine = e.me == plr.UserId
+			local row = K.panel(lanes, { Size = UDim2.new(1, -6, 0, 44), LayoutOrder = i, BackgroundColor3 = mine and Color3.fromRGB(50, 80, 60) or T.panel2 })
+			local kinfo = Catalog.Kinds[e.kind]
+			K.text(row, ("%s%s"):format(e.place and (e.place .. ". ") or "", e.name), { Size = UDim2.new(0.3, -8, 0, 20), Position = UDim2.fromOffset(8, 2), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15 })
+			K.text(row, kinfo and kinfo.name or "", { Size = UDim2.new(0.3, -8, 0, 16), Position = UDim2.fromOffset(8, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+			local _, fill = K.bar(row, mine and T.green or T.orange, { Size = UDim2.new(0.68, -10, 0, 16), Position = UDim2.new(0.31, 0, 0, 14) })
+			fill.Size = UDim2.fromScale(math.clamp(e.pos / math.max(rs.length, 1), 0, 1), 1)
+		end
+	end
+	raceB.Activated:Connect(function()
+		local action = (raceState and raceState.phase == "run") and "cheer" or "join"
+		local r = remotes.Race:InvokeServer(action)
+		if r and r.msg then showToast(r.msg) end
+		if action == "cheer" and r and r.ok then play("click") end
+	end)
+	remotes.RaceState.OnClientEvent:Connect(function(v)
+		raceState = v
+		if racePage.Visible then drawRace() end
+	end)
+	-- друзья на других серверах
+	local friendPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, friendPage)
+	local fHead = K.text(friendPage, "Друзья, которые сейчас ловят духов на других серверах:", { Size = UDim2.new(1, -10, 0, 30), LayoutOrder = 0, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextXAlignment = Enum.TextXAlignment.Left })
+	local function drawFriends()
+		for _, c in friendPage:GetChildren() do
+			if c:IsA("Frame") then c:Destroy() end
+		end
+		local ok, list = pcall(function() return plr:GetFriendsOnline(50) end)
+		local n = 0
+		for _, f in (ok and list) or {} do
+			if f.PlaceId == game.PlaceId and f.GameId and f.GameId ~= game.JobId then
+				n += 1
+				local row = K.panel(friendPage, { Size = UDim2.new(1, -10, 0, 56), LayoutOrder = n, BackgroundColor3 = T.panel2 })
+				K.text(row, f.DisplayName or f.UserName or "Друг", { Size = UDim2.new(0.6, -16, 1, -12), Position = UDim2.fromOffset(12, 6), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+				local jb = K.button(row, "Присоединиться", T.blue, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 0, 0, 6), MaxText = 15 })
+				jb.Activated:Connect(function()
+					showToast("Переходим к другу...", 3)
+					local r = remotes.JoinFriend:InvokeServer(f.VisitorId, f.GameId)
+					if r and not r.ok and r.msg then showToast(r.msg, 3) end
+				end)
+			end
+		end
+		fHead.Text = n > 0 and "Друзья, которые сейчас ловят духов на других серверах:" or "Сейчас никто из друзей не играет на другом сервере"
+	end
+	tabFriends.Activated:Connect(drawFriends)
+	tabRace.Activated:Connect(drawRace)
 	local furnPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 120), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, furnPage)
 	local furnCards = {}
@@ -7460,6 +7736,18 @@ do
 	local clubInfo = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 50), Position = UDim2.fromOffset(0, 40), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16, Font = Enum.Font.GothamBold, TextWrapped = true })
 	local _, clubFill = K.bar(inClub, T.gold, { Size = UDim2.new(1, 0, 0, 14), Position = UDim2.fromOffset(0, 96) })
 	local clubMembers = K.text(inClub, "", { Size = UDim2.new(1, 0, 0, 170), Position = UDim2.fromOffset(0, 118), TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true, TextColor3 = T.sub, StrokeThickness = 1 })
+	local warL = K.text(clubPage, "", { Size = UDim2.new(1, -10, 0, 210), LayoutOrder = 3, TextXAlignment = Enum.TextXAlignment.Left, TextYAlignment = Enum.TextYAlignment.Top, MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true })
+	tabClub.Activated:Connect(function()
+		warL.Text = "Войны клубов: загрузка..."
+		task.spawn(function()
+			local top = remotes.ClubTop:InvokeServer() or {}
+			local lines = { "Войны клубов, неделя (поймано духов):" }
+			for i, e in top do table.insert(lines, ("%d. %s  -  %d"):format(i, e.name, e.value)) end
+			if #top == 0 then table.insert(lines, "Пока пусто. Лови духов в клубе!") end
+			table.insert(lines, "Топ-3 клуба в понедельник получают монеты и пыль, 1 место - титул «Чемпион клубов»")
+			warL.Text = table.concat(lines, "\n")
+		end)
+	end)
 	local function clubCall(action, arg)
 		local r = remotes.Club:InvokeServer(action, arg)
 		if r and r.msg then showToast(r.msg, 3) end
@@ -7468,7 +7756,7 @@ do
 	joinB.Activated:Connect(function() clubCall("join", codeBox.Text) end)
 	leaveB.Activated:Connect(function() clubCall("leave") end)
 
-	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage }, { tabFurn, furnPage } }
+	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage }, { tabFurn, furnPage }, { tabRace, racePage }, { tabFriends, friendPage } }
 	for _, pair in pages do
 		pair[1].Activated:Connect(function()
 			for _, o in pages do

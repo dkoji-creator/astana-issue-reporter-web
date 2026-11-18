@@ -3,6 +3,7 @@ local Players = game:GetService("Players")
 local DataStoreService = game:GetService("DataStoreService")
 
 local Social = {}
+local memWeek -- поимки клубов за неделю в памяти (если DataStore недоступен)
 local R = {} -- remotes
 local ctx -- данные и функции из Main
 
@@ -12,6 +13,10 @@ function Social.remotes(remote)
 	R.Trade = remote("Trade", "RemoteFunction")
 	R.TradeEv = remote("TradeState")
 	R.Club = remote("Club", "RemoteFunction")
+	R.Race = remote("Race", "RemoteFunction")
+	R.RaceEv = remote("RaceState")
+	R.JoinFriend = remote("JoinFriend", "RemoteFunction")
+	R.ClubTop = remote("ClubTop", "RemoteFunction")
 end
 
 ------------------------------------------------------------------ дворы
@@ -604,6 +609,161 @@ local function clubAction(plr, action, arg)
 	return { ok = false }
 end
 
+------------------------------------------------------------------ войны клубов: недельный рейтинг клубов
+local clubWeekStores = {}
+memWeek = {}
+function Social.clubWeekStore(week: number)
+	if not clubWeekStores[week] then
+		pcall(function() clubWeekStores[week] = DataStoreService:GetOrderedDataStore("SC_ClubWeek_" .. week) end)
+	end
+	return clubWeekStores[week]
+end
+local function clubTop(week: number, n: number)
+	local out = {}
+	local st = Social.clubWeekStore(week)
+	local ok, pages = false, nil
+	if st then ok, pages = pcall(function() return st:GetSortedAsync(false, n) end) end
+	if ok and pages then
+		for _, e in pages:GetCurrentPage() do table.insert(out, { code = e.key, value = e.value }) end
+	elseif week == ctx.Catalog.Live.week(os.time()) then
+		for code, v in memWeek do table.insert(out, { code = code, value = v }) end
+		table.sort(out, function(a, b) return a.value > b.value end)
+	end
+	for _, e in out do
+		local rec = loadClub(e.code)
+		e.name = rec and rec.name or e.code
+	end
+	return out
+end
+-- награда за прошлую неделю: проверяется при входе игрока
+local function checkClubWar(plr)
+	local d = ctx.data[plr]
+	local week = ctx.Catalog.Live.week(os.time())
+	if not (d and d.club) or (d.clubWarChecked or 0) >= week then return end
+	d.clubWarChecked = week
+	local top = clubTop(week - 1, 3)
+	for rank, e in top do
+		if e.code == d.club then
+			local pz = ctx.Catalog.Live.ClubWar.prizes[rank]
+			d.coins += pz.coins
+			d.dust += pz.dust
+			if pz.title then
+				d.titles[pz.title] = true
+			end
+			ctx.NoticeEv:FireClient(plr, ("Войны клубов: твой клуб занял %d место за прошлую неделю! +%d монет, +%d пыли"):format(rank, pz.coins, pz.dust))
+			ctx.pushState(plr)
+		end
+	end
+end
+
+------------------------------------------------------------------ забеги спутников (показываются в окне, без постройки трассы)
+local race = { phase = "idle", entrants = {} }
+local function raceView()
+	local list = {}
+	for _, e in race.entrants do
+		table.insert(list, { name = e.name, kind = e.kind, pos = e.pos, place = e.place, me = e.uid })
+	end
+	return { phase = race.phase, list = list, lobbyLeft = race.lobbyEnd and math.max(0, math.ceil(race.lobbyEnd - os.clock())) or 0, length = ctx.Catalog.Live.Race.length }
+end
+local function raceBroadcast()
+	local v = raceView()
+	for _, e in race.entrants do
+		if e.plr and e.plr.Parent then R.RaceEv:FireClient(e.plr, v) end
+	end
+end
+local function runRace()
+	local RC = ctx.Catalog.Live.Race
+	-- соперники-духи, если людей меньше 4
+	local i = 1
+	while #race.entrants < 4 and RC.rivals[i] do
+		local rv = RC.rivals[i]
+		table.insert(race.entrants, { name = rv.name, kind = rv.kind, speed = rv.speed, pos = 0, boost = 0 })
+		i += 1
+	end
+	race.phase = "run"
+	local finished = 0
+	local t0 = os.clock()
+	while finished < #race.entrants and os.clock() - t0 < 45 do
+		task.wait(RC.tick)
+		for _, e in race.entrants do
+			if not e.place then
+				e.pos += (e.speed * (0.8 + math.random() * 0.45) + e.boost) * RC.tick * 3
+				e.boost = math.max(0, e.boost - RC.cheerBoost * 0.5)
+				if e.pos >= RC.length then
+					e.pos = RC.length
+					finished += 1
+					e.place = finished
+				end
+			end
+		end
+		raceBroadcast()
+	end
+	race.phase = "done"
+	raceBroadcast()
+	-- награды людям по месту
+	local day = math.floor(os.time() / 86400)
+	for _, e in race.entrants do
+		local d = e.plr and ctx.data[e.plr]
+		if d then
+			if typeof(d.raceDay) ~= "table" or d.raceDay.day ~= day then d.raceDay = { day = day, n = 0 } end
+			if d.raceDay.n < RC.dailyPrizes then
+				d.raceDay.n += 1
+				local pz = RC.prizes[e.place or 99] or RC.participation
+				d.coins += pz.coins
+				d.dust += pz.dust or 0
+				ctx.NoticeEv:FireClient(e.plr, ("Забег: %s место! +%d монет"):format(e.place and tostring(e.place) or "-", pz.coins))
+				ctx.pushState(e.plr)
+			else
+				ctx.NoticeEv:FireClient(e.plr, "Забег окончен. Награды на сегодня уже получены")
+			end
+		end
+	end
+	task.wait(4)
+	race = { phase = "idle", entrants = {} }
+end
+local function raceAction(plr, action)
+	local d = ctx.data[plr]
+	if not d then return { ok = false } end
+	local RC = ctx.Catalog.Live.Race
+	if action == "join" then
+		if race.phase == "run" or race.phase == "done" then return { ok = false, msg = "Забег уже идёт, подожди следующий" } end
+		local c = ctx.compOf(d)
+		if not c then return { ok = false, msg = "Сначала выбери спутника в Атласе" } end
+		for _, e in race.entrants do
+			if e.plr == plr then return { ok = false, msg = "Ты уже записан" } end
+		end
+		if #race.entrants >= 8 then return { ok = false, msg = "Все дорожки заняты" } end
+		table.insert(race.entrants, { plr = plr, uid = plr.UserId, name = plr.DisplayName, kind = c.kind,
+			speed = 0, pos = 0, boost = 0 })
+		local e = race.entrants[#race.entrants]
+		e.speed = ctx.Catalog.Live.raceSpeed(ctx.Catalog.Kinds[c.kind].rarity, c.level, c.evolved)
+		if race.phase == "idle" then
+			race.phase = "lobby"
+			race.lobbyEnd = os.clock() + RC.lobby
+			for _, p in Players:GetPlayers() do
+				if p ~= plr then ctx.NoticeEv:FireClient(p, plr.DisplayName .. " открыл забег спутников! Окно «Ловцы», вкладка «Забег»") end
+			end
+			task.delay(RC.lobby, function()
+				if race.phase == "lobby" then runRace() end
+			end)
+		end
+		raceBroadcast()
+		return { ok = true }
+	elseif action == "cheer" then
+		if race.phase ~= "run" then return { ok = false } end
+		for _, e in race.entrants do
+			if e.plr == plr then
+				local now = os.clock()
+				if now - (e.lastCheer or 0) < RC.cheerEvery then return { ok = false } end
+				e.lastCheer = now
+				e.boost += RC.cheerBoost
+				return { ok = true }
+			end
+		end
+	end
+	return { ok = false }
+end
+
 ------------------------------------------------------------------ подключение
 function Social.init(c)
 	ctx = c
@@ -625,6 +785,22 @@ function Social.init(c)
 		return { ok = true }
 	end
 	R.Trade.OnServerInvoke = tradeAction
+	R.Race.OnServerInvoke = raceAction
+	R.ClubTop.OnServerInvoke = function(plr)
+		return clubTop(ctx.Catalog.Live.week(os.time()), 10)
+	end
+	-- переход на сервер друга: только этот же плейс и только к другу
+	R.JoinFriend.OnServerInvoke = function(plr, friendId, jobId)
+		if typeof(friendId) ~= "number" or typeof(jobId) ~= "string" or #jobId < 10 or #jobId > 64 or jobId == game.JobId then return { ok = false } end
+		local ok, isFriend = pcall(function() return plr:IsFriendsWith(friendId) end)
+		if not (ok and isFriend) then return { ok = false, msg = "Это не твой друг" } end
+		local tpOk, err = pcall(function()
+			game:GetService("TeleportService"):TeleportToPlaceInstance(game.PlaceId, jobId, plr)
+		end)
+		if not tpOk then return { ok = false, msg = "Не получилось перейти: " .. tostring(err) } end
+		ctx.persist(plr)
+		return { ok = true }
+	end
 	R.Club.OnServerInvoke = clubAction
 	-- клубы: обновление кэша и запись накопленных поимок
 	task.spawn(function()
@@ -645,6 +821,12 @@ function Social.init(c)
 					end
 					clubs[d.club] = nil
 					saveClub(d.club, { fn = function(r) r.total = (r.total or 0) + pending end })
+					if pending > 0 then
+						local code = d.club
+						local st = Social.clubWeekStore(ctx.Catalog.Live.week(os.time()))
+						if st then pcall(function() st:IncrementAsync(code, pending) end) end
+						memWeek[code] = (memWeek[code] or 0) + pending
+					end
 				end
 			end
 		end
@@ -656,6 +838,7 @@ function Social.playerReady(plr)
 	if d and d.club then
 		task.spawn(function()
 			if not loadClub(d.club) then d.club = nil end
+			checkClubWar(plr)
 			ctx.pushState(plr)
 		end)
 	end

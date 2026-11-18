@@ -277,6 +277,15 @@ do
 	local j = srvClub(p2, "join", code or "")
 	if not (j and j.ok) then table.insert(SIM.errors, "вступить в клуб: " .. tostring(j and j.msg)) end
 	frames(10)
+	-- забег: оба игрока со спутниками
+	inv("Equip", "PaperFox")
+	local rj = inv("Race", "join")
+	if not (rj and (rj.ok or string.find(tostring(rj.msg), "записан"))) then table.insert(SIM.errors, "забег: " .. tostring(rj and rj.msg)) end
+	frames(500)
+	for _ = 1, 10 do inv("Race", "cheer") frames(20) end
+	frames(800)
+	local top = inv("ClubTop")
+	if typeof(top) ~= "table" then table.insert(SIM.errors, "рейтинг клубов не вернулся") end
 	Players.PlayerRemoving:Fire(p2)
 	p2.Parent = nil
 	frames(10)
@@ -371,9 +380,9 @@ stage("достижения")
 for _, id in { "first", "c50", "k10", "kall", "golden", "lvl25", "reborn", "legend" } do inv("ClaimAchievement", id) end
 frames(20)
 
-stage("долгий прогон 4 мин (луна → туманная ночь)")
+stage("долгий прогон 6 мин (луна → туманная ночь)")
 local sawFog = false
-for _ = 1, 4800 do
+for _ = 1, 7200 do
 	frames(1)
 	if workspace:GetAttribute("FogActive") then sawFog = true end
 end
