@@ -774,6 +774,29 @@ function S.applyVariant(m: Model, variant: string?)
 end
 
 -- радужный перелив (вызывать раз в несколько кадров)
+-- «Пробуждённый» дух: крупнее, светящиеся края и золотистое сияние
+function S.applyEvolved(m: Model)
+	S.scale(m, 1.25)
+	local main = m.PrimaryPart
+	for _, p in m:GetChildren() do
+		if p:IsA("BasePart") and p.Transparency < 0.6 then
+			p.Color = p.Color:Lerp(Color3.fromRGB(255, 225, 150), 0.18)
+		end
+	end
+	if main then
+		local l = Instance.new("PointLight")
+		l.Color, l.Range, l.Brightness = Color3.fromRGB(255, 220, 140), 12, 0.7
+		l.Parent = main
+		local pe = Instance.new("ParticleEmitter")
+		pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		pe.Color = ColorSequence.new(Color3.fromRGB(255, 235, 160), Color3.fromRGB(255, 170, 80))
+		pe.LightEmission, pe.Rate, pe.Lifetime = 0.5, 6, NumberRange.new(1, 1.6)
+		pe.Speed, pe.SpreadAngle = NumberRange.new(0.5, 1.5), Vector2.new(180, 180)
+		pe.Size = NumberSequence.new(0.35, 0)
+		pe.Parent = main
+	end
+end
+
 function S.rainbowTick(m: Model, t: number)
 	local i = 0
 	for _, p in m:GetChildren() do

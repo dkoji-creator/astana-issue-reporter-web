@@ -35,7 +35,7 @@ P.Milestones = {
 -- price = монеты (dust = пыль); source = где получить; tier = ценность облика (подпись в магазине)
 -- fx: tex = sparkles | fire | smoke, colors = цвета частиц, rate/size/life/speed, up = подъём (+) или падение (-),
 --     trail = цвета шлейфа при беге, aura = большой мягкий свет вокруг игрока, burst = вспышка при поимке духа
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "vip" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "lotus", "starlight", "phoenix", "eclipse", "vip" }
 local rgb = Color3.fromRGB
 P.SkinTiers = {
 	common = { name = "Обычный", color = rgb(190, 195, 215) },
@@ -101,6 +101,22 @@ P.Skins = {
 		desc = "Переливы сияния: зелёный, бирюзовый, фиолетовый",
 		fx = { tex = "sparkles", colors = { rgb(90, 255, 160), rgb(80, 200, 255), rgb(190, 110, 255) }, rate = 30, size = 0.6, life = 2.2, speed = 2, up = 2,
 			trail = { rgb(90, 255, 160), rgb(80, 200, 255), rgb(190, 110, 255) }, aura = true, burst = true } },
+	lotus = { name = "Лотос", tier = "epic", lamp = rgb(255, 170, 220), beam = rgb(255, 220, 240), source = "Премиум сезона, ур. 3",
+		desc = "Розовые лепестки лотоса кружат спиралью",
+		fx = { tex = "sparkles", colors = { rgb(255, 160, 220), rgb(255, 255, 255) }, rate = 16, size = 0.55, life = 2.4, speed = 1.4, up = 0.6,
+			trail = { rgb(255, 170, 220), rgb(200, 120, 255) } } },
+	starlight = { name = "Звёздный свет", tier = "legendary", lamp = rgb(200, 220, 255), beam = rgb(230, 240, 255), source = "Премиум сезона, ур. 12",
+		desc = "Россыпь звёзд и серебряный шлейф",
+		fx = { tex = "sparkles", colors = { rgb(255, 255, 255), rgb(150, 190, 255) }, rate = 26, size = 0.4, life = 2, speed = 2.5, up = 0.3,
+			trail = { rgb(220, 235, 255), rgb(90, 120, 220) }, aura = true, burst = true } },
+	phoenix = { name = "Феникс", tier = "mythic", lamp = rgb(255, 120, 40), beam = rgb(255, 200, 120), source = "Премиум сезона, ур. 21",
+		desc = "Огненные перья феникса и пламенный шлейф",
+		fx = { tex = "fire", colors = { rgb(255, 240, 140), rgb(255, 90, 30), rgb(200, 30, 60) }, rate = 30, size = 0.8, life = 1.2, speed = 2, up = 4,
+			trail = { rgb(255, 220, 90), rgb(255, 80, 30), rgb(150, 20, 40) }, aura = true, burst = true } },
+	eclipse = { name = "Затмение", tier = "mythic", lamp = rgb(160, 80, 255), beam = rgb(210, 170, 255), source = "Премиум сезона, ур. 30",
+		desc = "Чёрное солнце с фиолетовой короной",
+		fx = { tex = "smoke", colors = { rgb(120, 60, 220), rgb(30, 10, 60) }, rate = 12, size = 1.4, life = 2.5, speed = 1, up = 1,
+			trail = { rgb(180, 110, 255), rgb(20, 10, 40) }, aura = true, burst = true } },
 	vip = { name = "Радужный VIP", tier = "vip", lamp = rgb(255, 120, 220), beam = rgb(200, 220, 255), source = "VIP-ловец", rainbow = true,
 		desc = "Радужные звёзды, радужный шлейф, ореол и салют при поимке",
 		fx = { tex = "sparkles", colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) },
@@ -177,7 +193,7 @@ P.ChestEvery = 5
 function P.chest(level: number) return { coins = level * 25, dust = math.floor(level / 2) } end
 
 -- достижения: type = total | distinct | level | rebirths | variant | rarity
-P.AchievementOrder = { "first", "c50", "c300", "c1000", "k10", "kall", "golden", "rainbow", "infinity", "legend", "mythic", "secret", "lvl25", "reborn" }
+P.AchievementOrder = { "first", "c50", "c300", "c1000", "k10", "kall", "golden", "rainbow", "infinity", "legend", "mythic", "secret", "lvl25", "reborn", "evolve1", "evolve10" }
 P.Achievements = {
 	first = { name = "Первый улов", desc = "Сдай первого духа", type = "total", need = 1, coins = 30 },
 	c50 = { name = "Ловец", desc = "Сдай 50 духов", type = "total", need = 50, coins = 250 },
@@ -192,6 +208,8 @@ P.Achievements = {
 	mythic = { name = "Миф", desc = "Сдай мифического духа", type = "rarity", key = "mythic", need = 1, coins = 1500 },
 	secret = { name = "Тайна", desc = "Сдай секретного духа", type = "rarity", key = "secret", need = 1, coins = 4000 },
 	lvl25 = { name = "Ветеран", desc = "Достигни 25 уровня", type = "level", need = 25, coins = 1200 },
+	evolve1 = { name = "Пробуждение", desc = "Пробуди первого духа (10 дубликатов)", type = "evolved", need = 1, coins = 800, dust = 30 },
+	evolve10 = { name = "Мастер пробуждения", desc = "Пробуди 10 видов духов", type = "evolved", need = 10, coins = 5000, dust = 150 },
 	reborn = { name = "Новая жизнь", desc = "Переродись первый раз", type = "rebirths", need = 1, dust = 60, skin = "dragon" },
 }
 

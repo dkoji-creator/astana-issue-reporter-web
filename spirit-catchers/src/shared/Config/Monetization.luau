@@ -3,11 +3,15 @@
 -- Товары: id — донат-товар Roblox.
 local M = {}
 
-M.PassOrder = { "vip", "coins2x", "bigjar", "lucky", "wideBeam" }
+M.PassOrder = { "vip", "season1", "coins2x", "bigjar", "lucky", "wideBeam" }
 M.Passes = {
 	vip = {
 		id = 0, product = 3732892769, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
 		name = "VIP-ловец", desc = "Радужный фонарь: звёзды, радужный шлейф, ореол и салют при поимке. Табличка VIP и +25% монет",
+	},
+	season1 = {
+		id = 0, product = 3732979690, price = 149, icon = "trophy", color = Color3.fromRGB(255, 140, 60),
+		name = "Премиум сезона 1", desc = "10 наград премиум-трека: 4 эксклюзивных фонаря, 3 титула и мебель для двора. Только косметика",
 	},
 	coins2x = {
 		id = 0, product = 3732892783, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),

@@ -307,6 +307,17 @@ do
 	end
 	stage("на озере скрытых духов: " .. hidden)
 	inv("Redeem", "MIRROR")
+	for _ = 1, 12 do inv("Admin", "allSpirits") end
+	local ev = inv("Evolve", "PaperFox")
+	if not (ev and (ev.ok or string.find(tostring(ev.msg), "Уже"))) then table.insert(SIM.errors, "пробуждение: " .. tostring(ev and ev.msg)) end
+	for _ = 1, 5 do inv("Admin", "coins") end
+	local bf = inv("BuyFurniture", "torii")
+	if not (bf and (bf.ok or string.find(tostring(bf.msg), "Уже"))) then table.insert(SIM.errors, "мебель: " .. tostring(bf and bf.msg)) end
+	inv("BuyFurniture", "fountain")
+	inv("BuyFurniture", "garland")
+	local pr = inv("ClaimSeason", 3, true)
+	if not (pr and (pr.ok or string.find(tostring(pr.msg), "Уже"))) then table.insert(SIM.errors, "премиум сезона: " .. tostring(pr and pr.msg)) end
+	frames(30)
 end
 
 stage("достижения")

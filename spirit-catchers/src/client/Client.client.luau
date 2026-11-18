@@ -516,8 +516,20 @@ do
 			c.dots[vk] = d
 		end
 		c.varL = K.text(f, "", { Size = UDim2.new(0.45, -10, 0, 16), Position = UDim2.new(0.55, 2, 0, 195), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Right, StrokeThickness = 1 })
-		local trackB, trackBL = K.button(f, "Выследить", T.orange, { Size = UDim2.new(0.5, -7, 0, 38), Position = UDim2.new(0, 5, 1, -44), MaxText = 15 })
-		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(0.5, -7, 0, 38), Position = UDim2.new(0.5, 2, 1, -44), MaxText = 15 })
+		local trackB, trackBL = K.button(f, "Цель", T.orange, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(0, 4, 1, -44), MaxText = 14 })
+		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(1 / 3, 2, 1, -44), MaxText = 14 })
+		local evoB, evoBL = K.button(f, "Пробудить", T.gold, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(2 / 3, 0, 1, -44), MaxText = 14 })
+		c.evo, c.evoL = evoB, evoBL
+		evoB.Activated:Connect(function()
+			if state.evolved and state.evolved[kind] then return end
+			local r = remotes.Evolve:InvokeServer(kind)
+			if r and r.ok then
+				play("legendary")
+				showToast("Пробуждён: " .. info.name .. "! Способность и монеты x1.5", 3, Color3.fromRGB(150, 110, 20))
+			elseif r and r.msg then
+				showToast(r.msg, 2.5)
+			end
+		end)
 		c.trackL, c.equip, c.equipL = trackBL, equipB, equipBL
 		trackB.Activated:Connect(function()
 			setTrack(trackKind ~= kind and kind or nil)
@@ -548,11 +560,24 @@ do
 			local Live = Catalog.Live
 			local lvl = Live.companionLevel(n, (state.fed and state.fed[c.kind]) or 0)
 			local key, val = Live.abilityValue(c.kind, info.rarity, lvl)
+			if state.evolved and state.evolved[c.kind] then val *= Live.EvolvedMult end
 			c.info.Text = ("Спутник ур.%d: %s\n%s"):format(lvl, Live.abilityText(key, val), info.habit)
 		else
 			c.info.Text = "Где искать: " .. info.hint
 		end
-		c.trackL.Text = trackKind == c.kind and "Цель" or "Выследить"
+		c.trackL.Text = trackKind == c.kind and "Отмена" or "Цель"
+		local evolved = state.evolved and state.evolved[c.kind]
+		c.evo.Visible = known
+		local dupes = math.max(0, n - 1)
+		c.evoL.Text = evolved and "Пробуждён" or ("%d/%d"):format(math.min(dupes, Catalog.Live.EvolveDupes), Catalog.Live.EvolveDupes)
+		K.recolor(c.evo, evolved and Color3.fromRGB(150, 110, 30) or (dupes >= Catalog.Live.EvolveDupes and T.green or Color3.fromRGB(80, 80, 100)))
+		if c.evolvedShown ~= evolved and known and c.vp then
+			c.evolvedShown = evolved
+			c.vp:Destroy()
+			local m = Spirits.Builders[c.kind]()
+			if evolved then Spirits.applyEvolved(m) end
+			c.vp, c.setAngle = K.viewport(c.vpHolder, m)
+		end
 		c.equip.Visible = known
 		c.equipL.Text = state.equipped == c.kind and "Снять" or "Спутник"
 		local got = (state.variants and state.variants[c.kind]) or {}
@@ -675,17 +700,17 @@ do
 	local tierCards = {}
 	for i, rw in Live.Season.tiers do
 		local special = rw.skin or rw.title
-		local f = K.panel(tierScroll, { Size = UDim2.new(0, 150, 1, -12), LayoutOrder = i, BackgroundColor3 = special and Color3.fromRGB(80, 55, 40) or T.panel2 })
+		local f = K.panel(tierScroll, { Size = UDim2.new(0, 150, 0.62, -8), LayoutOrder = i, BackgroundColor3 = special and Color3.fromRGB(80, 55, 40) or T.panel2 })
 		if special then f:FindFirstChildOfClass("UIStroke").Color = T.gold end
 		local num = K.make("Frame", { Size = UDim2.fromOffset(44, 30), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = T.orange }, f)
 		K.corner(num, UDim.new(1, 0))
 		K.stroke(num, T.ink, 2)
 		K.text(num, tostring(i), { Size = UDim2.new(1, -6, 1, -4), Position = UDim2.fromOffset(3, 2), MaxText = 17 })
 		local ic = rw.skin and "shop" or (rw.title and "trophy" or (rw.potion and "potion" or (rw.coins and "coin" or "dust")))
-		K.icon(f, ic, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 40), Size = UDim2.fromOffset(60, 60) })
+		K.icon(f, ic, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(50, 50) })
 		local txt = rw.skin and ("Фонарь «" .. Prog.Skins[rw.skin].name .. "»") or Live.rewardText(rw)
 		if rw.skin and rw.title then txt = txt .. " и титул" end
-		K.text(f, txt, { Size = UDim2.new(1, -10, 0, 52), Position = UDim2.fromOffset(5, 104), MaxText = 15, TextWrapped = true, Font = Enum.Font.GothamBold })
+		K.text(f, txt, { Size = UDim2.new(1, -10, 1, -110), Position = UDim2.fromOffset(5, 60), MaxText = 15, TextWrapped = true, Font = Enum.Font.GothamBold })
 		local cb, cl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
 		cb.Activated:Connect(function()
 			local res = remotes.ClaimSeason:InvokeServer(i)
@@ -697,6 +722,27 @@ do
 			end
 		end)
 		tierCards[i] = { b = cb, l = cl }
+		-- премиум-награда под обычной (каждый 3-й уровень)
+		local pr = Live.Season.premium[i]
+		local pf = K.panel(f, { Position = UDim2.new(0, -3, 1, 8), Size = UDim2.new(1, 6, 0.6, 0), BackgroundColor3 = pr and Color3.fromRGB(90, 60, 25) or Color3.fromRGB(40, 38, 55) })
+		pf:FindFirstChildOfClass("UIStroke").Color = pr and T.gold or T.ink
+		if pr then
+			local ptxt = pr.skin and ("Фонарь «" .. Prog.Skins[pr.skin].name .. "»") or Live.rewardText(pr)
+			K.text(pf, ptxt, { Size = UDim2.new(1, -10, 1, -52), Position = UDim2.fromOffset(5, 4), MaxText = 14, TextWrapped = true, Font = Enum.Font.GothamBold, TextColor3 = T.gold })
+			local pb, pl = K.button(pf, "", T.gold, { Size = UDim2.new(1, -12, 0, 38), Position = UDim2.new(0, 6, 1, -44), MaxText = 15 })
+			pb.Activated:Connect(function()
+				local res = remotes.ClaimSeason:InvokeServer(i, true)
+				if res and res.ok then
+					play("legendary")
+					showToast("Премиум-награда: " .. ptxt, 2.5, Color3.fromRGB(150, 100, 20))
+				elseif res and res.msg then
+					showToast(res.msg, 2.5)
+				end
+			end)
+			tierCards[i].pb, tierCards[i].pl = pb, pl
+		else
+			K.text(pf, "Премиум", { Size = UDim2.new(1, -10, 1, -10), Position = UDim2.fromOffset(5, 5), MaxText = 13, TextColor3 = T.sub, StrokeThickness = 1 })
+		end
 	end
 
 	-- титулы
@@ -754,6 +800,12 @@ do
 		passFill.Size = UDim2.fromScale(tier >= #Live.Season.tiers and 1 or (se.xp % per) / per, 1)
 		endsL.Text = ("%s   ещё %d опыта"):format(Live.Season.ends, per - se.xp % per)
 		for i, c in tierCards do
+			if c.pb then
+				local hasP = state.passes and state.passes.season1
+				local pc = se.claimed and se.claimed["p" .. i]
+				c.pl.Text = pc and "Получено" or (not hasP and "Премиум" or (tier >= i and "Забрать!" or ("Ур. %d"):format(i)))
+				K.recolor(c.pb, pc and Color3.fromRGB(80, 80, 95) or ((hasP and tier >= i) and T.green or T.gold))
+			end
 			local claimed = se.claimed and se.claimed[tostring(i)]
 			if claimed then
 				c.l.Text = "Получено"
@@ -875,6 +927,27 @@ do
 	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
 	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
 	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabFurn = K.button(tabs, "Мебель", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local furnPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 120), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, furnPage)
+	local furnCards = {}
+	for i, id in Catalog.Live.FurnitureOrder do
+		local fc = Catalog.Live.Furniture[id]
+		local f = K.panel(furnPage, { LayoutOrder = i, BackgroundColor3 = fc.premium and Color3.fromRGB(80, 55, 30) or T.panel2 })
+		if fc.premium then f:FindFirstChildOfClass("UIStroke").Color = T.gold end
+		K.text(f, fc.name, { Size = UDim2.new(1, -10, 0, 40), Position = UDim2.fromOffset(5, 6), MaxText = 17, TextWrapped = true })
+		local b, l = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 42), Position = UDim2.new(0, 6, 1, -48), MaxText = 15 })
+		b.Activated:Connect(function()
+			local r = remotes.BuyFurniture:InvokeServer(id)
+			if r and r.ok then
+				play("save")
+				showToast("Во дворе появилось: " .. fc.name, 2.5)
+			elseif r and r.msg then
+				showToast(r.msg, 2.5)
+			end
+		end)
+		furnCards[id] = { b = b, l = l }
+	end
 
 	-- дворы: свой двор + список игроков сервера
 	local yardPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44) })
@@ -1019,7 +1092,7 @@ do
 	joinB.Activated:Connect(function() clubCall("join", codeBox.Text) end)
 	leaveB.Activated:Connect(function() clubCall("leave") end)
 
-	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage } }
+	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage }, { tabFurn, furnPage } }
 	for _, pair in pages do
 		pair[1].Activated:Connect(function()
 			for _, o in pages do
@@ -1031,6 +1104,20 @@ do
 
 	refreshSocial = function()
 		myYardL.Text = ("Твой двор: лайков %d"):format(state.yardLikes or 0)
+		for id, c in furnCards do
+			local fc = Catalog.Live.Furniture[id]
+			local owned = state.furniture and state.furniture[id]
+			if owned then
+				c.l.Text = "Во дворе"
+				K.recolor(c.b, Color3.fromRGB(80, 80, 95))
+			elseif fc.premium then
+				c.l.Text = "Премиум сезона"
+				K.recolor(c.b, Color3.fromRGB(150, 110, 30))
+			else
+				c.l.Text = fc.dust and ("%d + %d пыли"):format(fc.coins, fc.dust) or ("%d монет"):format(fc.coins)
+				K.recolor(c.b, (state.coins >= fc.coins and state.dust >= (fc.dust or 0)) and T.green or Color3.fromRGB(90, 90, 105))
+			end
+		end
 		-- игроки сервера: визит и обмен
 		local seen = {}
 		for _, p in Players:GetPlayers() do
@@ -2205,8 +2292,9 @@ do
 	updateFollowers = function(now)
 		for _, p in Players:GetPlayers() do
 			local kind = p:GetAttribute("Companion")
+			local evo = p:GetAttribute("CompanionEvolved") == true
 			local f = followers[p]
-			if f and f.kind ~= kind then
+			if f and (f.kind ~= kind or f.evo ~= evo) then
 				f.model:Destroy()
 				followers[p], f = nil, nil
 			end
@@ -2215,8 +2303,9 @@ do
 				if not f then
 					local m = Spirits.Builders[kind]()
 					Spirits.scale(m, Catalog.Kinds[kind].follow)
+					if evo then Spirits.applyEvolved(m) end
 					m.Parent = visFolder
-					f = { kind = kind, model = m, pivot = r.CFrame }
+					f = { kind = kind, model = m, pivot = r.CFrame, evo = evo }
 					followers[p] = f
 				end
 				local goal = r.CFrame * CFrame.new(3, 2.2 + math.sin(now * 2) * 0.4, 2)
@@ -2253,11 +2342,12 @@ do
 					yardModels[plot] = y
 					local i = 0
 					for entry in string.gmatch(sig, "[^,]+") do
-						local kind, variant = string.match(entry, "([^:]+):?(.*)")
+						local kind, variant, evo = string.match(entry, "([^:]+):?([^:]*):?(.*)")
 						if kind and Catalog.Kinds[kind] and Spirits.Builders[kind] then
 							i += 1
 							local m = Spirits.Builders[kind]()
 							pcall(Spirits.applyVariant, m, variant ~= "" and variant or nil)
+							if evo == "e" then pcall(Spirits.applyEvolved, m) end
 							m.Parent = visFolder
 							table.insert(y.list, { model = m, kind = kind, phase = i * 1.7, r = 6 + (i % 3) * 5 })
 						end

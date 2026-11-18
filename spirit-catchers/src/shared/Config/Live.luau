@@ -105,6 +105,14 @@ L.Season.tiers = {
 	{ coins = 2000 }, { dust = 50 }, { coins = 2500 }, { potion = 15 }, { skin = "harvest" },
 	{ coins = 3000 }, { dust = 70 }, { coins = 4000 }, { potion = 20 }, { skin = "aurora", title = "Легенда сезона" },
 }
+-- премиум-трек (покупка «Премиум сезона 1»): только косметика
+L.Season.premium = {
+	[3] = { skin = "lotus" }, [6] = { furniture = "koiPond" }, [9] = { title = "Звёздный ловец" },
+	[12] = { skin = "starlight" }, [15] = { furniture = "shrine" }, [18] = { title = "Хозяин тумана" },
+	[21] = { skin = "phoenix" }, [24] = { furniture = "spiritStatue" }, [27] = { title = "Повелитель фонарей" },
+	[30] = { skin = "eclipse" },
+}
+
 function L.rewardText(r): string
 	local parts = {}
 	if r.coins then table.insert(parts, r.coins .. " монет") end
@@ -112,6 +120,7 @@ function L.rewardText(r): string
 	if r.potion then table.insert(parts, "удача x2 на " .. r.potion .. " мин") end
 	if r.skin then table.insert(parts, "фонарь") end
 	if r.title then table.insert(parts, "титул «" .. r.title .. "»") end
+	if r.furniture then table.insert(parts, "мебель «" .. L.Furniture[r.furniture].name .. "»") end
 	return table.concat(parts, " + ")
 end
 
@@ -140,5 +149,31 @@ end
 L.AlbumMax = 40
 L.AlbumMinRarity = "epic" -- эпические и выше всегда попадают в альбом
 L.AlbumMinOdds = 25 -- и любые разновидности от 1 к 25 (блестящий и реже)
+
+------------------------------------------------------------------ эволюция духов
+-- 10 дубликатов + пыль: вид становится «Пробуждённым» (крупнее, с сиянием),
+-- его способность спутника x1.5, монеты за этот вид x1.5
+L.EvolveDupes = 10
+L.EvolveDust = { common = 10, uncommon = 20, rare = 35, epic = 60, legendary = 100, mythic = 160, secret = 250 }
+L.EvolvedMult = 1.5
+
+------------------------------------------------------------------ мебель для двора
+-- slot = место на участке (x вправо, z к выходу; зеркалится для верхнего ряда)
+L.FurnitureOrder = { "lanternPost", "bench", "bonsai", "stoneGarden", "sakura", "garland", "bell", "bridge", "torii", "fountain", "koiPond", "shrine", "spiritStatue" }
+L.Furniture = {
+	lanternPost = { name = "Фонарный столб", coins = 300, slot = Vector3.new(-20, 0, -20) },
+	bench = { name = "Скамейка", coins = 400, slot = Vector3.new(-14, 0, 2) },
+	bonsai = { name = "Бонсай", coins = 600, slot = Vector3.new(20, 0, -6) },
+	stoneGarden = { name = "Сад камней", coins = 700, slot = Vector3.new(-16, 0, -8) },
+	sakura = { name = "Сакура", coins = 800, slot = Vector3.new(19, 0, 10) },
+	garland = { name = "Гирлянда фонарей", coins = 900, slot = Vector3.new(0, 0, 8) },
+	bell = { name = "Колокол", coins = 1000, slot = Vector3.new(-20, 0, 12) },
+	bridge = { name = "Мостик", coins = 1200, slot = Vector3.new(0, 0, -6) },
+	torii = { name = "Тории", coins = 1500, dust = 20, slot = Vector3.new(0, 0, -22) },
+	fountain = { name = "Фонтан духов", coins = 2000, dust = 30, slot = Vector3.new(10, 0, -14) },
+	koiPond = { name = "Пруд с карпами", premium = true, slot = Vector3.new(-6, 0, -14) },
+	shrine = { name = "Святилище", premium = true, slot = Vector3.new(14, 0, 16) },
+	spiritStatue = { name = "Статуя духа", premium = true, slot = Vector3.new(-13, 0, 17) },
+}
 
 return L

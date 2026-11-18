@@ -127,10 +127,113 @@ local function yardKinds(d)
 				break
 			end
 		end
-		table.insert(out, kind .. ":" .. best)
+		table.insert(out, kind .. ":" .. best .. ((d.evolved and d.evolved[kind]) and ":e" or ""))
 	end
 	if d.equipped and not table.find(list, d.equipped) then table.insert(out, d.equipped .. ":normal") end
 	return table.concat(out, ",")
+end
+
+-- мебель двора: простые постройки из деталей в слотах участка
+local WOOD, DARK, RED, STONE = Color3.fromRGB(120, 85, 55), Color3.fromRGB(50, 35, 30), Color3.fromRGB(200, 55, 45), Color3.fromRGB(140, 140, 150)
+local function lamp(parent, pos, color)
+	local l = part(parent, "Lamp", Vector3.new(1.4, 1.6, 1.4), CFrame.new(pos), color, Enum.Material.Neon, { Shape = Enum.PartType.Ball, CanCollide = false })
+	local pl = Instance.new("PointLight")
+	pl.Range, pl.Brightness, pl.Color = 14, 0.7, color
+	pl.Parent = l
+end
+local FURN = {
+	lanternPost = function(f, o)
+		part(f, "Post", Vector3.new(0.6, 7, 0.6), CFrame.new(o + Vector3.new(0, 4, 0)), DARK, Enum.Material.Wood)
+		lamp(f, o + Vector3.new(0, 7.8, 0), Color3.fromRGB(255, 170, 80))
+	end,
+	bench = function(f, o)
+		part(f, "Seat", Vector3.new(6, 0.5, 2), CFrame.new(o + Vector3.new(0, 1.6, 0)), WOOD, Enum.Material.WoodPlanks)
+		part(f, "Back", Vector3.new(6, 1.6, 0.4), CFrame.new(o + Vector3.new(0, 2.6, 0.9)), WOOD, Enum.Material.WoodPlanks)
+		for _, x in { -2.6, 2.6 } do part(f, "Leg", Vector3.new(0.4, 1.2, 1.6), CFrame.new(o + Vector3.new(x, 0.9, 0)), DARK, Enum.Material.Wood) end
+	end,
+	bonsai = function(f, o)
+		part(f, "Pot", Vector3.new(2.4, 1.2, 2.4), CFrame.new(o + Vector3.new(0, 1.1, 0)), Color3.fromRGB(90, 60, 110), Enum.Material.Slate)
+		part(f, "Trunk", Vector3.new(0.5, 2.4, 0.5), CFrame.new(o + Vector3.new(0, 2.8, 0)) * CFrame.Angles(0, 0, 0.3), DARK, Enum.Material.Wood)
+		part(f, "Leaves", Vector3.new(3.4, 1.6, 3.4), CFrame.new(o + Vector3.new(0.5, 4.2, 0)), Color3.fromRGB(70, 140, 80), Enum.Material.Grass, { Shape = Enum.PartType.Ball })
+	end,
+	stoneGarden = function(f, o)
+		part(f, "Sand", Vector3.new(8, 0.2, 6), CFrame.new(o + Vector3.new(0, 0.75, 0)), Color3.fromRGB(220, 210, 185), Enum.Material.Sand, { CanCollide = false })
+		for i, p in { Vector3.new(-2, 0, -1), Vector3.new(1.8, 0, 1), Vector3.new(0.5, 0, -1.8) } do
+			part(f, "Rock", Vector3.new(1.4 + i * 0.3, 1 + i * 0.3, 1.2 + i * 0.2), CFrame.new(o + p + Vector3.new(0, 1.2, 0)), STONE, Enum.Material.Rock, { Shape = Enum.PartType.Ball })
+		end
+	end,
+	sakura = function(f, o)
+		part(f, "Trunk", Vector3.new(1, 7, 1), CFrame.new(o + Vector3.new(0, 4, 0)), DARK, Enum.Material.Wood)
+		for i, p in { Vector3.new(0, 8.5, 0), Vector3.new(2, 7.5, 1), Vector3.new(-2, 7.8, -1) } do
+			part(f, "Blossom", Vector3.new(5, 4, 5), CFrame.new(o + p), Color3.fromRGB(255, 170 + i * 10, 210), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, CanCollide = false })
+		end
+	end,
+	garland = function(f, o)
+		for _, x in { -9, 9 } do part(f, "Pole", Vector3.new(0.5, 7, 0.5), CFrame.new(o + Vector3.new(x, 4, 0)), DARK, Enum.Material.Wood) end
+		part(f, "String", Vector3.new(18, 0.1, 0.1), CFrame.new(o + Vector3.new(0, 7.2, 0)), DARK, nil, { CanCollide = false })
+		for x = -7, 7, 3.5 do lamp(f, o + Vector3.new(x, 6.4, 0), Color3.fromHSV(((x + 7) / 14) * 0.9, 0.6, 1)) end
+	end,
+	bell = function(f, o)
+		for _, x in { -2, 2 } do part(f, "Post", Vector3.new(0.6, 6, 0.6), CFrame.new(o + Vector3.new(x, 3.6, 0)), RED, Enum.Material.Wood) end
+		part(f, "Beam", Vector3.new(5.4, 0.6, 0.8), CFrame.new(o + Vector3.new(0, 6.6, 0)), DARK, Enum.Material.Wood)
+		part(f, "Bell", Vector3.new(2, 2.6, 2), CFrame.new(o + Vector3.new(0, 4.8, 0)), Color3.fromRGB(200, 160, 70), Enum.Material.Metal, { Shape = Enum.PartType.Ball })
+	end,
+	bridge = function(f, o)
+		part(f, "Stream", Vector3.new(4, 0.2, 14), CFrame.new(o + Vector3.new(0, 0.72, 0)), Color3.fromRGB(70, 140, 200), Enum.Material.Glass, { Transparency = 0.2, CanCollide = false })
+		part(f, "Deck", Vector3.new(7, 0.5, 3), CFrame.new(o + Vector3.new(0, 1.4, 0)), RED, Enum.Material.Wood)
+		for _, z in { -1.4, 1.4 } do part(f, "Rail", Vector3.new(7, 0.8, 0.3), CFrame.new(o + Vector3.new(0, 2, z)), RED, Enum.Material.Wood) end
+	end,
+	torii = function(f, o)
+		for _, x in { -4, 4 } do part(f, "Pillar", Vector3.new(1, 9, 1), CFrame.new(o + Vector3.new(x, 5, 0)), RED, Enum.Material.SmoothPlastic) end
+		part(f, "Top", Vector3.new(11, 1, 1.4), CFrame.new(o + Vector3.new(0, 9.8, 0)), DARK, Enum.Material.Wood)
+		part(f, "Mid", Vector3.new(9, 0.6, 1), CFrame.new(o + Vector3.new(0, 8.2, 0)), RED, Enum.Material.SmoothPlastic)
+	end,
+	fountain = function(f, o)
+		part(f, "Basin", Vector3.new(6, 1.2, 6), CFrame.new(o + Vector3.new(0, 1.2, 0)), STONE, Enum.Material.Concrete, { Shape = Enum.PartType.Cylinder, CFrame = CFrame.new(o + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90)) })
+		part(f, "Water", Vector3.new(0.3, 5.4, 5.4), CFrame.new(o + Vector3.new(0, 1.9, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(110, 200, 255), Enum.Material.Neon, { Shape = Enum.PartType.Cylinder, Transparency = 0.3, CanCollide = false })
+		local orb = part(f, "SpiritOrb", Vector3.new(1.4, 1.4, 1.4), CFrame.new(o + Vector3.new(0, 4, 0)), Color3.fromRGB(170, 230, 255), Enum.Material.Neon, { Shape = Enum.PartType.Ball, CanCollide = false })
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color, pe.LightEmission, pe.Rate = ColorSequence.new(Color3.fromRGB(170, 230, 255)), 0.6, 10
+		pe.Speed, pe.Lifetime, pe.Size = NumberRange.new(2, 4), NumberRange.new(1, 1.5), NumberSequence.new(0.3, 0)
+		pe.Acceleration = Vector3.new(0, -6, 0)
+		pe.Parent = orb
+	end,
+	koiPond = function(f, o)
+		part(f, "Pond", Vector3.new(0.3, 9, 9), CFrame.new(o + Vector3.new(0, 0.75, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(50, 120, 190), Enum.Material.Glass, { Shape = Enum.PartType.Cylinder, Transparency = 0.15, CanCollide = false })
+		for i = 1, 3 do
+			local a = i * 2.1
+			part(f, "Koi", Vector3.new(0.8, 0.4, 1.8), CFrame.new(o + Vector3.new(math.cos(a) * 2.4, 0.95, math.sin(a) * 2.4)) * CFrame.Angles(0, a, 0), i == 2 and Color3.fromRGB(255, 250, 240) or Color3.fromRGB(255, 120, 40), Enum.Material.SmoothPlastic, { CanCollide = false })
+		end
+	end,
+	shrine = function(f, o)
+		part(f, "Base", Vector3.new(6, 1, 5), CFrame.new(o + Vector3.new(0, 1, 0)), STONE, Enum.Material.Concrete)
+		part(f, "House", Vector3.new(4, 4, 3.4), CFrame.new(o + Vector3.new(0, 3.5, 0)), Color3.fromRGB(150, 50, 45), Enum.Material.Wood)
+		part(f, "Roof", Vector3.new(5.6, 0.8, 5), CFrame.new(o + Vector3.new(0, 6, 0)), Color3.fromRGB(40, 70, 60), Enum.Material.Slate)
+		lamp(f, o + Vector3.new(0, 3.4, -1.8), Color3.fromRGB(255, 210, 120))
+	end,
+	spiritStatue = function(f, o)
+		part(f, "Pedestal", Vector3.new(3, 2, 3), CFrame.new(o + Vector3.new(0, 1.6, 0)), STONE, Enum.Material.Marble)
+		part(f, "Body", Vector3.new(2.4, 3, 2.4), CFrame.new(o + Vector3.new(0, 4.1, 0)), Color3.fromRGB(230, 230, 240), Enum.Material.Marble, { Shape = Enum.PartType.Ball })
+		for _, x in { -0.7, 0.7 } do
+			part(f, "Ear", Vector3.new(0.6, 1.2, 0.4), CFrame.new(o + Vector3.new(x, 5.8, 0)), Color3.fromRGB(230, 230, 240), Enum.Material.Marble)
+			part(f, "Eye", Vector3.new(0.4, 0.4, 0.2), CFrame.new(o + Vector3.new(x * 0.6, 4.6, -1.15)), Color3.fromRGB(120, 220, 255), Enum.Material.Neon)
+		end
+	end,
+}
+local function buildFurniture(p, d)
+	local old = p.folder:FindFirstChild("Furniture")
+	if old then old:Destroy() end
+	local f = Instance.new("Folder")
+	f.Name = "Furniture"
+	for id in (d and d.furniture) or {} do
+		local cfg = ctx.Catalog.Live.Furniture[id]
+		local fn = FURN[id]
+		if cfg and fn then
+			local o = p.center + Vector3.new(cfg.slot.X, 0.2, cfg.slot.Z * p.back)
+			pcall(fn, f, o)
+		end
+	end
+	f.Parent = p.folder
 end
 
 function Social.refreshYard(plr)
@@ -139,6 +242,12 @@ function Social.refreshYard(plr)
 	if not (i and d) then return end
 	local p = plots[i]
 	p.folder:SetAttribute("Kinds", yardKinds(d))
+	local sig = ""
+	for id in d.furniture or {} do sig ..= id end
+	if p.furnSig ~= sig then
+		p.furnSig = sig
+		buildFurniture(p, d)
+	end
 	local text = ("Двор %s\nДухов %d/%d   Лайков %d"):format(plr.DisplayName, ctx.distinct(d), #ctx.Catalog.Order, d.yardLikes or 0)
 	for _, g in p.sign:GetChildren() do
 		if g:IsA("SurfaceGui") then g.Text.Text = text end
@@ -168,6 +277,8 @@ local function freePlot(plr)
 	p.folder:SetAttribute("Owner", 0)
 	p.folder:SetAttribute("Kinds", "")
 	p.prompt.Enabled = false
+	p.furnSig = nil
+	buildFurniture(p, nil)
 	for _, g in p.sign:GetChildren() do
 		if g:IsA("SurfaceGui") then g.Text.Text = "Свободный двор" end
 	end

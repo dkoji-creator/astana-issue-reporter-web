@@ -360,6 +360,14 @@ L.Season.tiers = {
 	{ coins = 2000 }, { dust = 50 }, { coins = 2500 }, { potion = 15 }, { skin = "harvest" },
 	{ coins = 3000 }, { dust = 70 }, { coins = 4000 }, { potion = 20 }, { skin = "aurora", title = "Легенда сезона" },
 }
+-- премиум-трек (покупка «Премиум сезона 1»): только косметика
+L.Season.premium = {
+	[3] = { skin = "lotus" }, [6] = { furniture = "koiPond" }, [9] = { title = "Звёздный ловец" },
+	[12] = { skin = "starlight" }, [15] = { furniture = "shrine" }, [18] = { title = "Хозяин тумана" },
+	[21] = { skin = "phoenix" }, [24] = { furniture = "spiritStatue" }, [27] = { title = "Повелитель фонарей" },
+	[30] = { skin = "eclipse" },
+}
+
 function L.rewardText(r): string
 	local parts = {}
 	if r.coins then table.insert(parts, r.coins .. " монет") end
@@ -367,6 +375,7 @@ function L.rewardText(r): string
 	if r.potion then table.insert(parts, "удача x2 на " .. r.potion .. " мин") end
 	if r.skin then table.insert(parts, "фонарь") end
 	if r.title then table.insert(parts, "титул «" .. r.title .. "»") end
+	if r.furniture then table.insert(parts, "мебель «" .. L.Furniture[r.furniture].name .. "»") end
 	return table.concat(parts, " + ")
 end
 
@@ -396,6 +405,32 @@ L.AlbumMax = 40
 L.AlbumMinRarity = "epic" -- эпические и выше всегда попадают в альбом
 L.AlbumMinOdds = 25 -- и любые разновидности от 1 к 25 (блестящий и реже)
 
+------------------------------------------------------------------ эволюция духов
+-- 10 дубликатов + пыль: вид становится «Пробуждённым» (крупнее, с сиянием),
+-- его способность спутника x1.5, монеты за этот вид x1.5
+L.EvolveDupes = 10
+L.EvolveDust = { common = 10, uncommon = 20, rare = 35, epic = 60, legendary = 100, mythic = 160, secret = 250 }
+L.EvolvedMult = 1.5
+
+------------------------------------------------------------------ мебель для двора
+-- slot = место на участке (x вправо, z к выходу; зеркалится для верхнего ряда)
+L.FurnitureOrder = { "lanternPost", "bench", "bonsai", "stoneGarden", "sakura", "garland", "bell", "bridge", "torii", "fountain", "koiPond", "shrine", "spiritStatue" }
+L.Furniture = {
+	lanternPost = { name = "Фонарный столб", coins = 300, slot = Vector3.new(-20, 0, -20) },
+	bench = { name = "Скамейка", coins = 400, slot = Vector3.new(-14, 0, 2) },
+	bonsai = { name = "Бонсай", coins = 600, slot = Vector3.new(20, 0, -6) },
+	stoneGarden = { name = "Сад камней", coins = 700, slot = Vector3.new(-16, 0, -8) },
+	sakura = { name = "Сакура", coins = 800, slot = Vector3.new(19, 0, 10) },
+	garland = { name = "Гирлянда фонарей", coins = 900, slot = Vector3.new(0, 0, 8) },
+	bell = { name = "Колокол", coins = 1000, slot = Vector3.new(-20, 0, 12) },
+	bridge = { name = "Мостик", coins = 1200, slot = Vector3.new(0, 0, -6) },
+	torii = { name = "Тории", coins = 1500, dust = 20, slot = Vector3.new(0, 0, -22) },
+	fountain = { name = "Фонтан духов", coins = 2000, dust = 30, slot = Vector3.new(10, 0, -14) },
+	koiPond = { name = "Пруд с карпами", premium = true, slot = Vector3.new(-6, 0, -14) },
+	shrine = { name = "Святилище", premium = true, slot = Vector3.new(14, 0, 16) },
+	spiritStatue = { name = "Статуя духа", premium = true, slot = Vector3.new(-13, 0, 17) },
+}
+
 return L
 ]]></string>
           </Properties>
@@ -408,11 +443,15 @@ return L
 -- Товары: id — донат-товар Roblox.
 local M = {}
 
-M.PassOrder = { "vip", "coins2x", "bigjar", "lucky", "wideBeam" }
+M.PassOrder = { "vip", "season1", "coins2x", "bigjar", "lucky", "wideBeam" }
 M.Passes = {
 	vip = {
 		id = 0, product = 3732892769, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
 		name = "VIP-ловец", desc = "Радужный фонарь: звёзды, радужный шлейф, ореол и салют при поимке. Табличка VIP и +25% монет",
+	},
+	season1 = {
+		id = 0, product = 3732979690, price = 149, icon = "trophy", color = Color3.fromRGB(255, 140, 60),
+		name = "Премиум сезона 1", desc = "10 наград премиум-трека: 4 эксклюзивных фонаря, 3 титула и мебель для двора. Только косметика",
 	},
 	coins2x = {
 		id = 0, product = 3732892783, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),
@@ -497,7 +536,7 @@ P.Milestones = {
 -- price = монеты (dust = пыль); source = где получить; tier = ценность облика (подпись в магазине)
 -- fx: tex = sparkles | fire | smoke, colors = цвета частиц, rate/size/life/speed, up = подъём (+) или падение (-),
 --     trail = цвета шлейфа при беге, aura = большой мягкий свет вокруг игрока, burst = вспышка при поимке духа
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "vip" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "lotus", "starlight", "phoenix", "eclipse", "vip" }
 local rgb = Color3.fromRGB
 P.SkinTiers = {
 	common = { name = "Обычный", color = rgb(190, 195, 215) },
@@ -563,6 +602,22 @@ P.Skins = {
 		desc = "Переливы сияния: зелёный, бирюзовый, фиолетовый",
 		fx = { tex = "sparkles", colors = { rgb(90, 255, 160), rgb(80, 200, 255), rgb(190, 110, 255) }, rate = 30, size = 0.6, life = 2.2, speed = 2, up = 2,
 			trail = { rgb(90, 255, 160), rgb(80, 200, 255), rgb(190, 110, 255) }, aura = true, burst = true } },
+	lotus = { name = "Лотос", tier = "epic", lamp = rgb(255, 170, 220), beam = rgb(255, 220, 240), source = "Премиум сезона, ур. 3",
+		desc = "Розовые лепестки лотоса кружат спиралью",
+		fx = { tex = "sparkles", colors = { rgb(255, 160, 220), rgb(255, 255, 255) }, rate = 16, size = 0.55, life = 2.4, speed = 1.4, up = 0.6,
+			trail = { rgb(255, 170, 220), rgb(200, 120, 255) } } },
+	starlight = { name = "Звёздный свет", tier = "legendary", lamp = rgb(200, 220, 255), beam = rgb(230, 240, 255), source = "Премиум сезона, ур. 12",
+		desc = "Россыпь звёзд и серебряный шлейф",
+		fx = { tex = "sparkles", colors = { rgb(255, 255, 255), rgb(150, 190, 255) }, rate = 26, size = 0.4, life = 2, speed = 2.5, up = 0.3,
+			trail = { rgb(220, 235, 255), rgb(90, 120, 220) }, aura = true, burst = true } },
+	phoenix = { name = "Феникс", tier = "mythic", lamp = rgb(255, 120, 40), beam = rgb(255, 200, 120), source = "Премиум сезона, ур. 21",
+		desc = "Огненные перья феникса и пламенный шлейф",
+		fx = { tex = "fire", colors = { rgb(255, 240, 140), rgb(255, 90, 30), rgb(200, 30, 60) }, rate = 30, size = 0.8, life = 1.2, speed = 2, up = 4,
+			trail = { rgb(255, 220, 90), rgb(255, 80, 30), rgb(150, 20, 40) }, aura = true, burst = true } },
+	eclipse = { name = "Затмение", tier = "mythic", lamp = rgb(160, 80, 255), beam = rgb(210, 170, 255), source = "Премиум сезона, ур. 30",
+		desc = "Чёрное солнце с фиолетовой короной",
+		fx = { tex = "smoke", colors = { rgb(120, 60, 220), rgb(30, 10, 60) }, rate = 12, size = 1.4, life = 2.5, speed = 1, up = 1,
+			trail = { rgb(180, 110, 255), rgb(20, 10, 40) }, aura = true, burst = true } },
 	vip = { name = "Радужный VIP", tier = "vip", lamp = rgb(255, 120, 220), beam = rgb(200, 220, 255), source = "VIP-ловец", rainbow = true,
 		desc = "Радужные звёзды, радужный шлейф, ореол и салют при поимке",
 		fx = { tex = "sparkles", colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) },
@@ -639,7 +694,7 @@ P.ChestEvery = 5
 function P.chest(level: number) return { coins = level * 25, dust = math.floor(level / 2) } end
 
 -- достижения: type = total | distinct | level | rebirths | variant | rarity
-P.AchievementOrder = { "first", "c50", "c300", "c1000", "k10", "kall", "golden", "rainbow", "infinity", "legend", "mythic", "secret", "lvl25", "reborn" }
+P.AchievementOrder = { "first", "c50", "c300", "c1000", "k10", "kall", "golden", "rainbow", "infinity", "legend", "mythic", "secret", "lvl25", "reborn", "evolve1", "evolve10" }
 P.Achievements = {
 	first = { name = "Первый улов", desc = "Сдай первого духа", type = "total", need = 1, coins = 30 },
 	c50 = { name = "Ловец", desc = "Сдай 50 духов", type = "total", need = 50, coins = 250 },
@@ -654,6 +709,8 @@ P.Achievements = {
 	mythic = { name = "Миф", desc = "Сдай мифического духа", type = "rarity", key = "mythic", need = 1, coins = 1500 },
 	secret = { name = "Тайна", desc = "Сдай секретного духа", type = "rarity", key = "secret", need = 1, coins = 4000 },
 	lvl25 = { name = "Ветеран", desc = "Достигни 25 уровня", type = "level", need = 25, coins = 1200 },
+	evolve1 = { name = "Пробуждение", desc = "Пробуди первого духа (10 дубликатов)", type = "evolved", need = 1, coins = 800, dust = 30 },
+	evolve10 = { name = "Мастер пробуждения", desc = "Пробуди 10 видов духов", type = "evolved", need = 10, coins = 5000, dust = 150 },
 	reborn = { name = "Новая жизнь", desc = "Переродись первый раз", type = "rebirths", need = 1, dust = 60, skin = "dragon" },
 }
 
@@ -1870,6 +1927,29 @@ function S.applyVariant(m: Model, variant: string?)
 end
 
 -- радужный перелив (вызывать раз в несколько кадров)
+-- «Пробуждённый» дух: крупнее, светящиеся края и золотистое сияние
+function S.applyEvolved(m: Model)
+	S.scale(m, 1.25)
+	local main = m.PrimaryPart
+	for _, p in m:GetChildren() do
+		if p:IsA("BasePart") and p.Transparency < 0.6 then
+			p.Color = p.Color:Lerp(Color3.fromRGB(255, 225, 150), 0.18)
+		end
+	end
+	if main then
+		local l = Instance.new("PointLight")
+		l.Color, l.Range, l.Brightness = Color3.fromRGB(255, 220, 140), 12, 0.7
+		l.Parent = main
+		local pe = Instance.new("ParticleEmitter")
+		pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		pe.Color = ColorSequence.new(Color3.fromRGB(255, 235, 160), Color3.fromRGB(255, 170, 80))
+		pe.LightEmission, pe.Rate, pe.Lifetime = 0.5, 6, NumberRange.new(1, 1.6)
+		pe.Speed, pe.SpreadAngle = NumberRange.new(0.5, 1.5), Vector2.new(180, 180)
+		pe.Size = NumberSequence.new(0.35, 0)
+		pe.Parent = main
+	end
+end
+
 function S.rainbowTick(m: Model, t: number)
 	local i = 0
 	for _, p in m:GetChildren() do
@@ -2187,6 +2267,8 @@ local RewardEv = remote("Reward") -- всплывающие награды: { co
 local FeedFn = remote("FeedCompanion", "RemoteFunction")
 local SeasonFn = remote("ClaimSeason", "RemoteFunction")
 local TitleFn = remote("SetTitle", "RemoteFunction")
+local EvolveFn = remote("Evolve", "RemoteFunction")
+local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
@@ -2264,7 +2346,9 @@ local function compOf(d)
 	if not kind or not Catalog.Kinds[kind] then return nil end
 	local lvl = Live.companionLevel(d.saved[kind] or 0, (d.fed and d.fed[kind]) or 0)
 	local key, value = Live.abilityValue(kind, Catalog.Kinds[kind].rarity, lvl)
-	return { kind = kind, level = lvl, ability = key, value = value, text = Live.abilityText(key, value) }
+	local evolved = d.evolved ~= nil and d.evolved[kind] == true
+	if evolved then value *= Live.EvolvedMult end
+	return { kind = kind, level = lvl, ability = key, value = value, text = Live.abilityText(key, value), evolved = evolved }
 end
 local function compPct(d, key: string): number
 	local c = compOf(d)
@@ -2471,7 +2555,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0,
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {},
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -2615,6 +2699,13 @@ local function migrate(raw): Profile
 			end
 		end
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
+		for _, f in { "evolved", "furniture" } do
+			if typeof(raw[f]) == "table" then
+				for k, v in raw[f] do
+					if v == true and (f == "evolved" and Catalog.Kinds[k] or f == "furniture" and Live.Furniture[k]) then d[f][k] = true end
+				end
+			end
+		end
 		d.yardLikes = math.floor(num(raw.yardLikes, 0, 1e9, 0))
 		if typeof(raw.likes) == "table" and typeof(raw.likes.day) == "number" and typeof(raw.likes.given) == "table" then
 			d.likes = { day = raw.likes.day, given = {} }
@@ -2651,6 +2742,11 @@ local function achProgress(d, a)
 	if a.type == "distinct" then return distinct(d) end
 	if a.type == "level" then return d.level end
 	if a.type == "rebirths" then return d.rebirths or 0 end
+	if a.type == "evolved" then
+		local n = 0
+		for _ in d.evolved or {} do n += 1 end
+		return n
+	end
 	if a.type == "variant" then
 		for _, vs in d.variants do
 			if vs[a.key] then return 1 end
@@ -2693,6 +2789,7 @@ local function pushState(plr)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
 	plr:SetAttribute("Companion", d.equipped or "")
+	plr:SetAttribute("CompanionEvolved", d.equipped ~= nil and d.evolved ~= nil and d.evolved[d.equipped] == true)
 	plr:SetAttribute("Skin", d.skin)
 	StateEv:FireClient(plr, {
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
@@ -2717,7 +2814,7 @@ local function pushState(plr)
 			return { list = t, all = ch.all }
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
-		club = Social.clubView(d), yardLikes = d.yardLikes or 0,
+		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -3475,7 +3572,7 @@ local function doSave(plr)
 	for _, entry in jar do
 		local kind, variant = entry.k, entry.v
 		local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
-		coins += math.floor(rar.coins * Catalog.Variants[variant].mult)
+		coins += math.floor(rar.coins * Catalog.Variants[variant].mult * ((d.evolved and d.evolved[kind]) and Live.EvolvedMult or 1))
 		d.total += 1
 		d.variants[kind] = d.variants[kind] or {}
 		if not d.variants[kind][variant] then
@@ -3922,14 +4019,20 @@ FeedFn.OnServerInvoke = function(plr)
 	pushState(plr)
 	return { ok = true, level = compOf(d).level }
 end
-SeasonFn.OnServerInvoke = function(plr, tier)
+SeasonFn.OnServerInvoke = function(plr, tier, premium)
 	local d = data[plr]
-	local r = d and typeof(tier) == "number" and Live.Season.tiers[tier]
+	local r = d and typeof(tier) == "number" and (premium == true and Live.Season.premium[tier] or Live.Season.tiers[tier])
 	if not r then return { ok = false } end
+	if premium == true and not hasPass(d, "season1") then return { ok = false, msg = "Нужен Премиум сезона (Магазин, Донат)" } end
 	local se = ensureSeason(d)
-	if se.claimed[tostring(tier)] then return { ok = false, msg = "Уже получено" } end
+	local key = (premium == true and "p" or "") .. tostring(tier)
+	if se.claimed[key] then return { ok = false, msg = "Уже получено" } end
 	if math.floor(se.xp / Live.Season.tierXp) < tier then return { ok = false, msg = "Набери больше опыта сезона" } end
-	se.claimed[tostring(tier)] = true
+	se.claimed[key] = true
+	if r.furniture then
+		d.furniture[r.furniture] = true
+		Social.refreshYard(plr)
+	end
 	d.coins += r.coins or 0
 	d.dust += r.dust or 0
 	if r.potion then d.luckUntil = math.max(d.luckUntil or 0, os.time()) + r.potion * 60 end
@@ -3941,6 +4044,40 @@ SeasonFn.OnServerInvoke = function(plr, tier)
 	persist(plr)
 	pushState(plr)
 	RewardEv:FireClient(plr, { coins = r.coins, dust = r.dust, skin = r.skin })
+	return { ok = true }
+end
+EvolveFn.OnServerInvoke = function(plr, kind)
+	local d = data[plr]
+	local info = d and typeof(kind) == "string" and Catalog.Kinds[kind]
+	if not info then return { ok = false } end
+	if d.evolved[kind] then return { ok = false, msg = "Уже пробуждён" } end
+	if (d.saved[kind] or 0) < Live.EvolveDupes + 1 then
+		return { ok = false, msg = ("Нужно %d дубликатов (у тебя %d)"):format(Live.EvolveDupes, math.max(0, (d.saved[kind] or 0) - 1)) }
+	end
+	local cost = Live.EvolveDust[info.rarity] or 50
+	if d.dust < cost then return { ok = false, msg = ("Нужно %d пыли"):format(cost) } end
+	d.dust -= cost
+	d.saved[kind] -= Live.EvolveDupes
+	d.evolved[kind] = true
+	applySpeed(plr)
+	Social.refreshYard(plr)
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+FurnitureFn.OnServerInvoke = function(plr, id)
+	local d = data[plr]
+	local f = d and typeof(id) == "string" and Live.Furniture[id]
+	if not f then return { ok = false } end
+	if d.furniture[id] then return { ok = false, msg = "Уже стоит во дворе" } end
+	if f.premium then return { ok = false, msg = "Награда премиум-трека сезона" } end
+	if d.coins < f.coins or d.dust < (f.dust or 0) then return { ok = false, msg = "Не хватает монет или пыли" } end
+	d.coins -= f.coins
+	d.dust -= f.dust or 0
+	d.furniture[id] = true
+	Social.refreshYard(plr)
+	persist(plr)
+	pushState(plr)
 	return { ok = true }
 end
 TitleFn.OnServerInvoke = function(plr, title)
@@ -3997,7 +4134,7 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		d.xp = 0
 	elseif cmd == "allSpirits" then
 		for _, kind in Catalog.Order do
-			d.saved[kind] = math.max(d.saved[kind] or 0, 1)
+			d.saved[kind] = (d.saved[kind] or 0) + 5
 			d.firstSaved[kind] = true
 			d.variants[kind] = {}
 			for _, v in Catalog.VariantOrder do d.variants[kind][v] = true end
@@ -5102,10 +5239,113 @@ local function yardKinds(d)
 				break
 			end
 		end
-		table.insert(out, kind .. ":" .. best)
+		table.insert(out, kind .. ":" .. best .. ((d.evolved and d.evolved[kind]) and ":e" or ""))
 	end
 	if d.equipped and not table.find(list, d.equipped) then table.insert(out, d.equipped .. ":normal") end
 	return table.concat(out, ",")
+end
+
+-- мебель двора: простые постройки из деталей в слотах участка
+local WOOD, DARK, RED, STONE = Color3.fromRGB(120, 85, 55), Color3.fromRGB(50, 35, 30), Color3.fromRGB(200, 55, 45), Color3.fromRGB(140, 140, 150)
+local function lamp(parent, pos, color)
+	local l = part(parent, "Lamp", Vector3.new(1.4, 1.6, 1.4), CFrame.new(pos), color, Enum.Material.Neon, { Shape = Enum.PartType.Ball, CanCollide = false })
+	local pl = Instance.new("PointLight")
+	pl.Range, pl.Brightness, pl.Color = 14, 0.7, color
+	pl.Parent = l
+end
+local FURN = {
+	lanternPost = function(f, o)
+		part(f, "Post", Vector3.new(0.6, 7, 0.6), CFrame.new(o + Vector3.new(0, 4, 0)), DARK, Enum.Material.Wood)
+		lamp(f, o + Vector3.new(0, 7.8, 0), Color3.fromRGB(255, 170, 80))
+	end,
+	bench = function(f, o)
+		part(f, "Seat", Vector3.new(6, 0.5, 2), CFrame.new(o + Vector3.new(0, 1.6, 0)), WOOD, Enum.Material.WoodPlanks)
+		part(f, "Back", Vector3.new(6, 1.6, 0.4), CFrame.new(o + Vector3.new(0, 2.6, 0.9)), WOOD, Enum.Material.WoodPlanks)
+		for _, x in { -2.6, 2.6 } do part(f, "Leg", Vector3.new(0.4, 1.2, 1.6), CFrame.new(o + Vector3.new(x, 0.9, 0)), DARK, Enum.Material.Wood) end
+	end,
+	bonsai = function(f, o)
+		part(f, "Pot", Vector3.new(2.4, 1.2, 2.4), CFrame.new(o + Vector3.new(0, 1.1, 0)), Color3.fromRGB(90, 60, 110), Enum.Material.Slate)
+		part(f, "Trunk", Vector3.new(0.5, 2.4, 0.5), CFrame.new(o + Vector3.new(0, 2.8, 0)) * CFrame.Angles(0, 0, 0.3), DARK, Enum.Material.Wood)
+		part(f, "Leaves", Vector3.new(3.4, 1.6, 3.4), CFrame.new(o + Vector3.new(0.5, 4.2, 0)), Color3.fromRGB(70, 140, 80), Enum.Material.Grass, { Shape = Enum.PartType.Ball })
+	end,
+	stoneGarden = function(f, o)
+		part(f, "Sand", Vector3.new(8, 0.2, 6), CFrame.new(o + Vector3.new(0, 0.75, 0)), Color3.fromRGB(220, 210, 185), Enum.Material.Sand, { CanCollide = false })
+		for i, p in { Vector3.new(-2, 0, -1), Vector3.new(1.8, 0, 1), Vector3.new(0.5, 0, -1.8) } do
+			part(f, "Rock", Vector3.new(1.4 + i * 0.3, 1 + i * 0.3, 1.2 + i * 0.2), CFrame.new(o + p + Vector3.new(0, 1.2, 0)), STONE, Enum.Material.Rock, { Shape = Enum.PartType.Ball })
+		end
+	end,
+	sakura = function(f, o)
+		part(f, "Trunk", Vector3.new(1, 7, 1), CFrame.new(o + Vector3.new(0, 4, 0)), DARK, Enum.Material.Wood)
+		for i, p in { Vector3.new(0, 8.5, 0), Vector3.new(2, 7.5, 1), Vector3.new(-2, 7.8, -1) } do
+			part(f, "Blossom", Vector3.new(5, 4, 5), CFrame.new(o + p), Color3.fromRGB(255, 170 + i * 10, 210), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, CanCollide = false })
+		end
+	end,
+	garland = function(f, o)
+		for _, x in { -9, 9 } do part(f, "Pole", Vector3.new(0.5, 7, 0.5), CFrame.new(o + Vector3.new(x, 4, 0)), DARK, Enum.Material.Wood) end
+		part(f, "String", Vector3.new(18, 0.1, 0.1), CFrame.new(o + Vector3.new(0, 7.2, 0)), DARK, nil, { CanCollide = false })
+		for x = -7, 7, 3.5 do lamp(f, o + Vector3.new(x, 6.4, 0), Color3.fromHSV(((x + 7) / 14) * 0.9, 0.6, 1)) end
+	end,
+	bell = function(f, o)
+		for _, x in { -2, 2 } do part(f, "Post", Vector3.new(0.6, 6, 0.6), CFrame.new(o + Vector3.new(x, 3.6, 0)), RED, Enum.Material.Wood) end
+		part(f, "Beam", Vector3.new(5.4, 0.6, 0.8), CFrame.new(o + Vector3.new(0, 6.6, 0)), DARK, Enum.Material.Wood)
+		part(f, "Bell", Vector3.new(2, 2.6, 2), CFrame.new(o + Vector3.new(0, 4.8, 0)), Color3.fromRGB(200, 160, 70), Enum.Material.Metal, { Shape = Enum.PartType.Ball })
+	end,
+	bridge = function(f, o)
+		part(f, "Stream", Vector3.new(4, 0.2, 14), CFrame.new(o + Vector3.new(0, 0.72, 0)), Color3.fromRGB(70, 140, 200), Enum.Material.Glass, { Transparency = 0.2, CanCollide = false })
+		part(f, "Deck", Vector3.new(7, 0.5, 3), CFrame.new(o + Vector3.new(0, 1.4, 0)), RED, Enum.Material.Wood)
+		for _, z in { -1.4, 1.4 } do part(f, "Rail", Vector3.new(7, 0.8, 0.3), CFrame.new(o + Vector3.new(0, 2, z)), RED, Enum.Material.Wood) end
+	end,
+	torii = function(f, o)
+		for _, x in { -4, 4 } do part(f, "Pillar", Vector3.new(1, 9, 1), CFrame.new(o + Vector3.new(x, 5, 0)), RED, Enum.Material.SmoothPlastic) end
+		part(f, "Top", Vector3.new(11, 1, 1.4), CFrame.new(o + Vector3.new(0, 9.8, 0)), DARK, Enum.Material.Wood)
+		part(f, "Mid", Vector3.new(9, 0.6, 1), CFrame.new(o + Vector3.new(0, 8.2, 0)), RED, Enum.Material.SmoothPlastic)
+	end,
+	fountain = function(f, o)
+		part(f, "Basin", Vector3.new(6, 1.2, 6), CFrame.new(o + Vector3.new(0, 1.2, 0)), STONE, Enum.Material.Concrete, { Shape = Enum.PartType.Cylinder, CFrame = CFrame.new(o + Vector3.new(0, 1.2, 0)) * CFrame.Angles(0, 0, math.rad(90)) })
+		part(f, "Water", Vector3.new(0.3, 5.4, 5.4), CFrame.new(o + Vector3.new(0, 1.9, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(110, 200, 255), Enum.Material.Neon, { Shape = Enum.PartType.Cylinder, Transparency = 0.3, CanCollide = false })
+		local orb = part(f, "SpiritOrb", Vector3.new(1.4, 1.4, 1.4), CFrame.new(o + Vector3.new(0, 4, 0)), Color3.fromRGB(170, 230, 255), Enum.Material.Neon, { Shape = Enum.PartType.Ball, CanCollide = false })
+		local pe = Instance.new("ParticleEmitter")
+		pe.Color, pe.LightEmission, pe.Rate = ColorSequence.new(Color3.fromRGB(170, 230, 255)), 0.6, 10
+		pe.Speed, pe.Lifetime, pe.Size = NumberRange.new(2, 4), NumberRange.new(1, 1.5), NumberSequence.new(0.3, 0)
+		pe.Acceleration = Vector3.new(0, -6, 0)
+		pe.Parent = orb
+	end,
+	koiPond = function(f, o)
+		part(f, "Pond", Vector3.new(0.3, 9, 9), CFrame.new(o + Vector3.new(0, 0.75, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(50, 120, 190), Enum.Material.Glass, { Shape = Enum.PartType.Cylinder, Transparency = 0.15, CanCollide = false })
+		for i = 1, 3 do
+			local a = i * 2.1
+			part(f, "Koi", Vector3.new(0.8, 0.4, 1.8), CFrame.new(o + Vector3.new(math.cos(a) * 2.4, 0.95, math.sin(a) * 2.4)) * CFrame.Angles(0, a, 0), i == 2 and Color3.fromRGB(255, 250, 240) or Color3.fromRGB(255, 120, 40), Enum.Material.SmoothPlastic, { CanCollide = false })
+		end
+	end,
+	shrine = function(f, o)
+		part(f, "Base", Vector3.new(6, 1, 5), CFrame.new(o + Vector3.new(0, 1, 0)), STONE, Enum.Material.Concrete)
+		part(f, "House", Vector3.new(4, 4, 3.4), CFrame.new(o + Vector3.new(0, 3.5, 0)), Color3.fromRGB(150, 50, 45), Enum.Material.Wood)
+		part(f, "Roof", Vector3.new(5.6, 0.8, 5), CFrame.new(o + Vector3.new(0, 6, 0)), Color3.fromRGB(40, 70, 60), Enum.Material.Slate)
+		lamp(f, o + Vector3.new(0, 3.4, -1.8), Color3.fromRGB(255, 210, 120))
+	end,
+	spiritStatue = function(f, o)
+		part(f, "Pedestal", Vector3.new(3, 2, 3), CFrame.new(o + Vector3.new(0, 1.6, 0)), STONE, Enum.Material.Marble)
+		part(f, "Body", Vector3.new(2.4, 3, 2.4), CFrame.new(o + Vector3.new(0, 4.1, 0)), Color3.fromRGB(230, 230, 240), Enum.Material.Marble, { Shape = Enum.PartType.Ball })
+		for _, x in { -0.7, 0.7 } do
+			part(f, "Ear", Vector3.new(0.6, 1.2, 0.4), CFrame.new(o + Vector3.new(x, 5.8, 0)), Color3.fromRGB(230, 230, 240), Enum.Material.Marble)
+			part(f, "Eye", Vector3.new(0.4, 0.4, 0.2), CFrame.new(o + Vector3.new(x * 0.6, 4.6, -1.15)), Color3.fromRGB(120, 220, 255), Enum.Material.Neon)
+		end
+	end,
+}
+local function buildFurniture(p, d)
+	local old = p.folder:FindFirstChild("Furniture")
+	if old then old:Destroy() end
+	local f = Instance.new("Folder")
+	f.Name = "Furniture"
+	for id in (d and d.furniture) or {} do
+		local cfg = ctx.Catalog.Live.Furniture[id]
+		local fn = FURN[id]
+		if cfg and fn then
+			local o = p.center + Vector3.new(cfg.slot.X, 0.2, cfg.slot.Z * p.back)
+			pcall(fn, f, o)
+		end
+	end
+	f.Parent = p.folder
 end
 
 function Social.refreshYard(plr)
@@ -5114,6 +5354,12 @@ function Social.refreshYard(plr)
 	if not (i and d) then return end
 	local p = plots[i]
 	p.folder:SetAttribute("Kinds", yardKinds(d))
+	local sig = ""
+	for id in d.furniture or {} do sig ..= id end
+	if p.furnSig ~= sig then
+		p.furnSig = sig
+		buildFurniture(p, d)
+	end
 	local text = ("Двор %s\nДухов %d/%d   Лайков %d"):format(plr.DisplayName, ctx.distinct(d), #ctx.Catalog.Order, d.yardLikes or 0)
 	for _, g in p.sign:GetChildren() do
 		if g:IsA("SurfaceGui") then g.Text.Text = text end
@@ -5143,6 +5389,8 @@ local function freePlot(plr)
 	p.folder:SetAttribute("Owner", 0)
 	p.folder:SetAttribute("Kinds", "")
 	p.prompt.Enabled = false
+	p.furnSig = nil
+	buildFurniture(p, nil)
 	for _, g in p.sign:GetChildren() do
 		if g:IsA("SurfaceGui") then g.Text.Text = "Свободный двор" end
 	end
@@ -6070,8 +6318,20 @@ do
 			c.dots[vk] = d
 		end
 		c.varL = K.text(f, "", { Size = UDim2.new(0.45, -10, 0, 16), Position = UDim2.new(0.55, 2, 0, 195), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Right, StrokeThickness = 1 })
-		local trackB, trackBL = K.button(f, "Выследить", T.orange, { Size = UDim2.new(0.5, -7, 0, 38), Position = UDim2.new(0, 5, 1, -44), MaxText = 15 })
-		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(0.5, -7, 0, 38), Position = UDim2.new(0.5, 2, 1, -44), MaxText = 15 })
+		local trackB, trackBL = K.button(f, "Цель", T.orange, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(0, 4, 1, -44), MaxText = 14 })
+		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(1 / 3, 2, 1, -44), MaxText = 14 })
+		local evoB, evoBL = K.button(f, "Пробудить", T.gold, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(2 / 3, 0, 1, -44), MaxText = 14 })
+		c.evo, c.evoL = evoB, evoBL
+		evoB.Activated:Connect(function()
+			if state.evolved and state.evolved[kind] then return end
+			local r = remotes.Evolve:InvokeServer(kind)
+			if r and r.ok then
+				play("legendary")
+				showToast("Пробуждён: " .. info.name .. "! Способность и монеты x1.5", 3, Color3.fromRGB(150, 110, 20))
+			elseif r and r.msg then
+				showToast(r.msg, 2.5)
+			end
+		end)
 		c.trackL, c.equip, c.equipL = trackBL, equipB, equipBL
 		trackB.Activated:Connect(function()
 			setTrack(trackKind ~= kind and kind or nil)
@@ -6102,11 +6362,24 @@ do
 			local Live = Catalog.Live
 			local lvl = Live.companionLevel(n, (state.fed and state.fed[c.kind]) or 0)
 			local key, val = Live.abilityValue(c.kind, info.rarity, lvl)
+			if state.evolved and state.evolved[c.kind] then val *= Live.EvolvedMult end
 			c.info.Text = ("Спутник ур.%d: %s\n%s"):format(lvl, Live.abilityText(key, val), info.habit)
 		else
 			c.info.Text = "Где искать: " .. info.hint
 		end
-		c.trackL.Text = trackKind == c.kind and "Цель" or "Выследить"
+		c.trackL.Text = trackKind == c.kind and "Отмена" or "Цель"
+		local evolved = state.evolved and state.evolved[c.kind]
+		c.evo.Visible = known
+		local dupes = math.max(0, n - 1)
+		c.evoL.Text = evolved and "Пробуждён" or ("%d/%d"):format(math.min(dupes, Catalog.Live.EvolveDupes), Catalog.Live.EvolveDupes)
+		K.recolor(c.evo, evolved and Color3.fromRGB(150, 110, 30) or (dupes >= Catalog.Live.EvolveDupes and T.green or Color3.fromRGB(80, 80, 100)))
+		if c.evolvedShown ~= evolved and known and c.vp then
+			c.evolvedShown = evolved
+			c.vp:Destroy()
+			local m = Spirits.Builders[c.kind]()
+			if evolved then Spirits.applyEvolved(m) end
+			c.vp, c.setAngle = K.viewport(c.vpHolder, m)
+		end
 		c.equip.Visible = known
 		c.equipL.Text = state.equipped == c.kind and "Снять" or "Спутник"
 		local got = (state.variants and state.variants[c.kind]) or {}
@@ -6229,17 +6502,17 @@ do
 	local tierCards = {}
 	for i, rw in Live.Season.tiers do
 		local special = rw.skin or rw.title
-		local f = K.panel(tierScroll, { Size = UDim2.new(0, 150, 1, -12), LayoutOrder = i, BackgroundColor3 = special and Color3.fromRGB(80, 55, 40) or T.panel2 })
+		local f = K.panel(tierScroll, { Size = UDim2.new(0, 150, 0.62, -8), LayoutOrder = i, BackgroundColor3 = special and Color3.fromRGB(80, 55, 40) or T.panel2 })
 		if special then f:FindFirstChildOfClass("UIStroke").Color = T.gold end
 		local num = K.make("Frame", { Size = UDim2.fromOffset(44, 30), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = T.orange }, f)
 		K.corner(num, UDim.new(1, 0))
 		K.stroke(num, T.ink, 2)
 		K.text(num, tostring(i), { Size = UDim2.new(1, -6, 1, -4), Position = UDim2.fromOffset(3, 2), MaxText = 17 })
 		local ic = rw.skin and "shop" or (rw.title and "trophy" or (rw.potion and "potion" or (rw.coins and "coin" or "dust")))
-		K.icon(f, ic, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 40), Size = UDim2.fromOffset(60, 60) })
+		K.icon(f, ic, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 6), Size = UDim2.fromOffset(50, 50) })
 		local txt = rw.skin and ("Фонарь «" .. Prog.Skins[rw.skin].name .. "»") or Live.rewardText(rw)
 		if rw.skin and rw.title then txt = txt .. " и титул" end
-		K.text(f, txt, { Size = UDim2.new(1, -10, 0, 52), Position = UDim2.fromOffset(5, 104), MaxText = 15, TextWrapped = true, Font = Enum.Font.GothamBold })
+		K.text(f, txt, { Size = UDim2.new(1, -10, 1, -110), Position = UDim2.fromOffset(5, 60), MaxText = 15, TextWrapped = true, Font = Enum.Font.GothamBold })
 		local cb, cl = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
 		cb.Activated:Connect(function()
 			local res = remotes.ClaimSeason:InvokeServer(i)
@@ -6251,6 +6524,27 @@ do
 			end
 		end)
 		tierCards[i] = { b = cb, l = cl }
+		-- премиум-награда под обычной (каждый 3-й уровень)
+		local pr = Live.Season.premium[i]
+		local pf = K.panel(f, { Position = UDim2.new(0, -3, 1, 8), Size = UDim2.new(1, 6, 0.6, 0), BackgroundColor3 = pr and Color3.fromRGB(90, 60, 25) or Color3.fromRGB(40, 38, 55) })
+		pf:FindFirstChildOfClass("UIStroke").Color = pr and T.gold or T.ink
+		if pr then
+			local ptxt = pr.skin and ("Фонарь «" .. Prog.Skins[pr.skin].name .. "»") or Live.rewardText(pr)
+			K.text(pf, ptxt, { Size = UDim2.new(1, -10, 1, -52), Position = UDim2.fromOffset(5, 4), MaxText = 14, TextWrapped = true, Font = Enum.Font.GothamBold, TextColor3 = T.gold })
+			local pb, pl = K.button(pf, "", T.gold, { Size = UDim2.new(1, -12, 0, 38), Position = UDim2.new(0, 6, 1, -44), MaxText = 15 })
+			pb.Activated:Connect(function()
+				local res = remotes.ClaimSeason:InvokeServer(i, true)
+				if res and res.ok then
+					play("legendary")
+					showToast("Премиум-награда: " .. ptxt, 2.5, Color3.fromRGB(150, 100, 20))
+				elseif res and res.msg then
+					showToast(res.msg, 2.5)
+				end
+			end)
+			tierCards[i].pb, tierCards[i].pl = pb, pl
+		else
+			K.text(pf, "Премиум", { Size = UDim2.new(1, -10, 1, -10), Position = UDim2.fromOffset(5, 5), MaxText = 13, TextColor3 = T.sub, StrokeThickness = 1 })
+		end
 	end
 
 	-- титулы
@@ -6308,6 +6602,12 @@ do
 		passFill.Size = UDim2.fromScale(tier >= #Live.Season.tiers and 1 or (se.xp % per) / per, 1)
 		endsL.Text = ("%s   ещё %d опыта"):format(Live.Season.ends, per - se.xp % per)
 		for i, c in tierCards do
+			if c.pb then
+				local hasP = state.passes and state.passes.season1
+				local pc = se.claimed and se.claimed["p" .. i]
+				c.pl.Text = pc and "Получено" or (not hasP and "Премиум" or (tier >= i and "Забрать!" or ("Ур. %d"):format(i)))
+				K.recolor(c.pb, pc and Color3.fromRGB(80, 80, 95) or ((hasP and tier >= i) and T.green or T.gold))
+			end
 			local claimed = se.claimed and se.claimed[tostring(i)]
 			if claimed then
 				c.l.Text = "Получено"
@@ -6429,6 +6729,27 @@ do
 	local tabYard = K.button(tabs, "Дворы", TEAL, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
 	local tabTrade = K.button(tabs, "Обмен", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
 	local tabClub = K.button(tabs, "Клуб", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tabFurn = K.button(tabs, "Мебель", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local furnPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 120), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, furnPage)
+	local furnCards = {}
+	for i, id in Catalog.Live.FurnitureOrder do
+		local fc = Catalog.Live.Furniture[id]
+		local f = K.panel(furnPage, { LayoutOrder = i, BackgroundColor3 = fc.premium and Color3.fromRGB(80, 55, 30) or T.panel2 })
+		if fc.premium then f:FindFirstChildOfClass("UIStroke").Color = T.gold end
+		K.text(f, fc.name, { Size = UDim2.new(1, -10, 0, 40), Position = UDim2.fromOffset(5, 6), MaxText = 17, TextWrapped = true })
+		local b, l = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 42), Position = UDim2.new(0, 6, 1, -48), MaxText = 15 })
+		b.Activated:Connect(function()
+			local r = remotes.BuyFurniture:InvokeServer(id)
+			if r and r.ok then
+				play("save")
+				showToast("Во дворе появилось: " .. fc.name, 2.5)
+			elseif r and r.msg then
+				showToast(r.msg, 2.5)
+			end
+		end)
+		furnCards[id] = { b = b, l = l }
+	end
 
 	-- дворы: свой двор + список игроков сервера
 	local yardPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44) })
@@ -6573,7 +6894,7 @@ do
 	joinB.Activated:Connect(function() clubCall("join", codeBox.Text) end)
 	leaveB.Activated:Connect(function() clubCall("leave") end)
 
-	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage } }
+	local pages = { { tabYard, yardPage }, { tabTrade, tradePage }, { tabClub, clubPage }, { tabFurn, furnPage } }
 	for _, pair in pages do
 		pair[1].Activated:Connect(function()
 			for _, o in pages do
@@ -6585,6 +6906,20 @@ do
 
 	refreshSocial = function()
 		myYardL.Text = ("Твой двор: лайков %d"):format(state.yardLikes or 0)
+		for id, c in furnCards do
+			local fc = Catalog.Live.Furniture[id]
+			local owned = state.furniture and state.furniture[id]
+			if owned then
+				c.l.Text = "Во дворе"
+				K.recolor(c.b, Color3.fromRGB(80, 80, 95))
+			elseif fc.premium then
+				c.l.Text = "Премиум сезона"
+				K.recolor(c.b, Color3.fromRGB(150, 110, 30))
+			else
+				c.l.Text = fc.dust and ("%d + %d пыли"):format(fc.coins, fc.dust) or ("%d монет"):format(fc.coins)
+				K.recolor(c.b, (state.coins >= fc.coins and state.dust >= (fc.dust or 0)) and T.green or Color3.fromRGB(90, 90, 105))
+			end
+		end
 		-- игроки сервера: визит и обмен
 		local seen = {}
 		for _, p in Players:GetPlayers() do
@@ -7759,8 +8094,9 @@ do
 	updateFollowers = function(now)
 		for _, p in Players:GetPlayers() do
 			local kind = p:GetAttribute("Companion")
+			local evo = p:GetAttribute("CompanionEvolved") == true
 			local f = followers[p]
-			if f and f.kind ~= kind then
+			if f and (f.kind ~= kind or f.evo ~= evo) then
 				f.model:Destroy()
 				followers[p], f = nil, nil
 			end
@@ -7769,8 +8105,9 @@ do
 				if not f then
 					local m = Spirits.Builders[kind]()
 					Spirits.scale(m, Catalog.Kinds[kind].follow)
+					if evo then Spirits.applyEvolved(m) end
 					m.Parent = visFolder
-					f = { kind = kind, model = m, pivot = r.CFrame }
+					f = { kind = kind, model = m, pivot = r.CFrame, evo = evo }
 					followers[p] = f
 				end
 				local goal = r.CFrame * CFrame.new(3, 2.2 + math.sin(now * 2) * 0.4, 2)
@@ -7807,11 +8144,12 @@ do
 					yardModels[plot] = y
 					local i = 0
 					for entry in string.gmatch(sig, "[^,]+") do
-						local kind, variant = string.match(entry, "([^:]+):?(.*)")
+						local kind, variant, evo = string.match(entry, "([^:]+):?([^:]*):?(.*)")
 						if kind and Catalog.Kinds[kind] and Spirits.Builders[kind] then
 							i += 1
 							local m = Spirits.Builders[kind]()
 							pcall(Spirits.applyVariant, m, variant ~= "" and variant or nil)
+							if evo == "e" then pcall(Spirits.applyEvolved, m) end
 							m.Parent = visFolder
 							table.insert(y.list, { model = m, kind = kind, phase = i * 1.7, r = 6 + (i % 3) * 5 })
 						end

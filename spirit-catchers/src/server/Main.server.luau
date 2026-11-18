@@ -78,6 +78,8 @@ local RewardEv = remote("Reward") -- всплывающие награды: { co
 local FeedFn = remote("FeedCompanion", "RemoteFunction")
 local SeasonFn = remote("ClaimSeason", "RemoteFunction")
 local TitleFn = remote("SetTitle", "RemoteFunction")
+local EvolveFn = remote("Evolve", "RemoteFunction")
+local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
@@ -155,7 +157,9 @@ local function compOf(d)
 	if not kind or not Catalog.Kinds[kind] then return nil end
 	local lvl = Live.companionLevel(d.saved[kind] or 0, (d.fed and d.fed[kind]) or 0)
 	local key, value = Live.abilityValue(kind, Catalog.Kinds[kind].rarity, lvl)
-	return { kind = kind, level = lvl, ability = key, value = value, text = Live.abilityText(key, value) }
+	local evolved = d.evolved ~= nil and d.evolved[kind] == true
+	if evolved then value *= Live.EvolvedMult end
+	return { kind = kind, level = lvl, ability = key, value = value, text = Live.abilityText(key, value), evolved = evolved }
 end
 local function compPct(d, key: string): number
 	local c = compOf(d)
@@ -362,7 +366,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0,
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {},
 		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -506,6 +510,13 @@ local function migrate(raw): Profile
 			end
 		end
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
+		for _, f in { "evolved", "furniture" } do
+			if typeof(raw[f]) == "table" then
+				for k, v in raw[f] do
+					if v == true and (f == "evolved" and Catalog.Kinds[k] or f == "furniture" and Live.Furniture[k]) then d[f][k] = true end
+				end
+			end
+		end
 		d.yardLikes = math.floor(num(raw.yardLikes, 0, 1e9, 0))
 		if typeof(raw.likes) == "table" and typeof(raw.likes.day) == "number" and typeof(raw.likes.given) == "table" then
 			d.likes = { day = raw.likes.day, given = {} }
@@ -542,6 +553,11 @@ local function achProgress(d, a)
 	if a.type == "distinct" then return distinct(d) end
 	if a.type == "level" then return d.level end
 	if a.type == "rebirths" then return d.rebirths or 0 end
+	if a.type == "evolved" then
+		local n = 0
+		for _ in d.evolved or {} do n += 1 end
+		return n
+	end
 	if a.type == "variant" then
 		for _, vs in d.variants do
 			if vs[a.key] then return 1 end
@@ -584,6 +600,7 @@ local function pushState(plr)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
 	plr:SetAttribute("Companion", d.equipped or "")
+	plr:SetAttribute("CompanionEvolved", d.equipped ~= nil and d.evolved ~= nil and d.evolved[d.equipped] == true)
 	plr:SetAttribute("Skin", d.skin)
 	StateEv:FireClient(plr, {
 		jar = jars[plr], cap = cap(d), saved = d.saved, equipped = d.equipped, coins = d.coins, dust = d.dust,
@@ -608,7 +625,7 @@ local function pushState(plr)
 			return { list = t, all = ch.all }
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
-		club = Social.clubView(d), yardLikes = d.yardLikes or 0,
+		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture,
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -1366,7 +1383,7 @@ local function doSave(plr)
 	for _, entry in jar do
 		local kind, variant = entry.k, entry.v
 		local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
-		coins += math.floor(rar.coins * Catalog.Variants[variant].mult)
+		coins += math.floor(rar.coins * Catalog.Variants[variant].mult * ((d.evolved and d.evolved[kind]) and Live.EvolvedMult or 1))
 		d.total += 1
 		d.variants[kind] = d.variants[kind] or {}
 		if not d.variants[kind][variant] then
@@ -1813,14 +1830,20 @@ FeedFn.OnServerInvoke = function(plr)
 	pushState(plr)
 	return { ok = true, level = compOf(d).level }
 end
-SeasonFn.OnServerInvoke = function(plr, tier)
+SeasonFn.OnServerInvoke = function(plr, tier, premium)
 	local d = data[plr]
-	local r = d and typeof(tier) == "number" and Live.Season.tiers[tier]
+	local r = d and typeof(tier) == "number" and (premium == true and Live.Season.premium[tier] or Live.Season.tiers[tier])
 	if not r then return { ok = false } end
+	if premium == true and not hasPass(d, "season1") then return { ok = false, msg = "Нужен Премиум сезона (Магазин, Донат)" } end
 	local se = ensureSeason(d)
-	if se.claimed[tostring(tier)] then return { ok = false, msg = "Уже получено" } end
+	local key = (premium == true and "p" or "") .. tostring(tier)
+	if se.claimed[key] then return { ok = false, msg = "Уже получено" } end
 	if math.floor(se.xp / Live.Season.tierXp) < tier then return { ok = false, msg = "Набери больше опыта сезона" } end
-	se.claimed[tostring(tier)] = true
+	se.claimed[key] = true
+	if r.furniture then
+		d.furniture[r.furniture] = true
+		Social.refreshYard(plr)
+	end
 	d.coins += r.coins or 0
 	d.dust += r.dust or 0
 	if r.potion then d.luckUntil = math.max(d.luckUntil or 0, os.time()) + r.potion * 60 end
@@ -1832,6 +1855,40 @@ SeasonFn.OnServerInvoke = function(plr, tier)
 	persist(plr)
 	pushState(plr)
 	RewardEv:FireClient(plr, { coins = r.coins, dust = r.dust, skin = r.skin })
+	return { ok = true }
+end
+EvolveFn.OnServerInvoke = function(plr, kind)
+	local d = data[plr]
+	local info = d and typeof(kind) == "string" and Catalog.Kinds[kind]
+	if not info then return { ok = false } end
+	if d.evolved[kind] then return { ok = false, msg = "Уже пробуждён" } end
+	if (d.saved[kind] or 0) < Live.EvolveDupes + 1 then
+		return { ok = false, msg = ("Нужно %d дубликатов (у тебя %d)"):format(Live.EvolveDupes, math.max(0, (d.saved[kind] or 0) - 1)) }
+	end
+	local cost = Live.EvolveDust[info.rarity] or 50
+	if d.dust < cost then return { ok = false, msg = ("Нужно %d пыли"):format(cost) } end
+	d.dust -= cost
+	d.saved[kind] -= Live.EvolveDupes
+	d.evolved[kind] = true
+	applySpeed(plr)
+	Social.refreshYard(plr)
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+FurnitureFn.OnServerInvoke = function(plr, id)
+	local d = data[plr]
+	local f = d and typeof(id) == "string" and Live.Furniture[id]
+	if not f then return { ok = false } end
+	if d.furniture[id] then return { ok = false, msg = "Уже стоит во дворе" } end
+	if f.premium then return { ok = false, msg = "Награда премиум-трека сезона" } end
+	if d.coins < f.coins or d.dust < (f.dust or 0) then return { ok = false, msg = "Не хватает монет или пыли" } end
+	d.coins -= f.coins
+	d.dust -= f.dust or 0
+	d.furniture[id] = true
+	Social.refreshYard(plr)
+	persist(plr)
+	pushState(plr)
 	return { ok = true }
 end
 TitleFn.OnServerInvoke = function(plr, title)
@@ -1888,7 +1945,7 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		d.xp = 0
 	elseif cmd == "allSpirits" then
 		for _, kind in Catalog.Order do
-			d.saved[kind] = math.max(d.saved[kind] or 0, 1)
+			d.saved[kind] = (d.saved[kind] or 0) + 5
 			d.firstSaved[kind] = true
 			d.variants[kind] = {}
 			for _, v in Catalog.VariantOrder do d.variants[kind][v] = true end
