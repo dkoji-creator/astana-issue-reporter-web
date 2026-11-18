@@ -74,7 +74,15 @@ do
 	end
 	task.spawn(function()
 		pcall(function() ContentProvider:PreloadAsync(allSounds) end)
-		if music then music:Play() end
+		if music then
+			-- если прелюдия недоступна (не выдан доступ плейсу), включаем прежнюю тему
+			task.wait(2)
+			if not music.IsLoaded and Audio.Music.fallback then
+				music.SoundId = Audio.Music.fallback
+				task.wait(1)
+			end
+			music:Play()
+		end
 	end)
 	play = function(name)
 		local s = sfx[name]
