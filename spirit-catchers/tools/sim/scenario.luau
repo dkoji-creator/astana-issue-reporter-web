@@ -401,6 +401,33 @@ do
 	frames(80)
 end
 
+stage("бросок фонарика")
+do
+	local altar0 = workspace.World:FindFirstChild("Altar")
+	plr.Character.HumanoidRootPart.CFrame = CFrame.new(altar0.Position + Vector3.new(0, 3, 4))
+	altar0:FindFirstChildOfClass("ProximityPrompt").Triggered:Fire(plr)
+	frames(5)
+	inv("Teleport", "street")
+	frames(5)
+	local okN = 0
+	for i = 1, 6 do
+		local r = inv("Throw", i / 6)
+		if r and r.ok then okN += 1 end
+		frames(60)
+	end
+	if okN < 3 then table.insert(SIM.errors, "бросок фонарика: успешных " .. okN) end
+	-- кнопка на экране: зажать и отпустить
+	local tb = hud:FindFirstChild("ThrowBtn", true)
+	if tb then
+		tb.InputBegan:Fire({ UserInputType = Enum.UserInputType.Touch })
+		frames(10)
+		tb.InputEnded:Fire({ UserInputType = Enum.UserInputType.Touch })
+		frames(40)
+	else
+		table.insert(SIM.errors, "нет кнопки БРОСОК")
+	end
+end
+
 stage("охота за 3 минуты")
 do
 	local h = inv("Hunt")

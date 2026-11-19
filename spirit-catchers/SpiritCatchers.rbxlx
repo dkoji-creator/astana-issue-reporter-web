@@ -641,6 +641,22 @@ L.Hunt = { seconds = 180, coinsPer = 150, dustPer = 3 }
 -- приглашение друга (по ссылке-приглашению Roblox)
 L.Invite = { inviter = { coins = 2000, dust = 50 }, guest = { coins = 1000 } }
 
+------------------------------------------------------------------ бросок фонарика: главный быстрый цикл
+-- держишь кнопку, полоска силы ходит вверх-вниз, отпускаешь; чем точнее (q от 0 до 1), тем дальше и реже дух
+L.Throw = {
+	cooldown = 1.6, cooldownMin = 0.6, -- секунд; уменьшается с силой света
+	baseDist = 18, maxDist = 70, -- метров
+	rarityBoost = 0.9, -- насколько точный бросок поднимает редкие виды
+	variantBoost = 1.5, -- и шанс разновидности
+	flight = 0.9, -- секунд полёта фонарика
+}
+function L.throwQuality(q: number): string
+	if q >= 0.94 then return "ИДЕАЛЬНО!" end
+	if q >= 0.8 then return "Отлично!" end
+	if q >= 0.55 then return "Хорошо" end
+	return "Слабо"
+end
+
 return L
 ]]></string>
           </Properties>
@@ -860,6 +876,7 @@ P.Codes = {
 	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
 	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
 	UPDATE3 = { coins = 1000, dust = 30, text = "Обновление 3! +1000 монет и +30 пыли" },
+	THROW = { coins = 3000, dust = 60, text = "Обновление 9! +3000 монет и +60 пыли. Жми БРОСОК!" },
 	HUNT = { coins = 3000, dust = 60, text = "Обновление 8! +3000 монет и +60 пыли. Попробуй «Охоту за 3 минуты»" },
 	DAILY = { coins = 2500, dust = 60, text = "Обновление 7! +2500 монет и +60 пыли. Загляни в «Каждый день»" },
 	TIKTOK = { coins = 1500, dust = 40, skin = "moon", text = "Привет из TikTok! +1500 монет, +40 пыли и Лунный фонарь" },
@@ -869,18 +886,17 @@ P.Codes = {
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 8
+P.NewsVersion = 9
 P.News = {
-	title = "Обновление 8: охота и выходные",
+	title = "Обновление 9: Бросок фонарика",
 	lines = {
-		"Охота за 3 минуты (Задания): лови как можно больше, рекорд сохраняется",
-		"Выходные: удача x2 в субботу и воскресенье",
-		"Награды серии входов: 3, 7, 14 и 30 дней подряд (яйца и титулы)",
-		"Недельный сундук: 5 дней со всеми испытаниями",
-		"Пригласи друга (Ловцы, Друзья): тебе 2000 монет, ему 1000",
-		"Автосдача (донат): полная банка сама сдаётся",
-		"Границы районов теперь видны: каменный бортик и туманная завеса",
-		"Код HUNT (Опции)",
+		"Новая кнопка БРОСОК: зажми, отпусти, когда полоска наверху",
+		"Фонарик приманивает духа туда, где сел. Дух сразу в банке",
+		"Чем точнее бросок, тем дальше полёт и реже дух",
+		"Крупно видно шанс: «1 к 2400»",
+		"Сила света ускоряет броски и замедляет полоску",
+		"Экран стал чище: Атлас, Магазин и Меню",
+		"Код THROW (Опции)",
 	},
 }
 
@@ -2730,6 +2746,7 @@ local PocketFn = remote("PocketSave", "RemoteFunction")
 local WheelFn = remote("SpinWheel", "RemoteFunction")
 local EggFn = remote("Egg", "RemoteFunction")
 local HuntFn = remote("Hunt", "RemoteFunction")
+local ThrowFn = remote("Throw", "RemoteFunction")
 local doSaveRef -- doSave (ниже), для автосдачи
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
@@ -4881,6 +4898,96 @@ EggFn.OnServerInvoke = function(plr, action, arg)
 	pushState(plr)
 	return { ok = true }
 end
+-- выдать пойманного духа (для броска фонарика и других быстрых поимок)
+local function grantCatch(plr, d, kind: string, district: string, variant: string, at: Vector3, odds: number)
+	local info = Catalog.Kinds[kind]
+	table.insert(jars[plr], { k = kind, v = variant })
+	local vOdds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
+	if vOdds >= Catalog.Luck.announceLocal then
+		AnnounceEv:FireAllClients({ name = plr.DisplayName, kind = kind, variant = variant, odds = vOdds })
+	end
+	CaughtEv:FireClient(plr, kind, at, 1, variant, vOdds >= 25, odds)
+	lanternBurst(plr)
+	local xp = math.floor((Catalog.Progress.XP[info.rarity] or 4) * (1 + compPct(d, "xp")) + 0.5)
+	d.xp += xp
+	liveOnCatch(plr, d, kind, district, variant)
+	local levelUp = nil
+	while d.xp >= Catalog.Progress.xpToNext(d.level) do
+		d.xp -= Catalog.Progress.xpToNext(d.level)
+		d.level += 1
+		local bonus = Catalog.Progress.levelReward(d.level)
+		d.coins += bonus
+		levelUp = { level = d.level, coins = bonus }
+		if d.level % Catalog.Progress.ChestEvery == 0 then
+			local ch = Catalog.Progress.chest(d.level)
+			d.coins += ch.coins
+			d.dust += ch.dust
+			levelUp.chest = ch
+		end
+	end
+	RewardEv:FireClient(plr, { xp = xp, levelUp = levelUp })
+	if #jars[plr] >= cap(d) and hasPass(d, "autoDeliver") and doSaveRef then
+		task.delay(1.5, function()
+			if plr.Parent and #(jars[plr] or {}) > 0 then SaveResultEv:FireClient(plr, doSaveRef(plr, true)) end
+		end)
+	end
+	pushState(plr)
+end
+-- бросок фонарика
+local throwAt = {}
+ThrowFn.OnServerInvoke = function(plr, q)
+	local d = data[plr]
+	local root = rootOf(plr)
+	if not (d and root and jars[plr]) or typeof(q) ~= "number" or q ~= q then return { ok = false } end
+	q = math.clamp(q, 0, 1)
+	local T = Live.Throw
+	local cd = math.max(T.cooldownMin, T.cooldown - 0.1 * ((d.levels.power or 1) - 1))
+	if os.clock() - (throwAt[plr] or 0) < cd then return { ok = false } end
+	if #jars[plr] >= cap(d) then
+		return { ok = false, msg = hasPass(d, "autoDeliver") and "Банка сдаётся..." or "Банка полна: нажми «Сдать» или отнеси к алтарю" }
+	end
+	local district = Catalog.district(root.Position)
+	if district == "plaza" then district = "street" end
+	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
+	if not tbl or next(tbl) == nil then return { ok = false, msg = "Здесь духи не водятся: иди в район" } end
+	throwAt[plr] = os.clock()
+	-- вес вида растёт с редкостью при точном броске
+	local weights, total = {}, 0
+	for kind, w in tbl do
+		local rank = RARITY_RANK[Catalog.Kinds[kind].rarity] or 1
+		local ww = w * (1 + (rank - 1) * T.rarityBoost * q)
+		weights[kind] = ww
+		total += ww
+	end
+	local r, kind = math.random() * total, nil
+	for k, w in weights do
+		r -= w
+		if r <= 0 then kind = k break end
+	end
+	kind = kind or next(weights)
+	local pKind = weights[kind] / total
+	-- разновидность: удача игрока, района и точность броска
+	local luck = luckOf(d) * (Catalog.Districts[district].luck or 1) * (1 + T.variantBoost * q)
+	local variant, pVar = "normal", 1
+	for vi = #Catalog.VariantOrder, 2, -1 do
+		local key = Catalog.VariantOrder[vi]
+		local vc = Catalog.Variants[key]
+		if (not vc.moonOnly or moon.active) and math.random() < vc.chance * luck then
+			variant, pVar = key, vc.chance
+			break
+		end
+	end
+	local odds = math.max(1, math.floor(1 / (pKind * pVar) + 0.5))
+	local dist = T.baseDist + (T.maxDist - T.baseDist) * q * (Catalog.upgradeValue("range", d.levels.range) / 30)
+	local look = root.CFrame.LookVector
+	local land = root.Position + Vector3.new(look.X, 0, look.Z).Unit * math.min(dist, T.maxDist * 1.6)
+	land = Vector3.new(land.X, 1.5, land.Z)
+	task.delay(T.flight, function()
+		if plr.Parent and data[plr] and jars[plr] then grantCatch(plr, data[plr], kind, district, variant, land, odds) end
+	end)
+	return { ok = true, land = land, quality = Live.throwQuality(q), dist = math.floor(dist), cd = cd }
+end
+
 HuntFn.OnServerInvoke = function(plr)
 	local d = data[plr]
 	if not d then return { ok = false } end
@@ -7350,6 +7457,7 @@ do
 
 end
 local enterPhoto -- фото-режим (ниже)
+local late = {} -- функции, объявленные ниже по файлу (ring, tut, setStep), для раннего кода
 local refreshHUD -- обновление интерфейса (ниже)
 local toggleWindow -- открыть одно окно, закрыть остальные (ниже)
 local openStory -- диалог Хранителя (ниже)
@@ -7569,6 +7677,89 @@ do
 	jarL = K.text(jarPanel, "Банка 0/3", { Size = UDim2.new(0.5, -40, 0, 22), Position = UDim2.fromOffset(46, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
 	jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.55, 0, 0, 18), Position = UDim2.new(0.42, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
 	_, jarFill = K.bar(jarPanel, T.cold, { Size = UDim2.new(1, -60, 0, 12), Position = UDim2.fromOffset(46, 30) })
+	-- БРОСОК ФОНАРИКА: главный быстрый цикл. Держи: полоска силы ходит; отпусти в нужный момент
+	local throwB = K.make("TextButton", { Name = "ThrowBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(112, 112), Position = UDim2.new(1, -140, 1, -110), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false }, hud)
+	K.corner(throwB, UDim.new(1, 0))
+	K.stroke(throwB, T.ink, 4)
+	local throwGrad = K.gradient(throwB, Color3.fromRGB(255, 200, 90), Color3.fromRGB(230, 120, 40))
+	K.icon(throwB, "luck", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(52, 52), Position = UDim2.new(0.5, 0, 0, 12) })
+	local throwL = K.text(throwB, "БРОСОК", { Size = UDim2.new(1, -10, 0, 26), Position = UDim2.new(0, 5, 1, -40), MaxText = 20 })
+	local meter = K.make("Frame", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(26, 150), Position = UDim2.new(1, -262, 1, -110), BackgroundColor3 = T.ink, Visible = false }, hud)
+	K.corner(meter, UDim.new(0, 10))
+	K.stroke(meter, Color3.new(1, 1, 1), 2)
+	local meterGrad = K.make("Frame", { Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.new(1, 1, 1) }, meter)
+	K.corner(meterGrad, UDim.new(0, 8))
+	K.make("UIGradient", { Rotation = -90, Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(220, 60, 60)), ColorSequenceKeypoint.new(0.55, Color3.fromRGB(240, 200, 60)), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 230, 110)) }) }, meterGrad)
+	local needle = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(1, 14, 0, 6), Position = UDim2.fromScale(0.5, 1), BackgroundColor3 = Color3.new(1, 1, 1) }, meter)
+	K.corner(needle, UDim.new(1, 0))
+	K.stroke(needle, T.ink, 2)
+	local qualityL = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.62, 0), Size = UDim2.fromOffset(360, 44), MaxText = 34, Visible = false, StrokeThickness = 3 })
+	local holdingThrow, holdT0, power, readyAt = false, 0, 0, 0
+	local function powerAt(t)
+		-- ходит вверх-вниз; на высоких уровнях силы света медленнее, легче попасть
+		local speed = 1.25 - 0.04 * ((plr:GetAttribute("PowerLvl") or 1) - 1)
+		return 0.5 - 0.5 * math.cos(t * math.pi * 2 * math.max(0.7, speed))
+	end
+	local function flyLantern(from, to)
+		local p = K.make("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(1.4, 1.4, 1.4), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+			Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 190, 100) }, workspace)
+		local l = K.make("PointLight", { Range = 14, Brightness = 1.2, Color = Color3.fromRGB(255, 190, 110) }, p)
+		local t0 = os.clock()
+		local dur = Catalog.Live.Throw.flight
+		local conn
+		conn = RunService.RenderStepped:Connect(function()
+			local k = math.min(1, (os.clock() - t0) / dur)
+			local pos = from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * (6 + (to - from).Magnitude * 0.25), 0)
+			p.CFrame = CFrame.new(pos)
+			if k >= 1 then
+				conn:Disconnect()
+				if late.ring then late.ring(to, 2, 12, Color3.fromRGB(255, 200, 120), 0.5, false) end
+				p:Destroy()
+			end
+		end)
+		task.delay(dur + 1, function() if p.Parent then p:Destroy() end end)
+	end
+	throwB.InputBegan:Connect(function(io)
+		if io.UserInputType ~= Enum.UserInputType.Touch and io.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		if os.clock() < readyAt then return end
+		holdingThrow, holdT0 = true, os.clock()
+		meter.Visible = true
+	end)
+	local function release()
+		if not holdingThrow then return end
+		holdingThrow = false
+		meter.Visible = false
+		local q = power
+		local r = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		task.spawn(function()
+			local res = remotes.Throw:InvokeServer(q)
+			if res and res.ok then
+				readyAt = os.clock() + (res.cd or 1.5)
+				play("click")
+				qualityL.Text = ("%s  %d м"):format(res.quality, res.dist)
+				qualityL.TextColor3 = q >= 0.94 and T.gold or (q >= 0.8 and T.green or Color3.new(1, 1, 1))
+				qualityL.Visible = true
+				K.pop(qualityL)
+				task.delay(1.2, function() qualityL.Visible = false end)
+				if r then flyLantern(r.Position + Vector3.new(0, 2, 0), res.land) end
+				if late.tut and late.tut.step == 1 then late.setStep(2) end
+			elseif res and res.msg then
+				showToast(res.msg, 2)
+			end
+		end)
+	end
+	throwB.InputEnded:Connect(release)
+	throwB.MouseButton1Up:Connect(release)
+	RunService.RenderStepped:Connect(function()
+		if holdingThrow then
+			power = powerAt(os.clock() - holdT0)
+			needle.Position = UDim2.fromScale(0.5, 1 - power)
+		end
+		local cooling = os.clock() < readyAt
+		throwL.Text = cooling and ("%.1f"):format(readyAt - os.clock()) or "БРОСОК"
+		throwGrad.Color = cooling and ColorSequence.new(Color3.fromRGB(150, 150, 160), Color3.fromRGB(100, 100, 115))
+			or ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(230, 120, 40))
+	end)
 	-- карманный алтарь: сдать улов прямо здесь
 	local pocketB, pocketL = K.button(jarPanel, "Сдать", T.green, { Name = "PocketBtn", Size = UDim2.fromOffset(96, 46), Position = UDim2.new(1, 8, 0, 2), MaxText = 17, Visible = false })
 	pocketB.Activated:Connect(function()
@@ -7594,7 +7785,7 @@ do
 	districtTitle = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(320, 22), MaxText = 16, Font = Enum.Font.GothamBold, StrokeThickness = 2 })
 
 	-- кнопка ловли: рядом со стандартной кнопкой прыжка, видна только рядом с доступным духом
-	catchBtn = K.make("TextButton", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(100, 100), Position = UDim2.new(1, -180, 1, -140), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, gui)
+	catchBtn = K.make("TextButton", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(100, 100), Position = UDim2.new(1, -150, 1, -250), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, gui)
 	K.corner(catchBtn, UDim.new(1, 0))
 	K.stroke(catchBtn, T.ink, 4)
 	K.gradient(catchBtn, Color3.fromRGB(120, 240, 160), Color3.fromRGB(40, 170, 90))
@@ -9695,7 +9886,7 @@ do
 	local bannerSeq = 0
 	local RANK_WORD = { common = "ПОЙМАН!", uncommon = "НЕОБЫЧНЫЙ!", rare = "РЕДКИЙ!", epic = "ЭПИЧЕСКИЙ!", legendary = "ЛЕГЕНДАРНЫЙ!", mythic = "МИФИЧЕСКИЙ!", secret = "СЕКРЕТНЫЙ!" }
 	local POWER = { common = 0.3, uncommon = 0.5, rare = 0.75, epic = 1, legendary = 1.3, mythic = 1.6, secret = 2 }
-	local function juice(info, rar, variant, rolling)
+	local function juice(info, rar, variant, rolling, odds)
 		local pw = POWER[info.rarity] or 0.3
 		if variant and variant ~= "normal" then pw += 0.4 end
 		if state.settings.reduced then pw *= 0.4 end
@@ -9725,13 +9916,13 @@ do
 			end)
 		end
 		-- надпись редкости (для необычных и выше или разновидностей)
-		if not rolling and (info.rarity ~= "common" or (variant and variant ~= "normal")) then
+		if not rolling and (info.rarity ~= "common" or (variant and variant ~= "normal") or (odds and odds >= 2)) then
 			bannerSeq += 1
 			local my = bannerSeq
 			local vname = (variant and variant ~= "normal") and (Catalog.Variants[variant].name .. " ") or ""
 			bannerTop.Text = RANK_WORD[info.rarity] or "ПОЙМАН!"
 			bannerTop.TextColor3 = (variant and variant ~= "normal") and Catalog.Variants[variant].color or rar.color
-			bannerSub.Text = vname .. info.name
+			bannerSub.Text = vname .. info.name .. (odds and odds > 1 and ("   1 к %d"):format(odds) or "")
 			banner.Visible = true
 			local sc = banner:FindFirstChild("Bounce") or K.make("UIScale", { Name = "Bounce" }, banner)
 			sc.Scale = 0.3
@@ -9741,12 +9932,12 @@ do
 			end)
 		end
 	end
-	catchEffect = function(kind, at, coop, variant, rolling)
+	catchEffect = function(kind, at, coop, variant, rolling, odds)
 		local r = root()
 		if not r then return end
 		local info = Catalog.Kinds[kind]
 		local rar = Catalog.Rarity[info.rarity]
-		juice(info, rar, variant, rolling)
+		juice(info, rar, variant, rolling, odds)
 		streak = (os.clock() - lastCatch < 20) and streak + 1 or 1
 		lastCatch = os.clock()
 		local big = info.rarity ~= "common"
@@ -9885,13 +10076,14 @@ do
 	end
 
 end
+late.ring = ring
 ------------------------------------------------------------------ обучение
 local tut, arrowPart, arrow, setStep, finishTutorial
 do
 	tut = { step = 0 }
 	local TUT_TEXT = {
-		"1/4  Найди тень рядом с площадью и наведи на неё фонарь",
-		"2/4  Жми ЛОВИТЬ и держи кнопку: зелёная зона должна держать метку духа",
+		"1/4  Зажми БРОСОК и отпусти, когда полоска наверху: фонарик приманит духа",
+		"2/4  Чем точнее бросок, тем реже дух. Ещё можно искать тени фонарём и ловить",
 		"3/4  Неси банку к алтарю (голубой луч) и сохрани улов",
 		"4/4  Открой Атлас и возьми лиса спутником",
 	}
@@ -9913,6 +10105,7 @@ do
 			K.recolor(btnAtlas, T.blue)
 		end
 	end
+	late.tut, late.setStep = tut, setStep
 	finishTutorial = function()
 		if tut.step == 0 or tut.step == 5 then return end
 		setStep(5)
@@ -10109,11 +10302,11 @@ do
 		end)
 	end)
 
-	remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled)
+	remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled, odds)
 		local rolling = variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25)
 		if rolling then task.spawn(playRoll, kind, variant) end
 		holding = false
-		catchEffect(kind, at, coop or 1, variant, rolling)
+		catchEffect(kind, at, coop or 1, variant, rolling, odds)
 		if tut.step == 2 or tut.step == 1 then setStep(3) end
 	end)
 

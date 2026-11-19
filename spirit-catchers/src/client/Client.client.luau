@@ -48,6 +48,7 @@ do
 
 end
 local enterPhoto -- фото-режим (ниже)
+local late = {} -- функции, объявленные ниже по файлу (ring, tut, setStep), для раннего кода
 local refreshHUD -- обновление интерфейса (ниже)
 local toggleWindow -- открыть одно окно, закрыть остальные (ниже)
 local openStory -- диалог Хранителя (ниже)
@@ -267,6 +268,89 @@ do
 	jarL = K.text(jarPanel, "Банка 0/3", { Size = UDim2.new(0.5, -40, 0, 22), Position = UDim2.fromOffset(46, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
 	jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.55, 0, 0, 18), Position = UDim2.new(0.42, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
 	_, jarFill = K.bar(jarPanel, T.cold, { Size = UDim2.new(1, -60, 0, 12), Position = UDim2.fromOffset(46, 30) })
+	-- БРОСОК ФОНАРИКА: главный быстрый цикл. Держи: полоска силы ходит; отпусти в нужный момент
+	local throwB = K.make("TextButton", { Name = "ThrowBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(112, 112), Position = UDim2.new(1, -140, 1, -110), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false }, hud)
+	K.corner(throwB, UDim.new(1, 0))
+	K.stroke(throwB, T.ink, 4)
+	local throwGrad = K.gradient(throwB, Color3.fromRGB(255, 200, 90), Color3.fromRGB(230, 120, 40))
+	K.icon(throwB, "luck", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(52, 52), Position = UDim2.new(0.5, 0, 0, 12) })
+	local throwL = K.text(throwB, "БРОСОК", { Size = UDim2.new(1, -10, 0, 26), Position = UDim2.new(0, 5, 1, -40), MaxText = 20 })
+	local meter = K.make("Frame", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(26, 150), Position = UDim2.new(1, -262, 1, -110), BackgroundColor3 = T.ink, Visible = false }, hud)
+	K.corner(meter, UDim.new(0, 10))
+	K.stroke(meter, Color3.new(1, 1, 1), 2)
+	local meterGrad = K.make("Frame", { Size = UDim2.new(1, -6, 1, -6), Position = UDim2.fromOffset(3, 3), BackgroundColor3 = Color3.new(1, 1, 1) }, meter)
+	K.corner(meterGrad, UDim.new(0, 8))
+	K.make("UIGradient", { Rotation = -90, Color = ColorSequence.new({ ColorSequenceKeypoint.new(0, Color3.fromRGB(220, 60, 60)), ColorSequenceKeypoint.new(0.55, Color3.fromRGB(240, 200, 60)), ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 230, 110)) }) }, meterGrad)
+	local needle = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.new(1, 14, 0, 6), Position = UDim2.fromScale(0.5, 1), BackgroundColor3 = Color3.new(1, 1, 1) }, meter)
+	K.corner(needle, UDim.new(1, 0))
+	K.stroke(needle, T.ink, 2)
+	local qualityL = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.62, 0), Size = UDim2.fromOffset(360, 44), MaxText = 34, Visible = false, StrokeThickness = 3 })
+	local holdingThrow, holdT0, power, readyAt = false, 0, 0, 0
+	local function powerAt(t)
+		-- ходит вверх-вниз; на высоких уровнях силы света медленнее, легче попасть
+		local speed = 1.25 - 0.04 * ((plr:GetAttribute("PowerLvl") or 1) - 1)
+		return 0.5 - 0.5 * math.cos(t * math.pi * 2 * math.max(0.7, speed))
+	end
+	local function flyLantern(from, to)
+		local p = K.make("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(1.4, 1.4, 1.4), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+			Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 190, 100) }, workspace)
+		local l = K.make("PointLight", { Range = 14, Brightness = 1.2, Color = Color3.fromRGB(255, 190, 110) }, p)
+		local t0 = os.clock()
+		local dur = Catalog.Live.Throw.flight
+		local conn
+		conn = RunService.RenderStepped:Connect(function()
+			local k = math.min(1, (os.clock() - t0) / dur)
+			local pos = from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * (6 + (to - from).Magnitude * 0.25), 0)
+			p.CFrame = CFrame.new(pos)
+			if k >= 1 then
+				conn:Disconnect()
+				if late.ring then late.ring(to, 2, 12, Color3.fromRGB(255, 200, 120), 0.5, false) end
+				p:Destroy()
+			end
+		end)
+		task.delay(dur + 1, function() if p.Parent then p:Destroy() end end)
+	end
+	throwB.InputBegan:Connect(function(io)
+		if io.UserInputType ~= Enum.UserInputType.Touch and io.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		if os.clock() < readyAt then return end
+		holdingThrow, holdT0 = true, os.clock()
+		meter.Visible = true
+	end)
+	local function release()
+		if not holdingThrow then return end
+		holdingThrow = false
+		meter.Visible = false
+		local q = power
+		local r = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		task.spawn(function()
+			local res = remotes.Throw:InvokeServer(q)
+			if res and res.ok then
+				readyAt = os.clock() + (res.cd or 1.5)
+				play("click")
+				qualityL.Text = ("%s  %d м"):format(res.quality, res.dist)
+				qualityL.TextColor3 = q >= 0.94 and T.gold or (q >= 0.8 and T.green or Color3.new(1, 1, 1))
+				qualityL.Visible = true
+				K.pop(qualityL)
+				task.delay(1.2, function() qualityL.Visible = false end)
+				if r then flyLantern(r.Position + Vector3.new(0, 2, 0), res.land) end
+				if late.tut and late.tut.step == 1 then late.setStep(2) end
+			elseif res and res.msg then
+				showToast(res.msg, 2)
+			end
+		end)
+	end
+	throwB.InputEnded:Connect(release)
+	throwB.MouseButton1Up:Connect(release)
+	RunService.RenderStepped:Connect(function()
+		if holdingThrow then
+			power = powerAt(os.clock() - holdT0)
+			needle.Position = UDim2.fromScale(0.5, 1 - power)
+		end
+		local cooling = os.clock() < readyAt
+		throwL.Text = cooling and ("%.1f"):format(readyAt - os.clock()) or "БРОСОК"
+		throwGrad.Color = cooling and ColorSequence.new(Color3.fromRGB(150, 150, 160), Color3.fromRGB(100, 100, 115))
+			or ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(230, 120, 40))
+	end)
 	-- карманный алтарь: сдать улов прямо здесь
 	local pocketB, pocketL = K.button(jarPanel, "Сдать", T.green, { Name = "PocketBtn", Size = UDim2.fromOffset(96, 46), Position = UDim2.new(1, 8, 0, 2), MaxText = 17, Visible = false })
 	pocketB.Activated:Connect(function()
@@ -292,7 +376,7 @@ do
 	districtTitle = K.text(hud, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(320, 22), MaxText = 16, Font = Enum.Font.GothamBold, StrokeThickness = 2 })
 
 	-- кнопка ловли: рядом со стандартной кнопкой прыжка, видна только рядом с доступным духом
-	catchBtn = K.make("TextButton", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(100, 100), Position = UDim2.new(1, -180, 1, -140), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, gui)
+	catchBtn = K.make("TextButton", { AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(100, 100), Position = UDim2.new(1, -150, 1, -250), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, gui)
 	K.corner(catchBtn, UDim.new(1, 0))
 	K.stroke(catchBtn, T.ink, 4)
 	K.gradient(catchBtn, Color3.fromRGB(120, 240, 160), Color3.fromRGB(40, 170, 90))
@@ -2393,7 +2477,7 @@ do
 	local bannerSeq = 0
 	local RANK_WORD = { common = "ПОЙМАН!", uncommon = "НЕОБЫЧНЫЙ!", rare = "РЕДКИЙ!", epic = "ЭПИЧЕСКИЙ!", legendary = "ЛЕГЕНДАРНЫЙ!", mythic = "МИФИЧЕСКИЙ!", secret = "СЕКРЕТНЫЙ!" }
 	local POWER = { common = 0.3, uncommon = 0.5, rare = 0.75, epic = 1, legendary = 1.3, mythic = 1.6, secret = 2 }
-	local function juice(info, rar, variant, rolling)
+	local function juice(info, rar, variant, rolling, odds)
 		local pw = POWER[info.rarity] or 0.3
 		if variant and variant ~= "normal" then pw += 0.4 end
 		if state.settings.reduced then pw *= 0.4 end
@@ -2423,13 +2507,13 @@ do
 			end)
 		end
 		-- надпись редкости (для необычных и выше или разновидностей)
-		if not rolling and (info.rarity ~= "common" or (variant and variant ~= "normal")) then
+		if not rolling and (info.rarity ~= "common" or (variant and variant ~= "normal") or (odds and odds >= 2)) then
 			bannerSeq += 1
 			local my = bannerSeq
 			local vname = (variant and variant ~= "normal") and (Catalog.Variants[variant].name .. " ") or ""
 			bannerTop.Text = RANK_WORD[info.rarity] or "ПОЙМАН!"
 			bannerTop.TextColor3 = (variant and variant ~= "normal") and Catalog.Variants[variant].color or rar.color
-			bannerSub.Text = vname .. info.name
+			bannerSub.Text = vname .. info.name .. (odds and odds > 1 and ("   1 к %d"):format(odds) or "")
 			banner.Visible = true
 			local sc = banner:FindFirstChild("Bounce") or K.make("UIScale", { Name = "Bounce" }, banner)
 			sc.Scale = 0.3
@@ -2439,12 +2523,12 @@ do
 			end)
 		end
 	end
-	catchEffect = function(kind, at, coop, variant, rolling)
+	catchEffect = function(kind, at, coop, variant, rolling, odds)
 		local r = root()
 		if not r then return end
 		local info = Catalog.Kinds[kind]
 		local rar = Catalog.Rarity[info.rarity]
-		juice(info, rar, variant, rolling)
+		juice(info, rar, variant, rolling, odds)
 		streak = (os.clock() - lastCatch < 20) and streak + 1 or 1
 		lastCatch = os.clock()
 		local big = info.rarity ~= "common"
@@ -2583,13 +2667,14 @@ do
 	end
 
 end
+late.ring = ring
 ------------------------------------------------------------------ обучение
 local tut, arrowPart, arrow, setStep, finishTutorial
 do
 	tut = { step = 0 }
 	local TUT_TEXT = {
-		"1/4  Найди тень рядом с площадью и наведи на неё фонарь",
-		"2/4  Жми ЛОВИТЬ и держи кнопку: зелёная зона должна держать метку духа",
+		"1/4  Зажми БРОСОК и отпусти, когда полоска наверху: фонарик приманит духа",
+		"2/4  Чем точнее бросок, тем реже дух. Ещё можно искать тени фонарём и ловить",
 		"3/4  Неси банку к алтарю (голубой луч) и сохрани улов",
 		"4/4  Открой Атлас и возьми лиса спутником",
 	}
@@ -2611,6 +2696,7 @@ do
 			K.recolor(btnAtlas, T.blue)
 		end
 	end
+	late.tut, late.setStep = tut, setStep
 	finishTutorial = function()
 		if tut.step == 0 or tut.step == 5 then return end
 		setStep(5)
@@ -2807,11 +2893,11 @@ do
 		end)
 	end)
 
-	remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled)
+	remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled, odds)
 		local rolling = variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25)
 		if rolling then task.spawn(playRoll, kind, variant) end
 		holding = false
-		catchEffect(kind, at, coop or 1, variant, rolling)
+		catchEffect(kind, at, coop or 1, variant, rolling, odds)
 		if tut.step == 2 or tut.step == 1 then setStep(3) end
 	end)
 

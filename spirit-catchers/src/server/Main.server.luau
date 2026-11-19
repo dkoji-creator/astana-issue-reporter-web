@@ -85,6 +85,7 @@ local PocketFn = remote("PocketSave", "RemoteFunction")
 local WheelFn = remote("SpinWheel", "RemoteFunction")
 local EggFn = remote("Egg", "RemoteFunction")
 local HuntFn = remote("Hunt", "RemoteFunction")
+local ThrowFn = remote("Throw", "RemoteFunction")
 local doSaveRef -- doSave (ниже), для автосдачи
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
@@ -2236,6 +2237,96 @@ EggFn.OnServerInvoke = function(plr, action, arg)
 	pushState(plr)
 	return { ok = true }
 end
+-- выдать пойманного духа (для броска фонарика и других быстрых поимок)
+local function grantCatch(plr, d, kind: string, district: string, variant: string, at: Vector3, odds: number)
+	local info = Catalog.Kinds[kind]
+	table.insert(jars[plr], { k = kind, v = variant })
+	local vOdds = variant ~= "normal" and math.floor(1 / Catalog.Variants[variant].chance + 0.5) or 1
+	if vOdds >= Catalog.Luck.announceLocal then
+		AnnounceEv:FireAllClients({ name = plr.DisplayName, kind = kind, variant = variant, odds = vOdds })
+	end
+	CaughtEv:FireClient(plr, kind, at, 1, variant, vOdds >= 25, odds)
+	lanternBurst(plr)
+	local xp = math.floor((Catalog.Progress.XP[info.rarity] or 4) * (1 + compPct(d, "xp")) + 0.5)
+	d.xp += xp
+	liveOnCatch(plr, d, kind, district, variant)
+	local levelUp = nil
+	while d.xp >= Catalog.Progress.xpToNext(d.level) do
+		d.xp -= Catalog.Progress.xpToNext(d.level)
+		d.level += 1
+		local bonus = Catalog.Progress.levelReward(d.level)
+		d.coins += bonus
+		levelUp = { level = d.level, coins = bonus }
+		if d.level % Catalog.Progress.ChestEvery == 0 then
+			local ch = Catalog.Progress.chest(d.level)
+			d.coins += ch.coins
+			d.dust += ch.dust
+			levelUp.chest = ch
+		end
+	end
+	RewardEv:FireClient(plr, { xp = xp, levelUp = levelUp })
+	if #jars[plr] >= cap(d) and hasPass(d, "autoDeliver") and doSaveRef then
+		task.delay(1.5, function()
+			if plr.Parent and #(jars[plr] or {}) > 0 then SaveResultEv:FireClient(plr, doSaveRef(plr, true)) end
+		end)
+	end
+	pushState(plr)
+end
+-- бросок фонарика
+local throwAt = {}
+ThrowFn.OnServerInvoke = function(plr, q)
+	local d = data[plr]
+	local root = rootOf(plr)
+	if not (d and root and jars[plr]) or typeof(q) ~= "number" or q ~= q then return { ok = false } end
+	q = math.clamp(q, 0, 1)
+	local T = Live.Throw
+	local cd = math.max(T.cooldownMin, T.cooldown - 0.1 * ((d.levels.power or 1) - 1))
+	if os.clock() - (throwAt[plr] or 0) < cd then return { ok = false } end
+	if #jars[plr] >= cap(d) then
+		return { ok = false, msg = hasPass(d, "autoDeliver") and "Банка сдаётся..." or "Банка полна: нажми «Сдать» или отнеси к алтарю" }
+	end
+	local district = Catalog.district(root.Position)
+	if district == "plaza" then district = "street" end
+	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
+	if not tbl or next(tbl) == nil then return { ok = false, msg = "Здесь духи не водятся: иди в район" } end
+	throwAt[plr] = os.clock()
+	-- вес вида растёт с редкостью при точном броске
+	local weights, total = {}, 0
+	for kind, w in tbl do
+		local rank = RARITY_RANK[Catalog.Kinds[kind].rarity] or 1
+		local ww = w * (1 + (rank - 1) * T.rarityBoost * q)
+		weights[kind] = ww
+		total += ww
+	end
+	local r, kind = math.random() * total, nil
+	for k, w in weights do
+		r -= w
+		if r <= 0 then kind = k break end
+	end
+	kind = kind or next(weights)
+	local pKind = weights[kind] / total
+	-- разновидность: удача игрока, района и точность броска
+	local luck = luckOf(d) * (Catalog.Districts[district].luck or 1) * (1 + T.variantBoost * q)
+	local variant, pVar = "normal", 1
+	for vi = #Catalog.VariantOrder, 2, -1 do
+		local key = Catalog.VariantOrder[vi]
+		local vc = Catalog.Variants[key]
+		if (not vc.moonOnly or moon.active) and math.random() < vc.chance * luck then
+			variant, pVar = key, vc.chance
+			break
+		end
+	end
+	local odds = math.max(1, math.floor(1 / (pKind * pVar) + 0.5))
+	local dist = T.baseDist + (T.maxDist - T.baseDist) * q * (Catalog.upgradeValue("range", d.levels.range) / 30)
+	local look = root.CFrame.LookVector
+	local land = root.Position + Vector3.new(look.X, 0, look.Z).Unit * math.min(dist, T.maxDist * 1.6)
+	land = Vector3.new(land.X, 1.5, land.Z)
+	task.delay(T.flight, function()
+		if plr.Parent and data[plr] and jars[plr] then grantCatch(plr, data[plr], kind, district, variant, land, odds) end
+	end)
+	return { ok = true, land = land, quality = Live.throwQuality(q), dist = math.floor(dist), cd = cd }
+end
+
 HuntFn.OnServerInvoke = function(plr)
 	local d = data[plr]
 	if not d then return { ok = false } end

@@ -358,4 +358,20 @@ L.Hunt = { seconds = 180, coinsPer = 150, dustPer = 3 }
 -- приглашение друга (по ссылке-приглашению Roblox)
 L.Invite = { inviter = { coins = 2000, dust = 50 }, guest = { coins = 1000 } }
 
+------------------------------------------------------------------ бросок фонарика: главный быстрый цикл
+-- держишь кнопку, полоска силы ходит вверх-вниз, отпускаешь; чем точнее (q от 0 до 1), тем дальше и реже дух
+L.Throw = {
+	cooldown = 1.6, cooldownMin = 0.6, -- секунд; уменьшается с силой света
+	baseDist = 18, maxDist = 70, -- метров
+	rarityBoost = 0.9, -- насколько точный бросок поднимает редкие виды
+	variantBoost = 1.5, -- и шанс разновидности
+	flight = 0.9, -- секунд полёта фонарика
+}
+function L.throwQuality(q: number): string
+	if q >= 0.94 then return "ИДЕАЛЬНО!" end
+	if q >= 0.8 then return "Отлично!" end
+	if q >= 0.55 then return "Хорошо" end
+	return "Слабо"
+end
+
 return L
