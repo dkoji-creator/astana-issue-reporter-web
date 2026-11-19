@@ -3703,6 +3703,8 @@ do
 			local dl = Catalog.Districts[d].luck or 1
 			districtTitle.Text = Catalog.DistrictNames[d] .. (dl > 1 and ("   удача района x%.1f"):format(dl) or "")
 			TweenService:Create(districtCC, TweenInfo.new(1.5), { TintColor = Catalog.Districts[d].tint }):Play()
+			-- Небесный рынок встречает рассветом (только у этого игрока)
+			TweenService:Create(Lighting, TweenInfo.new(2.5), { ClockTime = d == "skymarket" and 6.3 or 0 }):Play()
 		end
 		local atAltar = (r.Position - ALTAR_POS).Magnitude < 16
 

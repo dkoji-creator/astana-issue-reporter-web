@@ -681,6 +681,15 @@ function Map.build()
 			deco("Cloud", Vector3.new(1, 1, 1) * rngS:NextNumber(12, 22), CFrame.new(cx + rngS:NextNumber(-70, 70), rngS:NextNumber(-34, -18), cz + rngS:NextNumber(-70, 70)),
 				Color3.fromRGB(235, 225, 245), Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, Transparency = 0.25 })
 		end
+		-- море облаков вокруг крыш: рынок парит над облаками
+		local cloudCols = { Color3.fromRGB(255, 236, 240), Color3.fromRGB(255, 220, 200), Color3.fromRGB(235, 230, 255) }
+		for k = 0, 35 do
+			local a = k / 36 * math.pi * 2 + rngS:NextNumber(-0.08, 0.08)
+			local r = rngS:NextNumber(70, 105)
+			local sz = rngS:NextNumber(16, 30)
+			deco("SkyCloud", Vector3.new(sz * 1.6, sz * 0.7, sz), CFrame.new(cx + math.cos(a) * r, rngS:NextNumber(-8, 3), cz + math.sin(a) * r) * CFrame.Angles(0, -a, 0),
+				cloudCols[k % 3 + 1], Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball, Transparency = 0.1 })
+		end
 		-- воздушные змеи и гирлянды над рынком
 		for k = 0, 5 do
 			local a = k / 6 * math.pi * 2
