@@ -518,8 +518,11 @@ function S.buildLuckyCat(): Model
 	ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(2.2, 1.9, 1.9), CFrame = CFrame.new(0, 3.1, -0.1), Color = white }))
 	ellipsoid(mk(m, { Name = "Spot", Size = Vector3.new(0.9, 0.7, 0.5), CFrame = CFrame.new(0.6, 3.6, 0.3), Color = Color3.fromRGB(240, 150, 60) }))
 	for _, x in { -1, 1 } do
-		mk(m, { Name = "Ear", Size = Vector3.new(0.25, 0.8, 0.7), CFrame = CFrame.new(x * 0.75, 4.15, -0.1), Color = white }, "WedgePart")
-		mk(m, { Name = "EarIn", Size = Vector3.new(0.27, 0.5, 0.4), CFrame = CFrame.new(x * 0.75, 4.05, -0.2), Color = Color3.fromRGB(255, 150, 160) }, "WedgePart")
+		-- треугольные ушки лицом вперёд (два клина спиной к спине)
+		for _, flip in { 0, 180 } do
+			mk(m, { Name = "Ear", Size = Vector3.new(0.2, 0.85, 0.36), CFrame = CFrame.new(x * 0.75, 4.15, -0.1) * CFrame.Angles(0, 0, math.rad(-x * 12)) * CFrame.Angles(0, math.rad(90 + flip), 0) * CFrame.new(0, 0, -0.18), Color = white }, "WedgePart")
+			mk(m, { Name = "EarIn", Size = Vector3.new(0.06, 0.55, 0.2), CFrame = CFrame.new(x * 0.75, 4.08, -0.22) * CFrame.Angles(0, 0, math.rad(-x * 12)) * CFrame.Angles(0, math.rad(90 + flip), 0) * CFrame.new(0, 0, -0.1), Color = Color3.fromRGB(255, 150, 160) }, "WedgePart")
+		end
 		mk(m, { Name = "Eye", Size = Vector3.new(0.4, 0.08, 0.1), CFrame = CFrame.new(x * 0.45, 3.2, -1.0) * CFrame.Angles(0, 0, math.rad(x * 12)), Color = Color3.fromRGB(30, 20, 20) })
 		mk(m, { Name = "Whisker", Size = Vector3.new(0.7, 0.05, 0.05), CFrame = CFrame.new(x * 0.95, 2.85, -0.95), Color = Color3.fromRGB(60, 50, 50) })
 	end
@@ -1048,11 +1051,17 @@ function S.buildKiteDragon(): Model
 	local m = Instance.new("Model")
 	m.Name = "KiteDragon"
 	local red = Color3.fromRGB(230, 60, 60)
-	local head = mk(m, { Name = "Head", Size = Vector3.new(2.4, 1.8, 2.2), CFrame = CFrame.new(0, 0, -2), Color = red })
-	mk(m, { Name = "Horn", Size = Vector3.new(0.3, 1.4, 0.3), CFrame = CFrame.new(-0.7, 1.4, -1.8) * CFrame.Angles(0, 0, 0.3), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon })
-	mk(m, { Name = "Horn", Size = Vector3.new(0.3, 1.4, 0.3), CFrame = CFrame.new(0.7, 1.4, -1.8) * CFrame.Angles(0, 0, -0.3), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon })
-	for _, x in { -0.6, 0.6 } do
-		mk(m, { Name = "Eye", Size = Vector3.new(0.4, 0.4, 0.1), CFrame = CFrame.new(x, 0.3, -3.12), Color = Color3.fromRGB(255, 240, 120), Material = Enum.Material.Neon })
+	-- голова змея-дракона: круглая, с мордой, глазами, рогами и усами
+	local head = ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(2.6, 2.2, 2.4), CFrame = CFrame.new(0, 0, -2), Color = red }))
+	ellipsoid(mk(m, { Name = "Snout", Size = Vector3.new(1.8, 1.1, 1.6), CFrame = CFrame.new(0, -0.35, -3.1), Color = red }))
+	ellipsoid(mk(m, { Name = "Jaw", Size = Vector3.new(1.5, 0.5, 1.3), CFrame = CFrame.new(0, -0.85, -3.0), Color = Color3.fromRGB(255, 220, 120) }))
+	for _, x in { -1, 1 } do
+		mk(m, { Name = "Horn", Size = Vector3.new(0.3, 1.5, 0.3), CFrame = CFrame.new(x * 0.7, 1.4, -1.6) * CFrame.Angles(math.rad(-25), 0, -x * 0.3), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon })
+		ellipsoid(mk(m, { Name = "EyeWhite", Size = Vector3.new(0.6, 0.7, 0.2), CFrame = CFrame.new(x * 0.6, 0.35, -3.05), Color = Color3.new(1, 1, 1) }))
+		ellipsoid(mk(m, { Name = "Pupil", Size = Vector3.new(0.35, 0.5, 0.12), CFrame = CFrame.new(x * 0.6, 0.32, -3.15), Color = Color3.fromRGB(40, 20, 20) }))
+		mk(m, { Name = "Shine", Shape = Enum.PartType.Ball, Size = Vector3.new(0.15, 0.15, 0.15), CFrame = CFrame.new(x * 0.6 + 0.08, 0.45, -3.24), Color = Color3.new(1, 1, 1), Material = Enum.Material.Neon })
+		local whisker = mk(m, { Name = "Whisker", Size = Vector3.new(1.8, 0.08, 0.08), CFrame = CFrame.new(x * 1.6, -0.4, -3.4) * CFrame.Angles(0, x * 0.4, x * -0.3), Color = Color3.fromRGB(255, 220, 120), Material = Enum.Material.Neon })
+		joint(whisker, Vector3.new(x * 0.8, -0.4, -3.4), "flapZ", x, 0.6)
 	end
 	local colors = { Color3.fromRGB(255, 200, 60), Color3.fromRGB(80, 180, 255), Color3.fromRGB(120, 230, 120), red }
 	for i = 1, 8 do
