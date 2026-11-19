@@ -2250,6 +2250,7 @@ do
 		if kind == "GoldenCarp" then Spirits.scale(m, 0.6) end
 		m.Parent = workspace
 		local dur = big and 0.85 or 0.55
+		task.delay(dur + 1.5, function() if m.Parent then m:Destroy() end end)
 		ring(at + Vector3.new(0, 2, 0), big and 16 or 8, 2, rar.color, dur, true)
 		local t0 = os.clock()
 		local conn
@@ -2330,7 +2331,20 @@ do
 		local t0 = os.clock()
 		local colored, ringed, restored = false, false, false
 		local conn
+		local finished = false
+		-- уборка при любом исходе: модель не должна остаться у алтаря
+		local function cleanup()
+			if finished then return end
+			finished = true
+			if conn then conn:Disconnect() end
+			if m then m:Destroy() end
+			pcall(dimAltar, false)
+			revealCC.Brightness, revealCC.Saturation = 0, 0
+		end
+		task.delay(3, cleanup)
 		conn = RunService.RenderStepped:Connect(function()
+			if finished then return end
+			local okStep = pcall(function()
 			local t = os.clock() - t0
 			local cr = root() or r
 			local right, fwd = flat(cam.CFrame.RightVector), flat(cam.CFrame.LookVector)
@@ -2358,10 +2372,9 @@ do
 				for p in orig do TweenService:Create(p, TweenInfo.new(0.25), { Transparency = 1 }):Play() end
 				dimAltar(false)
 			end
-			if t > 2.05 then
-				conn:Disconnect()
-				m:Destroy()
-			end
+			if t > 2.05 then cleanup() end
+			end)
+			if not okStep then cleanup() end
 		end)
 		showToast(Catalog.Kinds[kind].name .. " в коллекции!", 2.5, Color3.fromRGB(150, 110, 20))
 	end

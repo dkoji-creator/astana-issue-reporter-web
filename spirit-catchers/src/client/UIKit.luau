@@ -183,8 +183,9 @@ function K.open(f)
 		local sg = f:FindFirstAncestorOfClass("ScreenGui")
 		local us = sg and sg:FindFirstChildOfClass("UIScale")
 		local k = (us and us.Scale > 0) and us.Scale or 1
-		f.Size = UDim2.fromScale(0.97 / k, 0.95 / k)
-		f.Position = UDim2.fromScale(0.5 / k, 0.5 / k)
+		-- масштаб уменьшает размер окна, но не его положение: центр оставляем 0.5
+		f.Size = UDim2.fromScale(math.min(0.94 / k, 1.25), math.min(0.84 / k, 1.25))
+		f.Position = UDim2.fromScale(0.5, 0.555) -- ниже кнопок Roblox в левом верхнем углу
 	end
 	f.Visible = true
 	local sc = f:FindFirstChild("Bounce") or make("UIScale", { Name = "Bounce" }, f)
