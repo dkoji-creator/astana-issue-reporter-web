@@ -692,6 +692,23 @@ function Map.build()
 		wall(Vector3.new(120, 80, 1), Vector3.new(cx, 40, cz + 55.5))
 	end
 
+	---------------------------------------------------------------- 5 спрятанных бумажных журавликов (секретный квест)
+	local cranes = {}
+	for i, pos in { Vector3.new(3, 1.5, 133), Vector3.new(7, 1.5, -47), Vector3.new(-143, 1.5, 10), Vector3.new(150, 1.5, 15), Vector3.new(4, 1.5, -147) } do
+		local c = deco("SecretCrane", Vector3.new(0.9, 0.5, 1.3), CFrame.new(pos) * CFrame.Angles(0, i, 0), Color3.fromRGB(255, 250, 235), Enum.Material.Neon, { Transparency = 0.1 })
+		for _, side in { -1, 1 } do
+			deco("SecretCraneWing", Vector3.new(1.4, 0.08, 0.7), c.CFrame * CFrame.new(side * 0.9, 0.15, 0) * CFrame.Angles(0, 0, math.rad(side * 25)), Color3.fromRGB(255, 240, 210), Enum.Material.Neon, { Transparency = 0.15 })
+		end
+		local pe = Instance.new("ParticleEmitter")
+		pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		pe.Color = ColorSequence.new(Color3.fromRGB(255, 240, 200))
+		pe.LightEmission, pe.Rate, pe.Lifetime, pe.Speed = 0.6, 3, NumberRange.new(1, 2), NumberRange.new(0.3, 0.8)
+		pe.Size = NumberSequence.new(0.3, 0)
+		pe.Parent = c
+		c:SetAttribute("CraneId", i)
+		cranes[i] = c
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = scf(CFrame.new(0, 0.6, 24))
 	local spawn = Instance.new("SpawnLocation")
@@ -715,6 +732,7 @@ function Map.build()
 		barrier = barrier,
 		barrierText = barrierText,
 		moon = moon,
+		cranes = cranes,
 	}
 end
 

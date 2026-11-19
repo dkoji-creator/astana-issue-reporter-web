@@ -607,6 +607,29 @@ function S.buildPaperDragon(): Model
 end
 
 ------------------------------------------------------------------ девятихвостая кицунэ
+function S.buildThousandCrane(): Model
+	local m = Instance.new("Model")
+	m.Name = "ThousandCrane"
+	local gold, light2 = Color3.fromRGB(255, 205, 90), Color3.fromRGB(255, 240, 190)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.4, 1.2, 2.8), CFrame = CFrame.new(), Color = gold, Material = Enum.Material.Metal, Reflectance = 0.2 }))
+	mk(m, { Name = "Neck", Size = Vector3.new(0.3, 2.2, 0.3), CFrame = CFrame.new(0, 1.0, -1.7) * CFrame.Angles(math.rad(-35), 0, 0), Color = gold })
+	mk(m, { Name = "Head", Size = Vector3.new(0.5, 0.5, 0.9), CFrame = CFrame.new(0, 1.9, -2.4), Color = gold })
+	mk(m, { Name = "Crown", Size = Vector3.new(0.35, 0.18, 0.35), CFrame = CFrame.new(0, 2.2, -2.4), Color = Color3.fromRGB(255, 80, 80), Material = Enum.Material.Neon })
+	-- много крыльев-листков веером
+	for layer = 1, 3 do
+		for i, x in { -1, 1 } do
+			local w = mk(m, { Name = "Wing", Size = Vector3.new(4.8 - layer * 0.8, 0.08, 1.6 - layer * 0.2), CFrame = CFrame.new(x * (2.8 - layer * 0.4), 0.3 + layer * 0.25, (layer - 2) * 0.6),
+				Color = layer == 2 and light2 or gold, Material = layer == 2 and Enum.Material.Neon or Enum.Material.SmoothPlastic })
+			joint(w, Vector3.new(x * 0.6, 0.3, 0), "flapZ", i * math.pi + layer * 0.4, 1.2)
+		end
+	end
+	mk(m, { Name = "Tail", Size = Vector3.new(1.2, 0.2, 1.8), CFrame = CFrame.new(0, 0.2, 2.2), Color = light2, Material = Enum.Material.Neon }, "WedgePart")
+	light(body, Color3.fromRGB(255, 220, 140), 18, 1.4)
+	m.PrimaryPart = body
+	S.scale(m, 1.5)
+	return m
+end
+
 function S.buildKyubi(): Model
 	local m = Instance.new("Model")
 	m.Name = "Kyubi"
@@ -676,24 +699,37 @@ end
 function S.buildPaperWhale(): Model
 	local m = Instance.new("Model")
 	m.Name = "PaperWhale"
-	local paper = Color3.fromRGB(225, 232, 245)
-	local head = mk(m, { Name = "Head", Size = Vector3.new(4, 3.4, 4), CFrame = CFrame.new(0, 0, -3), Color = paper })
-	mk(m, { Name = "Jaw", Size = Vector3.new(3.6, 0.8, 3.6), CFrame = CFrame.new(0, -1.9, -3), Color = Color3.fromRGB(170, 190, 225) })
+	local blue, belly = Color3.fromRGB(120, 170, 235), Color3.fromRGB(235, 242, 252)
+	-- обтекаемое тело: голова, туловище и сужающийся хвост
+	local head = ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(4.6, 4, 5.4), CFrame = CFrame.new(0, 0, -2.6), Color = blue }))
+	ellipsoid(mk(m, { Name = "Belly", Size = Vector3.new(3.8, 2.4, 5.2), CFrame = CFrame.new(0, -1.05, -2.4), Color = belly }))
+	for i = 1, 3 do
+		local seg = ellipsoid(mk(m, { Name = "Seg", Size = Vector3.new(4.2 - i * 0.9, 3.6 - i * 0.8, 3), CFrame = CFrame.new(0, 0.15 * i, -0.2 + i * 2.1), Color = blue }))
+		joint(seg, Vector3.new(0, 0, -1.2 + i * 2.1), "swingX", -i * 0.6, 0.05 * i)
+	end
+	-- хвостовые лопасти
 	for _, x in { -1, 1 } do
-		mk(m, { Name = "Eye", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), CFrame = CFrame.new(x * 2, 0.4, -4), Color = Color3.fromRGB(30, 30, 50) })
-		local fl = mk(m, { Name = "Flipper", Size = Vector3.new(3, 0.2, 1.6), CFrame = CFrame.new(x * 3.4, -1.2, -1.5) * CFrame.Angles(0, 0, math.rad(x * -20)), Color = paper })
-		joint(fl, Vector3.new(x * 2, -1, -1.5), "flapZ", x > 0 and 0 or math.pi, 0.5)
+		local fl = ellipsoid(mk(m, { Name = "Fluke", Size = Vector3.new(2.6, 0.3, 1.5), CFrame = CFrame.new(x * 1.2, 0.6, 7.4) * CFrame.Angles(0, math.rad(x * 25), 0), Color = blue }))
+		joint(fl, Vector3.new(0, 0.5, 6.2), "swingX", -3, 0.35)
+		-- глаза с бликом
+		ellipsoid(mk(m, { Name = "EyeWhite", Size = Vector3.new(0.2, 0.9, 0.8), CFrame = CFrame.new(x * 2.15, 0.35, -3.9), Color = Color3.new(1, 1, 1) }))
+		ellipsoid(mk(m, { Name = "Pupil", Size = Vector3.new(0.16, 0.6, 0.55), CFrame = CFrame.new(x * 2.25, 0.3, -3.95), Color = Color3.fromRGB(30, 35, 60) }))
+		mk(m, { Name = "Shine", Shape = Enum.PartType.Ball, Size = Vector3.new(0.22, 0.22, 0.22), CFrame = CFrame.new(x * 2.33, 0.5, -4.08), Color = Color3.new(1, 1, 1), Material = Enum.Material.Neon })
+		ellipsoid(mk(m, { Name = "Blush", Size = Vector3.new(0.12, 0.35, 0.7), CFrame = CFrame.new(x * 2.2, -0.35, -3.6), Color = Color3.fromRGB(255, 160, 190) }))
+		-- плавники
+		local fin = ellipsoid(mk(m, { Name = "Flipper", Size = Vector3.new(2.6, 0.3, 1.3), CFrame = CFrame.new(x * 2.9, -1.2, -1.2) * CFrame.Angles(0, 0, math.rad(x * -25)), Color = blue }))
+		joint(fin, Vector3.new(x * 1.8, -1, -1.2), "flapZ", x > 0 and 0 or math.pi, 0.5)
 	end
+	-- бумажные полоски-сгибы на спине и фонтанчик
 	for i = 1, 4 do
-		local seg = mk(m, { Name = "Seg", Size = Vector3.new(3.8 - i * 0.6, 3.2 - i * 0.5, 2.4), CFrame = CFrame.new(0, 0, -0.6 + i * 2.2), Color = i % 2 == 0 and paper or Color3.fromRGB(205, 215, 240) })
-		joint(seg, Vector3.new(0, 0, -1.6 + i * 2.2), "swingX", -i * 0.6, 0.06 * i)
+		mk(m, { Name = "Fold", Size = Vector3.new(2.6 - i * 0.3, 0.08, 0.12), CFrame = CFrame.new(0, 1.95 - i * 0.12, -3.6 + i * 1.3), Color = Color3.fromRGB(90, 140, 210) })
 	end
-	local tail = mk(m, { Name = "Fin", Size = Vector3.new(4.6, 0.2, 2.2), CFrame = CFrame.new(0, 0, 9.4), Color = paper })
-	joint(tail, Vector3.new(0, 0, 8.2), "swingX", -3, 0.35)
-	for i = 1, 6 do
-		mk(m, { Name = "Fold", Size = Vector3.new(0.08, 3.3, 0.08), CFrame = CFrame.new(1.95, 0, -4.5 + i * 1.4), Color = Color3.fromRGB(160, 175, 210) })
+	local spout = mk(m, { Name = "Spout", Size = Vector3.new(0.4, 1.4, 0.4), CFrame = CFrame.new(0, 2.6, -3.2), Color = Color3.fromRGB(190, 230, 255), Material = Enum.Material.Neon, Transparency = 0.3 })
+	for k = 0, 3 do
+		local a = k / 4 * math.pi * 2
+		mk(m, { Name = "Drop", Shape = Enum.PartType.Ball, Size = Vector3.new(0.45, 0.45, 0.45), CFrame = CFrame.new(math.cos(a) * 0.7, 3.4, -3.2 + math.sin(a) * 0.7), Color = Color3.fromRGB(200, 235, 255), Material = Enum.Material.Neon, Transparency = 0.25 })
 	end
-	light(head, Color3.fromRGB(190, 210, 255), 24, 1.2)
+	light(spout, Color3.fromRGB(190, 220, 255), 24, 1.2)
 	m.PrimaryPart = head
 	S.scale(m, 1.4)
 	return m
@@ -1110,6 +1146,7 @@ S.Builders = {
 	MirrorKoi = S.buildMirrorKoi,
 	GlassHeron = S.buildGlassHeron,
 	TwinMoon = S.buildTwinMoon,
+	ThousandCrane = S.buildThousandCrane,
 	PaperBalloon = S.buildPaperBalloon,
 	WindChime = S.buildWindChime,
 	CloudCat = S.buildCloudCat,
@@ -1158,6 +1195,7 @@ S.Pose = {
 	MapleSpirit = function(t) return CFrame.new(sin(t * 1.2) * 0.5, sin(t * 1.8) * 0.5, 0) * CFrame.Angles(0, t * 1.5, 0) end,
 	PumpkinLantern = function(t) return CFrame.new(0, abs(sin(t * 3.5)) * 0.6, 0) * CFrame.Angles(0, 0, sin(t * 3.5) * 0.1) end,
 	SnowSpirit = function(t) return CFrame.new(0, abs(sin(t * 2.5)) * 0.4, 0) * CFrame.Angles(0, 0, sin(t * 2.5) * 0.12) end,
+	ThousandCrane = function(t) return CFrame.new(0, sin(t * 1.1) * 0.8, 0) * CFrame.Angles(0, 0, sin(t * 0.7) * 0.2) end,
 	EchoFirefly = function(t) return CFrame.new(sin(t * 1.1) * 0.8, sin(t * 2.2) * 0.5, math.cos(t * 0.9) * 0.8) end,
 	LilyFrog = function(t) return CFrame.new(0, abs(sin(t * 3)) * 1.6, 0) end,
 	MirrorKoi = function(t) return CFrame.new(0, sin(t * 1.2) * 0.5, 0) * CFrame.Angles(0, sin(t * 0.8) * 0.3, 0) end,

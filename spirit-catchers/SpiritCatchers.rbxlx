@@ -945,17 +945,16 @@ P.Codes = {
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 12
+P.NewsVersion = 13
 P.News = {
-	title = "Обновление 12: ценность духов",
+	title = "Обновление 13: Секрет журавликов",
 	lines = {
-		"У каждого духа есть сила и цена: редкость x разновидность",
-		"Атлас, вкладка «Команда»: поставь 3-5 лучших духов",
-		"Команда даёт монеты и удачу и бегает за тобой",
-		"Лишних духов можно продать за монеты",
-		"Золотой лис теперь в 6 раз ценнее обычного, Бесконечный в 100",
-		"Ритуал у алтаря с анимацией: круг рун, столб света, итог для всех",
-		"Код TEAM (Опции)",
+		"По кварталу спрятаны 5 светящихся бумажных журавликов",
+		"Собери все 5 и получи секретного духа: Тысячекрылый журавль",
+		"Над легендарными и более редкими духами теперь столб света",
+		"Новые модели: Бумажный лис, Кицунэ и Бумажный кит",
+		"Площадь стала праздничной: гирлянды, сакура, узор у алтаря",
+		"Ночь стала светлее",
 	},
 }
 
@@ -1011,7 +1010,7 @@ P.Achievements = {
 	c300 = { name = "Опытный ловец", desc = "Сдай 300 духов", type = "total", need = 300, coins = 900, dust = 20 },
 	c1000 = { name = "Тысяча духов", desc = "Сдай 1000 духов", type = "total", need = 1000, skin = "fog", coins = 2000 },
 	k10 = { name = "Коллекционер", desc = "Собери 10 видов", type = "distinct", need = 10, skin = "sea" },
-	kall = { name = "Все духи", desc = "Собери все постоянные виды духов (31)", type = "distinct", need = 31, coins = 5000, dust = 120 },
+	kall = { name = "Все духи", desc = "Собери все постоянные виды духов (32)", type = "distinct", need = 32, coins = 5000, dust = 120 },
 	golden = { name = "Золотая находка", desc = "Поймай Золотую разновидность", type = "variant", key = "golden", need = 1, coins = 400 },
 	rainbow = { name = "Радуга", desc = "Поймай Радужную разновидность", type = "variant", key = "rainbow", need = 1, coins = 1500 },
 	infinity = { name = "Бесконечность", desc = "Поймай Бесконечную разновидность", type = "variant", key = "infinity", need = 1, coins = 10000, dust = 200 },
@@ -1047,7 +1046,7 @@ S.Order = {
 	"SeaHorse", "LighthouseOwl",
 	"PaperWhale",
 	"PaperDragon", "MistKraken",
-	"Kyubi",
+	"Kyubi", "ThousandCrane",
 	"EchoFirefly", "LilyFrog", "MirrorKoi", "GlassHeron", "TwinMoon",
 	"PaperBalloon", "WindChime", "CloudCat", "KiteDragon",
 	"MapleSpirit", "PumpkinLantern", "SnowSpirit",
@@ -1200,6 +1199,15 @@ S.Kinds = {
 		habit = "Длинное бумажное тело извивается в небе, оставляя искры.",
 		trail = { shape = "flame", color = Color3.fromRGB(255, 170, 60), text = "Горящие обрывки бумаги" },
 		yard = "Обвивает пагоду",
+	},
+	ThousandCrane = {
+		name = "Тысячекрылый журавль", short = "Журавль", rarity = "secret", world = "lantern", secretQuest = true,
+		move = "fly", speed = 5, height = 6, follow = 0.35, animSpeed = 3, condition = "any",
+		spawn = {}, habitat = { "lamp" },
+		hint = "Секрет: найди 5 светящихся бумажных журавликов, спрятанных в разных районах квартала",
+		habit = "Сложен из тысячи золотых листков. Говорят, исполняет одно желание.",
+		trail = { shape = "feather", color = Color3.fromRGB(255, 220, 120), text = "Золотые листки" },
+		yard = "Парит над двором",
 	},
 	Kyubi = {
 		name = "Девятихвостая кицунэ", short = "Кицунэ", rarity = "secret", world = "lantern",
@@ -2144,6 +2152,29 @@ function S.buildPaperDragon(): Model
 end
 
 ------------------------------------------------------------------ девятихвостая кицунэ
+function S.buildThousandCrane(): Model
+	local m = Instance.new("Model")
+	m.Name = "ThousandCrane"
+	local gold, light2 = Color3.fromRGB(255, 205, 90), Color3.fromRGB(255, 240, 190)
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.4, 1.2, 2.8), CFrame = CFrame.new(), Color = gold, Material = Enum.Material.Metal, Reflectance = 0.2 }))
+	mk(m, { Name = "Neck", Size = Vector3.new(0.3, 2.2, 0.3), CFrame = CFrame.new(0, 1.0, -1.7) * CFrame.Angles(math.rad(-35), 0, 0), Color = gold })
+	mk(m, { Name = "Head", Size = Vector3.new(0.5, 0.5, 0.9), CFrame = CFrame.new(0, 1.9, -2.4), Color = gold })
+	mk(m, { Name = "Crown", Size = Vector3.new(0.35, 0.18, 0.35), CFrame = CFrame.new(0, 2.2, -2.4), Color = Color3.fromRGB(255, 80, 80), Material = Enum.Material.Neon })
+	-- много крыльев-листков веером
+	for layer = 1, 3 do
+		for i, x in { -1, 1 } do
+			local w = mk(m, { Name = "Wing", Size = Vector3.new(4.8 - layer * 0.8, 0.08, 1.6 - layer * 0.2), CFrame = CFrame.new(x * (2.8 - layer * 0.4), 0.3 + layer * 0.25, (layer - 2) * 0.6),
+				Color = layer == 2 and light2 or gold, Material = layer == 2 and Enum.Material.Neon or Enum.Material.SmoothPlastic })
+			joint(w, Vector3.new(x * 0.6, 0.3, 0), "flapZ", i * math.pi + layer * 0.4, 1.2)
+		end
+	end
+	mk(m, { Name = "Tail", Size = Vector3.new(1.2, 0.2, 1.8), CFrame = CFrame.new(0, 0.2, 2.2), Color = light2, Material = Enum.Material.Neon }, "WedgePart")
+	light(body, Color3.fromRGB(255, 220, 140), 18, 1.4)
+	m.PrimaryPart = body
+	S.scale(m, 1.5)
+	return m
+end
+
 function S.buildKyubi(): Model
 	local m = Instance.new("Model")
 	m.Name = "Kyubi"
@@ -2213,24 +2244,37 @@ end
 function S.buildPaperWhale(): Model
 	local m = Instance.new("Model")
 	m.Name = "PaperWhale"
-	local paper = Color3.fromRGB(225, 232, 245)
-	local head = mk(m, { Name = "Head", Size = Vector3.new(4, 3.4, 4), CFrame = CFrame.new(0, 0, -3), Color = paper })
-	mk(m, { Name = "Jaw", Size = Vector3.new(3.6, 0.8, 3.6), CFrame = CFrame.new(0, -1.9, -3), Color = Color3.fromRGB(170, 190, 225) })
+	local blue, belly = Color3.fromRGB(120, 170, 235), Color3.fromRGB(235, 242, 252)
+	-- обтекаемое тело: голова, туловище и сужающийся хвост
+	local head = ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(4.6, 4, 5.4), CFrame = CFrame.new(0, 0, -2.6), Color = blue }))
+	ellipsoid(mk(m, { Name = "Belly", Size = Vector3.new(3.8, 2.4, 5.2), CFrame = CFrame.new(0, -1.05, -2.4), Color = belly }))
+	for i = 1, 3 do
+		local seg = ellipsoid(mk(m, { Name = "Seg", Size = Vector3.new(4.2 - i * 0.9, 3.6 - i * 0.8, 3), CFrame = CFrame.new(0, 0.15 * i, -0.2 + i * 2.1), Color = blue }))
+		joint(seg, Vector3.new(0, 0, -1.2 + i * 2.1), "swingX", -i * 0.6, 0.05 * i)
+	end
+	-- хвостовые лопасти
 	for _, x in { -1, 1 } do
-		mk(m, { Name = "Eye", Shape = Enum.PartType.Ball, Size = Vector3.new(0.5, 0.5, 0.5), CFrame = CFrame.new(x * 2, 0.4, -4), Color = Color3.fromRGB(30, 30, 50) })
-		local fl = mk(m, { Name = "Flipper", Size = Vector3.new(3, 0.2, 1.6), CFrame = CFrame.new(x * 3.4, -1.2, -1.5) * CFrame.Angles(0, 0, math.rad(x * -20)), Color = paper })
-		joint(fl, Vector3.new(x * 2, -1, -1.5), "flapZ", x > 0 and 0 or math.pi, 0.5)
+		local fl = ellipsoid(mk(m, { Name = "Fluke", Size = Vector3.new(2.6, 0.3, 1.5), CFrame = CFrame.new(x * 1.2, 0.6, 7.4) * CFrame.Angles(0, math.rad(x * 25), 0), Color = blue }))
+		joint(fl, Vector3.new(0, 0.5, 6.2), "swingX", -3, 0.35)
+		-- глаза с бликом
+		ellipsoid(mk(m, { Name = "EyeWhite", Size = Vector3.new(0.2, 0.9, 0.8), CFrame = CFrame.new(x * 2.15, 0.35, -3.9), Color = Color3.new(1, 1, 1) }))
+		ellipsoid(mk(m, { Name = "Pupil", Size = Vector3.new(0.16, 0.6, 0.55), CFrame = CFrame.new(x * 2.25, 0.3, -3.95), Color = Color3.fromRGB(30, 35, 60) }))
+		mk(m, { Name = "Shine", Shape = Enum.PartType.Ball, Size = Vector3.new(0.22, 0.22, 0.22), CFrame = CFrame.new(x * 2.33, 0.5, -4.08), Color = Color3.new(1, 1, 1), Material = Enum.Material.Neon })
+		ellipsoid(mk(m, { Name = "Blush", Size = Vector3.new(0.12, 0.35, 0.7), CFrame = CFrame.new(x * 2.2, -0.35, -3.6), Color = Color3.fromRGB(255, 160, 190) }))
+		-- плавники
+		local fin = ellipsoid(mk(m, { Name = "Flipper", Size = Vector3.new(2.6, 0.3, 1.3), CFrame = CFrame.new(x * 2.9, -1.2, -1.2) * CFrame.Angles(0, 0, math.rad(x * -25)), Color = blue }))
+		joint(fin, Vector3.new(x * 1.8, -1, -1.2), "flapZ", x > 0 and 0 or math.pi, 0.5)
 	end
+	-- бумажные полоски-сгибы на спине и фонтанчик
 	for i = 1, 4 do
-		local seg = mk(m, { Name = "Seg", Size = Vector3.new(3.8 - i * 0.6, 3.2 - i * 0.5, 2.4), CFrame = CFrame.new(0, 0, -0.6 + i * 2.2), Color = i % 2 == 0 and paper or Color3.fromRGB(205, 215, 240) })
-		joint(seg, Vector3.new(0, 0, -1.6 + i * 2.2), "swingX", -i * 0.6, 0.06 * i)
+		mk(m, { Name = "Fold", Size = Vector3.new(2.6 - i * 0.3, 0.08, 0.12), CFrame = CFrame.new(0, 1.95 - i * 0.12, -3.6 + i * 1.3), Color = Color3.fromRGB(90, 140, 210) })
 	end
-	local tail = mk(m, { Name = "Fin", Size = Vector3.new(4.6, 0.2, 2.2), CFrame = CFrame.new(0, 0, 9.4), Color = paper })
-	joint(tail, Vector3.new(0, 0, 8.2), "swingX", -3, 0.35)
-	for i = 1, 6 do
-		mk(m, { Name = "Fold", Size = Vector3.new(0.08, 3.3, 0.08), CFrame = CFrame.new(1.95, 0, -4.5 + i * 1.4), Color = Color3.fromRGB(160, 175, 210) })
+	local spout = mk(m, { Name = "Spout", Size = Vector3.new(0.4, 1.4, 0.4), CFrame = CFrame.new(0, 2.6, -3.2), Color = Color3.fromRGB(190, 230, 255), Material = Enum.Material.Neon, Transparency = 0.3 })
+	for k = 0, 3 do
+		local a = k / 4 * math.pi * 2
+		mk(m, { Name = "Drop", Shape = Enum.PartType.Ball, Size = Vector3.new(0.45, 0.45, 0.45), CFrame = CFrame.new(math.cos(a) * 0.7, 3.4, -3.2 + math.sin(a) * 0.7), Color = Color3.fromRGB(200, 235, 255), Material = Enum.Material.Neon, Transparency = 0.25 })
 	end
-	light(head, Color3.fromRGB(190, 210, 255), 24, 1.2)
+	light(spout, Color3.fromRGB(190, 220, 255), 24, 1.2)
 	m.PrimaryPart = head
 	S.scale(m, 1.4)
 	return m
@@ -2647,6 +2691,7 @@ S.Builders = {
 	MirrorKoi = S.buildMirrorKoi,
 	GlassHeron = S.buildGlassHeron,
 	TwinMoon = S.buildTwinMoon,
+	ThousandCrane = S.buildThousandCrane,
 	PaperBalloon = S.buildPaperBalloon,
 	WindChime = S.buildWindChime,
 	CloudCat = S.buildCloudCat,
@@ -2695,6 +2740,7 @@ S.Pose = {
 	MapleSpirit = function(t) return CFrame.new(sin(t * 1.2) * 0.5, sin(t * 1.8) * 0.5, 0) * CFrame.Angles(0, t * 1.5, 0) end,
 	PumpkinLantern = function(t) return CFrame.new(0, abs(sin(t * 3.5)) * 0.6, 0) * CFrame.Angles(0, 0, sin(t * 3.5) * 0.1) end,
 	SnowSpirit = function(t) return CFrame.new(0, abs(sin(t * 2.5)) * 0.4, 0) * CFrame.Angles(0, 0, sin(t * 2.5) * 0.12) end,
+	ThousandCrane = function(t) return CFrame.new(0, sin(t * 1.1) * 0.8, 0) * CFrame.Angles(0, 0, sin(t * 0.7) * 0.2) end,
 	EchoFirefly = function(t) return CFrame.new(sin(t * 1.1) * 0.8, sin(t * 2.2) * 0.5, math.cos(t * 0.9) * 0.8) end,
 	LilyFrog = function(t) return CFrame.new(0, abs(sin(t * 3)) * 1.6, 0) end,
 	MirrorKoi = function(t) return CFrame.new(0, sin(t * 1.2) * 0.5, 0) * CFrame.Angles(0, sin(t * 0.8) * 0.3, 0) end,
@@ -3338,6 +3384,10 @@ local function migrate(raw): Profile
 		if typeof(raw.wheel) == "table" then d.wheel = { day = math.floor(num(raw.wheel.day, 0, 1e7, 0)), used = math.floor(num(raw.wheel.used, 0, 10, 0)) } end
 		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
 		d.huntBest = math.floor(num(raw.huntBest, 0, 1e6, 0))
+		if typeof(raw.cranes) == "table" then
+			d.cranes = {}
+			for k, v in raw.cranes do if v == true and tonumber(k) and tonumber(k) <= 5 then d.cranes[tostring(k)] = true end end
+		end
 		d.ritualBest = num(raw.ritualBest, 0, 1e6, 0)
 		if typeof(raw.inv) == "table" then
 			d.inv = {}
@@ -4991,9 +5041,9 @@ local function hatch(plr, d, egg)
 	end
 	local pool = {}
 	for kind, info in Catalog.Kinds do
-		if info.rarity == rar and not info.holiday then table.insert(pool, kind) end
+		if info.rarity == rar and not info.holiday and not info.secretQuest then table.insert(pool, kind) end
 	end
-	if #pool == 0 then for kind, info in Catalog.Kinds do if not info.holiday then table.insert(pool, kind) end end end
+	if #pool == 0 then for kind, info in Catalog.Kinds do if not info.holiday and not info.secretQuest then table.insert(pool, kind) end end end
 	local kind = pool[math.random(#pool)]
 	local variant = "normal"
 	local luck = luckOf(d) * cfg.luck
@@ -5333,6 +5383,44 @@ RX.SellFn.OnServerInvoke = function(plr, key, n)
 	return { ok = true, coins = price * n, n = n }
 end
 
+-- секретный квест: 5 бумажных журавликов -> Тысячекрылый журавль
+for i, c in map.cranes or {} do
+	local pp = Instance.new("ProximityPrompt")
+	pp.ActionText, pp.ObjectText = "Подобрать", "Бумажный журавлик"
+	pp.HoldDuration, pp.MaxActivationDistance, pp.RequiresLineOfSight = 0.4, 9, false
+	pp.Parent = c
+	pp.Triggered:Connect(function(plr)
+		local d = data[plr]
+		if not d then return end
+		d.cranes = d.cranes or {}
+		local key = tostring(i)
+		if d.cranes[key] then
+			NoticeEv:FireClient(plr, "Этот журавлик уже у тебя")
+			return
+		end
+		d.cranes[key] = true
+		local n = 0
+		for _ in d.cranes do n += 1 end
+		if n >= 5 and not d.firstSaved.ThousandCrane then
+			d.saved.ThousandCrane = (d.saved.ThousandCrane or 0) + 1
+			d.firstSaved.ThousandCrane = true
+			d.variants.ThousandCrane = { normal = true }
+			invAdd(d, "ThousandCrane", "normal", 1)
+			d.titles["Хранитель журавликов"] = true
+			d.title = "Хранитель журавликов"
+			local root = rootOf(plr)
+			CaughtEv:FireClient(plr, "ThousandCrane", root and root.Position + Vector3.new(0, 6, 0) or c.Position, 1, "normal", false, 1000)
+			for _, p in Players:GetPlayers() do
+				NoticeEv:FireClient(p, plr.DisplayName .. " собрал 5 журавликов и получил секретного духа: Тысячекрылый журавль!")
+			end
+		else
+			NoticeEv:FireClient(plr, ("Бумажный журавлик %d/5! Остальные спрятаны в других районах"):format(n))
+		end
+		persist(plr)
+		pushState(plr)
+	end)
+end
+
 -- ритуал у алтаря за пыль
 RX.AltarRitualFn.OnServerInvoke = function(plr, id)
 	local d = data[plr]
@@ -5366,11 +5454,11 @@ RX.AltarRitualFn.OnServerInvoke = function(plr, id)
 	end
 	local pool = {}
 	for kind, info in Catalog.Kinds do
-		if info.rarity == rar and not info.holiday then table.insert(pool, kind) end
+		if info.rarity == rar and not info.holiday and not info.secretQuest then table.insert(pool, kind) end
 	end
 	if #pool == 0 then
 		for kind, info in Catalog.Kinds do
-			if RARITY_RANK[info.rarity] >= RARITY_RANK.legendary and not info.holiday then table.insert(pool, kind) end
+			if RARITY_RANK[info.rarity] >= RARITY_RANK.legendary and not info.holiday and not info.secretQuest then table.insert(pool, kind) end
 		end
 	end
 	local kind = pool[math.random(#pool)]
@@ -6970,6 +7058,23 @@ function Map.build()
 		wall(Vector3.new(120, 80, 1), Vector3.new(cx, 40, cz + 55.5))
 	end
 
+	---------------------------------------------------------------- 5 спрятанных бумажных журавликов (секретный квест)
+	local cranes = {}
+	for i, pos in { Vector3.new(3, 1.5, 133), Vector3.new(7, 1.5, -47), Vector3.new(-143, 1.5, 10), Vector3.new(150, 1.5, 15), Vector3.new(4, 1.5, -147) } do
+		local c = deco("SecretCrane", Vector3.new(0.9, 0.5, 1.3), CFrame.new(pos) * CFrame.Angles(0, i, 0), Color3.fromRGB(255, 250, 235), Enum.Material.Neon, { Transparency = 0.1 })
+		for _, side in { -1, 1 } do
+			deco("SecretCraneWing", Vector3.new(1.4, 0.08, 0.7), c.CFrame * CFrame.new(side * 0.9, 0.15, 0) * CFrame.Angles(0, 0, math.rad(side * 25)), Color3.fromRGB(255, 240, 210), Enum.Material.Neon, { Transparency = 0.15 })
+		end
+		local pe = Instance.new("ParticleEmitter")
+		pe.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+		pe.Color = ColorSequence.new(Color3.fromRGB(255, 240, 200))
+		pe.LightEmission, pe.Rate, pe.Lifetime, pe.Speed = 0.6, 3, NumberRange.new(1, 2), NumberRange.new(0.3, 0.8)
+		pe.Size = NumberSequence.new(0.3, 0)
+		pe.Parent = c
+		c:SetAttribute("CraneId", i)
+		cranes[i] = c
+	end
+
 	---------------------------------------------------------------- точка появления
 	local spawnCF = scf(CFrame.new(0, 0.6, 24))
 	local spawn = Instance.new("SpawnLocation")
@@ -6993,6 +7098,7 @@ function Map.build()
 		barrier = barrier,
 		barrierText = barrierText,
 		moon = moon,
+		cranes = cranes,
 	}
 end
 

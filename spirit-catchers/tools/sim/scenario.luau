@@ -428,6 +428,23 @@ do
 	end
 end
 
+stage("секретные журавлики")
+do
+	local found = 0
+	for _, c in workspace.World:GetChildren() do
+		if c.Name == "SecretCrane" then
+			local pp = c:FindFirstChildOfClass("ProximityPrompt")
+			if pp then
+				pp.Triggered:Fire(plr)
+				found += 1
+				frames(2)
+			end
+		end
+	end
+	if found ~= 5 then table.insert(SIM.errors, "журавликов на карте: " .. found) end
+	frames(20)
+end
+
 stage("ритуал у алтаря")
 do
 	for _ = 1, 3 do inv("Admin", "dust") end

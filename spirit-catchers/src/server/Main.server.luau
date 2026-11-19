@@ -616,6 +616,10 @@ local function migrate(raw): Profile
 		if typeof(raw.wheel) == "table" then d.wheel = { day = math.floor(num(raw.wheel.day, 0, 1e7, 0)), used = math.floor(num(raw.wheel.used, 0, 10, 0)) } end
 		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
 		d.huntBest = math.floor(num(raw.huntBest, 0, 1e6, 0))
+		if typeof(raw.cranes) == "table" then
+			d.cranes = {}
+			for k, v in raw.cranes do if v == true and tonumber(k) and tonumber(k) <= 5 then d.cranes[tostring(k)] = true end end
+		end
 		d.ritualBest = num(raw.ritualBest, 0, 1e6, 0)
 		if typeof(raw.inv) == "table" then
 			d.inv = {}
@@ -2269,9 +2273,9 @@ local function hatch(plr, d, egg)
 	end
 	local pool = {}
 	for kind, info in Catalog.Kinds do
-		if info.rarity == rar and not info.holiday then table.insert(pool, kind) end
+		if info.rarity == rar and not info.holiday and not info.secretQuest then table.insert(pool, kind) end
 	end
-	if #pool == 0 then for kind, info in Catalog.Kinds do if not info.holiday then table.insert(pool, kind) end end end
+	if #pool == 0 then for kind, info in Catalog.Kinds do if not info.holiday and not info.secretQuest then table.insert(pool, kind) end end end
 	local kind = pool[math.random(#pool)]
 	local variant = "normal"
 	local luck = luckOf(d) * cfg.luck
@@ -2611,6 +2615,44 @@ RX.SellFn.OnServerInvoke = function(plr, key, n)
 	return { ok = true, coins = price * n, n = n }
 end
 
+-- секретный квест: 5 бумажных журавликов -> Тысячекрылый журавль
+for i, c in map.cranes or {} do
+	local pp = Instance.new("ProximityPrompt")
+	pp.ActionText, pp.ObjectText = "Подобрать", "Бумажный журавлик"
+	pp.HoldDuration, pp.MaxActivationDistance, pp.RequiresLineOfSight = 0.4, 9, false
+	pp.Parent = c
+	pp.Triggered:Connect(function(plr)
+		local d = data[plr]
+		if not d then return end
+		d.cranes = d.cranes or {}
+		local key = tostring(i)
+		if d.cranes[key] then
+			NoticeEv:FireClient(plr, "Этот журавлик уже у тебя")
+			return
+		end
+		d.cranes[key] = true
+		local n = 0
+		for _ in d.cranes do n += 1 end
+		if n >= 5 and not d.firstSaved.ThousandCrane then
+			d.saved.ThousandCrane = (d.saved.ThousandCrane or 0) + 1
+			d.firstSaved.ThousandCrane = true
+			d.variants.ThousandCrane = { normal = true }
+			invAdd(d, "ThousandCrane", "normal", 1)
+			d.titles["Хранитель журавликов"] = true
+			d.title = "Хранитель журавликов"
+			local root = rootOf(plr)
+			CaughtEv:FireClient(plr, "ThousandCrane", root and root.Position + Vector3.new(0, 6, 0) or c.Position, 1, "normal", false, 1000)
+			for _, p in Players:GetPlayers() do
+				NoticeEv:FireClient(p, plr.DisplayName .. " собрал 5 журавликов и получил секретного духа: Тысячекрылый журавль!")
+			end
+		else
+			NoticeEv:FireClient(plr, ("Бумажный журавлик %d/5! Остальные спрятаны в других районах"):format(n))
+		end
+		persist(plr)
+		pushState(plr)
+	end)
+end
+
 -- ритуал у алтаря за пыль
 RX.AltarRitualFn.OnServerInvoke = function(plr, id)
 	local d = data[plr]
@@ -2644,11 +2686,11 @@ RX.AltarRitualFn.OnServerInvoke = function(plr, id)
 	end
 	local pool = {}
 	for kind, info in Catalog.Kinds do
-		if info.rarity == rar and not info.holiday then table.insert(pool, kind) end
+		if info.rarity == rar and not info.holiday and not info.secretQuest then table.insert(pool, kind) end
 	end
 	if #pool == 0 then
 		for kind, info in Catalog.Kinds do
-			if RARITY_RANK[info.rarity] >= RARITY_RANK.legendary and not info.holiday then table.insert(pool, kind) end
+			if RARITY_RANK[info.rarity] >= RARITY_RANK.legendary and not info.holiday and not info.secretQuest then table.insert(pool, kind) end
 		end
 	end
 	local kind = pool[math.random(#pool)]
