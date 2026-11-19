@@ -441,6 +441,13 @@ do
 		frames(20)
 	end
 	stage(("ритуал: проведено %d, успехов %d"):format(okN, succ))
+	frames(100)
+	-- команда и продажа
+	local t1 = inv("Team", "add", "PaperFox:golden")
+	if not (t1 and (t1.ok or string.find(tostring(t1.msg), "полна"))) then table.insert(SIM.errors, "команда: " .. tostring(t1 and t1.msg)) end
+	local sl = inv("SellSpirit", "PaperFox:normal", 1)
+	if not (sl and sl.ok) then table.insert(SIM.errors, "продажа: " .. tostring(sl and sl.msg)) end
+	frames(20)
 	if okN == 0 then table.insert(SIM.errors, "ритуал у алтаря не работает") end
 end
 

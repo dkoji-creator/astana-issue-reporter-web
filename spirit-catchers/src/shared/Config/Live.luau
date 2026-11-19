@@ -405,4 +405,30 @@ L.Rituals = {
 }
 L.RitualPity = 0.05
 
+------------------------------------------------------------------ ценность духов: инвентарь, команда, продажа
+-- у каждого духа (вид + разновидность) есть СИЛА и ЦЕНА. Чем реже вид и разновидность, тем больше.
+L.RarityPower = L.RarityPower or {}
+L.PowerBase = { common = 1, uncommon = 2, rare = 4, epic = 8, legendary = 16, mythic = 32, secret = 64 }
+function L.spiritPower(rarity: string, variantMult: number, evolved: boolean?): number
+	return math.floor((L.PowerBase[rarity] or 1) * (variantMult or 1) * (evolved and 1.5 or 1) * 10 + 0.5)
+end
+-- команда: до N духов дают бонус к монетам и удаче (растёт медленнее силы, чтобы не ломать баланс)
+L.TeamSlots = { base = 3, [15] = 4, [30] = 5, vip = 1 }
+function L.teamSlots(level: number, vip: boolean): number
+	local n = L.TeamSlots.base
+	if level >= 15 then n = 4 end
+	if level >= 30 then n = 5 end
+	return n + (vip and L.TeamSlots.vip or 0)
+end
+function L.teamBonus(power: number): number -- проценты к монетам от одного духа
+	return math.floor(12 * math.log(1 + power / 10, 2) + 0.5)
+end
+-- цена продажи дубликата
+function L.sellPrice(rarityCoins: number, variantMult: number): number
+	return math.floor(rarityCoins * (variantMult or 1) * 4)
+end
+
+-- анимация ритуала у алтаря (секунд до результата)
+L.RitualAnim = 3.2
+
 return L

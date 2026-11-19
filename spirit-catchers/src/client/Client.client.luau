@@ -543,6 +543,7 @@ do
 	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	local tabAlbum = K.button(atlasTabs, "Альбом", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+	local tabTeam = K.button(atlasTabs, "Команда", T.gold, { Size = UDim2.fromOffset(130, 34), MaxText = 16, LayoutOrder = -1 })
 	-- спутник: уровень и кормление (раньше было плашкой на экране)
 	local feedB, feedL = K.button(atlasTabs, "", T.pink, { Size = UDim2.fromOffset(250, 34), MaxText = 14, Visible = false })
 	feedB.Activated:Connect(function()
@@ -645,7 +646,70 @@ do
 		K.close(atlasW)
 		if enterPhoto then enterPhoto() end
 	end)
-	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList }, { tabAlbum, albumPage } }
+	-- КОМАНДА И ЦЕННОСТЬ: каждый дух (вид + разновидность) имеет силу и цену. Лучшие в команде дают монеты и удачу
+	local teamPage = K.make("Frame", { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70), BackgroundTransparency = 1, Visible = false }, atlasBody)
+	local teamHead = K.text(teamPage, "", { Size = UDim2.new(1, 0, 0, 26), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextColor3 = T.gold })
+	local teamGrid = K.scroll(teamPage, { Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -30) })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 176), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, teamGrid)
+	local teamShown = ""
+	local function refreshTeam()
+		local Live = Catalog.Live
+		local inv = state.inv or {}
+		local team = state.team or {}
+		local inTeam = {}
+		for _, k in team do inTeam[k] = (inTeam[k] or 0) + 1 end
+		teamHead.Text = ("Команда %d/%d: монеты +%d%%, удача +%d%%. Сильнее редкие и особые духи"):format(#team, state.teamSlots or 3, state.teamPct or 0, math.floor((state.teamPct or 0) / 2))
+		local sig = ""
+		for k, n in inv do sig ..= k .. n end
+		for _, k in team do sig ..= "|" .. k end
+		if sig == teamShown then return end
+		teamShown = sig
+		for _, c in teamGrid:GetChildren() do
+			if c:IsA("Frame") then c:Destroy() end
+		end
+		local list = {}
+		for key, n in inv do
+			local kind, variant = string.match(key, "([^:]+):(.+)")
+			local info = kind and Catalog.Kinds[kind]
+			local vc = variant and Catalog.Variants[variant]
+			if info and vc and n > 0 then
+				local power = Live.spiritPower(info.rarity, vc.mult, state.evolved and state.evolved[kind])
+				table.insert(list, { key = key, kind = kind, variant = variant, info = info, vc = vc, n = n, power = power })
+			end
+		end
+		table.sort(list, function(a, b) return a.power > b.power end)
+		for i, e in list do
+			if i > 60 then break end
+			local rar = Catalog.Rarity[e.info.rarity]
+			local f = K.panel(teamGrid, { LayoutOrder = i, BackgroundColor3 = inTeam[e.key] and Color3.fromRGB(60, 80, 50) or T.panel2 })
+			f:FindFirstChildOfClass("UIStroke").Color = e.variant ~= "normal" and e.vc.color or rar.color
+			if inTeam[e.key] then f:FindFirstChildOfClass("UIStroke").Thickness = 4 end
+			K.text(f, (e.variant ~= "normal" and (e.vc.name .. " ") or "") .. e.info.name, { Size = UDim2.new(1, -10, 0, 34), Position = UDim2.fromOffset(5, 4), MaxText = 15, TextWrapped = true, TextColor3 = e.variant ~= "normal" and e.vc.color or T.text })
+			K.text(f, ("%s   x%d"):format(rar.name, e.n), { Size = UDim2.new(1, -10, 0, 18), Position = UDim2.fromOffset(5, 40), MaxText = 14, TextColor3 = rar.color, Font = Enum.Font.GothamBold })
+			K.text(f, ("Сила %d   +%d%% монет"):format(e.power, Live.teamBonus(e.power)), { Size = UDim2.new(1, -10, 0, 20), Position = UDim2.fromOffset(5, 62), MaxText = 15, TextColor3 = T.gold })
+			local price = Live.sellPrice(rar.coins, e.vc.mult)
+			K.text(f, ("Цена %d монет"):format(price), { Size = UDim2.new(1, -10, 0, 18), Position = UDim2.fromOffset(5, 84), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+			local tb = K.button(f, inTeam[e.key] and "Убрать" or "В команду", inTeam[e.key] and Color3.fromRGB(110, 110, 130) or T.green, { Size = UDim2.new(1, -12, 0, 30), Position = UDim2.new(0, 6, 1, -70), MaxText = 14 })
+			tb.Activated:Connect(function()
+				local r = remotes.Team:InvokeServer(inTeam[e.key] and "remove" or "add", e.key)
+				if r and r.msg then showToast(r.msg, 2.5) end
+				teamShown = ""
+			end)
+			local sb = K.button(f, "Продать 1", T.orange, { Size = UDim2.new(1, -12, 0, 30), Position = UDim2.new(0, 6, 1, -36), MaxText = 14 })
+			sb.Activated:Connect(function()
+				local r = remotes.SellSpirit:InvokeServer(e.key, 1)
+				if r and r.ok then
+					play("save")
+					showToast(("Продано за %d монет"):format(r.coins), 1.5, Color3.fromRGB(150, 110, 20))
+				elseif r and r.msg then
+					showToast(r.msg, 2.5)
+				end
+				teamShown = ""
+			end)
+		end
+	end
+	tabTeam.Activated:Connect(refreshTeam)
+	local atlasPages = { { tabSpirits, spiritGrid }, { tabTiers, tierList }, { tabAch, achList }, { tabWorlds, worldList }, { tabAlbum, albumPage }, { tabTeam, teamPage } }
 	for _, pair in atlasPages do
 		pair[1].Activated:Connect(function()
 			for _, other in atlasPages do
@@ -837,6 +901,7 @@ do
 
 	refreshAtlas = function()
 		if albumPage.Visible then refreshAlbum() end
+		if teamPage.Visible then refreshTeam() end
 		local comp = state.comp
 		feedB.Visible = comp ~= nil
 		if comp then
@@ -1699,10 +1764,10 @@ do
 			if r and r.ok then
 				K.close(ritualW)
 				if not r.success then
-					play("oniHit")
-					dark.BackgroundTransparency = 0.1
-					TweenService:Create(dark, TweenInfo.new(1.2), { BackgroundTransparency = 1 }):Play()
-					showToast(("Тьма приняла подношение... Ничего (шанс был %d%%). Следующий шанс выше"):format(math.floor(r.chance * 100 + 0.5)), 3.5, Color3.fromRGB(90, 20, 60))
+					task.delay(Catalog.Live.RitualAnim, function()
+						dark.BackgroundTransparency = 0.25
+						TweenService:Create(dark, TweenInfo.new(1.2), { BackgroundTransparency = 1 }):Play()
+					end)
 				end
 			elseif r and r.msg then
 				showToast(r.msg, 3)
@@ -2676,6 +2741,65 @@ do
 		end
 	end
 	late.juice = juice
+	-- анимация ритуала у алтаря (видят все): круг рун, столб света, вихрь; итог — вспышка или чёрный дым
+	remotes.RitualFx.OnClientEvent:Connect(function(fx)
+		local base = fx.pos + Vector3.new(0, 0.6, 0)
+		local col = fx.color or Color3.fromRGB(190, 120, 255)
+		local parts = {}
+		local function part(props)
+			local p = K.make("Part", { Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false, Material = Enum.Material.Neon }, workspace)
+			for k, v in props do p[k] = v end
+			table.insert(parts, p)
+			return p
+		end
+		local runes = {}
+		for i = 1, 12 do
+			runes[i] = part({ Size = Vector3.new(1.2, 0.2, 0.5), Color = col, Transparency = 0.2 })
+		end
+		local beam = part({ Shape = Enum.PartType.Cylinder, Size = Vector3.new(0.2, 2, 2), Color = col, Transparency = 0.4 })
+		local orb = part({ Shape = Enum.PartType.Ball, Size = Vector3.new(1, 1, 1), Color = Color3.new(1, 1, 1), Transparency = 0.1 })
+		local pl = K.make("PointLight", { Color = col, Range = 30, Brightness = 2 }, orb)
+		local mine = fx.by == plr.UserId
+		if mine then play("reveal") end
+		local dur = Catalog.Live.RitualAnim
+		local t0 = os.clock()
+		local conn
+		conn = RunService.RenderStepped:Connect(function()
+			local t = os.clock() - t0
+			local k = math.min(1, t / dur)
+			for i, r in runes do
+				local a = t * (1.5 + k * 5) + i / 12 * math.pi * 2
+				local rad = 12 - k * 6
+				r.CFrame = CFrame.new(base + Vector3.new(math.cos(a) * rad, 0.2 + k * 3 + math.sin(t * 6 + i) * 0.3, math.sin(a) * rad)) * CFrame.Angles(0, -a, 0)
+			end
+			beam.Size = Vector3.new(40 * k, 1 + k * 4, 1 + k * 4)
+			beam.CFrame = CFrame.new(base + Vector3.new(0, 20 * k, 0)) * CFrame.Angles(0, 0, math.rad(90))
+			orb.Size = Vector3.new(1, 1, 1) * (1 + k * 4)
+			orb.CFrame = CFrame.new(base + Vector3.new(0, 4 + k * 3, 0))
+			if fx.success == false and k > 0.6 then
+				orb.Color = orb.Color:Lerp(Color3.fromRGB(20, 0, 30), 0.08)
+				pl.Brightness = math.max(0, pl.Brightness - 0.05)
+			end
+			if k >= 1 then
+				conn:Disconnect()
+				local at = base + Vector3.new(0, 6, 0)
+				if fx.success then
+					ring(at, 2, 30, col, 0.6, false)
+					ring(at, 2, 20, Color3.new(1, 1, 1), 0.4, true)
+					burst(at, ColorSequence.new(col, Color3.new(1, 1, 1)), 60)
+					if mine then play("legendary") end
+				else
+					burst(at, ColorSequence.new(Color3.fromRGB(40, 10, 60), Color3.fromRGB(5, 0, 10)), 50)
+					ring(at, 2, 24, Color3.fromRGB(30, 0, 40), 0.7, false)
+					if mine then play("oniHit") end
+				end
+				for _, p in parts do p:Destroy() end
+			end
+		end)
+		task.delay(dur + 2, function()
+			for _, p in parts do if p.Parent then p:Destroy() end end
+		end)
+	end)
 	catchEffect = function(kind, at, coop, variant, rolling, odds)
 		local r = root()
 		if not r then return end
@@ -3178,8 +3302,9 @@ do
 			local list = {}
 			local c = p:GetAttribute("Companion")
 			if c and c ~= "" then table.insert(list, { kind = c, evo = p:GetAttribute("CompanionEvolved") == true }) end
-			for k in string.gmatch(p:GetAttribute("Retinue") or "", "[^,]+") do
-				if #list < 3 then table.insert(list, { kind = k, evo = false }) end
+			for entry in string.gmatch(p:GetAttribute("Retinue") or "", "[^,]+") do
+				local k, v = string.match(entry, "([^:]+):?(.*)")
+				if #list < 3 then table.insert(list, { kind = k, evo = false, variant = v ~= "" and v or nil }) end
 			end
 			local fs = followers[p] or {}
 			followers[p] = fs
@@ -3187,7 +3312,7 @@ do
 			for slot = 1, 3 do
 				local want = list[slot]
 				local f = fs[slot]
-				if f and (not want or f.kind ~= want.kind or f.evo ~= want.evo or not r) then
+				if f and (not want or f.kind ~= want.kind or f.evo ~= want.evo or f.variant ~= want.variant or not r) then
 					f.model:Destroy()
 					fs[slot], f = nil, nil
 				end
@@ -3196,8 +3321,9 @@ do
 						local m = Spirits.Builders[want.kind]()
 						Spirits.scale(m, Catalog.Kinds[want.kind].follow * (slot == 1 and 1 or 0.8))
 						if want.evo then Spirits.applyEvolved(m) end
+						if want.variant then pcall(Spirits.applyVariant, m, want.variant) end
 						m.Parent = visFolder
-						f = { kind = want.kind, evo = want.evo, model = m, pivot = r.CFrame }
+						f = { kind = want.kind, evo = want.evo, variant = want.variant, model = m, pivot = r.CFrame }
 						fs[slot] = f
 					end
 					local goal = r.CFrame * SLOT_OFFSET[slot] * CFrame.new(0, math.sin(now * 2 + slot) * 0.4, 0)

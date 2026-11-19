@@ -364,7 +364,9 @@ local function offerCount(o)
 	return n
 end
 local function canGive(d, kind, n)
-	return (d.saved[kind] or 0) - n >= 1
+	-- обмениваются обычные (не особые) дубликаты: у себя остаётся хотя бы один дух вида
+	local normal = (d.inv and d.inv[kind .. ":normal"]) or 0
+	return (d.saved[kind] or 0) - n >= 1 and normal >= n
 end
 local function finishTrade(t)
 	local da, db = ctx.data[t.a], ctx.data[t.b]
@@ -380,6 +382,10 @@ local function finishTrade(t)
 		for kind, n in offer do
 			from.saved[kind] -= n
 			to.saved[kind] = (to.saved[kind] or 0) + n
+			local key = kind .. ":normal"
+			if from.inv then from.inv[key] = math.max(0, (from.inv[key] or 0) - n) end
+			to.inv = to.inv or {}
+			to.inv[key] = (to.inv[key] or 0) + n
 			to.firstSaved[kind] = true
 			to.variants[kind] = to.variants[kind] or {}
 			to.variants[kind].normal = true

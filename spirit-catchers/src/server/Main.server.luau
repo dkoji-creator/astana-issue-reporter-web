@@ -79,22 +79,26 @@ local RewardEv = remote("Reward") -- всплывающие награды: { co
 local FeedFn = remote("FeedCompanion", "RemoteFunction")
 local SeasonFn = remote("ClaimSeason", "RemoteFunction")
 local TitleFn = remote("SetTitle", "RemoteFunction")
-local EvolveFn = remote("Evolve", "RemoteFunction")
-local CoinShopFn = remote("CoinShop", "RemoteFunction")
-local PocketFn = remote("PocketSave", "RemoteFunction")
-local WheelFn = remote("SpinWheel", "RemoteFunction")
-local EggFn = remote("Egg", "RemoteFunction")
-local HuntFn = remote("Hunt", "RemoteFunction")
-local ThrowFn = remote("Throw", "RemoteFunction")
-local RitualFn = remote("Ritual", "RemoteFunction")
-local RitualEv = remote("RitualState")
-local AltarRitualFn = remote("AltarRitual", "RemoteFunction")
-local RitualOpenEv = remote("RitualOpen")
+local RX = {} -- remote-объекты новых систем (одна таблица: лимит 200 локальных переменных)
+RX.EvolveFn = remote("Evolve", "RemoteFunction")
+RX.CoinShopFn = remote("CoinShop", "RemoteFunction")
+RX.PocketFn = remote("PocketSave", "RemoteFunction")
+RX.WheelFn = remote("SpinWheel", "RemoteFunction")
+RX.EggFn = remote("Egg", "RemoteFunction")
+RX.HuntFn = remote("Hunt", "RemoteFunction")
+RX.ThrowFn = remote("Throw", "RemoteFunction")
+RX.RitualFn = remote("Ritual", "RemoteFunction")
+RX.RitualEv = remote("RitualState")
+RX.AltarRitualFn = remote("AltarRitual", "RemoteFunction")
+RX.RitualFxEv = remote("RitualFx")
+RX.TeamFn = remote("Team", "RemoteFunction")
+RX.SellFn = remote("SellSpirit", "RemoteFunction")
+RX.RitualOpenEv = remote("RitualOpen")
 local doSaveRef -- doSave (ниже), для автосдачи
-local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
-local StoryFn = remote("Story", "RemoteFunction")
-local StoryOpenEv = remote("StoryOpen")
-local BossHitEv = remote("BossHit")
+RX.FurnitureFn = remote("BuyFurniture", "RemoteFunction")
+RX.StoryFn = remote("Story", "RemoteFunction")
+RX.StoryOpenEv = remote("StoryOpen")
+RX.BossHitEv = remote("BossHit")
 remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
@@ -169,6 +173,30 @@ task.spawn(function()
 		workspace:SetAttribute("DayKind", Live.spiritOfDay(Live.day(os.time()), Catalog.Order, Catalog.Kinds) or "")
 	end
 end)
+-- инвентарь: сколько духов каждого вида и разновидности ("Kind:variant" -> число)
+local function invAdd(d, kind: string, variant: string, n: number)
+	d.inv = d.inv or {}
+	local key = kind .. ":" .. variant
+	d.inv[key] = math.max(0, (d.inv[key] or 0) + n)
+	if d.inv[key] == 0 then d.inv[key] = nil end
+end
+-- команда: проверенный список ключей и бонус к монетам/удаче
+local function teamOf(d)
+	local slots = Live.teamSlots(d.level, hasPass(d, "vip"))
+	local used, out, pct = {}, {}, 0
+	for _, key in d.team or {} do
+		local kind, variant = string.match(key, "([^:]+):(.+)")
+		local info = kind and Catalog.Kinds[kind]
+		local vc = variant and Catalog.Variants[variant]
+		used[key] = (used[key] or 0) + 1
+		if info and vc and #out < slots and ((d.inv and d.inv[key]) or 0) >= used[key] then
+			table.insert(out, key)
+			pct += Live.teamBonus(Live.spiritPower(info.rarity, vc.mult, d.evolved and d.evolved[kind]))
+		end
+	end
+	return out, pct, slots
+end
+
 -- спутник: уровень, способность и её сила
 local function compOf(d)
 	local kind = d and d.equipped
@@ -346,6 +374,11 @@ local function luckOf(d)
 	if streak > 1 then
 		mult *= 1 + (streak - 1) * Live.Streak.per
 		table.insert(parts, ("Серия входов %d дн. +%d%%"):format(streak, math.floor((streak - 1) * Live.Streak.per * 100 + 0.5)))
+	end
+	local _, teamPct = teamOf(d)
+	if teamPct > 0 then
+		mult *= 1 + teamPct / 200
+		table.insert(parts, ("Команда +%d%%"):format(math.floor(teamPct / 2)))
 	end
 	local shrine = (d.shrine or 0) * Live.CoinShop.shrinePer
 	if shrine > 0 then
@@ -582,6 +615,19 @@ local function migrate(raw): Profile
 		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
 		d.huntBest = math.floor(num(raw.huntBest, 0, 1e6, 0))
 		d.ritualBest = num(raw.ritualBest, 0, 1e6, 0)
+		if typeof(raw.inv) == "table" then
+			d.inv = {}
+			for k, v in raw.inv do
+				local kind, variant = typeof(k) == "string" and string.match(k, "([^:]+):(.+)")
+				if kind and Catalog.Kinds[kind] and Catalog.Variants[variant] then d.inv[k] = math.floor(num(v, 0, 1e7, 0)) end
+			end
+		end
+		if typeof(raw.team) == "table" then
+			d.team = {}
+			for _, k in raw.team do
+				if typeof(k) == "string" and #d.team < 8 then table.insert(d.team, k) end
+			end
+		end
 		if typeof(raw.ritualPity) == "table" then
 			d.ritualPity = {}
 			for k, v in raw.ritualPity do
@@ -621,6 +667,19 @@ local function migrate(raw): Profile
 			d.weekBest = { week = raw.weekBest.week, score = raw.weekBest.score, k = raw.weekBest.k, v = raw.weekBest.v }
 		end
 	end
+	-- старые сохранения без инвентаря: обычные = всего минус по одной каждой пойманной разновидности
+	if not d.inv then
+		d.inv = {}
+		for kind, n in d.saved do
+			local special = {}
+			for v in d.variants[kind] or {} do
+				if v ~= "normal" then table.insert(special, v) end
+			end
+			local normal = math.max(0, n - #special)
+			if normal > 0 then d.inv[kind .. ":normal"] = normal end
+			for i = 1, math.min(#special, n) do d.inv[kind .. ":" .. special[i]] = 1 end
+		end
+	end
 	fillOrders(d)
 	return d
 end
@@ -631,6 +690,7 @@ local function persist(plr)
 	local copy = table.clone(d)
 	copy.loadFailed = nil
 	copy._clubPending = nil
+	copy._ritualBusy = nil
 	copy.lastSeen = os.time()
 	copy.passes = nil
 	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
@@ -687,6 +747,12 @@ local function bestOf(d)
 	return bestK, bestV
 end
 local function retinueOf(d)
+	local team = teamOf(d)
+	if #team > 0 then
+		local out = {}
+		for i = 1, math.min(3, #team) do table.insert(out, team[i]) end
+		return table.concat(out, ",")
+	end
 	local slots = (d.level >= 20 and 2) or (d.level >= 10 and 1) or 0
 	if slots == 0 then return "" end
 	local list = {}
@@ -766,7 +832,8 @@ local function pushState(plr)
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
-		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0, ritualBest = d.ritualBest or 0, ritualPity = d.ritualPity,
+		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0, ritualBest = d.ritualBest or 0, ritualPity = d.ritualPity, inv = d.inv, team = (teamOf(d)),
+		teamPct = select(2, teamOf(d)), teamSlots = select(3, teamOf(d)),
 		hunt = d.hunt and { ends = os.time() + math.max(0, math.floor(d.hunt.ends - os.clock())), n = d.hunt.n } or nil,
 		weekend = Live.isWeekend(os.time()),
 		spinsLeft = (function()
@@ -1571,6 +1638,7 @@ local function doSave(plr, anywhere: boolean?, mult: number?)
 			dust += rar.dust -- дубликат → пыль духов
 		end
 		d.saved[kind] = (d.saved[kind] or 0) + 1
+		invAdd(d, kind, variant, 1)
 		if not d.firstSaved[kind] then
 			d.firstSaved[kind] = true
 			table.insert(firsts, kind)
@@ -1602,6 +1670,8 @@ local function doSave(plr, anywhere: boolean?, mult: number?)
 	if hasPass(d, "coins2x") then coins *= 2 end
 	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
 	if mult then coins = math.floor(coins * mult) end
+	local _, teamPct = teamOf(d)
+	coins = math.floor(coins * (1 + teamPct / 100))
 	d.coins += coins
 	d.dust += dust
 	local kinds = table.clone(jar)
@@ -1620,7 +1690,7 @@ end)
 doSaveRef = doSave
 -- карманный алтарь: сдать улов где угодно (перезарядка по уровню)
 local pocketAt = {}
-PocketFn.OnServerInvoke = function(plr)
+RX.PocketFn.OnServerInvoke = function(plr)
 	local d = data[plr]
 	if not d then return { ok = false } end
 	local cd = Catalog.upgradeValue("pocket", d.levels.pocket or 1)
@@ -2088,7 +2158,7 @@ SeasonFn.OnServerInvoke = function(plr, tier, premium)
 	RewardEv:FireClient(plr, { coins = r.coins, dust = r.dust, skin = r.skin })
 	return { ok = true }
 end
-CoinShopFn.OnServerInvoke = function(plr, action, arg)
+RX.CoinShopFn.OnServerInvoke = function(plr, action, arg)
 	local d = data[plr]
 	if not d then return { ok = false } end
 	local CS = Live.CoinShop
@@ -2142,7 +2212,7 @@ CoinShopFn.OnServerInvoke = function(plr, action, arg)
 	return { ok = true }
 end
 -- колесо удачи
-WheelFn.OnServerInvoke = function(plr)
+RX.WheelFn.OnServerInvoke = function(plr)
 	local d = data[plr]
 	if not d then return { ok = false } end
 	local today = Live.day(os.time())
@@ -2212,13 +2282,14 @@ local function hatch(plr, d, egg)
 		end
 	end
 	d.saved[kind] = (d.saved[kind] or 0) + 1
+	invAdd(d, kind, variant, 1)
 	d.firstSaved[kind] = true
 	d.variants[kind] = d.variants[kind] or {}
 	d.variants[kind][variant] = true
 	liveOnCatch(plr, d, kind, "plaza", variant)
 	return kind, variant
 end
-EggFn.OnServerInvoke = function(plr, action, arg)
+RX.EggFn.OnServerInvoke = function(plr, action, arg)
 	local d = data[plr]
 	if not d then return { ok = false } end
 	if action == "buy" then
@@ -2286,7 +2357,7 @@ local function grantCatch(plr, d, kind: string, district: string, variant: strin
 end
 -- бросок фонарика
 local throwAt = {}
-ThrowFn.OnServerInvoke = function(plr, q)
+RX.ThrowFn.OnServerInvoke = function(plr, q)
 	local d = data[plr]
 	local root = rootOf(plr)
 	if not (d and root and jars[plr]) or typeof(q) ~= "number" or q ~= q then return { ok = false } end
@@ -2385,7 +2456,7 @@ local function endRitual(plr)
 		plr:SetAttribute("RitualM", 0)
 	end
 end
-RitualFn.OnServerInvoke = function(plr, action)
+RX.RitualFn.OnServerInvoke = function(plr, action)
 	local d = data[plr]
 	local root = rootOf(plr)
 	if not (d and root) then return { ok = false } end
@@ -2461,7 +2532,7 @@ task.spawn(function()
 				-- Тьма: рой потерян
 				local lost = #rt.swarm
 				endRitual(plr)
-				RitualEv:FireClient(plr, { type = "crash", lost = lost, mult = Live.ritualMult(now - rt.t0) })
+				RX.RitualEv:FireClient(plr, { type = "crash", lost = lost, mult = Live.ritualMult(now - rt.t0) })
 				if lost >= 10 then
 					for _, p in Players:GetPlayers() do
 						if p ~= plr then NoticeEv:FireClient(p, ("Тьма забрала у %s %d духов!"):format(plr.DisplayName, lost)) end
@@ -2477,14 +2548,14 @@ task.spawn(function()
 					if kind then
 						table.insert(rt.swarm, { k = kind, v = variant })
 						swarmAttr(plr, rt)
-						RitualEv:FireClient(plr, { type = "arrive", kind = kind, variant = variant, odds = odds, n = #rt.swarm, mult = m })
+						RX.RitualEv:FireClient(plr, { type = "arrive", kind = kind, variant = variant, odds = odds, n = #rt.swarm, mult = m })
 					end
 				end
 				if rt.omenAt and now >= rt.omenAt then
 					rt.omenAt = nil
-					RitualEv:FireClient(plr, { type = "omen" })
+					RX.RitualEv:FireClient(plr, { type = "omen" })
 				elseif math.random() < (dt or 0.1) / (RIT.falseEvery * (1 + 0.08 * rt.sense)) then
-					RitualEv:FireClient(plr, { type = "omen" })
+					RX.RitualEv:FireClient(plr, { type = "omen" })
 				end
 			end
 		end
@@ -2492,18 +2563,71 @@ task.spawn(function()
 end)
 Players.PlayerRemoving:Connect(function(plr) rituals[plr] = nil end)
 
+RX.TeamFn.OnServerInvoke = function(plr, action, key)
+	local d = data[plr]
+	if not (d and typeof(key) == "string") then return { ok = false } end
+	local team = teamOf(d)
+	if action == "add" then
+		local _, _, slots = teamOf(d)
+		if #team >= slots then return { ok = false, msg = ("Команда полна (%d мест). Убери кого-нибудь"):format(slots) } end
+		local count = 0
+		for _, k in team do if k == key then count += 1 end end
+		if ((d.inv and d.inv[key]) or 0) <= count then return { ok = false, msg = "Нет свободного духа такого вида" } end
+		table.insert(team, key)
+	elseif action == "remove" then
+		local i = table.find(team, key)
+		if i then table.remove(team, i) end
+	else
+		return { ok = false }
+	end
+	d.team = team
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+RX.SellFn.OnServerInvoke = function(plr, key, n)
+	local d = data[plr]
+	if not (d and typeof(key) == "string") then return { ok = false } end
+	local kind, variant = string.match(key, "([^:]+):(.+)")
+	local info = kind and Catalog.Kinds[kind]
+	local vc = variant and Catalog.Variants[variant]
+	if not (info and vc) then return { ok = false } end
+	n = (n == "all") and 1e9 or (typeof(n) == "number" and math.floor(n) or 1)
+	local have = (d.inv and d.inv[key]) or 0
+	local inTeam = 0
+	for _, k in teamOf(d) do if k == key then inTeam += 1 end end
+	-- нельзя продать последнего духа вида и тех, кто в команде
+	local sellable = math.min(have - inTeam, (d.saved[kind] or 0) - 1)
+	n = math.min(n, sellable)
+	if n <= 0 then return { ok = false, msg = "Нельзя продать: последний дух вида или он в команде" } end
+	local price = Live.sellPrice(Catalog.Rarity[info.rarity].coins, vc.mult)
+	invAdd(d, kind, variant, -n)
+	d.saved[kind] -= n
+	d.coins += price * n
+	persist(plr)
+	pushState(plr)
+	return { ok = true, coins = price * n, n = n }
+end
+
 -- ритуал у алтаря за пыль
-AltarRitualFn.OnServerInvoke = function(plr, id)
+RX.AltarRitualFn.OnServerInvoke = function(plr, id)
 	local d = data[plr]
 	local cfg = d and typeof(id) == "string" and Live.Rituals[id]
 	if not cfg then return { ok = false } end
 	if d.dust < cfg.dust then return { ok = false, msg = ("Нужно %d пыли (пыль дают дубликаты духов)"):format(cfg.dust) } end
+	if d._ritualBusy then return { ok = false, msg = "Ритуал уже идёт" } end
 	d.dust -= cfg.dust
 	d.ritualPity = d.ritualPity or {}
 	local pity = d.ritualPity[id] or 0
 	local chance = math.min(0.95, cfg.chance + pity)
 	if math.random() >= chance then
 		d.ritualPity[id] = pity + Live.RitualPity
+		d._ritualBusy = true
+		RX.RitualFxEv:FireAllClients({ pos = map.altarPos, color = cfg.color, success = false, by = plr.UserId, tier = id })
+		task.delay(Live.RitualAnim, function()
+			if data[plr] then data[plr]._ritualBusy = nil end
+			if plr.Parent then NoticeEv:FireClient(plr, ("Тьма приняла подношение... Ничего (шанс был %d%%). Следующий шанс выше"):format(math.floor(chance * 100 + 0.5))) end
+		end)
 		persist(plr)
 		pushState(plr)
 		return { ok = true, success = false, chance = chance }
@@ -2537,18 +2661,24 @@ AltarRitualFn.OnServerInvoke = function(plr, id)
 		end
 	end
 	d.saved[kind] = (d.saved[kind] or 0) + 1
+	invAdd(d, kind, variant, 1)
 	d.firstSaved[kind] = true
 	d.variants[kind] = d.variants[kind] or {}
 	d.variants[kind][variant] = true
 	liveOnCatch(plr, d, kind, "plaza", variant)
 	local odds = math.max(1, math.floor(total / cfg.weights[rar] * #pool / pVar / chance + 0.5))
-	local root = rootOf(plr)
-	CaughtEv:FireClient(plr, kind, root and (root.Position + root.CFrame.LookVector * 6 + Vector3.new(0, 4, 0)) or map.altarPos, 1, variant, variant ~= "normal", odds)
-	if RARITY_RANK[rar] >= RARITY_RANK.mythic or variant ~= "normal" then
-		for _, p in Players:GetPlayers() do
-			NoticeEv:FireClient(p, ("%s провёл %s: %s%s!"):format(plr.DisplayName, cfg.name:lower(), variant ~= "normal" and (Catalog.Variants[variant].name .. " ") or "", Catalog.Kinds[kind].name))
+	d._ritualBusy = true
+	RX.RitualFxEv:FireAllClients({ pos = map.altarPos, color = cfg.color, success = true, by = plr.UserId, tier = id, kind = kind, variant = variant })
+	task.delay(Live.RitualAnim, function()
+		if data[plr] then data[plr]._ritualBusy = nil end
+		if not plr.Parent then return end
+		CaughtEv:FireClient(plr, kind, map.altarPos + Vector3.new(0, 6, 0), 1, variant, variant ~= "normal", odds)
+		if RARITY_RANK[rar] >= RARITY_RANK.mythic or variant ~= "normal" then
+			for _, p in Players:GetPlayers() do
+				NoticeEv:FireClient(p, ("%s провёл %s: %s%s!"):format(plr.DisplayName, cfg.name:lower(), variant ~= "normal" and (Catalog.Variants[variant].name .. " ") or "", Catalog.Kinds[kind].name))
+			end
 		end
-	end
+	end)
 	persist(plr)
 	pushState(plr)
 	return { ok = true, success = true, kind = kind, variant = variant }
@@ -2560,10 +2690,10 @@ do -- кнопка «Ритуал» у алтаря
 	rp.KeyboardKeyCode = Enum.KeyCode.R
 	rp.UIOffset = Vector2.new(0, 70)
 	rp.Parent = map.altar
-	rp.Triggered:Connect(function(plr) RitualOpenEv:FireClient(plr) end)
+	rp.Triggered:Connect(function(plr) RX.RitualOpenEv:FireClient(plr) end)
 end
 
-HuntFn.OnServerInvoke = function(plr)
+RX.HuntFn.OnServerInvoke = function(plr)
 	local d = data[plr]
 	if not d then return { ok = false } end
 	if d.hunt and os.clock() < d.hunt.ends then return { ok = false, msg = "Охота уже идёт" } end
@@ -2585,7 +2715,7 @@ HuntFn.OnServerInvoke = function(plr)
 	end)
 	return { ok = true }
 end
-EvolveFn.OnServerInvoke = function(plr, kind)
+RX.EvolveFn.OnServerInvoke = function(plr, kind)
 	local d = data[plr]
 	local info = d and typeof(kind) == "string" and Catalog.Kinds[kind]
 	if not info then return { ok = false } end
@@ -2597,6 +2727,18 @@ EvolveFn.OnServerInvoke = function(plr, kind)
 	if d.dust < cost then return { ok = false, msg = ("Нужно %d пыли"):format(cost) } end
 	d.dust -= cost
 	d.saved[kind] -= Live.EvolveDupes
+	do -- из инвентаря сначала уходят обычные, потом самые дешёвые разновидности
+		local left = Live.EvolveDupes
+		for _, v in Catalog.VariantOrder do
+			local have = (d.inv and d.inv[kind .. ":" .. v]) or 0
+			local take = math.min(have, left)
+			if take > 0 then
+				invAdd(d, kind, v, -take)
+				left -= take
+			end
+			if left <= 0 then break end
+		end
+	end
 	d.evolved[kind] = true
 	storyEvent(plr, d, "evolve")
 	applySpeed(plr)
@@ -2605,7 +2747,7 @@ EvolveFn.OnServerInvoke = function(plr, kind)
 	pushState(plr)
 	return { ok = true }
 end
-FurnitureFn.OnServerInvoke = function(plr, id)
+RX.FurnitureFn.OnServerInvoke = function(plr, id)
 	local d = data[plr]
 	local f = d and typeof(id) == "string" and Live.Furniture[id]
 	if not f then return { ok = false } end
@@ -2620,7 +2762,7 @@ FurnitureFn.OnServerInvoke = function(plr, id)
 	pushState(plr)
 	return { ok = true }
 end
-StoryFn.OnServerInvoke = function(plr, action)
+RX.StoryFn.OnServerInvoke = function(plr, action)
 	local d = data[plr]
 	if not d then return { ok = false } end
 	local ch = Live.Story[d.story.ch]
@@ -2697,6 +2839,9 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 			d.firstSaved[kind] = true
 			d.variants[kind] = {}
 			for _, v in Catalog.VariantOrder do d.variants[kind][v] = true end
+			invAdd(d, kind, "normal", 5)
+			for i = 2, #Catalog.VariantOrder do invAdd(d, kind, Catalog.VariantOrder[i], 1) end
+			d.saved[kind] += #Catalog.VariantOrder - 1
 		end
 	elseif cmd == "maxUpgrades" then
 		for _, k in Catalog.UpgradeOrder do d.levels[k] = Catalog.MaxLevel end
@@ -3105,7 +3250,7 @@ do
 	prompt.ActionText, prompt.ObjectText = "Поговорить", "Хранитель"
 	prompt.HoldDuration, prompt.MaxActivationDistance, prompt.RequiresLineOfSight = 0, 12, false
 	prompt.Parent = robe
-	prompt.Triggered:Connect(function(plr) StoryOpenEv:FireClient(plr) end)
+	prompt.Triggered:Connect(function(plr) RX.StoryOpenEv:FireClient(plr) end)
 	npc.Parent = workspace
 end
 
@@ -3179,7 +3324,7 @@ local function startBoss(district: string?)
 	end
 end
 startBossCmd = startBoss
-BossHitEv.OnServerEvent:Connect(function(plr)
+RX.BossHitEv.OnServerEvent:Connect(function(plr)
 	if not (boss.active and boss.anchor) then return end
 	local root = rootOf(plr)
 	local d = data[plr]
