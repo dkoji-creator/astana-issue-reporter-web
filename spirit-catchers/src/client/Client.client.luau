@@ -1654,7 +1654,8 @@ do
 	-- новичка встречает Хранитель (один раз за сессию)
 	local greeted = false
 	remotes.State.OnClientEvent:Connect(function(st)
-		if greeted or not st or (st.total or 0) > 0 then return end
+		-- Хранитель заговаривает сам только после обучения, чтобы не наслаивать окна на новичка
+		if greeted or not st or not st.tutorialDone or (st.total or 0) > 3 or not st.story or st.story.ch ~= 1 then return end
 		greeted = true
 		task.delay(6, function()
 			local intro = plr.PlayerGui:FindFirstChild("Intro")
@@ -3246,6 +3247,15 @@ do
 			end
 			v.shadow.Parent = visFolder
 		end
+		-- маяк редкого духа: столб света над легендарным и реже, виден через всю карту
+		local rk = info.rarity
+		if rk == "legendary" or rk == "mythic" or rk == "secret" then
+			local col = Catalog.Rarity[rk].color
+			local beacon = K.make("Part", { Name = "Beacon", Shape = Enum.PartType.Cylinder, Size = Vector3.new(160, 3, 3), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+				Material = Enum.Material.Neon, Color = col, Transparency = 0.55 }, visFolder)
+			K.make("PointLight", { Color = col, Range = 30, Brightness = 1.5 }, beacon)
+			v.beacon = beacon
+		end
 		-- Небесный рынок: над спрятанным духом развевается лента, её видно издалека
 		if Catalog.district(a.Position) == "skymarket" then
 			local col = Color3.fromHSV(math.random(), 0.6, 1)
@@ -3289,6 +3299,7 @@ do
 		if v.model then v.model:Destroy() end
 		if v.reflect then v.reflect:Destroy() end
 		if v.ribbon then v.ribbon:Destroy() end
+		if v.beacon then v.beacon:Destroy() end
 	end
 	spiritsFolder.ChildAdded:Connect(addAnchor)
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
@@ -3599,6 +3610,12 @@ do
 					pe:Emit(reducedFx and 6 or 20)
 					pe.Rate = 3
 				end
+			end
+			if v.beacon then
+				-- столб пульсирует; после проявления становится тоньше, пока духа не поймают
+				local w = (revealed and 1.4 or 3) + math.sin(now * 3 + v.seed) * 0.5
+				v.beacon.Size = Vector3.new(160, w, w)
+				v.beacon.CFrame = CFrame.new(cf.X, 80, cf.Z) * CFrame.Angles(0, 0, math.rad(90))
 			end
 			if v.ribbon then
 				if revealed then

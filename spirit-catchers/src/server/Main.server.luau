@@ -103,20 +103,22 @@ remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
 Lighting.ClockTime = 0
-Lighting.Brightness = 1
-Lighting.ExposureCompensation = -0.3
-Lighting.Ambient = Color3.fromRGB(44, 44, 72)
-Lighting.OutdoorAmbient = Color3.fromRGB(48, 50, 80)
+-- лунная ночь, но светлее: на видео и телефоне всё читается
+local NIGHT_AMB, NIGHT_OUT = Color3.fromRGB(66, 68, 104), Color3.fromRGB(78, 84, 124)
+Lighting.Brightness = 1.6
+Lighting.ExposureCompensation = 0
+Lighting.Ambient = NIGHT_AMB
+Lighting.OutdoorAmbient = NIGHT_OUT
 Lighting.EnvironmentDiffuseScale = 0.3
 local cc = Instance.new("ColorCorrectionEffect")
-cc.Saturation, cc.Contrast = -0.15, 0.04 -- спокойнее цвета: меньше «кислотности» неона
+cc.Saturation, cc.Contrast = -0.12, 0.06 -- спокойнее цвета: меньше «кислотности» неона
 cc.Parent = Lighting
 local bloom = Instance.new("BloomEffect")
 bloom.Name = "Bloom"
 bloom.Intensity, bloom.Size, bloom.Threshold = 0.08, 10, 2.2
 bloom.Parent = Lighting
 local atm = Instance.new("Atmosphere")
-atm.Density, atm.Haze, atm.Color, atm.Decay = 0.3, 1.1, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
+atm.Density, atm.Haze, atm.Color, atm.Decay = 0.26, 0.7, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
 atm.Parent = Lighting
 
 ------------------------------------------------------------------ профили (версия 4; v2 и v3 переносятся)
@@ -1417,8 +1419,8 @@ end)
 local function tweenLight(red)
 	local ti = TweenInfo.new(2.5)
 	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(70, 52, 66), OutdoorAmbient = Color3.fromRGB(78, 56, 72) }
-		or { Ambient = Color3.fromRGB(44, 44, 72), OutdoorAmbient = Color3.fromRGB(48, 50, 80) }):Play()
-	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 232, 232), Saturation = 0 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
+		or { Ambient = NIGHT_AMB, OutdoorAmbient = NIGHT_OUT }):Play()
+	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 232, 232), Saturation = -0.05 } or { TintColor = Color3.new(1, 1, 1), Saturation = -0.12 }):Play()
 	TweenService:Create(atm, ti, { Color = red and Color3.fromRGB(190, 45, 55) or Color3.fromRGB(80, 90, 150), Decay = red and Color3.fromRGB(120, 20, 40) or Color3.fromRGB(40, 30, 80) }):Play()
 	TweenService:Create(map.moon, ti, { Transparency = red and 0 or 1 }):Play()
 end
@@ -1559,7 +1561,7 @@ local function endFog()
 	moon.fog = false
 	workspace:SetAttribute("FogActive", false)
 	setPhase(false, NORMAL_TIME)
-	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.3, Haze = 1.1, Color = Color3.fromRGB(80, 90, 150) }):Play()
+	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.26, Haze = 0.7, Color = Color3.fromRGB(80, 90, 150) }):Play()
 end
 
 local function endMoon()

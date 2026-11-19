@@ -2823,20 +2823,22 @@ remotes.Parent = ReplicatedStorage
 
 ------------------------------------------------------------------ свет
 Lighting.ClockTime = 0
-Lighting.Brightness = 1
-Lighting.ExposureCompensation = -0.3
-Lighting.Ambient = Color3.fromRGB(44, 44, 72)
-Lighting.OutdoorAmbient = Color3.fromRGB(48, 50, 80)
+-- лунная ночь, но светлее: на видео и телефоне всё читается
+local NIGHT_AMB, NIGHT_OUT = Color3.fromRGB(66, 68, 104), Color3.fromRGB(78, 84, 124)
+Lighting.Brightness = 1.6
+Lighting.ExposureCompensation = 0
+Lighting.Ambient = NIGHT_AMB
+Lighting.OutdoorAmbient = NIGHT_OUT
 Lighting.EnvironmentDiffuseScale = 0.3
 local cc = Instance.new("ColorCorrectionEffect")
-cc.Saturation, cc.Contrast = -0.15, 0.04 -- спокойнее цвета: меньше «кислотности» неона
+cc.Saturation, cc.Contrast = -0.12, 0.06 -- спокойнее цвета: меньше «кислотности» неона
 cc.Parent = Lighting
 local bloom = Instance.new("BloomEffect")
 bloom.Name = "Bloom"
 bloom.Intensity, bloom.Size, bloom.Threshold = 0.08, 10, 2.2
 bloom.Parent = Lighting
 local atm = Instance.new("Atmosphere")
-atm.Density, atm.Haze, atm.Color, atm.Decay = 0.3, 1.1, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
+atm.Density, atm.Haze, atm.Color, atm.Decay = 0.26, 0.7, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
 atm.Parent = Lighting
 
 ------------------------------------------------------------------ профили (версия 4; v2 и v3 переносятся)
@@ -4137,8 +4139,8 @@ end)
 local function tweenLight(red)
 	local ti = TweenInfo.new(2.5)
 	TweenService:Create(Lighting, ti, red and { Ambient = Color3.fromRGB(70, 52, 66), OutdoorAmbient = Color3.fromRGB(78, 56, 72) }
-		or { Ambient = Color3.fromRGB(44, 44, 72), OutdoorAmbient = Color3.fromRGB(48, 50, 80) }):Play()
-	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 232, 232), Saturation = 0 } or { TintColor = Color3.new(1, 1, 1), Saturation = 0 }):Play()
+		or { Ambient = NIGHT_AMB, OutdoorAmbient = NIGHT_OUT }):Play()
+	TweenService:Create(cc, ti, red and { TintColor = Color3.fromRGB(255, 232, 232), Saturation = -0.05 } or { TintColor = Color3.new(1, 1, 1), Saturation = -0.12 }):Play()
 	TweenService:Create(atm, ti, { Color = red and Color3.fromRGB(190, 45, 55) or Color3.fromRGB(80, 90, 150), Decay = red and Color3.fromRGB(120, 20, 40) or Color3.fromRGB(40, 30, 80) }):Play()
 	TweenService:Create(map.moon, ti, { Transparency = red and 0 or 1 }):Play()
 end
@@ -4279,7 +4281,7 @@ local function endFog()
 	moon.fog = false
 	workspace:SetAttribute("FogActive", false)
 	setPhase(false, NORMAL_TIME)
-	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.3, Haze = 1.1, Color = Color3.fromRGB(80, 90, 150) }):Play()
+	TweenService:Create(atm, TweenInfo.new(3), { Density = 0.26, Haze = 0.7, Color = Color3.fromRGB(80, 90, 150) }):Play()
 end
 
 local function endMoon()
@@ -9509,7 +9511,8 @@ do
 	-- новичка встречает Хранитель (один раз за сессию)
 	local greeted = false
 	remotes.State.OnClientEvent:Connect(function(st)
-		if greeted or not st or (st.total or 0) > 0 then return end
+		-- Хранитель заговаривает сам только после обучения, чтобы не наслаивать окна на новичка
+		if greeted or not st or not st.tutorialDone or (st.total or 0) > 3 or not st.story or st.story.ch ~= 1 then return end
 		greeted = true
 		task.delay(6, function()
 			local intro = plr.PlayerGui:FindFirstChild("Intro")
@@ -11101,6 +11104,15 @@ do
 			end
 			v.shadow.Parent = visFolder
 		end
+		-- маяк редкого духа: столб света над легендарным и реже, виден через всю карту
+		local rk = info.rarity
+		if rk == "legendary" or rk == "mythic" or rk == "secret" then
+			local col = Catalog.Rarity[rk].color
+			local beacon = K.make("Part", { Name = "Beacon", Shape = Enum.PartType.Cylinder, Size = Vector3.new(160, 3, 3), Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false,
+				Material = Enum.Material.Neon, Color = col, Transparency = 0.55 }, visFolder)
+			K.make("PointLight", { Color = col, Range = 30, Brightness = 1.5 }, beacon)
+			v.beacon = beacon
+		end
 		-- Небесный рынок: над спрятанным духом развевается лента, её видно издалека
 		if Catalog.district(a.Position) == "skymarket" then
 			local col = Color3.fromHSV(math.random(), 0.6, 1)
@@ -11144,6 +11156,7 @@ do
 		if v.model then v.model:Destroy() end
 		if v.reflect then v.reflect:Destroy() end
 		if v.ribbon then v.ribbon:Destroy() end
+		if v.beacon then v.beacon:Destroy() end
 	end
 	spiritsFolder.ChildAdded:Connect(addAnchor)
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
@@ -11454,6 +11467,12 @@ do
 					pe:Emit(reducedFx and 6 or 20)
 					pe.Rate = 3
 				end
+			end
+			if v.beacon then
+				-- столб пульсирует; после проявления становится тоньше, пока духа не поймают
+				local w = (revealed and 1.4 or 3) + math.sin(now * 3 + v.seed) * 0.5
+				v.beacon.Size = Vector3.new(160, w, w)
+				v.beacon.CFrame = CFrame.new(cf.X, 80, cf.Z) * CFrame.Angles(0, 0, math.rad(90))
 			end
 			if v.ribbon then
 				if revealed then
