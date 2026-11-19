@@ -82,6 +82,8 @@ local TitleFn = remote("SetTitle", "RemoteFunction")
 local EvolveFn = remote("Evolve", "RemoteFunction")
 local CoinShopFn = remote("CoinShop", "RemoteFunction")
 local PocketFn = remote("PocketSave", "RemoteFunction")
+local WheelFn = remote("SpinWheel", "RemoteFunction")
+local EggFn = remote("Egg", "RemoteFunction")
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
 local StoryOpenEv = remote("StoryOpen")
@@ -151,10 +153,12 @@ local function dayMod(): string
 	return workspace:GetAttribute("DayMod") or ""
 end
 workspace:SetAttribute("DayMod", Live.modifierOf(Live.day(os.time())).id)
+workspace:SetAttribute("DayKind", Live.spiritOfDay(Live.day(os.time()), Catalog.Order, Catalog.Kinds) or "")
 task.spawn(function()
 	while true do
 		task.wait(30)
 		workspace:SetAttribute("DayMod", modOverride or Live.modifierOf(Live.day(os.time())).id)
+		workspace:SetAttribute("DayKind", Live.spiritOfDay(Live.day(os.time()), Catalog.Order, Catalog.Kinds) or "")
 	end
 end)
 -- спутник: уровень, способность и её сила
@@ -310,6 +314,11 @@ local function luckOf(d)
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
 	end
+	local streak = math.min(Live.Streak.max, (d.loginStreak and d.loginStreak.n) or 0)
+	if streak > 1 then
+		mult *= 1 + (streak - 1) * Live.Streak.per
+		table.insert(parts, ("Серия входов %d дн. +%d%%"):format(streak, math.floor((streak - 1) * Live.Streak.per * 100 + 0.5)))
+	end
 	local shrine = (d.shrine or 0) * Live.CoinShop.shrinePer
 	if shrine > 0 then
 		mult *= 1 + shrine
@@ -394,7 +403,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {}, story = { ch = 1, prog = 0 },
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {}, story = { ch = 1, prog = 0 }, eggs = {},
 		levels = { jar = 1, range = 1, power = 1, speed = 1, helper = 1, pocket = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -540,6 +549,14 @@ local function migrate(raw): Profile
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
 		d.clubWarChecked = math.floor(num(raw.clubWarChecked, 0, 1e7, 0))
 		d.shrine = math.floor(num(raw.shrine, 0, Live.CoinShop.shrineMax, 0))
+		if typeof(raw.loginStreak) == "table" then d.loginStreak = { day = math.floor(num(raw.loginStreak.day, 0, 1e7, 0)), n = math.floor(num(raw.loginStreak.n, 0, 1000, 0)) } end
+		if typeof(raw.wheel) == "table" then d.wheel = { day = math.floor(num(raw.wheel.day, 0, 1e7, 0)), used = math.floor(num(raw.wheel.used, 0, 10, 0)) } end
+		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
+		if typeof(raw.eggs) == "table" then
+			for _, e in raw.eggs do
+				if typeof(e) == "table" and Live.Eggs[e.id] and #d.eggs < Live.EggSlots then table.insert(d.eggs, { id = e.id, at = math.floor(num(e.at, 0, 1e12, 0)) }) end
+			end
+		end
 		if typeof(raw.raceDay) == "table" then d.raceDay = { day = math.floor(num(raw.raceDay.day, 0, 1e7, 0)), n = math.floor(num(raw.raceDay.n, 0, 1000, 0)) } end
 		if typeof(raw.story) == "table" then
 			d.story = { ch = math.floor(num(raw.story.ch, 1, #Live.Story + 1, 1)), prog = math.floor(num(raw.story.prog, 0, 1e6, 0)) }
@@ -572,6 +589,7 @@ local function persist(plr)
 	local copy = table.clone(d)
 	copy.loadFailed = nil
 	copy._clubPending = nil
+	copy.lastSeen = os.time()
 	copy.passes = nil
 	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
 	if not ok then warn("DataStore save failed:", err) end
@@ -706,6 +724,12 @@ local function pushState(plr)
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
+		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(),
+		spinsLeft = (function()
+			local today = Live.day(os.time())
+			local used = (d.wheel and d.wheel.day == today) and d.wheel.used or 0
+			return math.max(0, (hasPass(d, "vip") and 2 or 1) - used)
+		end)(),
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -1001,6 +1025,9 @@ local function pickKind(district)
 		end
 		if #hs > 0 and math.random() < Catalog.Live.HolidayChance then return hs[math.random(#hs)].kind end
 	end
+	-- дух дня появляется чаще
+	local dk = workspace:GetAttribute("DayKind")
+	if dk and Catalog.Kinds[dk] and Catalog.Kinds[dk].spawn[district] and math.random() < 0.2 then return dk end
 	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
 	if not tbl or next(tbl) == nil then return nil end
 	local total = 0
@@ -1483,7 +1510,8 @@ local function doSave(plr, anywhere: boolean?)
 	for _, entry in jar do
 		local kind, variant = entry.k, entry.v
 		local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
-		coins += math.floor(rar.coins * Catalog.Variants[variant].mult * ((d.evolved and d.evolved[kind]) and Live.EvolvedMult or 1))
+		coins += math.floor(rar.coins * Catalog.Variants[variant].mult * ((d.evolved and d.evolved[kind]) and Live.EvolvedMult or 1)
+			* (kind == workspace:GetAttribute("DayKind") and 2 or 1))
 		d.total += 1
 		d.variants[kind] = d.variants[kind] or {}
 		if not d.variants[kind][variant] then
@@ -2055,6 +2083,114 @@ CoinShopFn.OnServerInvoke = function(plr, action, arg)
 		sp.revealed = true
 		sp.revealedAt = os.clock()
 		sp.anchor:SetAttribute("Revealed", true)
+	else
+		return { ok = false }
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+-- колесо удачи
+WheelFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	local today = Live.day(os.time())
+	if not d.wheel or d.wheel.day ~= today then d.wheel = { day = today, used = 0 } end
+	if d.wheel.used >= (hasPass(d, "vip") and 2 or 1) then return { ok = false, msg = "Вращение уже было сегодня. Приходи завтра!" } end
+	d.wheel.used += 1
+	local total = 0
+	for _, p in Live.WheelPrizes do total += p.w end
+	local r = math.random() * total
+	local idx = #Live.WheelPrizes
+	for i, p in Live.WheelPrizes do
+		r -= p.w
+		if r <= 0 then idx = i break end
+	end
+	local prize = Live.WheelPrizes[idx]
+	local text = prize.name
+	local coins = Live.wheelCoins(prize.id, d.level)
+	if coins > 0 then
+		d.coins += coins
+		text = ("%d монет"):format(coins)
+	elseif prize.id == "dustS" then d.dust += 20
+	elseif prize.id == "dustL" then d.dust += 80
+	elseif prize.id == "potion" then d.luckUntil = math.max(d.luckUntil or 0, os.time()) + 600
+	elseif prize.id == "egg" then
+		if #d.eggs < Live.EggSlots then
+			table.insert(d.eggs, { id = "moon", at = os.time() + Live.Eggs.moon.hours * 3600 })
+		else
+			d.dust += 60
+			text = "Инкубатор полон: 60 пыли"
+		end
+	elseif prize.id == "skin" then
+		if d.skins.fortune then
+			d.dust += 200
+			text = "Фонарь уже есть: 200 пыли"
+		else
+			d.skins.fortune = true
+		end
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true, index = idx, text = text }
+end
+-- инкубатор: купить яйцо или вылупить готовое
+local function hatch(plr, d, egg)
+	local cfg = Live.Eggs[egg.id]
+	local total = 0
+	for _, w in cfg.weights do total += w end
+	local r, rar = math.random() * total, "common"
+	for k, w in cfg.weights do
+		r -= w
+		if r <= 0 then rar = k break end
+	end
+	local pool = {}
+	for kind, info in Catalog.Kinds do
+		if info.rarity == rar and not info.holiday then table.insert(pool, kind) end
+	end
+	if #pool == 0 then for kind, info in Catalog.Kinds do if not info.holiday then table.insert(pool, kind) end end end
+	local kind = pool[math.random(#pool)]
+	local variant = "normal"
+	local luck = luckOf(d) * cfg.luck
+	for vi = #Catalog.VariantOrder, 2, -1 do
+		local key = Catalog.VariantOrder[vi]
+		local vc = Catalog.Variants[key]
+		if not vc.moonOnly and math.random() < vc.chance * luck then
+			variant = key
+			break
+		end
+	end
+	d.saved[kind] = (d.saved[kind] or 0) + 1
+	d.firstSaved[kind] = true
+	d.variants[kind] = d.variants[kind] or {}
+	d.variants[kind][variant] = true
+	liveOnCatch(plr, d, kind, "plaza", variant)
+	return kind, variant
+end
+EggFn.OnServerInvoke = function(plr, action, arg)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if action == "buy" then
+		local cfg = typeof(arg) == "string" and Live.Eggs[arg]
+		if not cfg then return { ok = false } end
+		if #d.eggs >= Live.EggSlots then return { ok = false, msg = "Все места в инкубаторе заняты" } end
+		if d.coins < cfg.coins then return { ok = false, msg = ("Нужно %d монет"):format(cfg.coins) } end
+		d.coins -= cfg.coins
+		table.insert(d.eggs, { id = arg, at = os.time() + cfg.hours * 3600 })
+	elseif action == "hatch" then
+		local i = typeof(arg) == "number" and arg
+		local egg = i and d.eggs[i]
+		if not egg then return { ok = false } end
+		if os.time() < egg.at then return { ok = false, msg = "Ещё не вылупилось" } end
+		table.remove(d.eggs, i)
+		local kind, variant = hatch(plr, d, egg)
+		local root = rootOf(plr)
+		if root then CaughtEv:FireClient(plr, kind, root.Position + root.CFrame.LookVector * 6 + Vector3.new(0, 3, 0), 1, variant, variant ~= "normal") end
+		persist(plr)
+		pushState(plr)
+		return { ok = true, kind = kind, variant = variant }
+	elseif action == "fast" and isAdmin(plr) then
+		for _, e in d.eggs do e.at = os.time() end
 	else
 		return { ok = false }
 	end
@@ -2702,6 +2838,32 @@ Players.PlayerAdded:Connect(function(plr)
 	end)
 	if plr.Character then giveLantern(plr, plr.Character) end
 	task.spawn(checkPasses, plr)
+	-- серия входов и пыль двора за время отсутствия
+	do
+		local today = Live.day(os.time())
+		local ls = d.loginStreak or { day = 0, n = 0 }
+		local msgs = {}
+		if ls.day ~= today then
+			ls = { day = today, n = (ls.day == today - 1) and ls.n + 1 or 1 }
+			d.loginStreak = ls
+			local luckPct = math.floor((math.min(ls.n, Live.Streak.max) - 1) * Live.Streak.per * 100 + 0.5)
+			table.insert(msgs, ("Серия входов: %d день! Удача +%d%%. Заходи завтра, будет ещё +5%%"):format(ls.n, luckPct))
+		end
+		if (d.lastSeen or 0) > 0 and distinct(d) > 0 then
+			local hours = (os.time() - d.lastSeen) / 3600
+			local dust = hours >= 0.25 and Live.offlineDust(hours, distinct(d)) or 0
+			if dust > 0 then
+				d.dust += dust
+				table.insert(msgs, ("Пока тебя не было, духи двора собрали %d пыли"):format(dust))
+			end
+		end
+		task.delay(9, function()
+			for _, m in msgs do
+				if plr.Parent then NoticeEv:FireClient(plr, m) end
+				task.wait(3.5)
+			end
+		end)
+	end
 	pushState(plr)
 	Social.playerReady(plr)
 	if failed then NoticeEv:FireClient(plr, "Не удалось загрузить сохранение — прогресс этой сессии не запишется") end

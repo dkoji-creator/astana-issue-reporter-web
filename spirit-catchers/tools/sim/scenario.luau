@@ -104,8 +104,16 @@ end
 
 stage("клики по всем кнопкам")
 local skip = { ["Сброс прогресса"] = true, ["Переродиться"] = true, ["Сбросить"] = true }
+local function allButtons()
+	local list = hud:GetDescendants()
+	local wl = pg:FindFirstChild("SpiritWindows")
+	if wl then
+		for _, d in wl:GetDescendants() do table.insert(list, d) end
+	end
+	return list
+end
 for round = 1, 2 do
-	for _, d in hud:GetDescendants() do
+	for _, d in allButtons() do
 		if d:IsA("TextButton") then
 			local lbl = d:FindFirstChildOfClass("TextLabel")
 			local text = lbl and lbl.Text or ""
@@ -216,7 +224,7 @@ frames(2200) -- рейд заканчивается по времени
 if workspace:GetAttribute("RaidActive") then table.insert(SIM.errors, "рейд не закончился") end
 frames(20)
 for round = 1, 1 do
-	for _, d in hud:GetDescendants() do
+	for _, d in allButtons() do
 		if d:IsA("TextButton") then
 			local lbl = d:FindFirstChildOfClass("TextLabel")
 			local text = lbl and lbl.Text or ""
@@ -377,6 +385,20 @@ do
 		frames(2500)
 		if workspace:FindFirstChild("NightBoss") then table.insert(SIM.errors, "страж не ушёл") end
 	end
+end
+
+stage("колесо и инкубатор")
+do
+	local w = inv("SpinWheel")
+	if not (w and (w.ok or string.find(tostring(w.msg), "уже"))) then table.insert(SIM.errors, "колесо: " .. tostring(w and w.msg)) end
+	local w2 = inv("SpinWheel")
+	for _ = 1, 20 do inv("Admin", "coins") end
+	local b = inv("Egg", "buy", "lantern")
+	if not (b and (b.ok or string.find(tostring(b.msg), "заняты"))) then table.insert(SIM.errors, "яйцо: " .. tostring(b and b.msg)) end
+	inv("Egg", "fast")
+	local h = inv("Egg", "hatch", 1)
+	if not (h and h.ok) then table.insert(SIM.errors, "вылупление: " .. tostring(h and h.msg)) end
+	frames(80)
 end
 
 stage("траты монет")

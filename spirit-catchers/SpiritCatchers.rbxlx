@@ -575,6 +575,53 @@ function L.summonCost(level: number): number
 	return L.CoinShop.summonBase + level * L.CoinShop.summonPerLevel
 end
 
+------------------------------------------------------------------ причины вернуться завтра
+-- серия входов: удача +5% за каждый день подряд (до +50%), пропуск дня сбрасывает серию
+L.Streak = { per = 0.05, max = 10 }
+-- колесо удачи: 1 бесплатное вращение в день (VIP: 2)
+L.WheelPrizes = {
+	{ id = "coinsS", w = 28, name = "Монеты", icon = "coin", color = Color3.fromRGB(255, 200, 60) },
+	{ id = "dustS", w = 20, name = "20 пыли", icon = "dust", color = Color3.fromRGB(180, 120, 255) },
+	{ id = "potion", w = 15, name = "Зелье 10 мин", icon = "potion", color = Color3.fromRGB(90, 220, 120) },
+	{ id = "coinsL", w = 12, name = "Много монет", icon = "coin", color = Color3.fromRGB(255, 160, 40) },
+	{ id = "dustL", w = 8, name = "80 пыли", icon = "dust", color = Color3.fromRGB(140, 80, 255) },
+	{ id = "egg", w = 8, name = "Лунное яйцо", icon = "moon", color = Color3.fromRGB(120, 170, 255) },
+	{ id = "chest", w = 6, name = "Сундук", icon = "gift", color = Color3.fromRGB(255, 110, 90) },
+	{ id = "skin", w = 3, name = "Фонарь «Фортуна»", icon = "luck", color = Color3.fromRGB(255, 120, 220) },
+}
+function L.wheelCoins(id: string, level: number): number
+	if id == "coinsS" then return 300 + level * 40 end
+	if id == "coinsL" then return 1500 + level * 150 end
+	if id == "chest" then return 5000 + level * 400 end
+	return 0
+end
+-- инкубатор: яйцо вылупляется через несколько часов; дух сразу идёт в коллекцию
+L.EggOrder = { "lantern", "moon", "star" }
+L.Eggs = {
+	lantern = { name = "Фонарное яйцо", coins = 4000, hours = 1, luck = 1, color = Color3.fromRGB(255, 180, 90),
+		weights = { common = 40, uncommon = 35, rare = 18, epic = 6, legendary = 1 } },
+	moon = { name = "Лунное яйцо", coins = 25000, hours = 4, luck = 2, color = Color3.fromRGB(150, 190, 255),
+		weights = { uncommon = 30, rare = 35, epic = 25, legendary = 8, mythic = 2 } },
+	star = { name = "Звёздное яйцо", coins = 120000, hours = 12, luck = 4, color = Color3.fromRGB(255, 220, 120),
+		weights = { rare = 30, epic = 40, legendary = 22, mythic = 7, secret = 1 } },
+}
+L.EggSlots = 3
+-- дух дня: чаще появляется и даёт x2 монет при сдаче
+function L.spiritOfDay(day: number, order, kinds): string?
+	local c = {}
+	for _, k in order do
+		local info = kinds[k]
+		if info and not info.moonOnly and not info.holiday and info.move ~= "swim" and next(info.spawn) ~= nil then table.insert(c, k) end
+	end
+	if #c == 0 then return nil end
+	return c[(day * 13 + 5) % #c + 1]
+end
+-- пока игрока нет, духи его двора собирают пыль (до 12 часов)
+L.Offline = { maxHours = 12 }
+function L.offlineDust(hours: number, distinct: number): number
+	return math.floor(math.min(hours, L.Offline.maxHours) * (3 + distinct * 0.3))
+end
+
 return L
 ]]></string>
           </Properties>
@@ -680,7 +727,7 @@ P.Milestones = {
 -- price = монеты (dust = пыль); source = где получить; tier = ценность облика (подпись в магазине)
 -- fx: tex = sparkles | fire | smoke, colors = цвета частиц, rate/size/life/speed, up = подъём (+) или падение (-),
 --     trail = цвета шлейфа при беге, aura = большой мягкий свет вокруг игрока, burst = вспышка при поимке духа
-P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "lotus", "starlight", "phoenix", "eclipse", "crystal", "imperial", "solar", "vip" }
+P.SkinOrder = { "classic", "sakura", "moon", "jade", "sea", "ember", "autumn", "maple", "golden", "fog", "ghost", "harvest", "dragon", "aurora", "lotus", "starlight", "phoenix", "eclipse", "crystal", "imperial", "solar", "fortune", "vip" }
 local rgb = Color3.fromRGB
 P.SkinTiers = {
 	common = { name = "Обычный", color = rgb(190, 195, 215) },
@@ -774,6 +821,10 @@ P.Skins = {
 		desc = "Маленькое солнце: протуберанцы, огненный шлейф и вспышка",
 		fx = { tex = "fire", colors = { rgb(255, 255, 220), rgb(255, 190, 60), rgb(255, 90, 30) }, rate = 32, size = 0.9, life = 1.1, speed = 2.6, up = 3,
 			trail = { rgb(255, 250, 200), rgb(255, 140, 40), rgb(200, 50, 20) }, aura = true, burst = true } },
+	fortune = { name = "Фортуна", tier = "legendary", lamp = rgb(255, 150, 230), beam = rgb(255, 210, 240), source = "Колесо удачи (редкий приз)",
+		desc = "Розово-золотые искры удачи и клеверный шлейф",
+		fx = { tex = "sparkles", colors = { rgb(255, 150, 230), rgb(255, 220, 120), rgb(120, 255, 160) }, rate = 24, size = 0.5, life = 1.8, speed = 2, up = 1.2,
+			trail = { rgb(255, 150, 230), rgb(120, 255, 160) }, aura = true, burst = true } },
 	vip = { name = "Радужный VIP", tier = "vip", lamp = rgb(255, 120, 220), beam = rgb(200, 220, 255), source = "VIP-ловец", rainbow = true,
 		desc = "Радужные звёзды, радужный шлейф, ореол и салют при поимке",
 		fx = { tex = "sparkles", colors = { rgb(255, 80, 80), rgb(255, 200, 60), rgb(80, 255, 120), rgb(80, 160, 255), rgb(220, 90, 255) },
@@ -786,6 +837,7 @@ P.Codes = {
 	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
 	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
 	UPDATE3 = { coins = 1000, dust = 30, text = "Обновление 3! +1000 монет и +30 пыли" },
+	DAILY = { coins = 2500, dust = 60, text = "Обновление 7! +2500 монет и +60 пыли. Загляни в «Каждый день»" },
 	TIKTOK = { coins = 1500, dust = 40, skin = "moon", text = "Привет из TikTok! +1500 монет, +40 пыли и Лунный фонарь" },
 	BOOST = { coins = 3000, dust = 80, text = "Обновление 6! +3000 монет и +80 пыли: купи помощника-ловца" },
 	SKY = { coins = 2000, dust = 60, text = "Обновление 5: Небесный рынок! +2000 монет и +60 пыли" },
@@ -793,17 +845,17 @@ P.Codes = {
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 6
+P.NewsVersion = 7
 P.News = {
-	title = "Обновление 6: меньше беготни",
+	title = "Обновление 7: каждый день",
 	lines = {
-		"Скорость бега: новый апгрейд в Магазине (до +16.5)",
-		"Помощник-ловец: спутник сам ловит духов рядом с тобой",
-		"Карманный алтарь: кнопка «Сдать» на банке, без похода к алтарю",
-		"Поимка стала ярче: вспышка, тряска и надпись редкости",
-		"Свита: с 10 и 20 уровня за тобой бегут ещё 2 твоих самых редких духа",
-		"Над головой виден твой лучший улов",
-		"Код BOOST (Опции)",
+		"Серия входов: +5% удачи за каждый день подряд (до +45%)",
+		"Колесо удачи: бесплатное вращение каждый день, главный приз фонарь «Фортуна»",
+		"Инкубатор: яйца вылупляются через 1, 4 и 12 часов, внутри редкие духи",
+		"Дух дня: появляется чаще и даёт x2 монет",
+		"Пока тебя нет, духи двора собирают пыль (до 12 часов)",
+		"Меньше помех на экране, окна по размеру экрана",
+		"Код DAILY (Опции)",
 	},
 }
 
@@ -2650,6 +2702,8 @@ local TitleFn = remote("SetTitle", "RemoteFunction")
 local EvolveFn = remote("Evolve", "RemoteFunction")
 local CoinShopFn = remote("CoinShop", "RemoteFunction")
 local PocketFn = remote("PocketSave", "RemoteFunction")
+local WheelFn = remote("SpinWheel", "RemoteFunction")
+local EggFn = remote("Egg", "RemoteFunction")
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
 local StoryOpenEv = remote("StoryOpen")
@@ -2719,10 +2773,12 @@ local function dayMod(): string
 	return workspace:GetAttribute("DayMod") or ""
 end
 workspace:SetAttribute("DayMod", Live.modifierOf(Live.day(os.time())).id)
+workspace:SetAttribute("DayKind", Live.spiritOfDay(Live.day(os.time()), Catalog.Order, Catalog.Kinds) or "")
 task.spawn(function()
 	while true do
 		task.wait(30)
 		workspace:SetAttribute("DayMod", modOverride or Live.modifierOf(Live.day(os.time())).id)
+		workspace:SetAttribute("DayKind", Live.spiritOfDay(Live.day(os.time()), Catalog.Order, Catalog.Kinds) or "")
 	end
 end)
 -- спутник: уровень, способность и её сила
@@ -2878,6 +2934,11 @@ local function luckOf(d)
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
 	end
+	local streak = math.min(Live.Streak.max, (d.loginStreak and d.loginStreak.n) or 0)
+	if streak > 1 then
+		mult *= 1 + (streak - 1) * Live.Streak.per
+		table.insert(parts, ("Серия входов %d дн. +%d%%"):format(streak, math.floor((streak - 1) * Live.Streak.per * 100 + 0.5)))
+	end
 	local shrine = (d.shrine or 0) * Live.CoinShop.shrinePer
 	if shrine > 0 then
 		mult *= 1 + shrine
@@ -2962,7 +3023,7 @@ end
 
 local function migrate(raw): Profile
 	local d: Profile = {
-		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {}, story = { ch = 1, prog = 0 },
+		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {}, story = { ch = 1, prog = 0 }, eggs = {},
 		levels = { jar = 1, range = 1, power = 1, speed = 1, helper = 1, pocket = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
@@ -3108,6 +3169,14 @@ local function migrate(raw): Profile
 		if typeof(raw.club) == "string" and #raw.club == 5 then d.club = raw.club end
 		d.clubWarChecked = math.floor(num(raw.clubWarChecked, 0, 1e7, 0))
 		d.shrine = math.floor(num(raw.shrine, 0, Live.CoinShop.shrineMax, 0))
+		if typeof(raw.loginStreak) == "table" then d.loginStreak = { day = math.floor(num(raw.loginStreak.day, 0, 1e7, 0)), n = math.floor(num(raw.loginStreak.n, 0, 1000, 0)) } end
+		if typeof(raw.wheel) == "table" then d.wheel = { day = math.floor(num(raw.wheel.day, 0, 1e7, 0)), used = math.floor(num(raw.wheel.used, 0, 10, 0)) } end
+		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
+		if typeof(raw.eggs) == "table" then
+			for _, e in raw.eggs do
+				if typeof(e) == "table" and Live.Eggs[e.id] and #d.eggs < Live.EggSlots then table.insert(d.eggs, { id = e.id, at = math.floor(num(e.at, 0, 1e12, 0)) }) end
+			end
+		end
 		if typeof(raw.raceDay) == "table" then d.raceDay = { day = math.floor(num(raw.raceDay.day, 0, 1e7, 0)), n = math.floor(num(raw.raceDay.n, 0, 1000, 0)) } end
 		if typeof(raw.story) == "table" then
 			d.story = { ch = math.floor(num(raw.story.ch, 1, #Live.Story + 1, 1)), prog = math.floor(num(raw.story.prog, 0, 1e6, 0)) }
@@ -3140,6 +3209,7 @@ local function persist(plr)
 	local copy = table.clone(d)
 	copy.loadFailed = nil
 	copy._clubPending = nil
+	copy.lastSeen = os.time()
 	copy.passes = nil
 	local ok, err = pcall(function() store:SetAsync("u" .. plr.UserId, copy) end)
 	if not ok then warn("DataStore save failed:", err) end
@@ -3274,6 +3344,12 @@ local function pushState(plr)
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
+		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(),
+		spinsLeft = (function()
+			local today = Live.day(os.time())
+			local used = (d.wheel and d.wheel.day == today) and d.wheel.used or 0
+			return math.max(0, (hasPass(d, "vip") and 2 or 1) - used)
+		end)(),
 		skins = d.skins, skin = d.skin, milestones = d.milestones, passes = (function()
 			local t = {}
 			for key in Money.Passes do t[key] = hasPass(d, key) end
@@ -3569,6 +3645,9 @@ local function pickKind(district)
 		end
 		if #hs > 0 and math.random() < Catalog.Live.HolidayChance then return hs[math.random(#hs)].kind end
 	end
+	-- дух дня появляется чаще
+	local dk = workspace:GetAttribute("DayKind")
+	if dk and Catalog.Kinds[dk] and Catalog.Kinds[dk].spawn[district] and math.random() < 0.2 then return dk end
 	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
 	if not tbl or next(tbl) == nil then return nil end
 	local total = 0
@@ -4051,7 +4130,8 @@ local function doSave(plr, anywhere: boolean?)
 	for _, entry in jar do
 		local kind, variant = entry.k, entry.v
 		local rar = Catalog.Rarity[Catalog.Kinds[kind].rarity]
-		coins += math.floor(rar.coins * Catalog.Variants[variant].mult * ((d.evolved and d.evolved[kind]) and Live.EvolvedMult or 1))
+		coins += math.floor(rar.coins * Catalog.Variants[variant].mult * ((d.evolved and d.evolved[kind]) and Live.EvolvedMult or 1)
+			* (kind == workspace:GetAttribute("DayKind") and 2 or 1))
 		d.total += 1
 		d.variants[kind] = d.variants[kind] or {}
 		if not d.variants[kind][variant] then
@@ -4623,6 +4703,114 @@ CoinShopFn.OnServerInvoke = function(plr, action, arg)
 		sp.revealed = true
 		sp.revealedAt = os.clock()
 		sp.anchor:SetAttribute("Revealed", true)
+	else
+		return { ok = false }
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true }
+end
+-- колесо удачи
+WheelFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	local today = Live.day(os.time())
+	if not d.wheel or d.wheel.day ~= today then d.wheel = { day = today, used = 0 } end
+	if d.wheel.used >= (hasPass(d, "vip") and 2 or 1) then return { ok = false, msg = "Вращение уже было сегодня. Приходи завтра!" } end
+	d.wheel.used += 1
+	local total = 0
+	for _, p in Live.WheelPrizes do total += p.w end
+	local r = math.random() * total
+	local idx = #Live.WheelPrizes
+	for i, p in Live.WheelPrizes do
+		r -= p.w
+		if r <= 0 then idx = i break end
+	end
+	local prize = Live.WheelPrizes[idx]
+	local text = prize.name
+	local coins = Live.wheelCoins(prize.id, d.level)
+	if coins > 0 then
+		d.coins += coins
+		text = ("%d монет"):format(coins)
+	elseif prize.id == "dustS" then d.dust += 20
+	elseif prize.id == "dustL" then d.dust += 80
+	elseif prize.id == "potion" then d.luckUntil = math.max(d.luckUntil or 0, os.time()) + 600
+	elseif prize.id == "egg" then
+		if #d.eggs < Live.EggSlots then
+			table.insert(d.eggs, { id = "moon", at = os.time() + Live.Eggs.moon.hours * 3600 })
+		else
+			d.dust += 60
+			text = "Инкубатор полон: 60 пыли"
+		end
+	elseif prize.id == "skin" then
+		if d.skins.fortune then
+			d.dust += 200
+			text = "Фонарь уже есть: 200 пыли"
+		else
+			d.skins.fortune = true
+		end
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true, index = idx, text = text }
+end
+-- инкубатор: купить яйцо или вылупить готовое
+local function hatch(plr, d, egg)
+	local cfg = Live.Eggs[egg.id]
+	local total = 0
+	for _, w in cfg.weights do total += w end
+	local r, rar = math.random() * total, "common"
+	for k, w in cfg.weights do
+		r -= w
+		if r <= 0 then rar = k break end
+	end
+	local pool = {}
+	for kind, info in Catalog.Kinds do
+		if info.rarity == rar and not info.holiday then table.insert(pool, kind) end
+	end
+	if #pool == 0 then for kind, info in Catalog.Kinds do if not info.holiday then table.insert(pool, kind) end end end
+	local kind = pool[math.random(#pool)]
+	local variant = "normal"
+	local luck = luckOf(d) * cfg.luck
+	for vi = #Catalog.VariantOrder, 2, -1 do
+		local key = Catalog.VariantOrder[vi]
+		local vc = Catalog.Variants[key]
+		if not vc.moonOnly and math.random() < vc.chance * luck then
+			variant = key
+			break
+		end
+	end
+	d.saved[kind] = (d.saved[kind] or 0) + 1
+	d.firstSaved[kind] = true
+	d.variants[kind] = d.variants[kind] or {}
+	d.variants[kind][variant] = true
+	liveOnCatch(plr, d, kind, "plaza", variant)
+	return kind, variant
+end
+EggFn.OnServerInvoke = function(plr, action, arg)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if action == "buy" then
+		local cfg = typeof(arg) == "string" and Live.Eggs[arg]
+		if not cfg then return { ok = false } end
+		if #d.eggs >= Live.EggSlots then return { ok = false, msg = "Все места в инкубаторе заняты" } end
+		if d.coins < cfg.coins then return { ok = false, msg = ("Нужно %d монет"):format(cfg.coins) } end
+		d.coins -= cfg.coins
+		table.insert(d.eggs, { id = arg, at = os.time() + cfg.hours * 3600 })
+	elseif action == "hatch" then
+		local i = typeof(arg) == "number" and arg
+		local egg = i and d.eggs[i]
+		if not egg then return { ok = false } end
+		if os.time() < egg.at then return { ok = false, msg = "Ещё не вылупилось" } end
+		table.remove(d.eggs, i)
+		local kind, variant = hatch(plr, d, egg)
+		local root = rootOf(plr)
+		if root then CaughtEv:FireClient(plr, kind, root.Position + root.CFrame.LookVector * 6 + Vector3.new(0, 3, 0), 1, variant, variant ~= "normal") end
+		persist(plr)
+		pushState(plr)
+		return { ok = true, kind = kind, variant = variant }
+	elseif action == "fast" and isAdmin(plr) then
+		for _, e in d.eggs do e.at = os.time() end
 	else
 		return { ok = false }
 	end
@@ -5270,6 +5458,32 @@ Players.PlayerAdded:Connect(function(plr)
 	end)
 	if plr.Character then giveLantern(plr, plr.Character) end
 	task.spawn(checkPasses, plr)
+	-- серия входов и пыль двора за время отсутствия
+	do
+		local today = Live.day(os.time())
+		local ls = d.loginStreak or { day = 0, n = 0 }
+		local msgs = {}
+		if ls.day ~= today then
+			ls = { day = today, n = (ls.day == today - 1) and ls.n + 1 or 1 }
+			d.loginStreak = ls
+			local luckPct = math.floor((math.min(ls.n, Live.Streak.max) - 1) * Live.Streak.per * 100 + 0.5)
+			table.insert(msgs, ("Серия входов: %d день! Удача +%d%%. Заходи завтра, будет ещё +5%%"):format(ls.n, luckPct))
+		end
+		if (d.lastSeen or 0) > 0 and distinct(d) > 0 then
+			local hours = (os.time() - d.lastSeen) / 3600
+			local dust = hours >= 0.25 and Live.offlineDust(hours, distinct(d)) or 0
+			if dust > 0 then
+				d.dust += dust
+				table.insert(msgs, ("Пока тебя не было, духи двора собрали %d пыли"):format(dust))
+			end
+		end
+		task.delay(9, function()
+			for _, m in msgs do
+				if plr.Parent then NoticeEv:FireClient(plr, m) end
+				task.wait(3.5)
+			end
+		end)
+	end
 	pushState(plr)
 	Social.playerReady(plr)
 	if failed then NoticeEv:FireClient(plr, "Не удалось загрузить сохранение — прогресс этой сессии не запишется") end
@@ -7015,7 +7229,7 @@ do
 	btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 	btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
 	btnShop = K.iconButton(leftCol, "shop", "Магазин", T.red)
-	btnGift = K.iconButton(leftCol, "gift", "Подарок", T.green)
+	btnGift = K.iconButton(leftCol, "gift", "Каждый день", T.green)
 	btnTeleport = K.iconButton(leftCol, "portal", "Телепорт", T.purple)
 	btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
 	btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
@@ -8585,8 +8799,16 @@ end
 ------------------------------------------------------------------ окно: Подарок дня
 local giftW, giftBody, refreshGift
 do
-	giftW, giftBody = K.window(gui, "Ежедневный подарок", "gift", T.green, 0.8, 0.66)
-	local dayRow = K.make("Frame", { Size = UDim2.new(1, 0, 0.62, 0), BackgroundTransparency = 1 }, giftBody)
+	giftW, giftBody = K.window(gui, "Каждый день", "gift", T.green, 0.8, 0.7)
+	local Live = Catalog.Live
+	local gTabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1 }, giftBody)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, gTabs)
+	local tGift = K.button(gTabs, "Подарок", T.green, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tWheel = K.button(gTabs, "Колесо", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tEgg = K.button(gTabs, "Инкубатор", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local streakL = K.text(gTabs, "", { Size = UDim2.fromOffset(260, 36), MaxText = 15, TextColor3 = T.gold, Font = Enum.Font.GothamBold })
+	local giftPage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1 }, giftBody)
+	local dayRow = K.make("Frame", { Size = UDim2.new(1, 0, 0.62, 0), BackgroundTransparency = 1 }, giftPage)
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, dayRow)
 	local dayTiles = {}
 	for i, r in Prog.Daily do
@@ -8601,7 +8823,7 @@ do
 		K.text(f, table.concat(parts, "\n"), { Size = UDim2.new(1, -6, 0, 34), Position = UDim2.new(0, 3, 1, -38), MaxText = 13, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
 		dayTiles[i] = f
 	end
-	local giftBtn, giftL = K.button(giftBody, "Забрать", T.green, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, 0, 1, -4), MaxText = 22 })
+	local giftBtn, giftL = K.button(giftPage, "Забрать", T.green, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, 0, 1, -4), MaxText = 22 })
 	giftBtn.Activated:Connect(function()
 		local r = remotes.ClaimDaily:InvokeServer()
 		if r and r.ok then
@@ -8611,7 +8833,129 @@ do
 			showToast(r.msg)
 		end
 	end)
+	-- колесо удачи: полоса из призов, подсветка бежит и останавливается на выигрыше
+	local wheelPage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, giftBody)
+	local strip = K.make("Frame", { Size = UDim2.new(1, 0, 0.5, 0), BackgroundTransparency = 1 }, wheelPage)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center }, strip)
+	local tiles = {}
+	for i, pz in Live.WheelPrizes do
+		local f = K.panel(strip, { Size = UDim2.new(1 / #Live.WheelPrizes, -6, 1, 0), BackgroundColor3 = K.darken(pz.color, 0.55) })
+		K.icon(f, pz.icon, { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(44, 44), Position = UDim2.new(0.5, 0, 0, 8) })
+		K.text(f, pz.name, { Size = UDim2.new(1, -6, 0, 40), Position = UDim2.new(0, 3, 1, -44), MaxText = 14, TextWrapped = true })
+		tiles[i] = f
+	end
+	local wheelInfo = K.text(wheelPage, "1 бесплатное вращение каждый день (VIP: 2). Главный приз: фонарь «Фортуна»", { Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 0.5, 8), MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local spinB, spinL = K.button(wheelPage, "Крутить", T.gold, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, 0, 1, -4), MaxText = 22 })
+	local spinning = false
+	spinB.Activated:Connect(function()
+		if spinning then return end
+		local r = remotes.SpinWheel:InvokeServer()
+		if not (r and r.ok) then
+			if r and r.msg then showToast(r.msg) end
+			return
+		end
+		spinning = true
+		local n = #tiles
+		local steps = n * 3 + r.index
+		for i = 1, steps do
+			for j, t in tiles do t:FindFirstChildOfClass("UIStroke").Color = (j == (i - 1) % n + 1) and T.gold or T.ink end
+			play("click")
+			task.wait(0.04 + (i / steps) ^ 3 * 0.25)
+		end
+		play("legendary")
+		showToast("Колесо: " .. r.text .. "!", 3, Color3.fromRGB(150, 110, 20))
+		spinning = false
+	end)
+	-- инкубатор: 3 места, яйца вылупляются через часы
+	local eggPage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, giftBody)
+	local slotsRow = K.make("Frame", { Size = UDim2.new(1, 0, 0.5, -4), BackgroundTransparency = 1 }, eggPage)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center }, slotsRow)
+	local eggSlots = {}
+	for i = 1, Live.EggSlots do
+		local f = K.panel(slotsRow, { Size = UDim2.new(1 / Live.EggSlots, -8, 1, 0), BackgroundColor3 = T.panel2 })
+		local name = K.text(f, "", { Size = UDim2.new(1, -10, 0, 24), Position = UDim2.fromOffset(5, 6), MaxText = 17 })
+		local timeL = K.text(f, "", { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 32), MaxText = 16, TextColor3 = T.gold })
+		local b, l = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
+		b.Activated:Connect(function()
+			local r = remotes.Egg:InvokeServer("hatch", i)
+			if r and r.ok then
+				play("legendary")
+			elseif r and r.msg then
+				showToast(r.msg)
+			end
+		end)
+		eggSlots[i] = { f = f, name = name, time = timeL, b = b, l = l }
+	end
+	local buyRow = K.make("Frame", { Position = UDim2.new(0, 0, 0.5, 4), Size = UDim2.new(1, 0, 0.5, -4), BackgroundTransparency = 1 }, eggPage)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center }, buyRow)
+	for _, id in Live.EggOrder do
+		local cfg = Live.Eggs[id]
+		local f = K.panel(buyRow, { Size = UDim2.new(1 / #Live.EggOrder, -8, 1, 0), BackgroundColor3 = K.darken(cfg.color, 0.6) })
+		K.text(f, cfg.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 4), MaxText = 17 })
+		local best = "до легендарного"
+		if cfg.weights.secret then best = "шанс секретного" elseif cfg.weights.mythic then best = "до мифического" end
+		K.text(f, ("Вылупится через %d ч, %s"):format(cfg.hours, best), { Size = UDim2.new(1, -10, 0, 20), Position = UDim2.fromOffset(5, 28), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		local b = K.button(f, ("%d монет"):format(cfg.coins), T.green, { Size = UDim2.new(1, -12, 0, 38), Position = UDim2.new(0, 6, 1, -44), MaxText = 15 })
+		b.Activated:Connect(function()
+			local r = remotes.Egg:InvokeServer("buy", id)
+			if r and r.ok then
+				play("save")
+				showToast(cfg.name .. " в инкубаторе!", 2)
+			elseif r and r.msg then
+				showToast(r.msg)
+			end
+		end)
+	end
+	local function refreshEggs()
+		local now = os.time()
+		for i, sl in eggSlots do
+			local e = state.eggs and state.eggs[i]
+			if e then
+				local cfg = Live.Eggs[e.id]
+				local left = e.at - now
+				sl.name.Text = cfg.name
+				sl.f.BackgroundColor3 = K.darken(cfg.color, 0.55)
+				sl.b.Visible = true
+				if left <= 0 then
+					sl.time.Text = "Готово!"
+					sl.l.Text = "Вылупить"
+					K.recolor(sl.b, T.green)
+				else
+					sl.time.Text = ("%d:%02d:%02d"):format(left // 3600, (left % 3600) // 60, left % 60)
+					sl.l.Text = "Ждём..."
+					K.recolor(sl.b, Color3.fromRGB(80, 80, 100))
+				end
+			else
+				sl.name.Text = "Пустое место"
+				sl.time.Text = "Купи яйцо ниже"
+				sl.f.BackgroundColor3 = T.panel2
+				sl.b.Visible = false
+			end
+		end
+	end
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			if eggPage.Visible and giftW.Visible then refreshEggs() end
+		end
+	end)
+	local gPages = { { tGift, giftPage, T.green }, { tWheel, wheelPage, T.gold }, { tEgg, eggPage, T.blue } }
+	for _, pair in gPages do
+		pair[1].Activated:Connect(function()
+			for _, o in gPages do
+				o[2].Visible = o == pair
+				K.recolor(o[1], o == pair and o[3] or T.panel2)
+			end
+			refreshEggs()
+		end)
+	end
 	refreshGift = function()
+		local ls = state.loginStreak
+		local n = ls and ls.n or 1
+		streakL.Text = ("Серия входов: %d дн.  Удача +%d%%"):format(n, math.floor((math.min(n, Live.Streak.max) - 1) * Live.Streak.per * 100 + 0.5))
+		spinL.Text = (state.spinsLeft or 0) > 0 and ("Крутить (%d)"):format(state.spinsLeft) or "Завтра снова"
+		K.recolor(spinB, (state.spinsLeft or 0) > 0 and T.gold or Color3.fromRGB(80, 80, 95))
+		refreshEggs()
 		local today = math.floor(workspace:GetServerTimeNow() / 86400)
 		local nextDay
 		if state.dailyReady then
@@ -8955,7 +9299,11 @@ do
 		dustL.Text = tostring(state.dust)
 		levelL.Text = ("Ур. %d"):format(state.level)
 		xpFill.Size = UDim2.fromScale(math.clamp(state.xp / math.max(state.xpNext, 1), 0, 1), 1)
-		btnGift.Badge.Visible = state.dailyReady
+		local eggReady = false
+		for _, e in state.eggs or {} do
+			if e.at <= os.time() then eggReady = true end
+		end
+		btnGift.Badge.Visible = state.dailyReady or (state.spinsLeft or 0) > 0 or eggReady
 		btnPower.Badge.Visible = (state.talentPoints or 0) > 0 or (state.level or 1) >= (state.rebirthLevel or 15)
 		luckL.Text = ("Удача x%.2f"):format(state.luck or 1)
 		luckL.Text = string.gsub(luckL.Text, "%.?0+$", "")
@@ -8985,7 +9333,7 @@ do
 		goalPill.Visible = ch ~= nil and not trackPill.Visible and not collapsed
 		if ch then
 			local done = st.prog >= ch.need
-			goalL.Text = done and ("Глава «%s» готова: поговори с Хранителем"):format(ch.title)
+			goalL.Text = done and "Глава готова! Нажми: награда у Хранителя"
 				or ("Цель: %s (%d/%d)"):format(Catalog.Live.storyGoal(ch, Catalog.Kinds, Catalog.Districts), st.prog, ch.need)
 		end
 		-- сезон: есть награда или незавершённое испытание
@@ -9008,7 +9356,7 @@ do
 			modPill.BackgroundColor3 = K.darken(mod.color, 0.35)
 		end
 		local c = state.comp
-		compPill.Visible = c ~= nil and not collapsed
+		compPill.Visible = c ~= nil and not collapsed and not catchBtn.Visible
 		if c then
 			local cost = Live.feedCost(c.level)
 			compL.Text = ("%s ур.%d: %s\n%s"):format(Catalog.Kinds[c.kind].short, c.level, c.text,
@@ -9086,7 +9434,7 @@ do
 	local bannerSeq = 0
 	local RANK_WORD = { common = "ПОЙМАН!", uncommon = "НЕОБЫЧНЫЙ!", rare = "РЕДКИЙ!", epic = "ЭПИЧЕСКИЙ!", legendary = "ЛЕГЕНДАРНЫЙ!", mythic = "МИФИЧЕСКИЙ!", secret = "СЕКРЕТНЫЙ!" }
 	local POWER = { common = 0.3, uncommon = 0.5, rare = 0.75, epic = 1, legendary = 1.3, mythic = 1.6, secret = 2 }
-	local function juice(info, rar, variant)
+	local function juice(info, rar, variant, rolling)
 		local pw = POWER[info.rarity] or 0.3
 		if variant and variant ~= "normal" then pw += 0.4 end
 		if state.settings.reduced then pw *= 0.4 end
@@ -9116,7 +9464,7 @@ do
 			end)
 		end
 		-- надпись редкости (для необычных и выше или разновидностей)
-		if info.rarity ~= "common" or (variant and variant ~= "normal") then
+		if not rolling and (info.rarity ~= "common" or (variant and variant ~= "normal")) then
 			bannerSeq += 1
 			local my = bannerSeq
 			local vname = (variant and variant ~= "normal") and (Catalog.Variants[variant].name .. " ") or ""
@@ -9132,12 +9480,12 @@ do
 			end)
 		end
 	end
-	catchEffect = function(kind, at, coop, variant)
+	catchEffect = function(kind, at, coop, variant, rolling)
 		local r = root()
 		if not r then return end
 		local info = Catalog.Kinds[kind]
 		local rar = Catalog.Rarity[info.rarity]
-		juice(info, rar, variant)
+		juice(info, rar, variant, rolling)
 		streak = (os.clock() - lastCatch < 20) and streak + 1 or 1
 		lastCatch = os.clock()
 		local big = info.rarity ~= "common"
@@ -9501,11 +9849,10 @@ do
 	end)
 
 	remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled)
-		if variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25) then
-			task.spawn(playRoll, kind, variant)
-		end
+		local rolling = variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25)
+		if rolling then task.spawn(playRoll, kind, variant) end
 		holding = false
-		catchEffect(kind, at, coop or 1, variant)
+		catchEffect(kind, at, coop or 1, variant, rolling)
 		if tut.step == 2 or tut.step == 1 then setStep(3) end
 	end)
 
@@ -9599,7 +9946,7 @@ do
 					d.Brightness *= 0.5
 				end
 			end
-			m.Parent = visFolder
+			m.Parent = nil -- появится, когда игрок рядом (см. обновление)
 			v.reflect = m
 		end
 		local sid = Audio.Spirit[kind]
@@ -9693,13 +10040,18 @@ do
 							local m = Spirits.Builders[kind]()
 							pcall(Spirits.applyVariant, m, variant ~= "" and variant or nil)
 							if evo == "e" then pcall(Spirits.applyEvolved, m) end
-							m.Parent = visFolder
+							m.Parent = nil -- показываем только рядом с двором
 							table.insert(y.list, { model = m, kind = kind, phase = i * 1.7, r = 6 + (i % 3) * 5 })
 						end
 					end
 				end
 				local center = plot:GetAttribute("Center")
-				if center and cam and (cam.CFrame.Position - center).Magnitude < 170 then
+				local near = center and cam and (cam.CFrame.Position - center).Magnitude < 170
+				for _, e in y.list do
+					local want = near and visFolder or nil
+					if e.model.Parent ~= want then e.model.Parent = want end
+				end
+				if near then
 					for _, e in y.list do
 						local info = Catalog.Kinds[e.kind]
 						local a = now * 0.25 + e.phase
@@ -9862,7 +10214,9 @@ do
 					Spirits.aura(v.model, Catalog.Rarity[rk].color)
 				end
 				v.variant = variant
-				v.model.Parent = visFolder
+				-- сразу на место духа (иначе модель секунду висит в центре карты)
+				Spirits.animate(v.model, cf, 0)
+				v.model.Parent = dist < 170 and visFolder or nil
 				if dist < 60 then play("reveal") end
 				ring(cf.Position + Vector3.new(0, 1, 0), 2, 10, Catalog.Rarity[v.info.rarity].color, 0.4, false)
 				local pe = v.shadow and v.shadow:FindFirstChildOfClass("ParticleEmitter")
@@ -9890,14 +10244,21 @@ do
 					ring(Vector3.new(cf.X, 0.6, cf.Z), 2, 14, Color3.fromRGB(170, 210, 255), 0.6, false)
 					v.reflect:Destroy()
 					v.reflect = nil
-				elseif dist < 170 then
+				elseif dist >= 170 then
+					v.reflect.Parent = nil
+				else
+					if not v.reflect.Parent then v.reflect.Parent = visFolder end
 					local t = now + v.seed
 					local p = cf.Position
 					local rp = CFrame.new(p.X, 1 - p.Y, p.Z) * cf.Rotation * CFrame.Angles(0, 0, math.pi)
 					Spirits.animate(v.reflect, rp * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
 				end
 			end
+			if v.model and dist >= 170 then
+				v.model.Parent = nil -- далеко: не показываем (и не оставляем в центре карты)
+			end
 			if v.model and dist < 170 then
+				if not v.model.Parent then v.model.Parent = visFolder end
 				local t = now + v.seed
 				Spirits.animate(v.model, cf * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
 				if v.variant == "rainbow" and math.floor(now * 12) % 3 == 0 then Spirits.rainbowTick(v.model, now) end
@@ -9916,6 +10277,9 @@ do
 			beamPart.CFrame = CFrame.new(c) * CFrame.Angles(0, now * 0.6, 0) * CFrame.new(48, 0, 0)
 		end
 		if math.floor(now * 10) % 2 == 0 then
+			-- свою табличку ранга над головой не показываем себе: она закрывает обзор (другие её видят)
+			local myTag = plr.Character and plr.Character:FindFirstChild("Head") and plr.Character.Head:FindFirstChild("RankTag")
+			if myTag and myTag.Enabled then myTag.Enabled = false end
 			-- свой фонарь светит мягче: частицы у камеры не должны засвечивать персонажа
 			local myLamp = plr.Character and plr.Character:FindFirstChild("Lantern")
 			local fx = myLamp and myLamp:FindFirstChild("Fx")
@@ -10296,7 +10660,18 @@ function K.pill(parent, iconKey, color, width)
 end
 
 -- окно: шапка с иконкой и названием, круглая кнопка закрытия
+-- окна живут в отдельном слое без UIScale: их размер на телефоне точно задаётся долями экрана
+local function windowLayer(parent)
+	local pg = parent:IsA("ScreenGui") and parent.Parent
+	if not pg then return parent end
+	local layer = pg:FindFirstChild("SpiritWindows")
+	if not layer then
+		layer = make("ScreenGui", { Name = "SpiritWindows", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 10, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, pg)
+	end
+	return layer
+end
 function K.window(parent, title, iconKey, color, w, h)
+	parent = windowLayer(parent)
 	local f = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.54), Size = UDim2.fromScale(w or 0.84, h or 0.8),
 		BackgroundColor3 = T.panel, Visible = false, ZIndex = 5,
@@ -10324,16 +10699,11 @@ function K.window(parent, title, iconKey, color, w, h)
 end
 
 function K.open(f)
-	-- на телефоне окно почти во весь экран. UIScale на ScreenGui сжимает всё к левому верхнему углу,
-	-- поэтому размер и центр делим на его масштаб
+	-- на телефоне окно почти во весь экран (слой окон без UIScale)
 	local cam = workspace.CurrentCamera
 	local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
 	if vp.Y > 0 and vp.Y < 760 then
-		local sg = f:FindFirstAncestorOfClass("ScreenGui")
-		local us = sg and sg:FindFirstChildOfClass("UIScale")
-		local k = (us and us.Scale > 0) and us.Scale or 1
-		-- масштаб уменьшает размер окна, но не его положение: центр оставляем 0.5
-		f.Size = UDim2.fromScale(math.min(0.94 / k, 1.25), math.min(0.84 / k, 1.25))
+		f.Size = UDim2.fromScale(0.94, 0.84)
 		f.Position = UDim2.fromScale(0.5, 0.555) -- ниже кнопок Roblox в левом верхнем углу
 	end
 	f.Visible = true

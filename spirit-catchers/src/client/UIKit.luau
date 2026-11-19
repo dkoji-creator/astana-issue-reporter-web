@@ -147,7 +147,18 @@ function K.pill(parent, iconKey, color, width)
 end
 
 -- окно: шапка с иконкой и названием, круглая кнопка закрытия
+-- окна живут в отдельном слое без UIScale: их размер на телефоне точно задаётся долями экрана
+local function windowLayer(parent)
+	local pg = parent:IsA("ScreenGui") and parent.Parent
+	if not pg then return parent end
+	local layer = pg:FindFirstChild("SpiritWindows")
+	if not layer then
+		layer = make("ScreenGui", { Name = "SpiritWindows", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 10, ZIndexBehavior = Enum.ZIndexBehavior.Sibling }, pg)
+	end
+	return layer
+end
 function K.window(parent, title, iconKey, color, w, h)
+	parent = windowLayer(parent)
 	local f = make("Frame", {
 		AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.54), Size = UDim2.fromScale(w or 0.84, h or 0.8),
 		BackgroundColor3 = T.panel, Visible = false, ZIndex = 5,
@@ -175,16 +186,11 @@ function K.window(parent, title, iconKey, color, w, h)
 end
 
 function K.open(f)
-	-- на телефоне окно почти во весь экран. UIScale на ScreenGui сжимает всё к левому верхнему углу,
-	-- поэтому размер и центр делим на его масштаб
+	-- на телефоне окно почти во весь экран (слой окон без UIScale)
 	local cam = workspace.CurrentCamera
 	local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
 	if vp.Y > 0 and vp.Y < 760 then
-		local sg = f:FindFirstAncestorOfClass("ScreenGui")
-		local us = sg and sg:FindFirstChildOfClass("UIScale")
-		local k = (us and us.Scale > 0) and us.Scale or 1
-		-- масштаб уменьшает размер окна, но не его положение: центр оставляем 0.5
-		f.Size = UDim2.fromScale(math.min(0.94 / k, 1.25), math.min(0.84 / k, 1.25))
+		f.Size = UDim2.fromScale(0.94, 0.84)
 		f.Position = UDim2.fromScale(0.5, 0.555) -- ниже кнопок Roblox в левом верхнем углу
 	end
 	f.Visible = true

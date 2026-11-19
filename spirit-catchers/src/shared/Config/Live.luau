@@ -292,4 +292,51 @@ function L.summonCost(level: number): number
 	return L.CoinShop.summonBase + level * L.CoinShop.summonPerLevel
 end
 
+------------------------------------------------------------------ причины вернуться завтра
+-- серия входов: удача +5% за каждый день подряд (до +50%), пропуск дня сбрасывает серию
+L.Streak = { per = 0.05, max = 10 }
+-- колесо удачи: 1 бесплатное вращение в день (VIP: 2)
+L.WheelPrizes = {
+	{ id = "coinsS", w = 28, name = "Монеты", icon = "coin", color = Color3.fromRGB(255, 200, 60) },
+	{ id = "dustS", w = 20, name = "20 пыли", icon = "dust", color = Color3.fromRGB(180, 120, 255) },
+	{ id = "potion", w = 15, name = "Зелье 10 мин", icon = "potion", color = Color3.fromRGB(90, 220, 120) },
+	{ id = "coinsL", w = 12, name = "Много монет", icon = "coin", color = Color3.fromRGB(255, 160, 40) },
+	{ id = "dustL", w = 8, name = "80 пыли", icon = "dust", color = Color3.fromRGB(140, 80, 255) },
+	{ id = "egg", w = 8, name = "Лунное яйцо", icon = "moon", color = Color3.fromRGB(120, 170, 255) },
+	{ id = "chest", w = 6, name = "Сундук", icon = "gift", color = Color3.fromRGB(255, 110, 90) },
+	{ id = "skin", w = 3, name = "Фонарь «Фортуна»", icon = "luck", color = Color3.fromRGB(255, 120, 220) },
+}
+function L.wheelCoins(id: string, level: number): number
+	if id == "coinsS" then return 300 + level * 40 end
+	if id == "coinsL" then return 1500 + level * 150 end
+	if id == "chest" then return 5000 + level * 400 end
+	return 0
+end
+-- инкубатор: яйцо вылупляется через несколько часов; дух сразу идёт в коллекцию
+L.EggOrder = { "lantern", "moon", "star" }
+L.Eggs = {
+	lantern = { name = "Фонарное яйцо", coins = 4000, hours = 1, luck = 1, color = Color3.fromRGB(255, 180, 90),
+		weights = { common = 40, uncommon = 35, rare = 18, epic = 6, legendary = 1 } },
+	moon = { name = "Лунное яйцо", coins = 25000, hours = 4, luck = 2, color = Color3.fromRGB(150, 190, 255),
+		weights = { uncommon = 30, rare = 35, epic = 25, legendary = 8, mythic = 2 } },
+	star = { name = "Звёздное яйцо", coins = 120000, hours = 12, luck = 4, color = Color3.fromRGB(255, 220, 120),
+		weights = { rare = 30, epic = 40, legendary = 22, mythic = 7, secret = 1 } },
+}
+L.EggSlots = 3
+-- дух дня: чаще появляется и даёт x2 монет при сдаче
+function L.spiritOfDay(day: number, order, kinds): string?
+	local c = {}
+	for _, k in order do
+		local info = kinds[k]
+		if info and not info.moonOnly and not info.holiday and info.move ~= "swim" and next(info.spawn) ~= nil then table.insert(c, k) end
+	end
+	if #c == 0 then return nil end
+	return c[(day * 13 + 5) % #c + 1]
+end
+-- пока игрока нет, духи его двора собирают пыль (до 12 часов)
+L.Offline = { maxHours = 12 }
+function L.offlineDust(hours: number, distinct: number): number
+	return math.floor(math.min(hours, L.Offline.maxHours) * (3 + distinct * 0.3))
+end
+
 return L

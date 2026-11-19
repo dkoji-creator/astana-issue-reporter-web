@@ -119,7 +119,7 @@ do
 	btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 	btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
 	btnShop = K.iconButton(leftCol, "shop", "Магазин", T.red)
-	btnGift = K.iconButton(leftCol, "gift", "Подарок", T.green)
+	btnGift = K.iconButton(leftCol, "gift", "Каждый день", T.green)
 	btnTeleport = K.iconButton(leftCol, "portal", "Телепорт", T.purple)
 	btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
 	btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
@@ -1689,8 +1689,16 @@ end
 ------------------------------------------------------------------ окно: Подарок дня
 local giftW, giftBody, refreshGift
 do
-	giftW, giftBody = K.window(gui, "Ежедневный подарок", "gift", T.green, 0.8, 0.66)
-	local dayRow = K.make("Frame", { Size = UDim2.new(1, 0, 0.62, 0), BackgroundTransparency = 1 }, giftBody)
+	giftW, giftBody = K.window(gui, "Каждый день", "gift", T.green, 0.8, 0.7)
+	local Live = Catalog.Live
+	local gTabs = K.make("Frame", { Size = UDim2.new(1, 0, 0, 36), BackgroundTransparency = 1 }, giftBody)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, gTabs)
+	local tGift = K.button(gTabs, "Подарок", T.green, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tWheel = K.button(gTabs, "Колесо", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local tEgg = K.button(gTabs, "Инкубатор", T.panel2, { Size = UDim2.fromOffset(150, 36), MaxText = 17 })
+	local streakL = K.text(gTabs, "", { Size = UDim2.fromOffset(260, 36), MaxText = 15, TextColor3 = T.gold, Font = Enum.Font.GothamBold })
+	local giftPage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1 }, giftBody)
+	local dayRow = K.make("Frame", { Size = UDim2.new(1, 0, 0.62, 0), BackgroundTransparency = 1 }, giftPage)
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder }, dayRow)
 	local dayTiles = {}
 	for i, r in Prog.Daily do
@@ -1705,7 +1713,7 @@ do
 		K.text(f, table.concat(parts, "\n"), { Size = UDim2.new(1, -6, 0, 34), Position = UDim2.new(0, 3, 1, -38), MaxText = 13, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
 		dayTiles[i] = f
 	end
-	local giftBtn, giftL = K.button(giftBody, "Забрать", T.green, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, 0, 1, -4), MaxText = 22 })
+	local giftBtn, giftL = K.button(giftPage, "Забрать", T.green, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, 0, 1, -4), MaxText = 22 })
 	giftBtn.Activated:Connect(function()
 		local r = remotes.ClaimDaily:InvokeServer()
 		if r and r.ok then
@@ -1715,7 +1723,129 @@ do
 			showToast(r.msg)
 		end
 	end)
+	-- колесо удачи: полоса из призов, подсветка бежит и останавливается на выигрыше
+	local wheelPage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, giftBody)
+	local strip = K.make("Frame", { Size = UDim2.new(1, 0, 0.5, 0), BackgroundTransparency = 1 }, wheelPage)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), HorizontalAlignment = Enum.HorizontalAlignment.Center }, strip)
+	local tiles = {}
+	for i, pz in Live.WheelPrizes do
+		local f = K.panel(strip, { Size = UDim2.new(1 / #Live.WheelPrizes, -6, 1, 0), BackgroundColor3 = K.darken(pz.color, 0.55) })
+		K.icon(f, pz.icon, { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(44, 44), Position = UDim2.new(0.5, 0, 0, 8) })
+		K.text(f, pz.name, { Size = UDim2.new(1, -6, 0, 40), Position = UDim2.new(0, 3, 1, -44), MaxText = 14, TextWrapped = true })
+		tiles[i] = f
+	end
+	local wheelInfo = K.text(wheelPage, "1 бесплатное вращение каждый день (VIP: 2). Главный приз: фонарь «Фортуна»", { Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 0.5, 8), MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local spinB, spinL = K.button(wheelPage, "Крутить", T.gold, { AnchorPoint = Vector2.new(0.5, 1), Size = UDim2.fromOffset(260, 54), Position = UDim2.new(0.5, 0, 1, -4), MaxText = 22 })
+	local spinning = false
+	spinB.Activated:Connect(function()
+		if spinning then return end
+		local r = remotes.SpinWheel:InvokeServer()
+		if not (r and r.ok) then
+			if r and r.msg then showToast(r.msg) end
+			return
+		end
+		spinning = true
+		local n = #tiles
+		local steps = n * 3 + r.index
+		for i = 1, steps do
+			for j, t in tiles do t:FindFirstChildOfClass("UIStroke").Color = (j == (i - 1) % n + 1) and T.gold or T.ink end
+			play("click")
+			task.wait(0.04 + (i / steps) ^ 3 * 0.25)
+		end
+		play("legendary")
+		showToast("Колесо: " .. r.text .. "!", 3, Color3.fromRGB(150, 110, 20))
+		spinning = false
+	end)
+	-- инкубатор: 3 места, яйца вылупляются через часы
+	local eggPage = K.make("Frame", { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), BackgroundTransparency = 1, Visible = false }, giftBody)
+	local slotsRow = K.make("Frame", { Size = UDim2.new(1, 0, 0.5, -4), BackgroundTransparency = 1 }, eggPage)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center }, slotsRow)
+	local eggSlots = {}
+	for i = 1, Live.EggSlots do
+		local f = K.panel(slotsRow, { Size = UDim2.new(1 / Live.EggSlots, -8, 1, 0), BackgroundColor3 = T.panel2 })
+		local name = K.text(f, "", { Size = UDim2.new(1, -10, 0, 24), Position = UDim2.fromOffset(5, 6), MaxText = 17 })
+		local timeL = K.text(f, "", { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 32), MaxText = 16, TextColor3 = T.gold })
+		local b, l = K.button(f, "", T.green, { Size = UDim2.new(1, -12, 0, 40), Position = UDim2.new(0, 6, 1, -46), MaxText = 16 })
+		b.Activated:Connect(function()
+			local r = remotes.Egg:InvokeServer("hatch", i)
+			if r and r.ok then
+				play("legendary")
+			elseif r and r.msg then
+				showToast(r.msg)
+			end
+		end)
+		eggSlots[i] = { f = f, name = name, time = timeL, b = b, l = l }
+	end
+	local buyRow = K.make("Frame", { Position = UDim2.new(0, 0, 0.5, 4), Size = UDim2.new(1, 0, 0.5, -4), BackgroundTransparency = 1 }, eggPage)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center }, buyRow)
+	for _, id in Live.EggOrder do
+		local cfg = Live.Eggs[id]
+		local f = K.panel(buyRow, { Size = UDim2.new(1 / #Live.EggOrder, -8, 1, 0), BackgroundColor3 = K.darken(cfg.color, 0.6) })
+		K.text(f, cfg.name, { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 4), MaxText = 17 })
+		local best = "до легендарного"
+		if cfg.weights.secret then best = "шанс секретного" elseif cfg.weights.mythic then best = "до мифического" end
+		K.text(f, ("Вылупится через %d ч, %s"):format(cfg.hours, best), { Size = UDim2.new(1, -10, 0, 20), Position = UDim2.fromOffset(5, 28), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		local b = K.button(f, ("%d монет"):format(cfg.coins), T.green, { Size = UDim2.new(1, -12, 0, 38), Position = UDim2.new(0, 6, 1, -44), MaxText = 15 })
+		b.Activated:Connect(function()
+			local r = remotes.Egg:InvokeServer("buy", id)
+			if r and r.ok then
+				play("save")
+				showToast(cfg.name .. " в инкубаторе!", 2)
+			elseif r and r.msg then
+				showToast(r.msg)
+			end
+		end)
+	end
+	local function refreshEggs()
+		local now = os.time()
+		for i, sl in eggSlots do
+			local e = state.eggs and state.eggs[i]
+			if e then
+				local cfg = Live.Eggs[e.id]
+				local left = e.at - now
+				sl.name.Text = cfg.name
+				sl.f.BackgroundColor3 = K.darken(cfg.color, 0.55)
+				sl.b.Visible = true
+				if left <= 0 then
+					sl.time.Text = "Готово!"
+					sl.l.Text = "Вылупить"
+					K.recolor(sl.b, T.green)
+				else
+					sl.time.Text = ("%d:%02d:%02d"):format(left // 3600, (left % 3600) // 60, left % 60)
+					sl.l.Text = "Ждём..."
+					K.recolor(sl.b, Color3.fromRGB(80, 80, 100))
+				end
+			else
+				sl.name.Text = "Пустое место"
+				sl.time.Text = "Купи яйцо ниже"
+				sl.f.BackgroundColor3 = T.panel2
+				sl.b.Visible = false
+			end
+		end
+	end
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			if eggPage.Visible and giftW.Visible then refreshEggs() end
+		end
+	end)
+	local gPages = { { tGift, giftPage, T.green }, { tWheel, wheelPage, T.gold }, { tEgg, eggPage, T.blue } }
+	for _, pair in gPages do
+		pair[1].Activated:Connect(function()
+			for _, o in gPages do
+				o[2].Visible = o == pair
+				K.recolor(o[1], o == pair and o[3] or T.panel2)
+			end
+			refreshEggs()
+		end)
+	end
 	refreshGift = function()
+		local ls = state.loginStreak
+		local n = ls and ls.n or 1
+		streakL.Text = ("Серия входов: %d дн.  Удача +%d%%"):format(n, math.floor((math.min(n, Live.Streak.max) - 1) * Live.Streak.per * 100 + 0.5))
+		spinL.Text = (state.spinsLeft or 0) > 0 and ("Крутить (%d)"):format(state.spinsLeft) or "Завтра снова"
+		K.recolor(spinB, (state.spinsLeft or 0) > 0 and T.gold or Color3.fromRGB(80, 80, 95))
+		refreshEggs()
 		local today = math.floor(workspace:GetServerTimeNow() / 86400)
 		local nextDay
 		if state.dailyReady then
@@ -2059,7 +2189,11 @@ do
 		dustL.Text = tostring(state.dust)
 		levelL.Text = ("Ур. %d"):format(state.level)
 		xpFill.Size = UDim2.fromScale(math.clamp(state.xp / math.max(state.xpNext, 1), 0, 1), 1)
-		btnGift.Badge.Visible = state.dailyReady
+		local eggReady = false
+		for _, e in state.eggs or {} do
+			if e.at <= os.time() then eggReady = true end
+		end
+		btnGift.Badge.Visible = state.dailyReady or (state.spinsLeft or 0) > 0 or eggReady
 		btnPower.Badge.Visible = (state.talentPoints or 0) > 0 or (state.level or 1) >= (state.rebirthLevel or 15)
 		luckL.Text = ("Удача x%.2f"):format(state.luck or 1)
 		luckL.Text = string.gsub(luckL.Text, "%.?0+$", "")
@@ -2089,7 +2223,7 @@ do
 		goalPill.Visible = ch ~= nil and not trackPill.Visible and not collapsed
 		if ch then
 			local done = st.prog >= ch.need
-			goalL.Text = done and ("Глава «%s» готова: поговори с Хранителем"):format(ch.title)
+			goalL.Text = done and "Глава готова! Нажми: награда у Хранителя"
 				or ("Цель: %s (%d/%d)"):format(Catalog.Live.storyGoal(ch, Catalog.Kinds, Catalog.Districts), st.prog, ch.need)
 		end
 		-- сезон: есть награда или незавершённое испытание
@@ -2112,7 +2246,7 @@ do
 			modPill.BackgroundColor3 = K.darken(mod.color, 0.35)
 		end
 		local c = state.comp
-		compPill.Visible = c ~= nil and not collapsed
+		compPill.Visible = c ~= nil and not collapsed and not catchBtn.Visible
 		if c then
 			local cost = Live.feedCost(c.level)
 			compL.Text = ("%s ур.%d: %s\n%s"):format(Catalog.Kinds[c.kind].short, c.level, c.text,
@@ -2190,7 +2324,7 @@ do
 	local bannerSeq = 0
 	local RANK_WORD = { common = "ПОЙМАН!", uncommon = "НЕОБЫЧНЫЙ!", rare = "РЕДКИЙ!", epic = "ЭПИЧЕСКИЙ!", legendary = "ЛЕГЕНДАРНЫЙ!", mythic = "МИФИЧЕСКИЙ!", secret = "СЕКРЕТНЫЙ!" }
 	local POWER = { common = 0.3, uncommon = 0.5, rare = 0.75, epic = 1, legendary = 1.3, mythic = 1.6, secret = 2 }
-	local function juice(info, rar, variant)
+	local function juice(info, rar, variant, rolling)
 		local pw = POWER[info.rarity] or 0.3
 		if variant and variant ~= "normal" then pw += 0.4 end
 		if state.settings.reduced then pw *= 0.4 end
@@ -2220,7 +2354,7 @@ do
 			end)
 		end
 		-- надпись редкости (для необычных и выше или разновидностей)
-		if info.rarity ~= "common" or (variant and variant ~= "normal") then
+		if not rolling and (info.rarity ~= "common" or (variant and variant ~= "normal")) then
 			bannerSeq += 1
 			local my = bannerSeq
 			local vname = (variant and variant ~= "normal") and (Catalog.Variants[variant].name .. " ") or ""
@@ -2236,12 +2370,12 @@ do
 			end)
 		end
 	end
-	catchEffect = function(kind, at, coop, variant)
+	catchEffect = function(kind, at, coop, variant, rolling)
 		local r = root()
 		if not r then return end
 		local info = Catalog.Kinds[kind]
 		local rar = Catalog.Rarity[info.rarity]
-		juice(info, rar, variant)
+		juice(info, rar, variant, rolling)
 		streak = (os.clock() - lastCatch < 20) and streak + 1 or 1
 		lastCatch = os.clock()
 		local big = info.rarity ~= "common"
@@ -2605,11 +2739,10 @@ do
 	end)
 
 	remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled)
-		if variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25) then
-			task.spawn(playRoll, kind, variant)
-		end
+		local rolling = variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25)
+		if rolling then task.spawn(playRoll, kind, variant) end
 		holding = false
-		catchEffect(kind, at, coop or 1, variant)
+		catchEffect(kind, at, coop or 1, variant, rolling)
 		if tut.step == 2 or tut.step == 1 then setStep(3) end
 	end)
 
@@ -2703,7 +2836,7 @@ do
 					d.Brightness *= 0.5
 				end
 			end
-			m.Parent = visFolder
+			m.Parent = nil -- появится, когда игрок рядом (см. обновление)
 			v.reflect = m
 		end
 		local sid = Audio.Spirit[kind]
@@ -2797,13 +2930,18 @@ do
 							local m = Spirits.Builders[kind]()
 							pcall(Spirits.applyVariant, m, variant ~= "" and variant or nil)
 							if evo == "e" then pcall(Spirits.applyEvolved, m) end
-							m.Parent = visFolder
+							m.Parent = nil -- показываем только рядом с двором
 							table.insert(y.list, { model = m, kind = kind, phase = i * 1.7, r = 6 + (i % 3) * 5 })
 						end
 					end
 				end
 				local center = plot:GetAttribute("Center")
-				if center and cam and (cam.CFrame.Position - center).Magnitude < 170 then
+				local near = center and cam and (cam.CFrame.Position - center).Magnitude < 170
+				for _, e in y.list do
+					local want = near and visFolder or nil
+					if e.model.Parent ~= want then e.model.Parent = want end
+				end
+				if near then
 					for _, e in y.list do
 						local info = Catalog.Kinds[e.kind]
 						local a = now * 0.25 + e.phase
@@ -2966,7 +3104,9 @@ do
 					Spirits.aura(v.model, Catalog.Rarity[rk].color)
 				end
 				v.variant = variant
-				v.model.Parent = visFolder
+				-- сразу на место духа (иначе модель секунду висит в центре карты)
+				Spirits.animate(v.model, cf, 0)
+				v.model.Parent = dist < 170 and visFolder or nil
 				if dist < 60 then play("reveal") end
 				ring(cf.Position + Vector3.new(0, 1, 0), 2, 10, Catalog.Rarity[v.info.rarity].color, 0.4, false)
 				local pe = v.shadow and v.shadow:FindFirstChildOfClass("ParticleEmitter")
@@ -2994,14 +3134,21 @@ do
 					ring(Vector3.new(cf.X, 0.6, cf.Z), 2, 14, Color3.fromRGB(170, 210, 255), 0.6, false)
 					v.reflect:Destroy()
 					v.reflect = nil
-				elseif dist < 170 then
+				elseif dist >= 170 then
+					v.reflect.Parent = nil
+				else
+					if not v.reflect.Parent then v.reflect.Parent = visFolder end
 					local t = now + v.seed
 					local p = cf.Position
 					local rp = CFrame.new(p.X, 1 - p.Y, p.Z) * cf.Rotation * CFrame.Angles(0, 0, math.pi)
 					Spirits.animate(v.reflect, rp * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
 				end
 			end
+			if v.model and dist >= 170 then
+				v.model.Parent = nil -- далеко: не показываем (и не оставляем в центре карты)
+			end
 			if v.model and dist < 170 then
+				if not v.model.Parent then v.model.Parent = visFolder end
 				local t = now + v.seed
 				Spirits.animate(v.model, cf * Spirits.Pose[v.kind](t), t * v.info.animSpeed)
 				if v.variant == "rainbow" and math.floor(now * 12) % 3 == 0 then Spirits.rainbowTick(v.model, now) end
@@ -3020,6 +3167,9 @@ do
 			beamPart.CFrame = CFrame.new(c) * CFrame.Angles(0, now * 0.6, 0) * CFrame.new(48, 0, 0)
 		end
 		if math.floor(now * 10) % 2 == 0 then
+			-- свою табличку ранга над головой не показываем себе: она закрывает обзор (другие её видят)
+			local myTag = plr.Character and plr.Character:FindFirstChild("Head") and plr.Character.Head:FindFirstChild("RankTag")
+			if myTag and myTag.Enabled then myTag.Enabled = false end
 			-- свой фонарь светит мягче: частицы у камеры не должны засвечивать персонажа
 			local myLamp = plr.Character and plr.Character:FindFirstChild("Lantern")
 			local fx = myLamp and myLamp:FindFirstChild("Fx")
