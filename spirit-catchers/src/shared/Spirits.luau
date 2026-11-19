@@ -152,7 +152,7 @@ function S.buildGoldenCarp(): Model
 	m.Name = "GoldenCarp"
 	local gold = Color3.fromRGB(240, 170, 40)
 	local deep = Color3.fromRGB(215, 110, 25)
-	local fin = Color3.fromRGB(255, 235, 170)
+	local fin = Color3.fromRGB(255, 196, 100) -- светящиеся вуалевые плавники
 
 	local segs = {
 		{ Vector3.new(2.6, 2.8, 3.2), -3.6, gold },
@@ -175,18 +175,18 @@ function S.buildGoldenCarp(): Model
 		joint(wh, Vector3.new(x * 0.8, -0.6, -4.6), "wagY", x, 0.6)
 		-- длинные грудные плавники
 		local pf = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 1.6, 4.2), CFrame = CFrame.new(x * 2.6, -0.7, -0.8) * CFrame.Angles(0, 0, math.rad(x * -60)),
-			Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.5 })
+			Color = fin, Material = Enum.Material.Neon, Transparency = 0.35 })
 		joint(pf, Vector3.new(x * 1.3, -0.5, -0.8), "flapZ", x > 0 and 0 or math.pi, 0.7)
 		local vf = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 1.2, 3), CFrame = CFrame.new(x * 1.6, -1.6, 2.2) * CFrame.Angles(0, 0, math.rad(x * -35)),
-			Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.55 })
+			Color = fin, Material = Enum.Material.Neon, Transparency = 0.4 })
 		joint(vf, Vector3.new(x * 0.8, -1, 2.2), "flapZ", x > 0 and 1 or 1 + math.pi, 0.5)
 	end
-	local dorsal = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 2.4, 6), CFrame = CFrame.new(0, 2.3, 0.6), Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.5 })
+	local dorsal = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 2.4, 6), CFrame = CFrame.new(0, 2.3, 0.6), Color = fin, Material = Enum.Material.Neon, Transparency = 0.35 })
 	joint(dorsal, Vector3.new(0, 1.4, 0.6), "wagY", -1, 0.15)
 	-- большой вуалевый хвост
 	for i, a in { -28, 28 } do
 		local tf = mk(m, { Name = "Fin", Size = Vector3.new(0.1, 3.4, 5.2), CFrame = CFrame.new(0, a / 28 * 1.3, 7.6) * CFrame.Angles(math.rad(a), 0, 0),
-			Color = fin, Material = Enum.Material.SmoothPlastic, Transparency = 0.45 })
+			Color = fin, Material = Enum.Material.Neon, Transparency = 0.3 })
 		joint(tf, Vector3.new(0, 0, 5.4), "wagY", -4 - i * 0.2, 0.9)
 	end
 	-- светящийся след
@@ -471,14 +471,22 @@ end
 function S.buildFoxFire(): Model
 	local m = Instance.new("Model")
 	m.Name = "FoxFire"
-	local core = mk(m, { Name = "Core", Shape = Enum.PartType.Ball, Size = Vector3.new(0.6, 0.6, 0.6), CFrame = CFrame.new(), Color = Color3.fromRGB(220, 245, 255), Material = Enum.Material.Neon })
+	-- маленькая белая маска лиса в центре и три языка призрачного пламени вокруг
+	local core = ellipsoid(mk(m, { Name = "Mask", Size = Vector3.new(1.3, 1.1, 0.7), CFrame = CFrame.new(), Color = Color3.fromRGB(250, 250, 255) }))
+	for _, x in { -1, 1 } do
+		mk(m, { Name = "MaskEar", Size = Vector3.new(0.18, 0.55, 0.3), CFrame = CFrame.new(x * 0.4, 0.65, 0) * CFrame.Angles(0, 0, math.rad(-x * 15)), Color = Color3.fromRGB(250, 250, 255) }, "WedgePart")
+		mk(m, { Name = "MaskEye", Size = Vector3.new(0.3, 0.08, 0.05), CFrame = CFrame.new(x * 0.3, 0.1, -0.36) * CFrame.Angles(0, 0, math.rad(x * 15)), Color = Color3.fromRGB(60, 160, 255), Material = Enum.Material.Neon })
+		mk(m, { Name = "MaskMark", Size = Vector3.new(0.08, 0.35, 0.05), CFrame = CFrame.new(x * 0.48, -0.15, -0.34), Color = Color3.fromRGB(230, 60, 80) })
+	end
 	for i = 1, 3 do
 		local a = i * math.pi * 2 / 3
-		local pos = Vector3.new(math.cos(a) * 1.8, 0, math.sin(a) * 1.8)
-		local f = ellipsoid(mk(m, { Name = "Flame", Size = Vector3.new(1.2, 1.9, 1.2), CFrame = CFrame.new(pos), Color = Color3.fromRGB(90, 190, 255), Material = Enum.Material.Neon, Transparency = 0.25 }))
-		joint(f, Vector3.zero, "wagY", i * 2.1, 1.8)
-		local w = ellipsoid(mk(m, { Name = "FlameCore", Size = Vector3.new(0.5, 0.8, 0.5), CFrame = CFrame.new(pos - Vector3.new(0, 0.3, 0)), Color = Color3.new(1, 1, 1), Material = Enum.Material.Neon }))
-		joint(w, Vector3.zero, "wagY", i * 2.1, 1.8)
+		local base = Vector3.new(math.cos(a) * 1.9, -0.3, math.sin(a) * 1.9)
+		-- язык пламени: снизу крупно, вверху тонкий кончик
+		for k, sz in { 1.1, 0.8, 0.5 } do
+			local f = ellipsoid(mk(m, { Name = "Flame", Size = Vector3.new(sz, sz * 1.5, sz), CFrame = CFrame.new(base + Vector3.new(0, (k - 1) * 0.75, 0)),
+				Color = k == 1 and Color3.fromRGB(120, 200, 255) or (k == 2 and Color3.fromRGB(170, 225, 255) or Color3.fromRGB(235, 248, 255)), Material = Enum.Material.Neon, Transparency = 0.15 + k * 0.05 }))
+			joint(f, Vector3.zero, "wagY", i * 2.1 + k * 0.4, 1.8)
+		end
 	end
 	light(core, Color3.fromRGB(110, 200, 255), 16, 1.5)
 	m.PrimaryPart = core
