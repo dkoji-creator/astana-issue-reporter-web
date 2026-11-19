@@ -86,6 +86,8 @@ local WheelFn = remote("SpinWheel", "RemoteFunction")
 local EggFn = remote("Egg", "RemoteFunction")
 local HuntFn = remote("Hunt", "RemoteFunction")
 local ThrowFn = remote("Throw", "RemoteFunction")
+local RitualFn = remote("Ritual", "RemoteFunction")
+local RitualEv = remote("RitualState")
 local doSaveRef -- doSave (ниже), для автосдачи
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
@@ -577,6 +579,7 @@ local function migrate(raw): Profile
 		if typeof(raw.wheel) == "table" then d.wheel = { day = math.floor(num(raw.wheel.day, 0, 1e7, 0)), used = math.floor(num(raw.wheel.used, 0, 10, 0)) } end
 		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
 		d.huntBest = math.floor(num(raw.huntBest, 0, 1e6, 0))
+		d.ritualBest = num(raw.ritualBest, 0, 1e6, 0)
 		if typeof(raw.weekChal) == "table" then d.weekChal = { week = math.floor(num(raw.weekChal.week, 0, 1e7, 0)), days = math.floor(num(raw.weekChal.days, 0, 7, 0)), got = raw.weekChal.got == true } end
 		if typeof(raw.streakClaimed) == "table" then
 			d.streakClaimed = {}
@@ -755,7 +758,7 @@ local function pushState(plr)
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
-		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0,
+		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0, ritualBest = d.ritualBest or 0,
 		hunt = d.hunt and { ends = os.time() + math.max(0, math.floor(d.hunt.ends - os.clock())), n = d.hunt.n } or nil,
 		weekend = Live.isWeekend(os.time()),
 		spinsLeft = (function()
@@ -1536,7 +1539,7 @@ savePrompt.HoldDuration, savePrompt.MaxActivationDistance = 0.25, ALTAR_RANGE
 savePrompt.RequiresLineOfSight = false
 savePrompt.Parent = map.altar
 
-local function doSave(plr, anywhere: boolean?)
+local function doSave(plr, anywhere: boolean?, mult: number?)
 	local root = rootOf(plr)
 	local d = data[plr]
 	if not (root and d) then return { ok = false, msg = "Нет персонажа" } end
@@ -1590,6 +1593,7 @@ local function doSave(plr, anywhere: boolean?)
 	storyEvent(plr, d, "deliver")
 	if hasPass(d, "coins2x") then coins *= 2 end
 	if hasPass(d, "vip") then coins = math.floor(coins * Money.VipCoinBonus) end
+	if mult then coins = math.floor(coins * mult) end
 	d.coins += coins
 	d.dust += dust
 	local kinds = table.clone(jar)
@@ -2326,6 +2330,159 @@ ThrowFn.OnServerInvoke = function(plr, q)
 	end)
 	return { ok = true, land = land, quality = Live.throwQuality(q), dist = math.floor(dist), cd = cd }
 end
+
+------------------------------------------------------------------ Ритуал фонаря
+local RIT = Live.Ritual
+local rituals = {}
+local function rollSpirit(d, district, q)
+	local tbl = WEIGHTS[moon.active and "moon" or "normal"][district]
+	if not tbl or next(tbl) == nil then return nil end
+	local weights, total = {}, 0
+	for kind, w in tbl do
+		local rank = RARITY_RANK[Catalog.Kinds[kind].rarity] or 1
+		local ww = w * (1 + (rank - 1) * 1.6 * q) ^ (1 + q)
+		weights[kind] = ww
+		total += ww
+	end
+	local r, kind = math.random() * total, nil
+	for k, w in weights do
+		r -= w
+		if r <= 0 then kind = k break end
+	end
+	kind = kind or next(weights)
+	local luck = luckOf(d) * (Catalog.Districts[district].luck or 1) * (1 + 1.5 * q)
+	local variant, pVar = "normal", 1
+	for vi = #Catalog.VariantOrder, 2, -1 do
+		local key = Catalog.VariantOrder[vi]
+		local vc = Catalog.Variants[key]
+		if (not vc.moonOnly or moon.active) and math.random() < vc.chance * luck then
+			variant, pVar = key, vc.chance
+			break
+		end
+	end
+	return kind, variant, math.max(1, math.floor(total / weights[kind] / pVar + 0.5))
+end
+local function swarmAttr(plr, rt)
+	local parts = {}
+	for i = math.max(1, #rt.swarm - 11), #rt.swarm do
+		local e = rt.swarm[i]
+		table.insert(parts, e.k .. ":" .. e.v)
+	end
+	plr:SetAttribute("Swarm", table.concat(parts, ","))
+end
+local function endRitual(plr)
+	rituals[plr] = nil
+	if plr.Parent then
+		plr:SetAttribute("Swarm", "")
+		plr:SetAttribute("RitualM", 0)
+	end
+end
+RitualFn.OnServerInvoke = function(plr, action)
+	local d = data[plr]
+	local root = rootOf(plr)
+	if not (d and root) then return { ok = false } end
+	if action == "start" then
+		if rituals[plr] then return { ok = false } end
+		local district = Catalog.district(root.Position)
+		if district == "plaza" then district = "street" end
+		local dc = Catalog.Districts[district]
+		if not dc or dc.max == 0 or not Catalog.unlocked(district, stats(d)) then return { ok = false, msg = "Ритуал проводят в районах с духами" } end
+		local now = os.clock()
+		local crashIn = math.max(RIT.minCrash, -math.log(1 - math.random() * 0.999) * RIT.meanCrash)
+		local sense = d.talents.sense or 0
+		local rt = { t0 = now, crashAt = now + crashIn, swarm = {}, next = now + 1.2, district = district, sense = sense }
+		if math.random() < RIT.omenChance + RIT.omenPerSense * sense then
+			local lead = RIT.omenLead[1] + math.random() * (RIT.omenLead[2] - RIT.omenLead[1])
+			if crashIn - lead > 0.8 then rt.omenAt = rt.crashAt - lead end
+		end
+		rituals[plr] = rt
+		plr:SetAttribute("RitualM", 1)
+		swarmAttr(plr, rt)
+		return { ok = true, cap = cap(d) }
+	elseif action == "bank" then
+		local rt = rituals[plr]
+		if not rt then return { ok = false } end
+		local m = Live.ritualMult(os.clock() - rt.t0)
+		endRitual(plr)
+		if #rt.swarm == 0 then return { ok = true, n = 0 } end
+		-- рой идёт в коллекцию как сдача на алтаре, монеты x множитель света
+		local keep = jars[plr]
+		local entries = {}
+		for _, e in rt.swarm do table.insert(entries, { k = e.k, v = e.v }) end
+		jars[plr] = entries
+		local xpSum = 0
+		for _, e in rt.swarm do
+			local x = math.floor((Catalog.Progress.XP[Catalog.Kinds[e.k].rarity] or 4) * (1 + compPct(d, "xp")) + 0.5)
+			xpSum += x
+			liveOnCatch(plr, d, e.k, rt.district, e.v)
+		end
+		local res = doSave(plr, true, m)
+		jars[plr] = keep
+		d.xp += xpSum
+		local levelUp = nil
+		while d.xp >= Catalog.Progress.xpToNext(d.level) do
+			d.xp -= Catalog.Progress.xpToNext(d.level)
+			d.level += 1
+			local bonus = Catalog.Progress.levelReward(d.level)
+			d.coins += bonus
+			levelUp = { level = d.level, coins = bonus }
+		end
+		RewardEv:FireClient(plr, { xp = xpSum, levelUp = levelUp })
+		local record = m > (d.ritualBest or 0)
+		if record then d.ritualBest = math.floor(m * 100) / 100 end
+		if m >= 8 or #rt.swarm >= 15 then
+			for _, p in Players:GetPlayers() do
+				NoticeEv:FireClient(p, ("%s запечатал %d духов на x%.1f!"):format(plr.DisplayName, #rt.swarm, m))
+			end
+		end
+		SaveResultEv:FireClient(plr, res)
+		pushState(plr)
+		return { ok = true, n = #rt.swarm, mult = m, record = record }
+	end
+	return { ok = false }
+end
+task.spawn(function()
+	while true do
+		local dt = task.wait(0.1)
+		local now = os.clock()
+		for plr, rt in rituals do
+			local d = data[plr]
+			if not (d and plr.Parent) then
+				rituals[plr] = nil
+			elseif now >= rt.crashAt then
+				-- Тьма: рой потерян
+				local lost = #rt.swarm
+				endRitual(plr)
+				RitualEv:FireClient(plr, { type = "crash", lost = lost, mult = Live.ritualMult(now - rt.t0) })
+				if lost >= 10 then
+					for _, p in Players:GetPlayers() do
+						if p ~= plr then NoticeEv:FireClient(p, ("Тьма забрала у %s %d духов!"):format(plr.DisplayName, lost)) end
+					end
+				end
+			else
+				local m = Live.ritualMult(now - rt.t0)
+				plr:SetAttribute("RitualM", m)
+				if now >= rt.next and #rt.swarm < cap(d) then
+					rt.next = now + RIT.arriveEvery
+					local q = math.clamp((m - 1) / RIT.rarityAt, 0, 1)
+					local kind, variant, odds = rollSpirit(d, rt.district, q)
+					if kind then
+						table.insert(rt.swarm, { k = kind, v = variant })
+						swarmAttr(plr, rt)
+						RitualEv:FireClient(plr, { type = "arrive", kind = kind, variant = variant, odds = odds, n = #rt.swarm, mult = m })
+					end
+				end
+				if rt.omenAt and now >= rt.omenAt then
+					rt.omenAt = nil
+					RitualEv:FireClient(plr, { type = "omen" })
+				elseif math.random() < (dt or 0.1) / (RIT.falseEvery * (1 + 0.08 * rt.sense)) then
+					RitualEv:FireClient(plr, { type = "omen" })
+				end
+			end
+		end
+	end
+end)
+Players.PlayerRemoving:Connect(function(plr) rituals[plr] = nil end)
 
 HuntFn.OnServerInvoke = function(plr)
 	local d = data[plr]

@@ -269,7 +269,7 @@ do
 	jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.55, 0, 0, 18), Position = UDim2.new(0.42, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
 	_, jarFill = K.bar(jarPanel, T.cold, { Size = UDim2.new(1, -60, 0, 12), Position = UDim2.fromOffset(46, 30) })
 	-- БРОСОК ФОНАРИКА: главный быстрый цикл. Держи: полоска силы ходит; отпусти в нужный момент
-	local throwB = K.make("TextButton", { Name = "ThrowBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(112, 112), Position = UDim2.new(1, -140, 1, -110), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false }, hud)
+	local throwB = K.make("TextButton", { Name = "ThrowBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(112, 112), Position = UDim2.new(1, -140, 1, -110), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
 	K.corner(throwB, UDim.new(1, 0))
 	K.stroke(throwB, T.ink, 4)
 	local throwGrad = K.gradient(throwB, Color3.fromRGB(255, 200, 90), Color3.fromRGB(230, 120, 40))
@@ -351,6 +351,92 @@ do
 		throwGrad.Color = cooling and ColorSequence.new(Color3.fromRGB(150, 150, 160), Color3.fromRGB(100, 100, 115))
 			or ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(230, 120, 40))
 	end)
+	-- РИТУАЛ ФОНАРЯ: «рискни или забери». Свет растёт, духи слетаются, «Запечатать» до прихода Тьмы
+	local ritB = K.make("TextButton", { Name = "RitualBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(120, 120), Position = UDim2.new(1, -136, 1, -104), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false }, hud)
+	K.corner(ritB, UDim.new(1, 0))
+	K.stroke(ritB, T.ink, 4)
+	local ritGrad = K.gradient(ritB, Color3.fromRGB(255, 205, 100), Color3.fromRGB(225, 120, 40))
+	K.icon(ritB, "luck", { AnchorPoint = Vector2.new(0.5, 0), Size = UDim2.fromOffset(50, 50), Position = UDim2.new(0.5, 0, 0, 12) })
+	local ritL = K.text(ritB, "РИТУАЛ", { Size = UDim2.new(1, -10, 0, 28), Position = UDim2.new(0, 5, 1, -44), MaxText = 19 })
+	local ritPanel = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 112), Size = UDim2.fromOffset(300, 84), BackgroundTransparency = 1, Visible = false }, hud)
+	local multL = K.text(ritPanel, "x1.00", { Size = UDim2.new(1, 0, 0, 54), MaxText = 54, StrokeThickness = 4, TextColor3 = Color3.fromRGB(255, 220, 120) })
+	local swarmL = K.text(ritPanel, "", { Size = UDim2.new(1, 0, 0, 26), Position = UDim2.fromOffset(0, 56), MaxText = 20, Font = Enum.Font.GothamBold })
+	local omenF = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 0, 20), BackgroundTransparency = 1, ZIndex = 30, Active = false }, gui)
+	local ritActive, ritT0, ritCap, ritN = false, 0, 0, 0
+	local function ritRefresh()
+		ritPanel.Visible = ritActive
+		ritL.Text = ritActive and "ЗАПЕЧАТАТЬ" or "РИТУАЛ"
+		ritGrad.Color = ritActive and ColorSequence.new(Color3.fromRGB(120, 230, 150), Color3.fromRGB(40, 160, 90))
+			or ColorSequence.new(Color3.fromRGB(255, 205, 100), Color3.fromRGB(225, 120, 40))
+	end
+	ritB.Activated:Connect(function()
+		K.bounce(ritB)
+		if not ritActive then
+			local r = remotes.Ritual:InvokeServer("start")
+			if r and r.ok then
+				ritActive, ritT0, ritCap, ritN = true, os.clock(), r.cap or 10, 0
+				play("reveal")
+				showToast("Ритуал! Духи слетаются на свет. Запечатай до прихода Тьмы", 3, Color3.fromRGB(150, 100, 30))
+				if late.tut and late.tut.step == 1 then late.setStep(2) end
+			elseif r and r.msg then
+				showToast(r.msg, 2.5)
+			end
+		else
+			local r = remotes.Ritual:InvokeServer("bank")
+			ritActive = false
+			ritRefresh()
+			if r and r.ok and r.n > 0 then
+				play("legendary")
+				showToast(("Запечатано %d духов на x%.2f!%s"):format(r.n, r.mult, r.record and "  НОВЫЙ РЕКОРД!" or ""), 3.5, Color3.fromRGB(40, 130, 70))
+				if late.tut and late.tut.step <= 3 then late.setStep(4) end
+			end
+		end
+		ritRefresh()
+	end)
+	remotes.RitualState.OnClientEvent:Connect(function(m)
+		if m.type == "arrive" then
+			ritN = m.n
+			local info = Catalog.Kinds[m.kind]
+			local rar = Catalog.Rarity[info.rarity]
+			if late.juice and (info.rarity ~= "common" or m.variant ~= "normal") then
+				late.juice(info, rar, m.variant, false, m.odds)
+			else
+				play("catch")
+			end
+		elseif m.type == "omen" then
+			-- знак Тьмы: экран темнеет, фонарь мигает, шёпот
+			play("oniWarn")
+			omenF.BackgroundTransparency = 0.45
+			TweenService:Create(omenF, TweenInfo.new(0.9), { BackgroundTransparency = 1 }):Play()
+			local lamp = plr.Character and plr.Character:FindFirstChild("Lantern")
+			if lamp then
+				task.spawn(function()
+					for _ = 1, 4 do
+						lamp.Transparency = 0.9
+						task.wait(0.07)
+						lamp.Transparency = 0
+						task.wait(0.09)
+					end
+				end)
+			end
+		elseif m.type == "crash" then
+			ritActive = false
+			ritRefresh()
+			play("oniHit")
+			omenF.BackgroundTransparency = 0
+			TweenService:Create(omenF, TweenInfo.new(1.4), { BackgroundTransparency = 1 }):Play()
+			showToast(("ТЬМА! Потеряно духов: %d (свет был x%.2f)"):format(m.lost, m.mult), 3.5, Color3.fromRGB(120, 20, 50))
+		end
+	end)
+	RunService.RenderStepped:Connect(function()
+		if ritActive then
+			local mlt = plr:GetAttribute("RitualM") or 1
+			multL.Text = ("СВЕТ x%.2f"):format(mlt)
+			multL.TextColor3 = mlt >= 8 and Color3.fromRGB(255, 110, 110) or (mlt >= 4 and Color3.fromRGB(255, 200, 90) or Color3.fromRGB(255, 240, 200))
+			swarmL.Text = ("Духов в рое: %d/%d   рекорд x%.1f"):format(ritN, ritCap, state.ritualBest or 0)
+		end
+	end)
+	ritRefresh()
 	-- карманный алтарь: сдать улов прямо здесь
 	local pocketB, pocketL = K.button(jarPanel, "Сдать", T.green, { Name = "PocketBtn", Size = UDim2.fromOffset(96, 46), Position = UDim2.new(1, 8, 0, 2), MaxText = 17, Visible = false })
 	pocketB.Activated:Connect(function()
@@ -2523,6 +2609,7 @@ do
 			end)
 		end
 	end
+	late.juice = juice
 	catchEffect = function(kind, at, coop, variant, rolling, odds)
 		local r = root()
 		if not r then return end
@@ -2911,7 +2998,7 @@ do
 
 end
 ------------------------------------------------------------------ визуал духов и следы
-local visFolder, visuals, dropTrail, updateFollowers, updateOni, updateYards
+local visFolder, visuals, dropTrail, updateFollowers, updateOni, updateYards, updateSwarms
 do
 	visFolder = K.make("Folder", { Name = "SpiritVisuals" }, workspace)
 	local trailFolder = K.make("Folder", { Name = "Trails" }, workspace)
@@ -3057,6 +3144,57 @@ do
 			if not p.Parent then
 				for _, f in fs do f.model:Destroy() end
 				followers[p] = nil
+			end
+		end
+	end
+
+	-- рой ритуала: духи кружат вокруг игрока (видно всем)
+	local swarms = {} -- [Player] = { sig, list = { model, kind } }
+	updateSwarms = function(now)
+		for _, p in Players:GetPlayers() do
+			local sig = p:GetAttribute("Swarm") or ""
+			local sw = swarms[p]
+			if not sw or sw.sig ~= sig then
+				local old = sw and sw.list or {}
+				local keep = {}
+				sw = { sig = sig, list = {} }
+				local i = 0
+				for entry in string.gmatch(sig, "[^,]+") do
+					i += 1
+					local kind, variant = string.match(entry, "([^:]+):?(.*)")
+					local reuse = old[i]
+					if reuse and reuse.entry == entry then
+						table.insert(sw.list, reuse)
+						keep[reuse] = true
+					elseif Catalog.Kinds[kind] and Spirits.Builders[kind] then
+						local m = Spirits.Builders[kind]()
+						Spirits.scale(m, 0.45)
+						pcall(Spirits.applyVariant, m, variant ~= "" and variant or nil)
+						table.insert(sw.list, { model = m, kind = kind, entry = entry })
+					end
+				end
+				for _, e in old do
+					if not keep[e] then e.model:Destroy() end
+				end
+				swarms[p] = sw
+			end
+			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+			local near = r and workspace.CurrentCamera and (workspace.CurrentCamera.CFrame.Position - r.Position).Magnitude < 170
+			for i, e in sw.list do
+				local want = near and visFolder or nil
+				if e.model.Parent ~= want then e.model.Parent = want end
+				if near then
+					local a = now * 1.4 + i * (math.pi * 2 / math.max(#sw.list, 1))
+					local rad = 5 + (i % 3) * 1.2
+					local pos = r.Position + Vector3.new(math.cos(a) * rad, 1.5 + math.sin(now * 2 + i) * 0.8, math.sin(a) * rad)
+					Spirits.animate(e.model, CFrame.lookAt(pos, pos + Vector3.new(-math.sin(a), 0, math.cos(a))), now * 3)
+				end
+			end
+		end
+		for p, sw in swarms do
+			if not p.Parent then
+				for _, e in sw.list do e.model:Destroy() end
+				swarms[p] = nil
 			end
 		end
 	end
@@ -3315,6 +3453,7 @@ do
 		end
 		updateFollowers(now)
 		updateYards(now)
+		updateSwarms(now)
 		updateOni(dt)
 		local beamPart = World:FindFirstChild("LighthouseBeam")
 		if beamPart then
