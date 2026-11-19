@@ -208,6 +208,19 @@ L.Story = {
 		say = "Последнее испытание: Стеклянная цапля. Поймаешь её, и станешь моим учеником." },
 }
 
+-- короткая цель главы для плашки на экране
+function L.storyGoal(ch, kinds, districts): string
+	if ch.type == "kind" then return "Поймай: " .. (kinds[ch.kind] and kinds[ch.kind].name or ch.kind) end
+	if ch.type == "district" then return "Лови духов: " .. (districts[ch.district] and districts[ch.district].name or ch.district) end
+	if ch.type == "rarity" then return "Поймай редких духов или лучше" end
+	if ch.type == "variant" then return "Поймай необычные разновидности" end
+	if ch.type == "deliver" then return "Сдай банки у алтаря" end
+	if ch.type == "raid" then return "Помоги в рейде «Тысяча фонарей»" end
+	if ch.type == "boss" then return "Победи ночного стража" end
+	if ch.type == "evolve" then return "Пробуди духа в Атласе" end
+	return ch.title
+end
+
 ------------------------------------------------------------------ ночные стражи: мини-босс в районе
 L.Boss = {
 	every = 420, first = 200, duration = 120, radius = 45, hitEvery = 0.2,

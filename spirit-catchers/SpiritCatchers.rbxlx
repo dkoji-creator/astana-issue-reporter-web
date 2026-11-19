@@ -211,7 +211,29 @@ E.Upgrades = {
 		fmt = "x%.2g",
 	},
 }
-E.UpgradeOrder = { "jar", "range", "power" }
+	-- апгрейды против усталости: меньше беготни и ручной работы
+E.Upgrades.speed = {
+	name = "Скорость бега", desc = "Быстрее бегаешь между логовами и алтарём",
+	values = { 0, 1.5, 3, 4.5, 6, 7.5, 9, 10.5, 12, 13.5, 15, 16.5 },
+	coins = { 150, 400, 900, 2000, 4500, 9000, 18000, 35000, 70000, 140000, 280000 },
+	dust = { 0, 0, 5, 10, 15, 20, 30, 40, 55, 70, 90 },
+	fmt = "+%.1f",
+}
+E.Upgrades.helper = {
+	name = "Помощник-ловец", desc = "Спутник сам ловит духов рядом с тобой (ур. 2-4: обычные, 5-8: до редких, 9+: до эпических)",
+	values = { 0, 40, 32, 26, 21, 17, 14, 12, 10, 8, 7, 6 },
+	coins = { 500, 1500, 4000, 9000, 18000, 35000, 60000, 100000, 160000, 250000, 400000 },
+	dust = { 0, 10, 20, 30, 45, 60, 80, 100, 130, 160, 200 },
+	fmt = "раз в %d с", off = "нет",
+}
+E.Upgrades.pocket = {
+	name = "Карманный алтарь", desc = "Кнопка «Сдать» на банке: сдаёшь улов где угодно, без похода к алтарю",
+	values = { 0, 180, 150, 120, 100, 80, 65, 50, 40, 30, 20, 10 },
+	coins = { 1000, 3000, 7000, 14000, 25000, 45000, 75000, 120000, 180000, 260000, 380000 },
+	dust = { 0, 10, 20, 30, 40, 55, 70, 90, 110, 140, 180 },
+	fmt = "раз в %d с", off = "нет",
+}
+E.UpgradeOrder = { "jar", "speed", "helper", "pocket", "range", "power" }
 
 E.GardenNeed = 3
 E.CatchRange = 14
@@ -468,6 +490,19 @@ L.Story = {
 	{ title = "Хранитель", type = "kind", kind = "GlassHeron", need = 1, coins = 3000, dust = 100, title2 = "Ученик Хранителя",
 		say = "Последнее испытание: Стеклянная цапля. Поймаешь её, и станешь моим учеником." },
 }
+
+-- короткая цель главы для плашки на экране
+function L.storyGoal(ch, kinds, districts): string
+	if ch.type == "kind" then return "Поймай: " .. (kinds[ch.kind] and kinds[ch.kind].name or ch.kind) end
+	if ch.type == "district" then return "Лови духов: " .. (districts[ch.district] and districts[ch.district].name or ch.district) end
+	if ch.type == "rarity" then return "Поймай редких духов или лучше" end
+	if ch.type == "variant" then return "Поймай необычные разновидности" end
+	if ch.type == "deliver" then return "Сдай банки у алтаря" end
+	if ch.type == "raid" then return "Помоги в рейде «Тысяча фонарей»" end
+	if ch.type == "boss" then return "Победи ночного стража" end
+	if ch.type == "evolve" then return "Пробуди духа в Атласе" end
+	return ch.title
+end
 
 ------------------------------------------------------------------ ночные стражи: мини-босс в районе
 L.Boss = {
@@ -751,22 +786,23 @@ P.Codes = {
 	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
 	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
 	UPDATE3 = { coins = 1000, dust = 30, text = "Обновление 3! +1000 монет и +30 пыли" },
+	BOOST = { coins = 3000, dust = 80, text = "Обновление 6! +3000 монет и +80 пыли: купи помощника-ловца" },
 	SKY = { coins = 2000, dust = 60, text = "Обновление 5: Небесный рынок! +2000 монет и +60 пыли" },
 	MIRROR = { coins = 1500, dust = 50, text = "Обновление 4: Зеркальное озеро! +1500 монет и +50 пыли" },
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 5
+P.NewsVersion = 6
 P.News = {
-	title = "Обновление 5: Небесный рынок",
+	title = "Обновление 6: меньше беготни",
 	lines = {
-		"Третий мир: Небесный рынок (ур. 30). Ленты на ветру показывают духов",
-		"Пробуждение: 10 дубликатов + пыль = пробуждённый дух (способность и монеты x1.5)",
-		"Сюжет: 12 глав от Хранителя алтаря у площади",
-		"Ночные стражи: мини-боссы в районах, побеждайте вместе",
-		"Мебель для двора, забеги спутников, войны клубов, переход к друзьям",
-		"Премиум-трек сезона (только косметика) и праздничные духи: Кленовый дух до 30 ноября",
-		"Код SKY (Опции)",
+		"Скорость бега: новый апгрейд в Магазине (до +16.5)",
+		"Помощник-ловец: спутник сам ловит духов рядом с тобой",
+		"Карманный алтарь: кнопка «Сдать» на банке, без похода к алтарю",
+		"Поимка стала ярче: вспышка, тряска и надпись редкости",
+		"Свита: с 10 и 20 уровня за тобой бегут ещё 2 твоих самых редких духа",
+		"Над головой виден твой лучший улов",
+		"Код BOOST (Опции)",
 	},
 }
 
@@ -2612,6 +2648,7 @@ local SeasonFn = remote("ClaimSeason", "RemoteFunction")
 local TitleFn = remote("SetTitle", "RemoteFunction")
 local EvolveFn = remote("Evolve", "RemoteFunction")
 local CoinShopFn = remote("CoinShop", "RemoteFunction")
+local PocketFn = remote("PocketSave", "RemoteFunction")
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
 local StoryOpenEv = remote("StoryOpen")
@@ -2874,7 +2911,7 @@ local function applySpeed(plr)
 	local h = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
 	if d and h then
 		local c = compOf(d)
-		h.WalkSpeed = 16 + (d.talents.swift or 0) + ((c and c.ability == "speed") and c.value or 0)
+		h.WalkSpeed = 16 + (d.talents.swift or 0) + ((c and c.ability == "speed") and c.value or 0) + Catalog.upgradeValue("speed", d.levels.speed or 1)
 	end
 end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
@@ -2925,7 +2962,7 @@ end
 local function migrate(raw): Profile
 	local d: Profile = {
 		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {}, story = { ch = 1, prog = 0 },
-		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
+		levels = { jar = 1, range = 1, power = 1, speed = 1, helper = 1, pocket = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
 		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0, luckUntil = 0,
@@ -3138,22 +3175,67 @@ local function achProgress(d, a)
 end
 
 -- ранг ловца над головой
+-- лучший улов за всё время (по очкам редкость x шанс разновидности) и свита для показа
+local function bestOf(d)
+	local bestK, bestV, bestS = nil, nil, 0
+	for kind, vs in d.variants or {} do
+		local info = Catalog.Kinds[kind]
+		if info and (d.saved[kind] or 0) > 0 then
+			for v in vs do
+				local vc = Catalog.Variants[v]
+				if vc then
+					local odds = v ~= "normal" and math.floor(1 / vc.chance + 0.5) or 1
+					local sc = (Live.RarityScore[info.rarity] or 1) * odds
+					if sc > bestS then bestK, bestV, bestS = kind, v, sc end
+				end
+			end
+		end
+	end
+	return bestK, bestV
+end
+local function retinueOf(d)
+	local slots = (d.level >= 20 and 2) or (d.level >= 10 and 1) or 0
+	if slots == 0 then return "" end
+	local list = {}
+	for kind, n in d.saved do
+		if n > 0 and Catalog.Kinds[kind] and kind ~= d.equipped then table.insert(list, kind) end
+	end
+	table.sort(list, function(a, b)
+		local ra, rb = RARITY_RANK[Catalog.Kinds[a].rarity], RARITY_RANK[Catalog.Kinds[b].rarity]
+		if ra ~= rb then return ra > rb end
+		return a < b
+	end)
+	local out = {}
+	for i = 1, math.min(slots, #list) do table.insert(out, list[i]) end
+	return table.concat(out, ",")
+end
+
 local function updateRankTag(plr, d)
 	local head = plr.Character and plr.Character:FindFirstChild("Head")
 	if not head then return end
 	local tag = head:FindFirstChild("RankTag")
 	if not tag then
 		tag = Instance.new("BillboardGui")
-		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(260, 26), Vector3.new(0, 3.6, 0), 90
+		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(280, 46), Vector3.new(0, 4, 0), 90
 		local t = Instance.new("TextLabel")
-		t.Name, t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = "Text", UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+		t.Name, t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = "Text", UDim2.fromScale(1, 0.55), 1, true, Enum.Font.GothamBlack
 		t.TextStrokeTransparency = 0.2
 		t.Parent = tag
+		local b = Instance.new("TextLabel")
+		b.Name, b.Size, b.Position, b.BackgroundTransparency, b.TextScaled, b.Font = "Best", UDim2.fromScale(1, 0.42), UDim2.fromScale(0, 0.58), 1, true, Enum.Font.GothamBold
+		b.TextStrokeTransparency = 0.2
+		b.Parent = tag
 		tag.Parent = head
 	end
 	local rank = Catalog.Progress.rankOf(d.level)
 	tag.Text.Text = ((d.rebirths or 0) > 0 and ("★%d "):format(d.rebirths) or "") .. (d.title or rank.name)
 	tag.Text.TextColor3 = rank.color
+	local bk, bv = bestOf(d)
+	local best = tag:FindFirstChild("Best")
+	if best then
+		best.Text = bk and ("Лучший улов: " .. (bv ~= "normal" and (Catalog.Variants[bv].name .. " ") or "") .. Catalog.Kinds[bk].name) or ""
+		best.TextColor3 = bk and (bv ~= "normal" and Catalog.Variants[bv].color or Catalog.Rarity[Catalog.Kinds[bk].rarity].color) or Color3.new(1, 1, 1)
+	end
 end
 
 local function pushState(plr)
@@ -3164,6 +3246,7 @@ local function pushState(plr)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
 	plr:SetAttribute("Companion", d.equipped or "")
+	plr:SetAttribute("Retinue", retinueOf(d))
 	plr:SetAttribute("CompanionEvolved", d.equipped ~= nil and d.evolved ~= nil and d.evolved[d.equipped] == true)
 	plr:SetAttribute("Skin", d.skin)
 	StateEv:FireClient(plr, {
@@ -3437,7 +3520,7 @@ local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVaria
 			break
 		end
 	end
-	if tut then variant = "normal" end
+	if tut then variant = "shiny" end -- первый лис новичка сияет: сразу видно, что духи бывают особенными
 	-- редкий гость: сервер предупреждает всех
 	local rk = info.rarity
 	if not tut and (rk == "legendary" or rk == "mythic" or rk == "secret") then
@@ -3519,6 +3602,14 @@ RunService.Heartbeat:Connect(function(dt)
 	for id, s in live do
 		local info = Catalog.Kinds[s.kind]
 		local g = groups[id]
+		if not g and s.helperFor then
+			-- помощник-ловец игрока забирает духа
+			if s.helperFor.Parent and data[s.helperFor] and jars[s.helperFor] and #jars[s.helperFor] < cap(data[s.helperFor]) then
+				g = { s.helperFor }
+				s.progress = 1
+			end
+			s.helperFor = nil
+		end
 		if info.move == "swim" then
 			local sw = Catalog.Districts[s.district].swim
 			local a = now * sw.speed
@@ -3947,11 +4038,11 @@ savePrompt.HoldDuration, savePrompt.MaxActivationDistance = 0.25, ALTAR_RANGE
 savePrompt.RequiresLineOfSight = false
 savePrompt.Parent = map.altar
 
-local function doSave(plr)
+local function doSave(plr, anywhere: boolean?)
 	local root = rootOf(plr)
 	local d = data[plr]
 	if not (root and d) then return { ok = false, msg = "Нет персонажа" } end
-	if (root.Position - map.altarPos).Magnitude > ALTAR_RANGE + 6 then return { ok = false, msg = "Подойди к алтарю" } end
+	if not anywhere and (root.Position - map.altarPos).Magnitude > ALTAR_RANGE + 6 then return { ok = false, msg = "Подойди к алтарю" } end
 	local jar = jars[plr]
 	if #jar == 0 then return { ok = false, msg = "Банка пуста — сначала поймай духа" } end
 	local wasOpen = gardenOpen(d)
@@ -4015,6 +4106,54 @@ end
 savePrompt.Triggered:Connect(function(plr)
 	SaveResultEv:FireClient(plr, doSave(plr))
 end)
+-- карманный алтарь: сдать улов где угодно (перезарядка по уровню)
+local pocketAt = {}
+PocketFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	local cd = Catalog.upgradeValue("pocket", d.levels.pocket or 1)
+	if cd <= 0 then return { ok = false, msg = "Купи «Карманный алтарь» в Магазине" } end
+	local left = (pocketAt[plr] or -1e9) + cd - os.clock()
+	if left > 0 then return { ok = false, msg = ("Карманный алтарь заряжается: %d с"):format(math.ceil(left)) } end
+	if #(jars[plr] or {}) == 0 then return { ok = false, msg = "Банка пуста" } end
+	pocketAt[plr] = os.clock()
+	plr:SetAttribute("PocketReady", os.time() + cd)
+	SaveResultEv:FireClient(plr, doSave(plr, true))
+	return { ok = true }
+end
+-- помощник-ловец: раз в N секунд ловит ближайшего подходящего духа
+local helperAt = {}
+task.spawn(function()
+	while true do
+		task.wait(1)
+		local now = os.clock()
+		for _, plr in Players:GetPlayers() do
+			local d = data[plr]
+			local root = rootOf(plr)
+			local every = d and Catalog.upgradeValue("helper", d.levels.helper or 1) or 0
+			if d and root and every > 0 and now - (helperAt[plr] or 0) >= every and jars[plr] and #jars[plr] < cap(d) then
+				local lvl = d.levels.helper
+				local maxRank = lvl >= 9 and RARITY_RANK.epic or (lvl >= 5 and RARITY_RANK.rare or RARITY_RANK.uncommon)
+				local best, bestD = nil, 35
+				for _, s in live do
+					local info = Catalog.Kinds[s.kind]
+					local dist = (s.pos - root.Position).Magnitude
+					if dist < bestD and not s.helperFor and not s.tut and info.move ~= "swim" and not info.moonOnly
+						and RARITY_RANK[info.rarity] <= maxRank and s.anchor:GetAttribute("Holders") == 0
+						and Catalog.unlocked(s.district, stats(d)) then
+						best, bestD = s, dist
+					end
+				end
+				if best then
+					helperAt[plr] = now
+					best.helperFor = plr
+					best.revealed = true
+					best.anchor:SetAttribute("Revealed", true)
+				end
+			end
+		end
+	end
+end)
 
 UpgradeFn.OnServerInvoke = function(plr, which)
 	local d = data[plr]
@@ -4029,6 +4168,7 @@ UpgradeFn.OnServerInvoke = function(plr, which)
 	d.coins -= c
 	d.dust -= du
 	d.levels[which] = lvl + 1
+	applySpeed(plr)
 	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
 	if lantern and lantern:FindFirstChild("Beam") then
 		lantern.Beam.Range = range(d)
@@ -6762,7 +6902,7 @@ end
 local state, trackKind
 do
 	state = {
-		jar = {}, cap = 3, saved = {}, coins = 0, dust = 0, levels = { jar = 1, range = 1, power = 1 },
+		jar = {}, cap = 3, saved = {}, coins = 0, dust = 0, levels = { jar = 1, range = 1, power = 1, speed = 1, helper = 1, pocket = 1 },
 		tutorialDone = true, gardenOpen = false, distinct = 0, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, xpNext = 35, daily = { last = 0, streak = 0 }, dailyReady = false,
@@ -6878,8 +7018,15 @@ do
 
 end
 ------------------------------------------------------------------ HUD: событие, цель, уведомления
-local eventPill, eventGrad, eventL, trackPill, trackL, showToast, modPill, modL, compPill, compL
+local eventPill, eventGrad, eventL, trackPill, trackL, showToast, modPill, modL, compPill, compL, goalPill, goalL
 do
+	-- одна главная цель на экране (текущая глава Хранителя); нажатие открывает разговор
+	goalPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 80), Size = UDim2.fromOffset(380, 38), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+	K.corner(goalPill, UDim.new(1, 0))
+	K.stroke(goalPill, T.ink, 3)
+	K.gradient(goalPill, Color3.fromRGB(255, 200, 90), Color3.fromRGB(200, 120, 40))
+	K.icon(goalPill, "target", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(-6, -2) })
+	goalL = K.text(goalPill, "", { Size = UDim2.new(1, -50, 1, -10), Position = UDim2.fromOffset(40, 5), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16 })
 	-- модификатор дня под таймером события
 	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(240, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(modPill, UDim.new(1, 0))
@@ -6942,6 +7089,20 @@ do
 	jarL = K.text(jarPanel, "Банка 0/3", { Size = UDim2.new(0.5, -40, 0, 22), Position = UDim2.fromOffset(46, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
 	jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.55, 0, 0, 18), Position = UDim2.new(0.42, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
 	_, jarFill = K.bar(jarPanel, T.cold, { Size = UDim2.new(1, -60, 0, 12), Position = UDim2.fromOffset(46, 30) })
+	-- карманный алтарь: сдать улов прямо здесь
+	local pocketB, pocketL = K.button(jarPanel, "Сдать", T.green, { Name = "PocketBtn", Size = UDim2.fromOffset(96, 46), Position = UDim2.new(1, 8, 0, 2), MaxText = 17, Visible = false })
+	pocketB.Activated:Connect(function()
+		local r = remotes.PocketSave:InvokeServer()
+		if r and not r.ok and r.msg then showToast(r.msg, 2) end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			local left = (plr:GetAttribute("PocketReady") or 0) - os.time()
+			pocketL.Text = left > 0 and ("%d с"):format(left) or "Сдать"
+			K.recolor(pocketB, left > 0 and Color3.fromRGB(90, 90, 105) or T.green)
+		end
+	end)
 
 	tutPanel = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -72), Size = UDim2.fromOffset(460, 52), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(tutPanel, UDim.new(0, 14))
@@ -8026,6 +8187,17 @@ do
 		end
 	end)
 	remotes.StoryOpen.OnClientEvent:Connect(openStory)
+	-- новичка встречает Хранитель (один раз за сессию)
+	local greeted = false
+	remotes.State.OnClientEvent:Connect(function(st)
+		if greeted or not st or (st.total or 0) > 0 then return end
+		greeted = true
+		task.delay(6, function()
+			local intro = plr.PlayerGui:FindFirstChild("Intro")
+			while intro and intro.Parent and intro.Enabled do task.wait(1) end
+			openStory()
+		end)
+	end)
 	remotes.State.OnClientEvent:Connect(function()
 		if dlg.Visible then task.defer(refresh) end
 	end)
@@ -8224,19 +8396,23 @@ do
 			end
 		end
 	end
-	local UP_ICON = { jar = "jar", range = "target", power = "upgrade" }
+	local UP_ICON = { jar = "jar", range = "target", power = "upgrade", speed = "paw", helper = "luck", pocket = "portal" }
+	local function upFmt(up, v)
+		if up.off and v == 0 then return up.off end
+		return up.fmt:format(v)
+	end
 	local upRows = {}
 	for i, key in Catalog.UpgradeOrder do
 		local up = Catalog.Upgrades[key]
 		local f = K.panel(upList, { Size = UDim2.new(1, -10, 0, 84), LayoutOrder = i, BackgroundColor3 = T.panel2 })
 		K.icon(f, UP_ICON[key], { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(8, 12) })
 		local title = K.text(f, "", { Size = UDim2.new(0.6, -80, 0, 24), Position = UDim2.fromOffset(76, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
-		K.text(f, up.desc, { Size = UDim2.new(0.6, -80, 0, 16), Position = UDim2.fromOffset(76, 34), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		K.text(f, up.desc, { Size = UDim2.new(0.6, -80, 0, 22), Position = UDim2.fromOffset(76, 32), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
 		local dots = K.make("Frame", { Size = UDim2.new(0.5, -80, 0, 14), Position = UDim2.fromOffset(76, 58), BackgroundTransparency = 1 }, f)
-		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, dots)
+		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3) }, dots)
 		local dotList = {}
 		for d = 1, Catalog.MaxLevel do
-			local dot = K.make("Frame", { Size = UDim2.fromOffset(24, 12), BackgroundColor3 = T.ink }, dots)
+			local dot = K.make("Frame", { Size = UDim2.fromOffset(14, 12), BackgroundColor3 = T.ink }, dots)
 			K.corner(dot, UDim.new(1, 0))
 			dotList[d] = dot
 		end
@@ -8274,11 +8450,11 @@ do
 			local lvl = state.levels[key] or 1
 			for d, dot in r.dots do dot.BackgroundColor3 = d <= lvl and T.green or T.ink end
 			if lvl >= Catalog.MaxLevel then
-				r.title.Text = ("%s: %s (макс.)"):format(up.name, up.fmt:format(up.values[lvl]))
+				r.title.Text = ("%s: %s (макс.)"):format(up.name, upFmt(up, up.values[lvl]))
 				r.buyL.Text = "Максимум"
 				K.recolor(r.buy, Color3.fromRGB(80, 80, 95))
 			else
-				r.title.Text = ("%s: %s -> %s"):format(up.name, up.fmt:format(up.values[lvl]), up.fmt:format(up.values[lvl + 1]))
+				r.title.Text = ("%s: %s -> %s"):format(up.name, upFmt(up, up.values[lvl]), upFmt(up, up.values[lvl + 1]))
 				local c, du = up.coins[lvl], up.dust[lvl]
 				r.buyL.Text = du > 0 and ("%d монет + %d пыли"):format(c, du) or ("%d монет"):format(c)
 				K.recolor(r.buy, (state.coins >= c and state.dust >= du) and T.green or Color3.fromRGB(90, 90, 105))
@@ -8666,6 +8842,9 @@ do
 	btnQuests.Activated:Connect(function() toggleWindow(questW, refreshQuests) end)
 	btnSeason.Activated:Connect(function() toggleWindow(seasonW, refreshSeason) end)
 	btnSocial.Activated:Connect(function() toggleWindow(socialW, refreshSocial) end)
+	goalPill.Activated:Connect(function()
+		if openStory then openStory() end
+	end)
 	compPill.Activated:Connect(function()
 		local res = remotes.FeedCompanion:InvokeServer()
 		if res and res.ok then
@@ -8695,6 +8874,7 @@ do
 end
 ------------------------------------------------------------------ HUD-обновление
 local refreshHUD
+local hudUnlockSeen = false
 do
 	refreshHUD = function()
 		local n = #state.jar
@@ -8708,6 +8888,8 @@ do
 		end
 		jarNames.Text = n > 0 and table.concat(names, ", ") or "пусто"
 		jarNames.TextColor3 = n >= state.cap and Color3.fromRGB(255, 160, 100) or T.sub
+		local pb = jarPanel:FindFirstChild("PocketBtn")
+		if pb then pb.Visible = (state.levels.pocket or 1) > 1 end
 		coinL.Text = tostring(state.coins)
 		dustL.Text = tostring(state.dust)
 		levelL.Text = ("Ур. %d"):format(state.level)
@@ -8724,6 +8906,26 @@ do
 			if not (state.achDone and state.achDone[id]) and ((state.achCur and state.achCur[id]) or 0) >= a.need then claimable = true end
 		end
 		btnAtlas.Badge.Visible = claimable
+		-- кнопки открываются постепенно, чтобы новичка не засыпало окнами
+		local UNLOCK = { { btnQuests, 2, "Задания" }, { btnTeleport, 3, "Телепорт" }, { btnPower, 3, "Сила" }, { btnSeason, 4, "Сезон" }, { btnSocial, 6, "Ловцы" } }
+		for _, u in UNLOCK do
+			local open = (state.level or 1) >= u[2] or state.isAdmin == true
+			if open and not u[1].Visible and hudUnlockSeen then
+				showToast("Открыто: " .. u[3] .. "!", 3, Color3.fromRGB(60, 120, 80))
+				K.pop(u[1])
+			end
+			u[1].Visible = open
+		end
+		hudUnlockSeen = true
+		-- главная цель
+		local st = state.story
+		local ch = st and Catalog.Live.Story[st.ch]
+		goalPill.Visible = ch ~= nil and not trackPill.Visible
+		if ch then
+			local done = st.prog >= ch.need
+			goalL.Text = done and ("Глава «%s» готова: поговори с Хранителем"):format(ch.title)
+				or ("Цель: %s (%d/%d)"):format(Catalog.Live.storyGoal(ch, Catalog.Kinds, Catalog.Districts), st.prog, ch.need)
+		end
 		-- сезон: есть награда или незавершённое испытание
 		local Live = Catalog.Live
 		local se = state.season
@@ -8814,11 +9016,66 @@ do
 	end
 
 	local streak, lastCatch = 0, 0
+	-- «сочная» поимка: вспышка, тряска, удар зума, крупная надпись редкости
+	local flash = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, ZIndex = 40, Active = false }, gui)
+	local banner = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.36), Size = UDim2.fromOffset(460, 110), BackgroundTransparency = 1, Visible = false, ZIndex = 41 }, gui)
+	local bannerTop = K.text(banner, "", { Size = UDim2.new(1, 0, 0, 62), MaxText = 56, ZIndex = 41, StrokeThickness = 4 })
+	local bannerSub = K.text(banner, "", { Size = UDim2.new(1, 0, 0, 34), Position = UDim2.fromOffset(0, 66), MaxText = 26, ZIndex = 41, StrokeThickness = 3 })
+	local bannerSeq = 0
+	local RANK_WORD = { common = "ПОЙМАН!", uncommon = "НЕОБЫЧНЫЙ!", rare = "РЕДКИЙ!", epic = "ЭПИЧЕСКИЙ!", legendary = "ЛЕГЕНДАРНЫЙ!", mythic = "МИФИЧЕСКИЙ!", secret = "СЕКРЕТНЫЙ!" }
+	local POWER = { common = 0.3, uncommon = 0.5, rare = 0.75, epic = 1, legendary = 1.3, mythic = 1.6, secret = 2 }
+	local function juice(info, rar, variant)
+		local pw = POWER[info.rarity] or 0.3
+		if variant and variant ~= "normal" then pw += 0.4 end
+		if state.settings.reduced then pw *= 0.4 end
+		-- вспышка
+		flash.BackgroundColor3 = rar.color:Lerp(Color3.new(1, 1, 1), 0.6)
+		flash.BackgroundTransparency = 1 - math.min(0.55, 0.15 + pw * 0.25)
+		TweenService:Create(flash, TweenInfo.new(0.35 + pw * 0.2), { BackgroundTransparency = 1 }):Play()
+		-- удар зума
+		local cam = workspace.CurrentCamera
+		if cam then
+			local fov = 70
+			cam.FieldOfView = fov - 4 - pw * 5
+			TweenService:Create(cam, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { FieldOfView = fov }):Play()
+		end
+		-- тряска камеры
+		local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			task.spawn(function()
+				local t0 = os.clock()
+				local dur = 0.18 + pw * 0.15
+				while os.clock() - t0 < dur do
+					local k = (1 - (os.clock() - t0) / dur) * pw * 0.35
+					hum.CameraOffset = Vector3.new((math.random() - 0.5) * k, (math.random() - 0.5) * k, 0)
+					RunService.RenderStepped:Wait()
+				end
+				hum.CameraOffset = Vector3.zero
+			end)
+		end
+		-- надпись редкости (для необычных и выше или разновидностей)
+		if info.rarity ~= "common" or (variant and variant ~= "normal") then
+			bannerSeq += 1
+			local my = bannerSeq
+			local vname = (variant and variant ~= "normal") and (Catalog.Variants[variant].name .. " ") or ""
+			bannerTop.Text = RANK_WORD[info.rarity] or "ПОЙМАН!"
+			bannerTop.TextColor3 = (variant and variant ~= "normal") and Catalog.Variants[variant].color or rar.color
+			bannerSub.Text = vname .. info.name
+			banner.Visible = true
+			local sc = banner:FindFirstChild("Bounce") or K.make("UIScale", { Name = "Bounce" }, banner)
+			sc.Scale = 0.3
+			TweenService:Create(sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 + pw * 0.15 }):Play()
+			task.delay(1.1 + pw * 0.4, function()
+				if bannerSeq == my then banner.Visible = false end
+			end)
+		end
+	end
 	catchEffect = function(kind, at, coop, variant)
 		local r = root()
 		if not r then return end
 		local info = Catalog.Kinds[kind]
 		local rar = Catalog.Rarity[info.rarity]
+		juice(info, rar, variant)
 		streak = (os.clock() - lastCatch < 20) and streak + 1 or 1
 		lastCatch = os.clock()
 		local big = info.rarity ~= "common"
@@ -9158,6 +9415,11 @@ do
 		annGrad.Color = ColorSequence.new(K.lighten(vc.color, 0.2), K.darken(vc.color, 0.35))
 		annGui.Visible = true
 		K.pop(annGui)
+		pcall(function()
+			local ch = game:GetService("TextChatService"):FindFirstChild("TextChannels")
+			local gen = ch and ch:FindFirstChild("RBXGeneral")
+			if gen then gen:DisplaySystemMessage(("[Spirit Catchers] %s поймал: %s %s (1 к %d)!"):format(a.name, vc.name, Catalog.Kinds[a.kind].name, a.odds)) end
+		end)
 		task.delay(5, function()
 			if annSeq == my then annGui.Visible = false end
 		end)
@@ -9288,37 +9550,45 @@ do
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
 	for _, a in spiritsFolder:GetChildren() do addAnchor(a) end
 
-	local followers = {}
+	-- спутник и свита (до 2 самых редких духов с 10 и 20 уровня) бегут за игроком
+	local followers = {} -- [Player] = { [slot] = { kind, evo, model, pivot } }
+	local SLOT_OFFSET = { CFrame.new(3, 2.2, 2), CFrame.new(-3, 1.8, 3), CFrame.new(0, 3, 5) }
 	updateFollowers = function(now)
 		for _, p in Players:GetPlayers() do
-			local kind = p:GetAttribute("Companion")
-			local evo = p:GetAttribute("CompanionEvolved") == true
-			local f = followers[p]
-			if f and (f.kind ~= kind or f.evo ~= evo) then
-				f.model:Destroy()
-				followers[p], f = nil, nil
+			local list = {}
+			local c = p:GetAttribute("Companion")
+			if c and c ~= "" then table.insert(list, { kind = c, evo = p:GetAttribute("CompanionEvolved") == true }) end
+			for k in string.gmatch(p:GetAttribute("Retinue") or "", "[^,]+") do
+				if #list < 3 then table.insert(list, { kind = k, evo = false }) end
 			end
+			local fs = followers[p] or {}
+			followers[p] = fs
 			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-			if kind and kind ~= "" and Catalog.Kinds[kind] and r then
-				if not f then
-					local m = Spirits.Builders[kind]()
-					Spirits.scale(m, Catalog.Kinds[kind].follow)
-					if evo then Spirits.applyEvolved(m) end
-					m.Parent = visFolder
-					f = { kind = kind, model = m, pivot = r.CFrame, evo = evo }
-					followers[p] = f
+			for slot = 1, 3 do
+				local want = list[slot]
+				local f = fs[slot]
+				if f and (not want or f.kind ~= want.kind or f.evo ~= want.evo or not r) then
+					f.model:Destroy()
+					fs[slot], f = nil, nil
 				end
-				local goal = r.CFrame * CFrame.new(3, 2.2 + math.sin(now * 2) * 0.4, 2)
-				f.pivot = f.pivot:Lerp(goal, 0.1)
-				Spirits.animate(f.model, f.pivot, now * Catalog.Kinds[kind].animSpeed * 0.6)
-			elseif f then
-				f.model:Destroy()
-				followers[p] = nil
+				if want and r and Catalog.Kinds[want.kind] and Spirits.Builders[want.kind] then
+					if not f then
+						local m = Spirits.Builders[want.kind]()
+						Spirits.scale(m, Catalog.Kinds[want.kind].follow * (slot == 1 and 1 or 0.8))
+						if want.evo then Spirits.applyEvolved(m) end
+						m.Parent = visFolder
+						f = { kind = want.kind, evo = want.evo, model = m, pivot = r.CFrame }
+						fs[slot] = f
+					end
+					local goal = r.CFrame * SLOT_OFFSET[slot] * CFrame.new(0, math.sin(now * 2 + slot) * 0.4, 0)
+					f.pivot = f.pivot:Lerp(goal, 0.1)
+					Spirits.animate(f.model, f.pivot, now * Catalog.Kinds[want.kind].animSpeed * 0.6)
+				end
 			end
 		end
-		for p, f in followers do
+		for p, fs in followers do
 			if not p.Parent then
-				f.model:Destroy()
+				for _, f in fs do f.model:Destroy() end
 				followers[p] = nil
 			end
 		end

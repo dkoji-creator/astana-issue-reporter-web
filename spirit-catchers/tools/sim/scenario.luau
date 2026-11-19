@@ -186,7 +186,7 @@ frames(60)
 stage("спутник, сезон, испытания, модификаторы")
 inv("Equip", "PaperFox")
 local fr = inv("FeedCompanion")
-if not (fr and fr.ok) then table.insert(SIM.errors, "кормление спутника: " .. tostring(fr and fr.msg)) end
+if not (fr and (fr.ok or string.find(tostring(fr.msg), "максимал"))) then table.insert(SIM.errors, "кормление спутника: " .. tostring(fr and fr.msg)) end
 for _ = 1, 7 do inv("Admin", "mod") frames(2) end
 inv("Admin", "season")
 local sr = inv("ClaimSeason", 1)

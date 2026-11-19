@@ -81,6 +81,7 @@ local SeasonFn = remote("ClaimSeason", "RemoteFunction")
 local TitleFn = remote("SetTitle", "RemoteFunction")
 local EvolveFn = remote("Evolve", "RemoteFunction")
 local CoinShopFn = remote("CoinShop", "RemoteFunction")
+local PocketFn = remote("PocketSave", "RemoteFunction")
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
 local StoryOpenEv = remote("StoryOpen")
@@ -343,7 +344,7 @@ local function applySpeed(plr)
 	local h = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
 	if d and h then
 		local c = compOf(d)
-		h.WalkSpeed = 16 + (d.talents.swift or 0) + ((c and c.ability == "speed") and c.value or 0)
+		h.WalkSpeed = 16 + (d.talents.swift or 0) + ((c and c.ability == "speed") and c.value or 0) + Catalog.upgradeValue("speed", d.levels.speed or 1)
 	end
 end
 local function cap(d: Profile) return Catalog.upgradeValue("jar", d.levels.jar) + (hasPass(d, "bigjar") and Money.BigJarBonus or 0) end
@@ -394,7 +395,7 @@ end
 local function migrate(raw): Profile
 	local d: Profile = {
 		version = 7, saved = {}, firstSaved = {}, equipped = nil, coins = 0, dust = 0, fed = {}, titles = {}, album = {}, yardLikes = 0, evolved = {}, furniture = {}, story = { ch = 1, prog = 0 },
-		levels = { jar = 1, range = 1, power = 1 }, tutorialDone = false, orders = {},
+		levels = { jar = 1, range = 1, power = 1, speed = 1, helper = 1, pocket = 1 }, tutorialDone = false, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, daily = { last = 0, streak = 0 }, skins = { classic = true }, skin = "classic", milestones = {},
 		variants = {}, total = 0, owned = {}, codes = {}, newsSeen = 0, luckUntil = 0,
@@ -607,22 +608,67 @@ local function achProgress(d, a)
 end
 
 -- ранг ловца над головой
+-- лучший улов за всё время (по очкам редкость x шанс разновидности) и свита для показа
+local function bestOf(d)
+	local bestK, bestV, bestS = nil, nil, 0
+	for kind, vs in d.variants or {} do
+		local info = Catalog.Kinds[kind]
+		if info and (d.saved[kind] or 0) > 0 then
+			for v in vs do
+				local vc = Catalog.Variants[v]
+				if vc then
+					local odds = v ~= "normal" and math.floor(1 / vc.chance + 0.5) or 1
+					local sc = (Live.RarityScore[info.rarity] or 1) * odds
+					if sc > bestS then bestK, bestV, bestS = kind, v, sc end
+				end
+			end
+		end
+	end
+	return bestK, bestV
+end
+local function retinueOf(d)
+	local slots = (d.level >= 20 and 2) or (d.level >= 10 and 1) or 0
+	if slots == 0 then return "" end
+	local list = {}
+	for kind, n in d.saved do
+		if n > 0 and Catalog.Kinds[kind] and kind ~= d.equipped then table.insert(list, kind) end
+	end
+	table.sort(list, function(a, b)
+		local ra, rb = RARITY_RANK[Catalog.Kinds[a].rarity], RARITY_RANK[Catalog.Kinds[b].rarity]
+		if ra ~= rb then return ra > rb end
+		return a < b
+	end)
+	local out = {}
+	for i = 1, math.min(slots, #list) do table.insert(out, list[i]) end
+	return table.concat(out, ",")
+end
+
 local function updateRankTag(plr, d)
 	local head = plr.Character and plr.Character:FindFirstChild("Head")
 	if not head then return end
 	local tag = head:FindFirstChild("RankTag")
 	if not tag then
 		tag = Instance.new("BillboardGui")
-		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(260, 26), Vector3.new(0, 3.6, 0), 90
+		tag.Name, tag.Size, tag.StudsOffset, tag.MaxDistance = "RankTag", UDim2.fromOffset(280, 46), Vector3.new(0, 4, 0), 90
 		local t = Instance.new("TextLabel")
-		t.Name, t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = "Text", UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+		t.Name, t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = "Text", UDim2.fromScale(1, 0.55), 1, true, Enum.Font.GothamBlack
 		t.TextStrokeTransparency = 0.2
 		t.Parent = tag
+		local b = Instance.new("TextLabel")
+		b.Name, b.Size, b.Position, b.BackgroundTransparency, b.TextScaled, b.Font = "Best", UDim2.fromScale(1, 0.42), UDim2.fromScale(0, 0.58), 1, true, Enum.Font.GothamBold
+		b.TextStrokeTransparency = 0.2
+		b.Parent = tag
 		tag.Parent = head
 	end
 	local rank = Catalog.Progress.rankOf(d.level)
 	tag.Text.Text = ((d.rebirths or 0) > 0 and ("★%d "):format(d.rebirths) or "") .. (d.title or rank.name)
 	tag.Text.TextColor3 = rank.color
+	local bk, bv = bestOf(d)
+	local best = tag:FindFirstChild("Best")
+	if best then
+		best.Text = bk and ("Лучший улов: " .. (bv ~= "normal" and (Catalog.Variants[bv].name .. " ") or "") .. Catalog.Kinds[bk].name) or ""
+		best.TextColor3 = bk and (bv ~= "normal" and Catalog.Variants[bv].color or Catalog.Rarity[Catalog.Kinds[bk].rarity].color) or Color3.new(1, 1, 1)
+	end
 end
 
 local function pushState(plr)
@@ -633,6 +679,7 @@ local function pushState(plr)
 	plr:SetAttribute("PowerLvl", d.levels.power)
 	plr:SetAttribute("GardenOpen", gardenOpen(d))
 	plr:SetAttribute("Companion", d.equipped or "")
+	plr:SetAttribute("Retinue", retinueOf(d))
 	plr:SetAttribute("CompanionEvolved", d.equipped ~= nil and d.evolved ~= nil and d.evolved[d.equipped] == true)
 	plr:SetAttribute("Skin", d.skin)
 	StateEv:FireClient(plr, {
@@ -906,7 +953,7 @@ local function newSpirit(kind, district, tut: boolean?, at: Vector3?, forceVaria
 			break
 		end
 	end
-	if tut then variant = "normal" end
+	if tut then variant = "shiny" end -- первый лис новичка сияет: сразу видно, что духи бывают особенными
 	-- редкий гость: сервер предупреждает всех
 	local rk = info.rarity
 	if not tut and (rk == "legendary" or rk == "mythic" or rk == "secret") then
@@ -988,6 +1035,14 @@ RunService.Heartbeat:Connect(function(dt)
 	for id, s in live do
 		local info = Catalog.Kinds[s.kind]
 		local g = groups[id]
+		if not g and s.helperFor then
+			-- помощник-ловец игрока забирает духа
+			if s.helperFor.Parent and data[s.helperFor] and jars[s.helperFor] and #jars[s.helperFor] < cap(data[s.helperFor]) then
+				g = { s.helperFor }
+				s.progress = 1
+			end
+			s.helperFor = nil
+		end
 		if info.move == "swim" then
 			local sw = Catalog.Districts[s.district].swim
 			local a = now * sw.speed
@@ -1416,11 +1471,11 @@ savePrompt.HoldDuration, savePrompt.MaxActivationDistance = 0.25, ALTAR_RANGE
 savePrompt.RequiresLineOfSight = false
 savePrompt.Parent = map.altar
 
-local function doSave(plr)
+local function doSave(plr, anywhere: boolean?)
 	local root = rootOf(plr)
 	local d = data[plr]
 	if not (root and d) then return { ok = false, msg = "Нет персонажа" } end
-	if (root.Position - map.altarPos).Magnitude > ALTAR_RANGE + 6 then return { ok = false, msg = "Подойди к алтарю" } end
+	if not anywhere and (root.Position - map.altarPos).Magnitude > ALTAR_RANGE + 6 then return { ok = false, msg = "Подойди к алтарю" } end
 	local jar = jars[plr]
 	if #jar == 0 then return { ok = false, msg = "Банка пуста — сначала поймай духа" } end
 	local wasOpen = gardenOpen(d)
@@ -1484,6 +1539,54 @@ end
 savePrompt.Triggered:Connect(function(plr)
 	SaveResultEv:FireClient(plr, doSave(plr))
 end)
+-- карманный алтарь: сдать улов где угодно (перезарядка по уровню)
+local pocketAt = {}
+PocketFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	local cd = Catalog.upgradeValue("pocket", d.levels.pocket or 1)
+	if cd <= 0 then return { ok = false, msg = "Купи «Карманный алтарь» в Магазине" } end
+	local left = (pocketAt[plr] or -1e9) + cd - os.clock()
+	if left > 0 then return { ok = false, msg = ("Карманный алтарь заряжается: %d с"):format(math.ceil(left)) } end
+	if #(jars[plr] or {}) == 0 then return { ok = false, msg = "Банка пуста" } end
+	pocketAt[plr] = os.clock()
+	plr:SetAttribute("PocketReady", os.time() + cd)
+	SaveResultEv:FireClient(plr, doSave(plr, true))
+	return { ok = true }
+end
+-- помощник-ловец: раз в N секунд ловит ближайшего подходящего духа
+local helperAt = {}
+task.spawn(function()
+	while true do
+		task.wait(1)
+		local now = os.clock()
+		for _, plr in Players:GetPlayers() do
+			local d = data[plr]
+			local root = rootOf(plr)
+			local every = d and Catalog.upgradeValue("helper", d.levels.helper or 1) or 0
+			if d and root and every > 0 and now - (helperAt[plr] or 0) >= every and jars[plr] and #jars[plr] < cap(d) then
+				local lvl = d.levels.helper
+				local maxRank = lvl >= 9 and RARITY_RANK.epic or (lvl >= 5 and RARITY_RANK.rare or RARITY_RANK.uncommon)
+				local best, bestD = nil, 35
+				for _, s in live do
+					local info = Catalog.Kinds[s.kind]
+					local dist = (s.pos - root.Position).Magnitude
+					if dist < bestD and not s.helperFor and not s.tut and info.move ~= "swim" and not info.moonOnly
+						and RARITY_RANK[info.rarity] <= maxRank and s.anchor:GetAttribute("Holders") == 0
+						and Catalog.unlocked(s.district, stats(d)) then
+						best, bestD = s, dist
+					end
+				end
+				if best then
+					helperAt[plr] = now
+					best.helperFor = plr
+					best.revealed = true
+					best.anchor:SetAttribute("Revealed", true)
+				end
+			end
+		end
+	end
+end)
 
 UpgradeFn.OnServerInvoke = function(plr, which)
 	local d = data[plr]
@@ -1498,6 +1601,7 @@ UpgradeFn.OnServerInvoke = function(plr, which)
 	d.coins -= c
 	d.dust -= du
 	d.levels[which] = lvl + 1
+	applySpeed(plr)
 	local lantern = plr.Character and plr.Character:FindFirstChild("Lantern")
 	if lantern and lantern:FindFirstChild("Beam") then
 		lantern.Beam.Range = range(d)

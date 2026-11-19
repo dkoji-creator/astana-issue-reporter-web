@@ -38,7 +38,7 @@ end
 local state, trackKind
 do
 	state = {
-		jar = {}, cap = 3, saved = {}, coins = 0, dust = 0, levels = { jar = 1, range = 1, power = 1 },
+		jar = {}, cap = 3, saved = {}, coins = 0, dust = 0, levels = { jar = 1, range = 1, power = 1, speed = 1, helper = 1, pocket = 1 },
 		tutorialDone = true, gardenOpen = false, distinct = 0, orders = {},
 		settings = { music = 0.6, sfx = 0.8, reduced = false, diag = false },
 		xp = 0, level = 1, xpNext = 35, daily = { last = 0, streak = 0 }, dailyReady = false,
@@ -154,8 +154,15 @@ do
 
 end
 ------------------------------------------------------------------ HUD: событие, цель, уведомления
-local eventPill, eventGrad, eventL, trackPill, trackL, showToast, modPill, modL, compPill, compL
+local eventPill, eventGrad, eventL, trackPill, trackL, showToast, modPill, modL, compPill, compL, goalPill, goalL
 do
+	-- одна главная цель на экране (текущая глава Хранителя); нажатие открывает разговор
+	goalPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 80), Size = UDim2.fromOffset(380, 38), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+	K.corner(goalPill, UDim.new(1, 0))
+	K.stroke(goalPill, T.ink, 3)
+	K.gradient(goalPill, Color3.fromRGB(255, 200, 90), Color3.fromRGB(200, 120, 40))
+	K.icon(goalPill, "target", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(-6, -2) })
+	goalL = K.text(goalPill, "", { Size = UDim2.new(1, -50, 1, -10), Position = UDim2.fromOffset(40, 5), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16 })
 	-- модификатор дня под таймером события
 	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(240, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(modPill, UDim.new(1, 0))
@@ -218,6 +225,20 @@ do
 	jarL = K.text(jarPanel, "Банка 0/3", { Size = UDim2.new(0.5, -40, 0, 22), Position = UDim2.fromOffset(46, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
 	jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.55, 0, 0, 18), Position = UDim2.new(0.42, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
 	_, jarFill = K.bar(jarPanel, T.cold, { Size = UDim2.new(1, -60, 0, 12), Position = UDim2.fromOffset(46, 30) })
+	-- карманный алтарь: сдать улов прямо здесь
+	local pocketB, pocketL = K.button(jarPanel, "Сдать", T.green, { Name = "PocketBtn", Size = UDim2.fromOffset(96, 46), Position = UDim2.new(1, 8, 0, 2), MaxText = 17, Visible = false })
+	pocketB.Activated:Connect(function()
+		local r = remotes.PocketSave:InvokeServer()
+		if r and not r.ok and r.msg then showToast(r.msg, 2) end
+	end)
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			local left = (plr:GetAttribute("PocketReady") or 0) - os.time()
+			pocketL.Text = left > 0 and ("%d с"):format(left) or "Сдать"
+			K.recolor(pocketB, left > 0 and Color3.fromRGB(90, 90, 105) or T.green)
+		end
+	end)
 
 	tutPanel = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -72), Size = UDim2.fromOffset(460, 52), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(tutPanel, UDim.new(0, 14))
@@ -1302,6 +1323,17 @@ do
 		end
 	end)
 	remotes.StoryOpen.OnClientEvent:Connect(openStory)
+	-- новичка встречает Хранитель (один раз за сессию)
+	local greeted = false
+	remotes.State.OnClientEvent:Connect(function(st)
+		if greeted or not st or (st.total or 0) > 0 then return end
+		greeted = true
+		task.delay(6, function()
+			local intro = plr.PlayerGui:FindFirstChild("Intro")
+			while intro and intro.Parent and intro.Enabled do task.wait(1) end
+			openStory()
+		end)
+	end)
 	remotes.State.OnClientEvent:Connect(function()
 		if dlg.Visible then task.defer(refresh) end
 	end)
@@ -1500,19 +1532,23 @@ do
 			end
 		end
 	end
-	local UP_ICON = { jar = "jar", range = "target", power = "upgrade" }
+	local UP_ICON = { jar = "jar", range = "target", power = "upgrade", speed = "paw", helper = "luck", pocket = "portal" }
+	local function upFmt(up, v)
+		if up.off and v == 0 then return up.off end
+		return up.fmt:format(v)
+	end
 	local upRows = {}
 	for i, key in Catalog.UpgradeOrder do
 		local up = Catalog.Upgrades[key]
 		local f = K.panel(upList, { Size = UDim2.new(1, -10, 0, 84), LayoutOrder = i, BackgroundColor3 = T.panel2 })
 		K.icon(f, UP_ICON[key], { Size = UDim2.fromOffset(60, 60), Position = UDim2.fromOffset(8, 12) })
 		local title = K.text(f, "", { Size = UDim2.new(0.6, -80, 0, 24), Position = UDim2.fromOffset(76, 8), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
-		K.text(f, up.desc, { Size = UDim2.new(0.6, -80, 0, 16), Position = UDim2.fromOffset(76, 34), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		K.text(f, up.desc, { Size = UDim2.new(0.6, -80, 0, 22), Position = UDim2.fromOffset(76, 32), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
 		local dots = K.make("Frame", { Size = UDim2.new(0.5, -80, 0, 14), Position = UDim2.fromOffset(76, 58), BackgroundTransparency = 1 }, f)
-		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6) }, dots)
+		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3) }, dots)
 		local dotList = {}
 		for d = 1, Catalog.MaxLevel do
-			local dot = K.make("Frame", { Size = UDim2.fromOffset(24, 12), BackgroundColor3 = T.ink }, dots)
+			local dot = K.make("Frame", { Size = UDim2.fromOffset(14, 12), BackgroundColor3 = T.ink }, dots)
 			K.corner(dot, UDim.new(1, 0))
 			dotList[d] = dot
 		end
@@ -1550,11 +1586,11 @@ do
 			local lvl = state.levels[key] or 1
 			for d, dot in r.dots do dot.BackgroundColor3 = d <= lvl and T.green or T.ink end
 			if lvl >= Catalog.MaxLevel then
-				r.title.Text = ("%s: %s (макс.)"):format(up.name, up.fmt:format(up.values[lvl]))
+				r.title.Text = ("%s: %s (макс.)"):format(up.name, upFmt(up, up.values[lvl]))
 				r.buyL.Text = "Максимум"
 				K.recolor(r.buy, Color3.fromRGB(80, 80, 95))
 			else
-				r.title.Text = ("%s: %s -> %s"):format(up.name, up.fmt:format(up.values[lvl]), up.fmt:format(up.values[lvl + 1]))
+				r.title.Text = ("%s: %s -> %s"):format(up.name, upFmt(up, up.values[lvl]), upFmt(up, up.values[lvl + 1]))
 				local c, du = up.coins[lvl], up.dust[lvl]
 				r.buyL.Text = du > 0 and ("%d монет + %d пыли"):format(c, du) or ("%d монет"):format(c)
 				K.recolor(r.buy, (state.coins >= c and state.dust >= du) and T.green or Color3.fromRGB(90, 90, 105))
@@ -1942,6 +1978,9 @@ do
 	btnQuests.Activated:Connect(function() toggleWindow(questW, refreshQuests) end)
 	btnSeason.Activated:Connect(function() toggleWindow(seasonW, refreshSeason) end)
 	btnSocial.Activated:Connect(function() toggleWindow(socialW, refreshSocial) end)
+	goalPill.Activated:Connect(function()
+		if openStory then openStory() end
+	end)
 	compPill.Activated:Connect(function()
 		local res = remotes.FeedCompanion:InvokeServer()
 		if res and res.ok then
@@ -1971,6 +2010,7 @@ do
 end
 ------------------------------------------------------------------ HUD-обновление
 local refreshHUD
+local hudUnlockSeen = false
 do
 	refreshHUD = function()
 		local n = #state.jar
@@ -1984,6 +2024,8 @@ do
 		end
 		jarNames.Text = n > 0 and table.concat(names, ", ") or "пусто"
 		jarNames.TextColor3 = n >= state.cap and Color3.fromRGB(255, 160, 100) or T.sub
+		local pb = jarPanel:FindFirstChild("PocketBtn")
+		if pb then pb.Visible = (state.levels.pocket or 1) > 1 end
 		coinL.Text = tostring(state.coins)
 		dustL.Text = tostring(state.dust)
 		levelL.Text = ("Ур. %d"):format(state.level)
@@ -2000,6 +2042,26 @@ do
 			if not (state.achDone and state.achDone[id]) and ((state.achCur and state.achCur[id]) or 0) >= a.need then claimable = true end
 		end
 		btnAtlas.Badge.Visible = claimable
+		-- кнопки открываются постепенно, чтобы новичка не засыпало окнами
+		local UNLOCK = { { btnQuests, 2, "Задания" }, { btnTeleport, 3, "Телепорт" }, { btnPower, 3, "Сила" }, { btnSeason, 4, "Сезон" }, { btnSocial, 6, "Ловцы" } }
+		for _, u in UNLOCK do
+			local open = (state.level or 1) >= u[2] or state.isAdmin == true
+			if open and not u[1].Visible and hudUnlockSeen then
+				showToast("Открыто: " .. u[3] .. "!", 3, Color3.fromRGB(60, 120, 80))
+				K.pop(u[1])
+			end
+			u[1].Visible = open
+		end
+		hudUnlockSeen = true
+		-- главная цель
+		local st = state.story
+		local ch = st and Catalog.Live.Story[st.ch]
+		goalPill.Visible = ch ~= nil and not trackPill.Visible
+		if ch then
+			local done = st.prog >= ch.need
+			goalL.Text = done and ("Глава «%s» готова: поговори с Хранителем"):format(ch.title)
+				or ("Цель: %s (%d/%d)"):format(Catalog.Live.storyGoal(ch, Catalog.Kinds, Catalog.Districts), st.prog, ch.need)
+		end
 		-- сезон: есть награда или незавершённое испытание
 		local Live = Catalog.Live
 		local se = state.season
@@ -2090,11 +2152,66 @@ do
 	end
 
 	local streak, lastCatch = 0, 0
+	-- «сочная» поимка: вспышка, тряска, удар зума, крупная надпись редкости
+	local flash = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, ZIndex = 40, Active = false }, gui)
+	local banner = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.36), Size = UDim2.fromOffset(460, 110), BackgroundTransparency = 1, Visible = false, ZIndex = 41 }, gui)
+	local bannerTop = K.text(banner, "", { Size = UDim2.new(1, 0, 0, 62), MaxText = 56, ZIndex = 41, StrokeThickness = 4 })
+	local bannerSub = K.text(banner, "", { Size = UDim2.new(1, 0, 0, 34), Position = UDim2.fromOffset(0, 66), MaxText = 26, ZIndex = 41, StrokeThickness = 3 })
+	local bannerSeq = 0
+	local RANK_WORD = { common = "ПОЙМАН!", uncommon = "НЕОБЫЧНЫЙ!", rare = "РЕДКИЙ!", epic = "ЭПИЧЕСКИЙ!", legendary = "ЛЕГЕНДАРНЫЙ!", mythic = "МИФИЧЕСКИЙ!", secret = "СЕКРЕТНЫЙ!" }
+	local POWER = { common = 0.3, uncommon = 0.5, rare = 0.75, epic = 1, legendary = 1.3, mythic = 1.6, secret = 2 }
+	local function juice(info, rar, variant)
+		local pw = POWER[info.rarity] or 0.3
+		if variant and variant ~= "normal" then pw += 0.4 end
+		if state.settings.reduced then pw *= 0.4 end
+		-- вспышка
+		flash.BackgroundColor3 = rar.color:Lerp(Color3.new(1, 1, 1), 0.6)
+		flash.BackgroundTransparency = 1 - math.min(0.55, 0.15 + pw * 0.25)
+		TweenService:Create(flash, TweenInfo.new(0.35 + pw * 0.2), { BackgroundTransparency = 1 }):Play()
+		-- удар зума
+		local cam = workspace.CurrentCamera
+		if cam then
+			local fov = 70
+			cam.FieldOfView = fov - 4 - pw * 5
+			TweenService:Create(cam, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { FieldOfView = fov }):Play()
+		end
+		-- тряска камеры
+		local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+		if hum then
+			task.spawn(function()
+				local t0 = os.clock()
+				local dur = 0.18 + pw * 0.15
+				while os.clock() - t0 < dur do
+					local k = (1 - (os.clock() - t0) / dur) * pw * 0.35
+					hum.CameraOffset = Vector3.new((math.random() - 0.5) * k, (math.random() - 0.5) * k, 0)
+					RunService.RenderStepped:Wait()
+				end
+				hum.CameraOffset = Vector3.zero
+			end)
+		end
+		-- надпись редкости (для необычных и выше или разновидностей)
+		if info.rarity ~= "common" or (variant and variant ~= "normal") then
+			bannerSeq += 1
+			local my = bannerSeq
+			local vname = (variant and variant ~= "normal") and (Catalog.Variants[variant].name .. " ") or ""
+			bannerTop.Text = RANK_WORD[info.rarity] or "ПОЙМАН!"
+			bannerTop.TextColor3 = (variant and variant ~= "normal") and Catalog.Variants[variant].color or rar.color
+			bannerSub.Text = vname .. info.name
+			banner.Visible = true
+			local sc = banner:FindFirstChild("Bounce") or K.make("UIScale", { Name = "Bounce" }, banner)
+			sc.Scale = 0.3
+			TweenService:Create(sc, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 + pw * 0.15 }):Play()
+			task.delay(1.1 + pw * 0.4, function()
+				if bannerSeq == my then banner.Visible = false end
+			end)
+		end
+	end
 	catchEffect = function(kind, at, coop, variant)
 		local r = root()
 		if not r then return end
 		local info = Catalog.Kinds[kind]
 		local rar = Catalog.Rarity[info.rarity]
+		juice(info, rar, variant)
 		streak = (os.clock() - lastCatch < 20) and streak + 1 or 1
 		lastCatch = os.clock()
 		local big = info.rarity ~= "common"
@@ -2434,6 +2551,11 @@ do
 		annGrad.Color = ColorSequence.new(K.lighten(vc.color, 0.2), K.darken(vc.color, 0.35))
 		annGui.Visible = true
 		K.pop(annGui)
+		pcall(function()
+			local ch = game:GetService("TextChatService"):FindFirstChild("TextChannels")
+			local gen = ch and ch:FindFirstChild("RBXGeneral")
+			if gen then gen:DisplaySystemMessage(("[Spirit Catchers] %s поймал: %s %s (1 к %d)!"):format(a.name, vc.name, Catalog.Kinds[a.kind].name, a.odds)) end
+		end)
 		task.delay(5, function()
 			if annSeq == my then annGui.Visible = false end
 		end)
@@ -2564,37 +2686,45 @@ do
 	spiritsFolder.ChildRemoved:Connect(removeAnchor)
 	for _, a in spiritsFolder:GetChildren() do addAnchor(a) end
 
-	local followers = {}
+	-- спутник и свита (до 2 самых редких духов с 10 и 20 уровня) бегут за игроком
+	local followers = {} -- [Player] = { [slot] = { kind, evo, model, pivot } }
+	local SLOT_OFFSET = { CFrame.new(3, 2.2, 2), CFrame.new(-3, 1.8, 3), CFrame.new(0, 3, 5) }
 	updateFollowers = function(now)
 		for _, p in Players:GetPlayers() do
-			local kind = p:GetAttribute("Companion")
-			local evo = p:GetAttribute("CompanionEvolved") == true
-			local f = followers[p]
-			if f and (f.kind ~= kind or f.evo ~= evo) then
-				f.model:Destroy()
-				followers[p], f = nil, nil
+			local list = {}
+			local c = p:GetAttribute("Companion")
+			if c and c ~= "" then table.insert(list, { kind = c, evo = p:GetAttribute("CompanionEvolved") == true }) end
+			for k in string.gmatch(p:GetAttribute("Retinue") or "", "[^,]+") do
+				if #list < 3 then table.insert(list, { kind = k, evo = false }) end
 			end
+			local fs = followers[p] or {}
+			followers[p] = fs
 			local r = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
-			if kind and kind ~= "" and Catalog.Kinds[kind] and r then
-				if not f then
-					local m = Spirits.Builders[kind]()
-					Spirits.scale(m, Catalog.Kinds[kind].follow)
-					if evo then Spirits.applyEvolved(m) end
-					m.Parent = visFolder
-					f = { kind = kind, model = m, pivot = r.CFrame, evo = evo }
-					followers[p] = f
+			for slot = 1, 3 do
+				local want = list[slot]
+				local f = fs[slot]
+				if f and (not want or f.kind ~= want.kind or f.evo ~= want.evo or not r) then
+					f.model:Destroy()
+					fs[slot], f = nil, nil
 				end
-				local goal = r.CFrame * CFrame.new(3, 2.2 + math.sin(now * 2) * 0.4, 2)
-				f.pivot = f.pivot:Lerp(goal, 0.1)
-				Spirits.animate(f.model, f.pivot, now * Catalog.Kinds[kind].animSpeed * 0.6)
-			elseif f then
-				f.model:Destroy()
-				followers[p] = nil
+				if want and r and Catalog.Kinds[want.kind] and Spirits.Builders[want.kind] then
+					if not f then
+						local m = Spirits.Builders[want.kind]()
+						Spirits.scale(m, Catalog.Kinds[want.kind].follow * (slot == 1 and 1 or 0.8))
+						if want.evo then Spirits.applyEvolved(m) end
+						m.Parent = visFolder
+						f = { kind = want.kind, evo = want.evo, model = m, pivot = r.CFrame }
+						fs[slot] = f
+					end
+					local goal = r.CFrame * SLOT_OFFSET[slot] * CFrame.new(0, math.sin(now * 2 + slot) * 0.4, 0)
+					f.pivot = f.pivot:Lerp(goal, 0.1)
+					Spirits.animate(f.model, f.pivot, now * Catalog.Kinds[want.kind].animSpeed * 0.6)
+				end
 			end
 		end
-		for p, f in followers do
+		for p, fs in followers do
 			if not p.Parent then
-				f.model:Destroy()
+				for _, f in fs do f.model:Destroy() end
 				followers[p] = nil
 			end
 		end
