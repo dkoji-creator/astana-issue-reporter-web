@@ -85,48 +85,60 @@ end
 
 ------------------------------------------------------------------ бумажный лис
 -- Опора — у лап. Длина ~8 стадов после масштаба: видно издалека.
+-- общий «чиби»-лис: круглое тело, большая голова, огромные глаза с бликом, треугольные уши
+local function chibiFox(m, pal)
+	local fur, accent, inner = pal.fur, pal.accent, pal.inner
+	local body = ellipsoid(mk(m, { Name = "Body", Size = Vector3.new(1.6, 1.4, 2.0), CFrame = CFrame.new(0, 1.2, 0.2), Color = fur, Material = pal.mat or Enum.Material.SmoothPlastic }))
+	ellipsoid(mk(m, { Name = "Belly", Size = Vector3.new(1.1, 1.0, 1.2), CFrame = CFrame.new(0, 1.05, -0.35), Color = pal.belly or Color3.fromRGB(255, 252, 245) }))
+	ellipsoid(mk(m, { Name = "Head", Size = Vector3.new(1.9, 1.7, 1.7), CFrame = CFrame.new(0, 2.5, -1.0), Color = fur, Material = pal.mat or Enum.Material.SmoothPlastic }))
+	ellipsoid(mk(m, { Name = "Muzzle", Size = Vector3.new(0.95, 0.6, 0.8), CFrame = CFrame.new(0, 2.15, -1.7), Color = pal.belly or Color3.fromRGB(255, 252, 245) }))
+	mk(m, { Name = "Nose", Size = Vector3.new(0.26, 0.26, 0.26), CFrame = CFrame.new(0, 2.32, -2.1), Color = Color3.fromRGB(40, 25, 35), Shape = Enum.PartType.Ball })
+	-- полоса-ошейник
+	mk(m, { Name = "Collar", Size = Vector3.new(0.25, 1.5, 1.5), CFrame = CFrame.new(0, 1.8, -0.55) * CFrame.Angles(0, math.rad(90), math.rad(-15)), Color = accent, Shape = Enum.PartType.Cylinder })
+	mk(m, { Name = "Bell", Size = Vector3.new(0.35, 0.35, 0.35), CFrame = CFrame.new(0, 1.55, -1.25), Color = Color3.fromRGB(255, 210, 80), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+	for i, x in { -1, 1 } do
+		ellipsoid(mk(m, { Name = "EyeWhite", Size = Vector3.new(0.46, 0.56, 0.16), CFrame = CFrame.new(x * 0.42, 2.66, -1.76), Color = Color3.fromRGB(255, 255, 255) }))
+		ellipsoid(mk(m, { Name = "Pupil", Size = Vector3.new(0.3, 0.4, 0.1), CFrame = CFrame.new(x * 0.42, 2.62, -1.84), Color = pal.eye or Color3.fromRGB(35, 25, 40), Material = pal.eye and Enum.Material.Neon or Enum.Material.SmoothPlastic }))
+		mk(m, { Name = "Shine", Size = Vector3.new(0.13, 0.13, 0.13), CFrame = CFrame.new(x * 0.42 + 0.07, 2.74, -1.9), Color = Color3.new(1, 1, 1), Material = Enum.Material.Neon, Shape = Enum.PartType.Ball })
+		ellipsoid(mk(m, { Name = "Blush", Size = Vector3.new(0.32, 0.16, 0.08), CFrame = CFrame.new(x * 0.72, 2.3, -1.62), Color = Color3.fromRGB(255, 150, 170) }))
+		-- ухо: два клина спиной к спине = треугольник лицом вперёд; розовая серединка
+		for _, flip in { 0, 180 } do
+			local ear = mk(m, { Name = "Ear", Size = Vector3.new(0.2, 1.25, 0.42), CFrame = CFrame.new(x * 0.62, 3.6, -0.95) * CFrame.Angles(0, 0, math.rad(-x * 16)) * CFrame.Angles(0, math.rad(90 + flip), 0) * CFrame.new(0, 0, -0.21), Color = fur }, "WedgePart")
+			joint(ear, Vector3.new(x * 0.62, 3.0, -0.95), "twitch", i * 1.3, 1)
+			local inr = mk(m, { Name = "EarInner", Size = Vector3.new(0.06, 0.78, 0.24), CFrame = CFrame.new(x * 0.62, 3.5, -1.07) * CFrame.Angles(0, 0, math.rad(-x * 16)) * CFrame.Angles(0, math.rad(90 + flip), 0) * CFrame.new(0, 0, -0.12), Color = inner }, "WedgePart")
+			joint(inr, Vector3.new(x * 0.62, 3.0, -0.95), "twitch", i * 1.3, 1)
+		end
+	end
+	for i, pos in { Vector3.new(-0.45, 0.3, -0.45), Vector3.new(0.45, 0.3, -0.45), Vector3.new(-0.45, 0.3, 0.75), Vector3.new(0.45, 0.3, 0.75) } do
+		local leg = ellipsoid(mk(m, { Name = "Leg", Size = Vector3.new(0.45, 0.65, 0.5), CFrame = CFrame.new(pos), Color = fur }))
+		joint(leg, pos + Vector3.new(0, 0.4, 0), "swingX", (i == 1 or i == 4) and 0 or math.pi, 1)
+	end
+	return body
+end
+local function foxTail(m, pal, angle, len, phase)
+	local root = Vector3.new(0, 1.5, 1.0)
+	local rot = CFrame.new(root) * CFrame.Angles(0, angle, 0) * CFrame.Angles(math.rad(-35), 0, 0)
+	local parts = {
+		{ Vector3.new(0.6, 0.6, 0.9) * len, 0.5 * len, pal.fur },
+		{ Vector3.new(0.9, 0.9, 1.2) * len, 1.3 * len, pal.fur },
+		{ Vector3.new(0.75, 0.75, 0.8) * len, 2.1 * len, pal.tip },
+	}
+	for i, p in parts do
+		local seg = ellipsoid(mk(m, { Name = "Tail", Size = p[1], CFrame = rot * CFrame.new(0, 0, p[2]), Color = p[3], Material = i == 3 and pal.tipMat or Enum.Material.SmoothPlastic,
+			Transparency = pal.tailT or 0 }))
+		joint(seg, root, "wagY", phase - i * 0.35, 0.9)
+	end
+end
+
 function S.buildPaperFox(): Model
 	local m = Instance.new("Model")
 	m.Name = "PaperFox"
-	local paper = Color3.fromRGB(236, 228, 214)
-	local ink = Color3.fromRGB(200, 40, 50)
-
-	local body = mk(m, { Name = "Body", Size = Vector3.new(1.5, 1.3, 2.6), CFrame = CFrame.new(0, 1.5, 0), Color = paper })
-	mk(m, { Name = "Stripe", Size = Vector3.new(1.55, 0.2, 1.8), CFrame = CFrame.new(0, 2.1, 0), Color = ink })
-	mk(m, { Name = "Chest", Size = Vector3.new(1.2, 1.1, 0.6), CFrame = CFrame.new(0, 1.5, -1.3) * CFrame.Angles(math.rad(20), 0, 0), Color = paper })
-	-- голова-ромб «оригами»
-	mk(m, { Name = "Head", Size = Vector3.new(1.3, 1.2, 1.3), CFrame = CFrame.new(0, 2.5, -1.7) * CFrame.Angles(0, math.rad(45), 0), Color = paper })
-	local snout = mk(m, { Name = "Snout", Size = Vector3.new(0.7, 0.6, 1.1), CFrame = CFrame.new(0, 2.25, -2.6) * CFrame.Angles(0, math.rad(180), 0), Color = paper }, "WedgePart")
-	snout.Size = Vector3.new(0.7, 0.6, 1.1)
-	mk(m, { Name = "Nose", Size = Vector3.new(0.25, 0.2, 0.2), CFrame = CFrame.new(0, 2.4, -3.1), Color = Color3.fromRGB(30, 20, 30) })
-	for i, x in { -0.3, 0.3 } do
-		mk(m, { Name = "EyeLine", Size = Vector3.new(0.34, 0.12, 0.08), CFrame = CFrame.new(x, 2.88, -2.33) * CFrame.Angles(0, 0, math.rad(x > 0 and -15 or 15)), Color = Color3.fromRGB(25, 15, 20) })
-		mk(m, { Name = "Eye", Size = Vector3.new(0.2, 0.22, 0.08), CFrame = CFrame.new(x, 2.74, -2.32), Color = Color3.fromRGB(255, 190, 60), Material = Enum.Material.Neon })
-		mk(m, { Name = "Cheek", Size = Vector3.new(0.22, 0.1, 0.06), CFrame = CFrame.new(x * 1.3, 2.5, -2.28), Color = ink })
-		-- большие уши: белые с красными кончиками
-		local ear = mk(m, { Name = "Ear", Size = Vector3.new(0.2, 1.3, 0.9), CFrame = CFrame.new(x * 1.6, 3.6, -1.6), Color = paper }, "WedgePart")
-		joint(ear, Vector3.new(x * 1.6, 3, -1.6), "twitch", i * 1.3, 1)
-		local tip = mk(m, { Name = "EarTip", Size = Vector3.new(0.22, 0.5, 0.36), CFrame = CFrame.new(x * 1.6, 4.05, -1.43), Color = ink }, "WedgePart")
-		joint(tip, Vector3.new(x * 1.6, 3, -1.6), "twitch", i * 1.3, 1)
-	end
-	-- лапы: шаг
-	for i, pos in { Vector3.new(-0.5, 0.5, -0.9), Vector3.new(0.5, 0.5, -0.9), Vector3.new(-0.5, 0.5, 0.9), Vector3.new(0.5, 0.5, 0.9) } do
-		local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.35, 1.1, 0.35), CFrame = CFrame.new(pos), Color = paper })
-		joint(leg, pos + Vector3.new(0, 0.5, 0), "swingX", (i == 1 or i == 4) and 0 or math.pi, 1)
-	end
-	-- пушистый хвост из трёх сегментов, светящийся кончик
-	local tailRoot = Vector3.new(0, 1.9, 1.3)
-	local segs = {
-		{ Vector3.new(0.6, 0.6, 1.2), CFrame.new(0, 2.2, 1.9) * CFrame.Angles(math.rad(35), 0, 0), paper, Enum.Material.SmoothPlastic },
-		{ Vector3.new(0.9, 0.9, 1.4), CFrame.new(0, 2.9, 2.7) * CFrame.Angles(math.rad(50), 0, 0), paper, Enum.Material.SmoothPlastic },
-		{ Vector3.new(0.7, 0.7, 0.9), CFrame.new(0, 3.6, 3.3) * CFrame.Angles(math.rad(65), 0, 0), Color3.fromRGB(255, 120, 110), Enum.Material.Neon },
-	}
-	for i, s in segs do
-		local p = mk(m, { Name = "Tail" .. i, Size = s[1], CFrame = s[2], Color = s[3], Material = s[4] })
-		joint(p, tailRoot, "wagY", -i * 0.4, 1)
-	end
+	local pal = { fur = Color3.fromRGB(255, 160, 80), accent = Color3.fromRGB(210, 45, 55), inner = Color3.fromRGB(255, 205, 190),
+		belly = Color3.fromRGB(255, 246, 232), tip = Color3.fromRGB(255, 250, 240), tipMat = Enum.Material.SmoothPlastic }
+	local body = chibiFox(m, pal)
+	foxTail(m, pal, 0, 1.15, 0)
 	local glow = Instance.new("PointLight")
-	glow.Color, glow.Range, glow.Brightness = Color3.fromRGB(255, 210, 180), 10, 0.6
+	glow.Color, glow.Range, glow.Brightness = Color3.fromRGB(255, 210, 170), 10, 0.5
 	glow.Parent = body
 	m.PrimaryPart = body
 	S.scale(m, 1.6)
@@ -598,27 +610,16 @@ end
 function S.buildKyubi(): Model
 	local m = Instance.new("Model")
 	m.Name = "Kyubi"
-	local white = Color3.fromRGB(245, 250, 255)
-	local cyan = Color3.fromRGB(60, 255, 220)
-	local body = mk(m, { Name = "Body", Size = Vector3.new(1.6, 1.4, 2.8), CFrame = CFrame.new(0, 1.7, 0), Color = white })
-	mk(m, { Name = "Head", Size = Vector3.new(1.4, 1.3, 1.4), CFrame = CFrame.new(0, 2.7, -1.8) * CFrame.Angles(0, math.rad(45), 0), Color = white })
-	mk(m, { Name = "Snout", Size = Vector3.new(0.6, 0.55, 1.1), CFrame = CFrame.new(0, 2.45, -2.75), Color = white })
-	for i, x in { -1, 1 } do
-		mk(m, { Name = "Ear", Size = Vector3.new(0.2, 1.4, 0.9), CFrame = CFrame.new(x * 0.5, 3.75, -1.7), Color = white }, "WedgePart")
-		mk(m, { Name = "Eye", Size = Vector3.new(0.22, 0.2, 0.08), CFrame = CFrame.new(x * 0.33, 2.9, -2.45), Color = cyan, Material = Enum.Material.Neon })
-		mk(m, { Name = "Mark", Size = Vector3.new(0.12, 0.5, 0.06), CFrame = CFrame.new(x * 0.55, 2.7, -2.4), Color = cyan, Material = Enum.Material.Neon })
-		for j, z in { -1, 1 } do
-			local leg = mk(m, { Name = "Leg", Size = Vector3.new(0.35, 1.3, 0.35), CFrame = CFrame.new(x * 0.55, 0.65, z * 1.0), Color = white })
-			joint(leg, Vector3.new(x * 0.55, 1.2, z * 1.0), "swingX", (i + j) % 2 * math.pi, 1)
-		end
-	end
+	local pal = { fur = Color3.fromRGB(248, 250, 255), accent = Color3.fromRGB(60, 230, 220), inner = Color3.fromRGB(150, 245, 235),
+		belly = Color3.fromRGB(255, 255, 255), tip = Color3.fromRGB(110, 255, 230), tipMat = Enum.Material.Neon, eye = Color3.fromRGB(60, 255, 220) }
+	local body = chibiFox(m, pal)
+	-- метки духа на лбу
+	mk(m, { Name = "Mark", Size = Vector3.new(0.14, 0.5, 0.06), CFrame = CFrame.new(0, 3.05, -1.78), Color = pal.accent, Material = Enum.Material.Neon })
+	-- девять хвостов веером
 	for t = 1, 9 do
-		local a = math.rad(-64 + (t - 1) * 16)
-		local tail = mk(m, { Name = "Tail", Size = Vector3.new(0.5, 0.5, 3.0), CFrame = CFrame.new(0, 2.0, 1.4) * CFrame.Angles(math.rad(40), a, 0) * CFrame.new(0, 0, 1.5),
-			Color = t % 2 == 0 and white or Color3.fromRGB(200, 255, 245), Material = Enum.Material.Neon, Transparency = 0.25 })
-		joint(tail, Vector3.new(0, 2.0, 1.4), "wagY", t * 0.5, 0.5)
+		foxTail(m, pal, math.rad(-72 + (t - 1) * 18), 0.95 + (t % 2) * 0.12, t * 0.5)
 	end
-	light(body, cyan, 16, 1.5)
+	light(body, pal.accent, 16, 1.2)
 	m.PrimaryPart = body
 	S.scale(m, 1.5)
 	return m
@@ -973,7 +974,7 @@ function S.buildWindChime(): Model
 	mk(m, { Name = "Rim", Size = Vector3.new(2.2, 0.2, 2.2), CFrame = CFrame.new(0, 1.3, 0), Color = Color3.fromRGB(90, 160, 230), Material = Enum.Material.Neon })
 	local tongue = mk(m, { Name = "Tongue", Size = Vector3.new(0.3, 0.8, 0.3), CFrame = CFrame.new(0, 1.2, 0), Color = Color3.fromRGB(255, 220, 120), Material = Enum.Material.Neon })
 	joint(tongue, Vector3.new(0, 1.6, 0), "swingX", 0, 1.4)
-	local paper = mk(m, { Name = "Strip", Size = Vector3.new(0.9, 2.2, 0.05), CFrame = CFrame.new(0, -0.3, 0), Color = Color3.fromRGB(255, 120, 140) })
+	local paper = mk(m, { Name = "Strip", Size = Vector3.new(0.45, 1.2, 0.05), CFrame = CFrame.new(0, 0.35, 0), Color = Color3.fromRGB(255, 200, 210) })
 	joint(paper, Vector3.new(0, 0.8, 0), "swingX", 1, 1.2)
 	for _, x in { -0.4, 0.4 } do
 		mk(m, { Name = "Eye", Size = Vector3.new(0.25, 0.3, 0.1), CFrame = CFrame.new(x, 2.1, -0.98), Color = Color3.fromRGB(30, 40, 70) })
@@ -1073,7 +1074,8 @@ function S.buildSnowSpirit(): Model
 	for _, x in { -0.35, 0.35 } do
 		mk(m, { Name = "Eye", Size = Vector3.new(0.2, 0.2, 0.1), CFrame = CFrame.new(x, 2.95, -0.82), Color = Color3.fromRGB(40, 60, 100), Material = Enum.Material.Neon })
 	end
-	local hat = mk(m, { Name = "Hat", Size = Vector3.new(1.2, 1.2, 1.2), CFrame = CFrame.new(0, 3.6, 0), Color = Color3.fromRGB(80, 160, 255), Material = Enum.Material.Neon }, "WedgePart")
+	local hat = mk(m, { Name = "Hat", Size = Vector3.new(0.5, 1.5, 1.5), CFrame = CFrame.new(0, 3.45, 0) * CFrame.Angles(0, 0, math.rad(90)), Color = Color3.fromRGB(220, 50, 60), Shape = Enum.PartType.Cylinder })
+	mk(m, { Name = "Pompom", Size = Vector3.new(0.5, 0.5, 0.5), CFrame = CFrame.new(0, 3.85, 0), Color = Color3.fromRGB(255, 255, 255), Shape = Enum.PartType.Ball })
 	light(hat, Color3.fromRGB(180, 220, 255), 12, 1)
 	m.PrimaryPart = base
 	S.scale(m, 1.4)

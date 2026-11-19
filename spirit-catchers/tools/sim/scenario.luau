@@ -475,6 +475,7 @@ stage("достижения")
 for _, id in { "first", "c50", "k10", "kall", "golden", "lvl25", "reborn", "legend" } do inv("ClaimAchievement", id) end
 frames(20)
 
+local partsBefore = #workspace:GetDescendants()
 stage("долгий прогон 6 мин (луна → туманная ночь)")
 local sawFog = false
 for _ = 1, 7200 do
@@ -482,6 +483,11 @@ for _ = 1, 7200 do
 	if workspace:GetAttribute("FogActive") then sawFog = true end
 end
 if not sawFog then table.insert(SIM.errors, "туманная ночь не наступила") end
+do
+	local partsAfter = #workspace:GetDescendants()
+	stage(("объектов в мире: до долгого прогона %d, после %d"):format(partsBefore, partsAfter))
+	if partsAfter > partsBefore * 1.5 + 500 then table.insert(SIM.errors, "утечка: объектов в мире стало слишком много") end
+end
 stage("нет моделей, застрявших в центре карты (перед алтарём)")
 do
 	local stuck = {}

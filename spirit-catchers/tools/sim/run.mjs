@@ -27,7 +27,7 @@ for (const f of files) {
   const key = path.relative(src, f).replace(/\\/g, '/').replace(/\.luau$/, '')
   bundle += `__defs[${JSON.stringify(key)}] = function(script)\n${fs.readFileSync(f, 'utf8')}\nend\n`
 }
-bundle += fs.readFileSync(path.join(here, 'scenario.luau'), 'utf8')
+bundle += fs.readFileSync(process.env.SCENARIO ? path.resolve(process.env.SCENARIO) : path.join(here, 'scenario.luau'), 'utf8')
 fs.writeFileSync(path.join(here, '.bundle.luau'), bundle)
 
 const fn = st.loadstring(bundle, 'bundle', false)
