@@ -2199,6 +2199,25 @@ AdminFn.OnServerInvoke = function(plr, cmd, a1, a2)
 		for _, p in Players:GetPlayers() do pushState(p) end
 	elseif cmd == "raid" then
 		startRaid()
+	elseif cmd == "showcase" then
+		-- для съёмки: вокруг игрока самые редкие духи района в лучших разновидностях, уже проявленные
+		if not root then return { ok = false } end
+		local district = Catalog.district(root.Position)
+		if not Catalog.Districts[district] or #Catalog.Districts[district].zones == 0 then return { ok = false, msg = "Встань в районе с духами" } end
+		local pool = {}
+		for kind, info in Catalog.Kinds do
+			if info.spawn[district] and info.move ~= "swim" then table.insert(pool, kind) end
+		end
+		table.sort(pool, function(x, y) return RARITY_RANK[Catalog.Kinds[x].rarity] > RARITY_RANK[Catalog.Kinds[y].rarity] end)
+		local vars = { "rainbow", "golden", "infinity", "shiny" }
+		for i = 1, math.min(4, #pool) do
+			local ang = i / 4 * math.pi * 2
+			local at = root.Position + Vector3.new(math.cos(ang) * 12, 0, math.sin(ang) * 12)
+			local sp = newSpirit(pool[i], district, false, Vector3.new(at.X, 0.5, at.Z), vars[i])
+			sp.revealed = true
+			sp.revealedAt = os.clock()
+			sp.anchor:SetAttribute("Revealed", true)
+		end
 	elseif cmd == "holiday" then
 		-- по кругу: праздники по очереди, потом снова по календарю
 		local ids = { "autumn", "halloween", "newyear" }
@@ -2487,25 +2506,37 @@ do
 	local function np(name, size, offset, color, mat, shape)
 		local p = Instance.new("Part")
 		p.Name, p.Size, p.Color, p.Material = name, size, color, mat or Enum.Material.SmoothPlastic
-		p.Anchored, p.CanCollide = true, name == "Robe"
+		p.Anchored, p.CanCollide, p.CastShadow = true, name == "Robe", false
 		if shape then p.Shape = shape end
-		p.CFrame = CFrame.new(base + offset) * CFrame.Angles(0, math.rad(200), 0)
+		p.CFrame = CFrame.new(base + offset) -- лицом к игрокам (+Z, со стороны площади)
 		p.Parent = npc
 		return p
 	end
-	local robe = np("Robe", Vector3.new(3, 5, 3), Vector3.new(0, 2.5, 0), Color3.fromRGB(70, 60, 120), Enum.Material.Fabric)
-	np("Sash", Vector3.new(3.1, 0.6, 3.1), Vector3.new(0, 3.4, 0), Color3.fromRGB(200, 60, 50), Enum.Material.Fabric)
-	np("Head", Vector3.new(1.8, 1.8, 1.8), Vector3.new(0, 5.9, 0), Color3.fromRGB(240, 220, 200), nil, Enum.PartType.Ball)
-	np("Beard", Vector3.new(1.2, 1.4, 0.6), Vector3.new(0, 5.1, -0.8), Color3.fromRGB(235, 235, 240))
-	np("Hat", Vector3.new(3.6, 0.5, 3.6), Vector3.new(0, 7, 0), Color3.fromRGB(150, 120, 70), Enum.Material.Wood, Enum.PartType.Cylinder).CFrame = CFrame.new(base + Vector3.new(0, 7, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	np("Staff", Vector3.new(0.3, 7, 0.3), Vector3.new(1.8, 3.5, -0.4), Color3.fromRGB(90, 60, 40), Enum.Material.Wood)
-	local lantern = np("Lantern", Vector3.new(1, 1.2, 1), Vector3.new(1.8, 7.2, -0.4), Color3.fromRGB(255, 190, 100), Enum.Material.Neon, Enum.PartType.Ball)
+	-- старичок в светлом кимоно: круглая голова, борода, широкая шляпа, посох с фонарём
+	local UP = CFrame.Angles(0, 0, math.rad(90)) -- цилиндр стоймя
+	local robe = np("Robe", Vector3.new(5.2, 3.4, 3.4), Vector3.new(0, 2.6, 0), Color3.fromRGB(235, 228, 210), Enum.Material.Fabric, Enum.PartType.Cylinder)
+	robe.CFrame = CFrame.new(base + Vector3.new(0, 2.6, 0)) * UP
+	local hem = np("Hem", Vector3.new(0.5, 3.8, 3.8), Vector3.new(0, 0.3, 0), Color3.fromRGB(70, 60, 120), Enum.Material.Fabric, Enum.PartType.Cylinder)
+	hem.CFrame = CFrame.new(base + Vector3.new(0, 0.3, 0)) * UP
+	local sash = np("Sash", Vector3.new(0.7, 3.6, 3.6), Vector3.new(0, 3.3, 0), Color3.fromRGB(200, 60, 50), Enum.Material.Fabric, Enum.PartType.Cylinder)
+	sash.CFrame = CFrame.new(base + Vector3.new(0, 3.3, 0)) * UP
+	np("Head", Vector3.new(2.2, 2.2, 2.2), Vector3.new(0, 6.2, 0), Color3.fromRGB(245, 222, 195), nil, Enum.PartType.Ball)
+	np("Beard", Vector3.new(1.4, 1.6, 0.8), Vector3.new(0, 5.2, 0.9), Color3.fromRGB(245, 245, 250))
+	for _, x in { -0.45, 0.45 } do
+		np("Eye", Vector3.new(0.25, 0.12, 0.1), Vector3.new(x, 6.5, 1.05), Color3.fromRGB(40, 30, 30))
+	end
+	local hat = np("Hat", Vector3.new(0.4, 4.6, 4.6), Vector3.new(0, 7.3, 0), Color3.fromRGB(200, 165, 90), Enum.Material.Wood, Enum.PartType.Cylinder)
+	hat.CFrame = CFrame.new(base + Vector3.new(0, 7.3, 0)) * UP
+	local tip = np("HatTip", Vector3.new(1.2, 1.4, 1.4), Vector3.new(0, 7.9, 0), Color3.fromRGB(200, 165, 90), Enum.Material.Wood, Enum.PartType.Cylinder)
+	tip.CFrame = CFrame.new(base + Vector3.new(0, 7.9, 0)) * UP
+	np("Staff", Vector3.new(0.35, 8, 0.35), Vector3.new(2.3, 4, 0.3), Color3.fromRGB(110, 75, 45), Enum.Material.Wood)
+	local lantern = np("Lantern", Vector3.new(1.2, 1.5, 1.2), Vector3.new(2.3, 8.4, 0.3), Color3.fromRGB(255, 190, 100), Enum.Material.Neon, Enum.PartType.Ball)
 	local pl = Instance.new("PointLight")
-	pl.Range, pl.Brightness, pl.Color = 16, 1, Color3.fromRGB(255, 190, 110)
+	pl.Range, pl.Brightness, pl.Color = 18, 1, Color3.fromRGB(255, 190, 110)
 	pl.Parent = lantern
 	npc.PrimaryPart = robe
 	local tag = Instance.new("BillboardGui")
-	tag.Size, tag.StudsOffset, tag.MaxDistance = UDim2.fromOffset(200, 26), Vector3.new(0, 5.5, 0), 70
+	tag.Size, tag.StudsOffset, tag.MaxDistance = UDim2.fromOffset(200, 26), Vector3.new(0, 6.5, 0), 70
 	local tl = Instance.new("TextLabel")
 	tl.Size, tl.BackgroundTransparency, tl.TextScaled, tl.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
 	tl.Text, tl.TextColor3, tl.TextStrokeTransparency = "Хранитель алтаря", Color3.fromRGB(255, 220, 140), 0.2

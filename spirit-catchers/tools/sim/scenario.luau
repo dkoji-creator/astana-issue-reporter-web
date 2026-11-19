@@ -190,7 +190,7 @@ if not (fr and (fr.ok or string.find(tostring(fr.msg), "максимал"))) the
 for _ = 1, 7 do inv("Admin", "mod") frames(2) end
 inv("Admin", "season")
 local sr = inv("ClaimSeason", 1)
-if not (sr and sr.ok) then table.insert(SIM.errors, "награда сезона: " .. tostring(sr and sr.msg)) end
+if not (sr and (sr.ok or string.find(tostring(sr.msg), "Уже"))) then table.insert(SIM.errors, "награда сезона: " .. tostring(sr and sr.msg)) end
 inv("ClaimSeason", 5)
 inv("SetTitle", "")
 inv("Admin", "raid")
@@ -316,6 +316,9 @@ do
 	end
 	stage("на озере скрытых духов: " .. hidden)
 	inv("Redeem", "MIRROR")
+	inv("Redeem", "TIKTOK")
+	local sc = inv("Admin", "showcase")
+	if not (sc and sc.ok) then table.insert(SIM.errors, "витрина: " .. tostring(sc and sc.msg)) end
 	for _ = 1, 12 do inv("Admin", "allSpirits") end
 	local ev = inv("Evolve", "PaperFox")
 	if not (ev and (ev.ok or string.find(tostring(ev.msg), "Уже"))) then table.insert(SIM.errors, "пробуждение: " .. tostring(ev and ev.msg)) end

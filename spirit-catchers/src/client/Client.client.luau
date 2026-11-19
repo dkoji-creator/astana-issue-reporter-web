@@ -48,6 +48,7 @@ do
 
 end
 local enterPhoto -- фото-режим (ниже)
+local refreshHUD -- обновление интерфейса (ниже)
 local toggleWindow -- открыть одно окно, закрыть остальные (ниже)
 local openStory -- диалог Хранителя (ниже)
 -- бонус способности спутника (доля), например compBonus("reveal") = 0.12
@@ -113,7 +114,7 @@ end
 ------------------------------------------------------------------ HUD: левая колонка
 local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason, btnSocial
 do
-	local leftCol = K.make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 22), Size = UDim2.fromOffset(136, 360), BackgroundTransparency = 1 }, hud)
+	local leftCol = K.make("Frame", { Name = "LeftCol", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 22), Size = UDim2.fromOffset(136, 360), BackgroundTransparency = 1 }, hud)
 	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
 	btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
 	btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
@@ -133,7 +134,7 @@ end
 local coinPill, coinL, dustPill, dustL, luckPill, luckL, luckSub, levelPill
 local levelL, _, xpFill
 do
-	local rightCol = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 190), BackgroundTransparency = 1 }, hud)
+	local rightCol = K.make("Frame", { Name = "RightCol", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 190), BackgroundTransparency = 1 }, hud)
 	K.make("UIListLayout", { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, rightCol)
 	coinPill, coinL = K.pill(rightCol, "coin", Color3.fromRGB(230, 170, 30), 160)
 	dustPill, dustL = K.pill(rightCol, "dust", T.purple, 160)
@@ -163,6 +164,22 @@ do
 	K.gradient(goalPill, Color3.fromRGB(255, 200, 90), Color3.fromRGB(200, 120, 40))
 	K.icon(goalPill, "target", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(-6, -2) })
 	goalL = K.text(goalPill, "", { Size = UDim2.new(1, -50, 1, -10), Position = UDim2.fromOffset(40, 5), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16 })
+	-- кнопка «Скрыть»: убирает боковые кнопки и плашки, чтобы освободить экран
+	local hideB, hideL = K.button(gui, "Скрыть", Color3.fromRGB(90, 90, 120), { Name = "HideHud", Position = UDim2.fromOffset(232, 12), Size = UDim2.fromOffset(96, 36), MaxText = 15 })
+	hideB.Activated:Connect(function()
+		local collapsed = not hud:GetAttribute("Collapsed")
+		hud:SetAttribute("Collapsed", collapsed)
+		hideL.Text = collapsed and "Меню" or "Скрыть"
+		for _, name in { "LeftCol", "RightCol" } do
+			local f = hud:FindFirstChild(name)
+			if f then f.Visible = not collapsed end
+		end
+		if collapsed then
+			compPill.Visible, modPill.Visible, goalPill.Visible = false, false, false
+		elseif refreshHUD then
+			refreshHUD()
+		end
+	end)
 	-- модификатор дня под таймером события
 	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(240, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(modPill, UDim.new(1, 0))
@@ -308,37 +325,37 @@ end
 local atlasW, atlasBody, _, collectFill, spiritGrid, cards, setTrack, refreshAtlas
 do
 	atlasW, atlasBody = K.window(gui, "Атлас духов", "atlas", T.blue)
-	local atlasTop = K.make("Frame", { Size = UDim2.new(1, 0, 0, 48), BackgroundTransparency = 1 }, atlasBody)
-	local collectL = K.text(atlasTop, "", { Size = UDim2.new(0.46, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 22 })
-	_, collectFill = K.bar(atlasTop, T.gold, { Size = UDim2.new(0.46, 0, 0, 12), Position = UDim2.fromOffset(0, 30) })
-	-- одна понятная карточка «следующая награда коллекции» вместо ряда одинаковых плашек
-	local mileCard = K.panel(atlasTop, { Position = UDim2.new(0.5, 0, 0, 0), Size = UDim2.new(0.5, 0, 1, -4), BackgroundColor3 = Color3.fromRGB(58, 50, 34) })
-	K.icon(mileCard, "trophy", { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 7) })
-	local mileTitle = K.text(mileCard, "", { Size = UDim2.new(0.62, -56, 0, 24), Position = UDim2.fromOffset(54, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextColor3 = T.gold })
-	local mileSub = K.text(mileCard, "", { Size = UDim2.new(0.62, -56, 0, 20), Position = UDim2.fromOffset(54, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
-	local mileB, mileBL = K.button(mileCard, "", T.green, { Size = UDim2.new(0.38, -8, 1, -12), Position = UDim2.new(0.62, 2, 0, 6), MaxText = 16 })
+	-- шапка в одну узкую строку: прогресс коллекции слева, следующая награда справа
+	local atlasTop = K.make("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1 }, atlasBody)
+	local collectL = K.text(atlasTop, "", { Size = UDim2.new(0.22, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17 })
+	_, collectFill = K.bar(atlasTop, T.gold, { Size = UDim2.new(0.22, 0, 0, 8), Position = UDim2.fromOffset(0, 22) })
+	local mileCard = K.make("Frame", { Position = UDim2.new(0.24, 0, 0, 0), Size = UDim2.new(0.76, 0, 1, 0), BackgroundTransparency = 1 }, atlasTop)
+	K.icon(mileCard, "trophy", { Size = UDim2.fromOffset(28, 28), Position = UDim2.fromOffset(0, 1) })
+	local mileTitle = K.text(mileCard, "", { Size = UDim2.new(0.7, -34, 1, -4), Position = UDim2.fromOffset(32, 2), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, TextColor3 = T.gold })
+	local mileSub = K.text(mileCard, "", { Visible = false })
+	local mileB, mileBL = K.button(mileCard, "", T.green, { Size = UDim2.new(0.3, 0, 1, 0), Position = UDim2.new(0.7, 0, 0, 0), MaxText = 14 })
 	local mileIndex = nil
 	mileB.Activated:Connect(function()
 		if not mileIndex then return end
 		local r = remotes.ClaimMilestone:InvokeServer(mileIndex)
 		if r and not r.ok and r.msg then showToast(r.msg) end
 	end)
-	local atlasTabs = K.make("Frame", { Position = UDim2.fromOffset(0, 52), Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1 }, atlasBody)
+	local atlasTabs = K.make("Frame", { Position = UDim2.fromOffset(0, 34), Size = UDim2.new(1, 0, 0, 32), BackgroundTransparency = 1 }, atlasBody)
 	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8) }, atlasTabs)
 	local tabSpirits = K.button(atlasTabs, "Духи", T.blue, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabTiers = K.button(atlasTabs, "Тир-лист", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
 	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	local tabAlbum = K.button(atlasTabs, "Альбом", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
-	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92) })
-	K.make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -10, 0, 262), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
+	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70) })
+	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 212), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
-	local worldList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), Visible = false })
+	local worldList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, worldList)
-	local tierList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), Visible = false })
+	local tierList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, tierList)
 	-- достижения
-	local achList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), Visible = false })
+	local achList = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder }, achList)
 	local achRows = {}
 	for i, id in Prog.AchievementOrder do
@@ -382,7 +399,7 @@ do
 		end
 	end
 	-- альбом редких поимок: карточка с 3D-моделью, разновидностью, датой и районом
-	local albumPage = K.make("Frame", { Position = UDim2.fromOffset(0, 92), Size = UDim2.new(1, 0, 1, -92), BackgroundTransparency = 1, Visible = false }, atlasBody)
+	local albumPage = K.make("Frame", { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70), BackgroundTransparency = 1, Visible = false }, atlasBody)
 	local albumHead = K.text(albumPage, "Сюда попадают эпические духи и редкие разновидности", { Size = UDim2.new(0.68, 0, 0, 30), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextWrapped = true })
 	local photoB = K.button(albumPage, "Фото-режим", T.pink, { Size = UDim2.new(0.3, 0, 0, 34), Position = UDim2.new(0.7, 0, 0, 0), MaxText = 16 })
 	local albumGrid = K.scroll(albumPage, { Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40) })
@@ -515,7 +532,7 @@ do
 		local f = K.panel(spiritGrid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
 		f:FindFirstChildOfClass("UIStroke").Color = rar.color
 		c.frame = f
-		local vpHolder = K.make("Frame", { Size = UDim2.new(1, -8, 0, 112), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
+		local vpHolder = K.make("Frame", { Size = UDim2.new(1, -8, 0, 84), Position = UDim2.fromOffset(4, 4), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
 		K.corner(vpHolder, UDim.new(0, 10))
 		K.gradient(vpHolder, K.darken(rar.color, 0.35), K.darken(rar.color, 0.75))
 		c.vpHolder = vpHolder
@@ -525,22 +542,22 @@ do
 		K.stroke(rTag, T.ink, 2)
 		c.rar = K.text(rTag, rar.name, { Size = UDim2.new(1, -10, 1, -4), Position = UDim2.fromOffset(5, 2), MaxText = 14, ZIndex = 3 })
 		c.count = K.text(vpHolder, "", { Size = UDim2.fromOffset(60, 24), Position = UDim2.new(1, -66, 0, 6), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 3, TextColor3 = T.gold })
-		c.name = K.text(f, info.name, { Size = UDim2.new(1, -12, 0, 26), Position = UDim2.fromOffset(6, 120), MaxText = 19 })
-		c.info = K.text(f, "", { Size = UDim2.new(1, -14, 0, 44), Position = UDim2.fromOffset(7, 148), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
+		c.name = K.text(f, info.name, { Size = UDim2.new(1, -12, 0, 22), Position = UDim2.fromOffset(6, 90), MaxText = 17 })
+		c.info = K.text(f, "", { Size = UDim2.new(1, -14, 0, 38), Position = UDim2.fromOffset(7, 113), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = Color3.fromRGB(225, 228, 245), TextWrapped = true, StrokeThickness = 1 })
 		-- разновидности: точки + понятная подпись
-		local dots = K.make("Frame", { Size = UDim2.new(0.55, 0, 0, 14), Position = UDim2.fromOffset(8, 196), BackgroundTransparency = 1 }, f)
+		local dots = K.make("Frame", { Size = UDim2.new(0.55, 0, 0, 12), Position = UDim2.fromOffset(8, 154), BackgroundTransparency = 1 }, f)
 		K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 3), VerticalAlignment = Enum.VerticalAlignment.Center }, dots)
 		c.dots = {}
 		for _, vk in Catalog.VariantOrder do
-			local d = K.make("Frame", { Size = UDim2.fromOffset(13, 13), BackgroundColor3 = T.ink }, dots)
+			local d = K.make("Frame", { Size = UDim2.fromOffset(11, 11), BackgroundColor3 = T.ink }, dots)
 			K.corner(d, UDim.new(1, 0))
 			K.stroke(d, Color3.fromRGB(120, 120, 150), 1)
 			c.dots[vk] = d
 		end
-		c.varL = K.text(f, "", { Size = UDim2.new(0.45, -10, 0, 16), Position = UDim2.new(0.55, 2, 0, 195), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Right, StrokeThickness = 1 })
-		local trackB, trackBL = K.button(f, "Цель", T.orange, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(0, 4, 1, -44), MaxText = 14 })
-		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(1 / 3, 2, 1, -44), MaxText = 14 })
-		local evoB, evoBL = K.button(f, "Пробудить", T.gold, { Size = UDim2.new(1 / 3, -6, 0, 38), Position = UDim2.new(2 / 3, 0, 1, -44), MaxText = 14 })
+		c.varL = K.text(f, "", { Size = UDim2.new(0.45, -10, 0, 14), Position = UDim2.new(0.55, 2, 0, 153), MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Right, StrokeThickness = 1 })
+		local trackB, trackBL = K.button(f, "Цель", T.orange, { Size = UDim2.new(1 / 3, -6, 0, 34), Position = UDim2.new(0, 4, 1, -40), MaxText = 13 })
+		local equipB, equipBL = K.button(f, "Спутник", T.pink, { Size = UDim2.new(1 / 3, -6, 0, 34), Position = UDim2.new(1 / 3, 2, 1, -40), MaxText = 13 })
+		local evoB, evoBL = K.button(f, "Пробудить", T.gold, { Size = UDim2.new(1 / 3, -6, 0, 34), Position = UDim2.new(2 / 3, 0, 1, -40), MaxText = 13 })
 		c.evo, c.evoL = evoB, evoBL
 		evoB.Activated:Connect(function()
 			if state.evolved and state.evolved[kind] then return end
@@ -630,12 +647,11 @@ do
 			if m.dust then table.insert(parts, m.dust .. " пыли") end
 			if m.skin then table.insert(parts, "фонарь") end
 			local ready = state.distinct >= m.need
-			mileTitle.Text = ("Награда за %d видов"):format(m.need)
-			mileSub.Text = table.concat(parts, " + ")
+				mileTitle.Text = ("Награда за %d видов: %s"):format(m.need, table.concat(parts, " + "))
 			mileBL.Text = ready and "Забрать!" or ("%d/%d"):format(state.distinct, m.need)
 			K.recolor(mileB, ready and T.green or Color3.fromRGB(80, 80, 100))
 		else
-			mileTitle.Text = "Все награды получены"
+			mileTitle.Text = "Все награды коллекции получены. Ищи редкие разновидности"
 			mileSub.Text = "Ищи редкие разновидности"
 			mileBL.Text = "Готово"
 			K.recolor(mileB, Color3.fromRGB(80, 80, 100))
@@ -914,7 +930,19 @@ do
 	local photoGui = K.make("ScreenGui", { Name = "PhotoMode", ResetOnSpawn = false, Enabled = false, DisplayOrder = 50 }, plr:WaitForChild("PlayerGui"))
 	local shot = K.button(photoGui, "Снимок", T.pink, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -110, 1, -24), Size = UDim2.fromOffset(130, 46), MaxText = 18 })
 	local leave = K.button(photoGui, "Выйти", Color3.fromRGB(110, 110, 140), { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -250, 1, -24), Size = UDim2.fromOffset(110, 46), MaxText = 18 })
-	local hint = K.text(photoGui, "Поверни камеру и нажми «Снимок»", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(420, 30), MaxText = 18 })
+	-- режим видео: прячет вообще всё, касание экрана возвращает кнопки
+	local video = K.button(photoGui, "Видео", T.red, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -370, 1, -24), Size = UDim2.fromOffset(110, 46), MaxText = 18 })
+	local wake = K.make("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", Visible = false, ZIndex = 10 }, photoGui)
+	video.Activated:Connect(function()
+		shot.Visible, leave.Visible, video.Visible = false, false, false
+		task.wait(0.3)
+		wake.Visible = true
+	end)
+	wake.Activated:Connect(function()
+		wake.Visible = false
+		shot.Visible, leave.Visible, video.Visible = true, true, true
+	end)
+	local hint = K.text(photoGui, "Поверни камеру и нажми «Снимок». «Видео» прячет всё, касание экрана вернёт кнопки", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(420, 30), MaxText = 18 })
 	enterPhoto = function()
 		gui.Enabled = false
 		photoGui.Enabled = true
@@ -926,7 +954,7 @@ do
 		gui.Enabled = true
 	end)
 	shot.Activated:Connect(function()
-		shot.Visible, leave.Visible = false, false
+		shot.Visible, leave.Visible, video.Visible = false, false, false
 		task.wait(0.1)
 		local ok = pcall(function()
 			local cs = game:GetService("CaptureService")
@@ -935,7 +963,7 @@ do
 			end)
 		end)
 		task.wait(0.4)
-		shot.Visible, leave.Visible = true, true
+		shot.Visible, leave.Visible, video.Visible = true, true, true
 		if not ok then
 			hint.Text = "Сделай скриншот кнопками телефона"
 			hint.Visible = true
@@ -1927,7 +1955,9 @@ do
 	local adminButtons = {
 		{ "+1000 монет", "coins" }, { "+100 пыли", "dust" }, { "+1 уровень", "level" }, { "Все духи", "allSpirits" },
 		{ "Макс. улучшения", "maxUpgrades" }, { "Весь донат", "passes" }, { "Начать луну", "moon" }, { "Закончить луну", "endMoon" },
-		{ "Фейерверк", "fireworks" }, { "Банка полная", "fillJar" }, { "Мгновенная ловля", "fast" }, { "Сброс прогресса", "reset" },
+		{ "Фейерверк", "fireworks" }, { "Банка полная", "fillJar" }, { "Мгновенная ловля", "fast" },
+		{ "Витрина духов", "showcase" }, { "Рейд фонарей", "raid" }, { "Ночной страж", "boss" }, { "Праздник", "holiday" },
+		{ "Модификатор дня", "mod" }, { "+3 ур. сезона", "season" }, { "Сброс прогресса", "reset" },
 	}
 	local resetArmed = false
 	for i, bd in adminButtons do
@@ -2009,7 +2039,6 @@ do
 
 end
 ------------------------------------------------------------------ HUD-обновление
-local refreshHUD
 local hudUnlockSeen = false
 do
 	refreshHUD = function()
@@ -2054,9 +2083,10 @@ do
 		end
 		hudUnlockSeen = true
 		-- главная цель
+		local collapsed = hud:GetAttribute("Collapsed") == true
 		local st = state.story
 		local ch = st and Catalog.Live.Story[st.ch]
-		goalPill.Visible = ch ~= nil and not trackPill.Visible
+		goalPill.Visible = ch ~= nil and not trackPill.Visible and not collapsed
 		if ch then
 			local done = st.prog >= ch.need
 			goalL.Text = done and ("Глава «%s» готова: поговори с Хранителем"):format(ch.title)
@@ -2076,13 +2106,13 @@ do
 		for _, m in Live.Modifiers do
 			if m.id == state.dayMod then mod = m end
 		end
-		modPill.Visible = mod ~= nil
+		modPill.Visible = mod ~= nil and not collapsed
 		if mod then
 			modL.Text = "Сегодня: " .. mod.name
 			modPill.BackgroundColor3 = K.darken(mod.color, 0.35)
 		end
 		local c = state.comp
-		compPill.Visible = c ~= nil
+		compPill.Visible = c ~= nil and not collapsed
 		if c then
 			local cost = Live.feedCost(c.level)
 			compL.Text = ("%s ур.%d: %s\n%s"):format(Catalog.Kinds[c.kind].short, c.level, c.text,

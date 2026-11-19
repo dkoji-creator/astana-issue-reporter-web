@@ -154,13 +154,7 @@ function K.window(parent, title, iconKey, color, w, h)
 	}, parent)
 	K.corner(f, UDim.new(0, 18))
 	K.stroke(f, T.ink, 4)
-	make("UISizeConstraint", { MaxSize = Vector2.new(1200, 760) }, f)
-	-- на телефоне окна почти во весь экран: так текст и карточки крупнее
-	local cam = workspace.CurrentCamera
-	if cam and cam.ViewportSize.Y > 0 and cam.ViewportSize.Y < 560 then
-		f.Size = UDim2.fromScale(0.95, 0.93)
-		f.Position = UDim2.fromScale(0.5, 0.52)
-	end
+	make("UISizeConstraint", { MaxSize = Vector2.new(2400, 1400) }, f)
 	local head = make("Frame", { Size = UDim2.new(1, 0, 0, 50), BackgroundColor3 = Color3.new(1, 1, 1) }, f)
 	K.corner(head, UDim.new(0, 18))
 	K.gradient(head, lighten(color, 0.2), darken(color, 0.1))
@@ -181,6 +175,17 @@ function K.window(parent, title, iconKey, color, w, h)
 end
 
 function K.open(f)
+	-- на телефоне окно почти во весь экран. UIScale на ScreenGui сжимает всё к левому верхнему углу,
+	-- поэтому размер и центр делим на его масштаб
+	local cam = workspace.CurrentCamera
+	local vp = cam and cam.ViewportSize or Vector2.new(1280, 720)
+	if vp.Y > 0 and vp.Y < 760 then
+		local sg = f:FindFirstAncestorOfClass("ScreenGui")
+		local us = sg and sg:FindFirstChildOfClass("UIScale")
+		local k = (us and us.Scale > 0) and us.Scale or 1
+		f.Size = UDim2.fromScale(0.97 / k, 0.95 / k)
+		f.Position = UDim2.fromScale(0.5 / k, 0.5 / k)
+	end
 	f.Visible = true
 	local sc = f:FindFirstChild("Bounce") or make("UIScale", { Name = "Bounce" }, f)
 	sc.Scale = 0.85
@@ -192,7 +197,7 @@ end
 
 function K.scroll(parent, props)
 	local s = make("ScrollingFrame", {
-		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 6, ScrollBarImageColor3 = T.sub,
+		BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 10, ScrollBarImageColor3 = T.sub, ScrollingDirection = Enum.ScrollingDirection.Y,
 		AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new(), Size = UDim2.fromScale(1, 1),
 	}, parent)
 	for k, v in props or {} do s[k] = v end
