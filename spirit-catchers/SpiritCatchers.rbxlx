@@ -7848,8 +7848,8 @@ do
 	K.corner(jarPanel, UDim.new(0, 14))
 	K.stroke(jarPanel, T.ink, 3)
 	K.icon(jarPanel, "jar", { Size = UDim2.fromOffset(56, 56), Position = UDim2.fromOffset(-14, -10) })
-	jarL = K.text(jarPanel, "Банка 0/3", { Size = UDim2.new(0.5, -40, 0, 22), Position = UDim2.fromOffset(46, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
-	jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.55, 0, 0, 18), Position = UDim2.new(0.42, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
+	jarL = K.text(jarPanel, "Банка 0/3", { Size = UDim2.new(0.54, -50, 0, 22), Position = UDim2.fromOffset(46, 4), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18 })
+	jarNames = K.text(jarPanel, "пусто", { Size = UDim2.new(0.46, -10, 0, 18), Position = UDim2.new(0.54, 0, 0, 6), TextXAlignment = Enum.TextXAlignment.Right, MaxText = 13, Font = Enum.Font.GothamBold, TextColor3 = T.sub })
 	_, jarFill = K.bar(jarPanel, T.cold, { Size = UDim2.new(1, -60, 0, 12), Position = UDim2.fromOffset(46, 30) })
 	-- БРОСОК ФОНАРИКА: главный быстрый цикл. Держи: полоска силы ходит; отпусти в нужный момент
 	local throwB = K.make("TextButton", { Name = "ThrowBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(112, 112), Position = UDim2.new(1, -140, 1, -110), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
