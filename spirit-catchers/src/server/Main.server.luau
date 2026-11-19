@@ -84,6 +84,8 @@ local CoinShopFn = remote("CoinShop", "RemoteFunction")
 local PocketFn = remote("PocketSave", "RemoteFunction")
 local WheelFn = remote("SpinWheel", "RemoteFunction")
 local EggFn = remote("Egg", "RemoteFunction")
+local HuntFn = remote("Hunt", "RemoteFunction")
+local doSaveRef -- doSave (ниже), для автосдачи
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
 local StoryOpenEv = remote("StoryOpen")
@@ -214,6 +216,21 @@ local function chalProgress(plr, d, fn)
 		d.dust += r.dust
 		addSeasonXp(d, r.sxp)
 		NoticeEv:FireClient(plr, ("Все испытания дня! Бонус +%d монет и +%d пыли"):format(r.coins, r.dust))
+		-- недельный сундук
+		local wk = Live.week(os.time())
+		if typeof(d.weekChal) ~= "table" or d.weekChal.week ~= wk then d.weekChal = { week = wk, days = 0, got = false } end
+		d.weekChal.days += 1
+		if d.weekChal.days >= Live.WeekChest.days and not d.weekChal.got then
+			d.weekChal.got = true
+			local wc = Live.WeekChest
+			local coins = wc.coins + wc.perLevel * d.level
+			d.coins += coins
+			d.dust += wc.dust
+			if #(d.eggs or {}) < Live.EggSlots then table.insert(d.eggs, { id = wc.egg, at = os.time() }) end
+			task.delay(4, function()
+				NoticeEv:FireClient(plr, ("Недельный сундук открыт! +%d монет, +%d пыли и Лунное яйцо (готово в инкубаторе)"):format(coins, wc.dust))
+			end)
+		end
 	end
 end
 local RARITY_RANK = {}
@@ -265,6 +282,7 @@ local function liveOnCatch(plr, d, kind: string, district: string, variant: stri
 	local rar = Catalog.Kinds[kind].rarity
 	weeklyCatch(plr, d, kind, variant)
 	Social.clubCatch(plr)
+	if d.hunt and os.clock() < d.hunt.ends then d.hunt.n += 1 end
 	local sinfo = { kind = kind, district = district, rarity = rar, variant = variant }
 	for _, typ in { "kind", "district", "rarity", "variant" } do storyEvent(plr, d, typ, sinfo) end
 	-- альбом редких поимок
@@ -313,6 +331,10 @@ local function luckOf(d)
 	if workspace:GetAttribute("MoonActive") then
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
+	end
+	if Live.isWeekend(os.time()) then
+		mult *= 2
+		table.insert(parts, "Выходные x2")
 	end
 	local streak = math.min(Live.Streak.max, (d.loginStreak and d.loginStreak.n) or 0)
 	if streak > 1 then
@@ -552,6 +574,13 @@ local function migrate(raw): Profile
 		if typeof(raw.loginStreak) == "table" then d.loginStreak = { day = math.floor(num(raw.loginStreak.day, 0, 1e7, 0)), n = math.floor(num(raw.loginStreak.n, 0, 1000, 0)) } end
 		if typeof(raw.wheel) == "table" then d.wheel = { day = math.floor(num(raw.wheel.day, 0, 1e7, 0)), used = math.floor(num(raw.wheel.used, 0, 10, 0)) } end
 		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
+		d.huntBest = math.floor(num(raw.huntBest, 0, 1e6, 0))
+		if typeof(raw.weekChal) == "table" then d.weekChal = { week = math.floor(num(raw.weekChal.week, 0, 1e7, 0)), days = math.floor(num(raw.weekChal.days, 0, 7, 0)), got = raw.weekChal.got == true } end
+		if typeof(raw.streakClaimed) == "table" then
+			d.streakClaimed = {}
+			for k, v in raw.streakClaimed do if v == true then d.streakClaimed[tostring(k)] = true end end
+		end
+		if typeof(raw.referredBy) == "number" then d.referredBy = raw.referredBy end
 		if typeof(raw.eggs) == "table" then
 			for _, e in raw.eggs do
 				if typeof(e) == "table" and Live.Eggs[e.id] and #d.eggs < Live.EggSlots then table.insert(d.eggs, { id = e.id, at = math.floor(num(e.at, 0, 1e12, 0)) }) end
@@ -724,7 +753,9 @@ local function pushState(plr)
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
-		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(),
+		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0,
+		hunt = d.hunt and { ends = os.time() + math.max(0, math.floor(d.hunt.ends - os.clock())), n = d.hunt.n } or nil,
+		weekend = Live.isWeekend(os.time()),
 		spinsLeft = (function()
 			local today = Live.day(os.time())
 			local used = (d.wheel and d.wheel.day == today) and d.wheel.used or 0
@@ -1158,6 +1189,11 @@ RunService.Heartbeat:Connect(function(dt)
 				table.insert(jars[plr], { k = s.kind, v = variant })
 				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant, variant ~= base)
 				lanternBurst(plr)
+				if #jars[plr] >= cap(data[plr]) and hasPass(data[plr], "autoDeliver") and doSaveRef then
+					task.delay(1.5, function()
+						if plr.Parent and #(jars[plr] or {}) > 0 then SaveResultEv:FireClient(plr, doSaveRef(plr, true)) end
+					end)
+				end
 				local d = data[plr]
 				local xp = math.floor((Catalog.Progress.XP[info.rarity] or 4) * (1 + compPct(d, "xp")) + 0.5)
 				d.xp += xp
@@ -1567,6 +1603,7 @@ end
 savePrompt.Triggered:Connect(function(plr)
 	SaveResultEv:FireClient(plr, doSave(plr))
 end)
+doSaveRef = doSave
 -- карманный алтарь: сдать улов где угодно (перезарядка по уровню)
 local pocketAt = {}
 PocketFn.OnServerInvoke = function(plr)
@@ -2198,6 +2235,28 @@ EggFn.OnServerInvoke = function(plr, action, arg)
 	pushState(plr)
 	return { ok = true }
 end
+HuntFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if d.hunt and os.clock() < d.hunt.ends then return { ok = false, msg = "Охота уже идёт" } end
+	d.hunt = { ends = os.clock() + Live.Hunt.seconds, n = 0 }
+	pushState(plr)
+	task.delay(Live.Hunt.seconds + 0.5, function()
+		local dd = data[plr]
+		if not (dd and dd.hunt and plr.Parent) then return end
+		local n = dd.hunt.n
+		dd.hunt = nil
+		local coins, dust = n * Live.Hunt.coinsPer, n * Live.Hunt.dustPer
+		dd.coins += coins
+		dd.dust += dust
+		local record = n > (dd.huntBest or 0)
+		if record then dd.huntBest = n end
+		NoticeEv:FireClient(plr, ("Охота окончена: %d духов! +%d монет, +%d пыли%s"):format(n, coins, dust, record and ". НОВЫЙ РЕКОРД!" or (" (рекорд " .. (dd.huntBest or 0) .. ")")))
+		persist(plr)
+		pushState(plr)
+	end)
+	return { ok = true }
+end
 EvolveFn.OnServerInvoke = function(plr, kind)
 	local d = data[plr]
 	local info = d and typeof(kind) == "string" and Catalog.Kinds[kind]
@@ -2486,6 +2545,42 @@ task.spawn(function()
 	while true do
 		pcall(renderRareBoard)
 		task.wait(90)
+	end
+end)
+-- доска «Самые длинные серии входов»
+task.spawn(function()
+	while true do
+		pcall(function()
+			local st = DataStoreService:GetOrderedDataStore("SC_LoginStreak")
+			local pages = st:GetSortedAsync(false, 8)
+			local list = pages:GetCurrentPage()
+			local gui = map.streakGui
+			for _, c in gui:GetChildren() do c:Destroy() end
+			local frame = Instance.new("Frame")
+			frame.Size, frame.BackgroundColor3 = UDim2.fromScale(1, 1), Color3.fromRGB(22, 36, 40)
+			frame.Parent = gui
+			local title = Instance.new("TextLabel")
+			title.Size, title.BackgroundTransparency, title.TextScaled, title.Font = UDim2.new(1, 0, 0.15, 0), 1, true, Enum.Font.GothamBlack
+			title.Text, title.TextColor3 = "СЕРИЯ ВХОДОВ (ДНЕЙ ПОДРЯД)", Color3.fromRGB(120, 230, 200)
+			title.Parent = frame
+			for i, e in list do
+				local uid = tonumber(string.sub(e.key, 2))
+				local name = uid and nameCache[uid]
+				if not name and uid then
+					local okN, n = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
+					name = okN and n or ("#" .. uid)
+					nameCache[uid] = name
+				end
+				local row = Instance.new("TextLabel")
+				row.Size, row.Position = UDim2.new(0.94, 0, 0.1, 0), UDim2.new(0.03, 0, 0.16 + (i - 1) * 0.105, 0)
+				row.BackgroundTransparency, row.TextScaled, row.Font = 1, true, Enum.Font.GothamBold
+				row.TextXAlignment = Enum.TextXAlignment.Left
+				row.TextColor3 = i == 1 and Color3.fromRGB(255, 220, 90) or Color3.new(1, 1, 1)
+				row.Text = ("%d. %s  -  %d дн."):format(i, name or "?", e.value)
+				row.Parent = frame
+			end
+		end)
+		task.wait(120)
 	end
 end)
 
@@ -2848,6 +2943,23 @@ Players.PlayerAdded:Connect(function(plr)
 			d.loginStreak = ls
 			local luckPct = math.floor((math.min(ls.n, Live.Streak.max) - 1) * Live.Streak.per * 100 + 0.5)
 			table.insert(msgs, ("Серия входов: %d день! Удача +%d%%. Заходи завтра, будет ещё +5%%"):format(ls.n, luckPct))
+			d.streakClaimed = d.streakClaimed or {}
+			for _, sr in Live.StreakRewards do
+				if ls.n >= sr.days and not d.streakClaimed[tostring(sr.days)] then
+					d.streakClaimed[tostring(sr.days)] = true
+					d.coins += sr.coins
+					d.dust += sr.dust
+					if sr.egg and #d.eggs < Live.EggSlots then table.insert(d.eggs, { id = sr.egg, at = os.time() }) end
+					if sr.title then
+						d.titles[sr.title] = true
+					end
+					table.insert(msgs, ("Награда серии «%s»: +%d монет, +%d пыли%s%s"):format(sr.text, sr.coins, sr.dust, sr.egg and ", яйцо" or "", sr.title and (", титул «" .. sr.title .. "»") or ""))
+				end
+			end
+			task.spawn(function()
+				local ok, st = pcall(function() return DataStoreService:GetOrderedDataStore("SC_LoginStreak") end)
+				if ok and st and not d.loadFailed then pcall(function() st:SetAsync("u" .. plr.UserId, ls.n) end) end
+			end)
 		end
 		if (d.lastSeen or 0) > 0 and distinct(d) > 0 then
 			local hours = (os.time() - d.lastSeen) / 3600
@@ -2857,6 +2969,45 @@ Players.PlayerAdded:Connect(function(plr)
 				table.insert(msgs, ("Пока тебя не было, духи двора собрали %d пыли"):format(dust))
 			end
 		end
+		-- пришёл по приглашению друга
+		local okJ, jd = pcall(function() return plr:GetJoinData() end)
+		local ref = okJ and typeof(jd) == "table" and jd.ReferredByPlayerId
+		if typeof(ref) == "number" and ref > 0 and ref ~= plr.UserId and not d.referredBy then
+			d.referredBy = ref
+			d.coins += Live.Invite.guest.coins
+			table.insert(msgs, ("Тебя пригласил друг: +%d монет!"):format(Live.Invite.guest.coins))
+			local inviter = Players:GetPlayerByUserId(ref)
+			local idata = inviter and data[inviter]
+			if idata then
+				idata.coins += Live.Invite.inviter.coins
+				idata.dust += Live.Invite.inviter.dust
+				NoticeEv:FireClient(inviter, ("%s пришёл по твоему приглашению! +%d монет, +%d пыли"):format(plr.DisplayName, Live.Invite.inviter.coins, Live.Invite.inviter.dust))
+				pushState(inviter)
+			else
+				task.spawn(function()
+					pcall(function()
+						DataStoreService:GetDataStore("SC_Referrals"):UpdateAsync("r" .. ref, function(n) return (tonumber(n) or 0) + 1 end)
+					end)
+				end)
+			end
+		end
+		-- награды за друзей, пришедших, пока меня не было
+		task.spawn(function()
+			pcall(function()
+				local rs = DataStoreService:GetDataStore("SC_Referrals")
+				local got = 0
+				rs:UpdateAsync("r" .. plr.UserId, function(n)
+					got = tonumber(n) or 0
+					return 0
+				end)
+				if got > 0 and data[plr] then
+					data[plr].coins += Live.Invite.inviter.coins * got
+					data[plr].dust += Live.Invite.inviter.dust * got
+					NoticeEv:FireClient(plr, ("Друзей пришло по приглашению: %d. +%d монет"):format(got, Live.Invite.inviter.coins * got))
+					pushState(plr)
+				end
+			end)
+		end)
 		task.delay(9, function()
 			for _, m in msgs do
 				if plr.Parent then NoticeEv:FireClient(plr, m) end

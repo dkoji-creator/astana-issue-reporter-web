@@ -41,8 +41,13 @@ local function light(parent, color, range, brightness)
 	l.Parent = parent
 	return l
 end
+-- граница района: видимая — каменный бортик и мерцающая туманная завеса (вместо невидимой стены)
 local function wall(size, pos)
 	block("Boundary", size, CFrame.new(pos), Color3.new(), nil, { Transparency = 1, CanQuery = false })
+	local base = 0.5
+	block("BoundaryStone", Vector3.new(size.X, 2.2, size.Z), CFrame.new(pos.X, base + 1.1, pos.Z), Color3.fromRGB(96, 98, 112), Enum.Material.Cobblestone)
+	deco("BoundaryMist", Vector3.new(math.max(size.X, 0.4), 9, math.max(size.Z, 0.4)), CFrame.new(pos.X, base + 2.2 + 4.5, pos.Z), Color3.fromRGB(150, 190, 255), Enum.Material.ForceField,
+		{ Transparency = 0.55, CanQuery = false })
 end
 local function sign(parent, text, color, face)
 	local g = Instance.new("SurfaceGui")
@@ -429,6 +434,15 @@ function Map.build()
 	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
+	-- третья доска: самые длинные серии входов
+	local streakBoard = block("StreakBoard", Vector3.new(14, 9, 0.6), CFrame.new(-26, 6, 2) * CFrame.Angles(0, math.rad(-90), 0), Color3.fromRGB(30, 40, 45), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(-26, 3, -4), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(-26, 3, 8), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	local streakGui = Instance.new("SurfaceGui")
+	streakGui.Face = Enum.NormalId.Front
+	streakGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	streakGui.PixelsPerStud = 30
+	streakGui.Parent = streakBoard
 	-- вторая доска: «Редчайший улов недели»
 	local rareBoard = block("RareBoard", Vector3.new(14, 9, 0.6), CFrame.new(26, 6, 20) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(40, 30, 45), Enum.Material.Wood)
 	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(26, 3, 14), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
@@ -651,6 +665,7 @@ function Map.build()
 		gates = gates,
 		boardGui = boardGui,
 		rareGui = rareGui,
+		streakGui = streakGui,
 		altar = altar,
 		altarPos = sp(altarPos),
 		spawnCF = spawnCF,

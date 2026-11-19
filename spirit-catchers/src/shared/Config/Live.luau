@@ -339,4 +339,23 @@ function L.offlineDust(hours: number, distinct: number): number
 	return math.floor(math.min(hours, L.Offline.maxHours) * (3 + distinct * 0.3))
 end
 
+-- награды за серию входов (выдаются при входе)
+L.StreakRewards = {
+	{ days = 3, coins = 1500, dust = 30, text = "3 дня подряд" },
+	{ days = 7, coins = 5000, dust = 80, egg = "moon", title = "Верный ловец", text = "Неделя подряд" },
+	{ days = 14, coins = 12000, dust = 150, egg = "star", text = "2 недели подряд" },
+	{ days = 30, coins = 40000, dust = 400, egg = "star", title = "Хранитель серии", text = "Месяц подряд" },
+}
+-- недельный сундук: 5 дней за неделю с выполненными всеми испытаниями дня
+L.WeekChest = { days = 5, coins = 10000, perLevel = 300, dust = 150, egg = "moon" }
+-- выходные: двойная удача в субботу и воскресенье (UTC)
+function L.isWeekend(t: number): boolean
+	local wd = os.date("!*t", t).wday
+	return wd == 1 or wd == 7
+end
+-- охота за 3 минуты: поймай как можно больше, награда за каждого + рекорд
+L.Hunt = { seconds = 180, coinsPer = 150, dustPer = 3 }
+-- приглашение друга (по ссылке-приглашению Roblox)
+L.Invite = { inviter = { coins = 2000, dust = 50 }, guest = { coins = 1000 } }
+
 return L

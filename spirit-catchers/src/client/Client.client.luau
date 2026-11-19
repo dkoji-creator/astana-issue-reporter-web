@@ -164,6 +164,18 @@ do
 	K.gradient(goalPill, Color3.fromRGB(255, 200, 90), Color3.fromRGB(200, 120, 40))
 	K.icon(goalPill, "target", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(-6, -2) })
 	goalL = K.text(goalPill, "", { Size = UDim2.new(1, -50, 1, -10), Position = UDim2.fromOffset(40, 5), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16 })
+	-- во время охоты плашка цели показывает таймер и счёт
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			local h = state.hunt
+			if h and h.ends > os.time() then
+				local left = h.ends - os.time()
+				goalPill.Visible = not hud:GetAttribute("Collapsed")
+				goalL.Text = ("ОХОТА %d:%02d   поймано: %d   рекорд: %d"):format(left // 60, left % 60, h.n or 0, state.huntBest or 0)
+			end
+		end
+	end)
 	-- кнопка «Скрыть»: убирает боковые кнопки и плашки, чтобы освободить экран
 	local hideB, hideL = K.button(gui, "Скрыть", Color3.fromRGB(90, 90, 120), { Name = "HideHud", Position = UDim2.fromOffset(232, 12), Size = UDim2.fromOffset(96, 36), MaxText = 15 })
 	hideB.Activated:Connect(function()
@@ -181,7 +193,7 @@ do
 		end
 	end)
 	-- модификатор дня под таймером события
-	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(240, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
+	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(300, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(modPill, UDim.new(1, 0))
 	K.stroke(modPill, T.ink, 2)
 	modL = K.text(modPill, "", { Size = UDim2.new(1, -16, 1, -6), Position = UDim2.fromOffset(8, 3), MaxText = 15 })
@@ -682,6 +694,17 @@ do
 		end)
 		questRows[i] = { title = title, bar = bar, reward = reward, go = go }
 	end
+	local huntB, huntBL = K.button(questList, "Охота за 3 минуты: лови как можно больше!", T.red, { Size = UDim2.new(1, -10, 0, 50), LayoutOrder = -1, MaxText = 18 })
+	huntB.Activated:Connect(function()
+		local r = remotes.Hunt:InvokeServer()
+		if r and r.ok then
+			K.close(questW)
+			play("legendary")
+			showToast("Охота началась! 3 минуты, каждый дух: +150 монет", 3, Color3.fromRGB(150, 40, 40))
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
 	local storyB = K.button(questList, "Сюжет: задания Хранителя алтаря", T.gold, { Size = UDim2.new(1, -10, 0, 50), LayoutOrder = 0, MaxText = 18 })
 	storyB.Activated:Connect(function()
 		K.close(questW)
@@ -689,6 +712,7 @@ do
 	end)
 	K.text(questList, "Задание засчитывается, когда сдаёшь банку у алтаря. Новое появляется сразу.", { Size = UDim2.new(1, -10, 0, 22), LayoutOrder = 10, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
 	refreshQuests = function()
+		huntBL.Text = ("Охота за 3 минуты (рекорд: %d)"):format(state.huntBest or 0)
 		for i, r in questRows do
 			local o = state.orders[i]
 			if o then
@@ -730,6 +754,7 @@ do
 	end
 	local r = Live.ChallengeReward
 	local b = Live.ChallengeAllBonus
+	local weekL = K.text(dayPage, "", { Size = UDim2.new(1, -10, 0, 30), LayoutOrder = 4, MaxText = 17, TextColor3 = T.gold })
 	K.text(dayPage, ("Каждое: %d монет, %d пыли, %d опыта сезона. Все три: ещё %d монет и %d пыли. Новые испытания каждый день."):format(r.coins, r.dust, r.sxp, b.coins, b.dust),
 		{ Size = UDim2.new(1, -10, 0, 44), LayoutOrder = 5, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 
@@ -822,6 +847,10 @@ do
 		for _, m in Live.Modifiers do
 			if m.id == state.dayMod then mod = m end
 		end
+		local wc = state.weekChal
+		local wdays = (wc and wc.week == Live.week(os.time())) and wc.days or 0
+		weekL.Text = (wc and wc.got and wc.week == Live.week(os.time())) and "Недельный сундук получен! Новый с понедельника"
+			or ("Недельный сундук: %d/%d дней со всеми испытаниями"):format(wdays, Live.WeekChest.days)
 		modTitle.Text = mod and ("Модификатор дня: " .. mod.name) or "Модификатор дня"
 		modDesc.Text = mod and mod.desc or ""
 		modCard.BackgroundColor3 = mod and K.darken(mod.color, 0.6) or T.panel2
@@ -1028,6 +1057,11 @@ do
 	-- друзья на других серверах
 	local friendPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, friendPage)
+	local inviteB = K.button(friendPage, "Пригласить друга: тебе 2000 монет, ему 1000", T.green, { Size = UDim2.new(1, -10, 0, 48), LayoutOrder = -1, MaxText = 17 })
+	inviteB.Activated:Connect(function()
+		local ok = pcall(function() game:GetService("SocialService"):PromptGameInvite(plr) end)
+		if not ok then showToast("Приглашения сейчас недоступны", 2) end
+	end)
 	local fHead = K.text(friendPage, "Друзья, которые сейчас ловят духов на других серверах:", { Size = UDim2.new(1, -10, 0, 30), LayoutOrder = 0, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextXAlignment = Enum.TextXAlignment.Left })
 	local function drawFriends()
 		for _, c in friendPage:GetChildren() do
@@ -2242,7 +2276,7 @@ do
 		end
 		modPill.Visible = mod ~= nil and not collapsed
 		if mod then
-			modL.Text = "Сегодня: " .. mod.name
+			modL.Text = "Сегодня: " .. mod.name .. (state.weekend and "  |  Выходные: удача x2" or "")
 			modPill.BackgroundColor3 = K.darken(mod.color, 0.35)
 		end
 		local c = state.comp

@@ -622,6 +622,25 @@ function L.offlineDust(hours: number, distinct: number): number
 	return math.floor(math.min(hours, L.Offline.maxHours) * (3 + distinct * 0.3))
 end
 
+-- награды за серию входов (выдаются при входе)
+L.StreakRewards = {
+	{ days = 3, coins = 1500, dust = 30, text = "3 дня подряд" },
+	{ days = 7, coins = 5000, dust = 80, egg = "moon", title = "Верный ловец", text = "Неделя подряд" },
+	{ days = 14, coins = 12000, dust = 150, egg = "star", text = "2 недели подряд" },
+	{ days = 30, coins = 40000, dust = 400, egg = "star", title = "Хранитель серии", text = "Месяц подряд" },
+}
+-- недельный сундук: 5 дней за неделю с выполненными всеми испытаниями дня
+L.WeekChest = { days = 5, coins = 10000, perLevel = 300, dust = 150, egg = "moon" }
+-- выходные: двойная удача в субботу и воскресенье (UTC)
+function L.isWeekend(t: number): boolean
+	local wd = os.date("!*t", t).wday
+	return wd == 1 or wd == 7
+end
+-- охота за 3 минуты: поймай как можно больше, награда за каждого + рекорд
+L.Hunt = { seconds = 180, coinsPer = 150, dustPer = 3 }
+-- приглашение друга (по ссылке-приглашению Roblox)
+L.Invite = { inviter = { coins = 2000, dust = 50 }, guest = { coins = 1000 } }
+
 return L
 ]]></string>
           </Properties>
@@ -634,7 +653,7 @@ return L
 -- Товары: id — донат-товар Roblox.
 local M = {}
 
-M.PassOrder = { "vip", "season1", "coins2x", "bigjar", "lucky", "wideBeam" }
+M.PassOrder = { "vip", "season1", "autoDeliver", "coins2x", "bigjar", "lucky", "wideBeam" }
 M.Passes = {
 	vip = {
 		id = 0, product = 3732892769, price = 199, icon = "level", color = Color3.fromRGB(255, 190, 40),
@@ -643,6 +662,10 @@ M.Passes = {
 	season1 = {
 		id = 0, product = 3732979690, price = 149, icon = "trophy", color = Color3.fromRGB(255, 140, 60),
 		name = "Премиум сезона 1", desc = "10 наград премиум-трека: 4 эксклюзивных фонаря, 3 титула и мебель для двора. Только косметика",
+	},
+	autoDeliver = {
+		id = 0, product = 3733521273, price = 99, icon = "jar", color = Color3.fromRGB(90, 200, 230),
+		name = "Автосдача", desc = "Полная банка сама сдаётся на алтарь, где бы ты ни был. Навсегда",
 	},
 	coins2x = {
 		id = 0, product = 3732892783, price = 149, icon = "coin", color = Color3.fromRGB(240, 180, 30),
@@ -837,6 +860,7 @@ P.Codes = {
 	BETA = { coins = 500, dust = 25, text = "Спасибо за бета-тест! +500 монет и +25 пыли" },
 	WELCOME = { coins = 250, skin = "moon", text = "Добро пожаловать! +250 монет и Лунный фонарь" },
 	UPDATE3 = { coins = 1000, dust = 30, text = "Обновление 3! +1000 монет и +30 пыли" },
+	HUNT = { coins = 3000, dust = 60, text = "Обновление 8! +3000 монет и +60 пыли. Попробуй «Охоту за 3 минуты»" },
 	DAILY = { coins = 2500, dust = 60, text = "Обновление 7! +2500 монет и +60 пыли. Загляни в «Каждый день»" },
 	TIKTOK = { coins = 1500, dust = 40, skin = "moon", text = "Привет из TikTok! +1500 монет, +40 пыли и Лунный фонарь" },
 	BOOST = { coins = 3000, dust = 80, text = "Обновление 6! +3000 монет и +80 пыли: купи помощника-ловца" },
@@ -845,17 +869,18 @@ P.Codes = {
 }
 
 -- окно «Что нового»: показывается один раз после выхода обновления
-P.NewsVersion = 7
+P.NewsVersion = 8
 P.News = {
-	title = "Обновление 7: каждый день",
+	title = "Обновление 8: охота и выходные",
 	lines = {
-		"Серия входов: +5% удачи за каждый день подряд (до +45%)",
-		"Колесо удачи: бесплатное вращение каждый день, главный приз фонарь «Фортуна»",
-		"Инкубатор: яйца вылупляются через 1, 4 и 12 часов, внутри редкие духи",
-		"Дух дня: появляется чаще и даёт x2 монет",
-		"Пока тебя нет, духи двора собирают пыль (до 12 часов)",
-		"Меньше помех на экране, окна по размеру экрана",
-		"Код DAILY (Опции)",
+		"Охота за 3 минуты (Задания): лови как можно больше, рекорд сохраняется",
+		"Выходные: удача x2 в субботу и воскресенье",
+		"Награды серии входов: 3, 7, 14 и 30 дней подряд (яйца и титулы)",
+		"Недельный сундук: 5 дней со всеми испытаниями",
+		"Пригласи друга (Ловцы, Друзья): тебе 2000 монет, ему 1000",
+		"Автосдача (донат): полная банка сама сдаётся",
+		"Границы районов теперь видны: каменный бортик и туманная завеса",
+		"Код HUNT (Опции)",
 	},
 }
 
@@ -2704,6 +2729,8 @@ local CoinShopFn = remote("CoinShop", "RemoteFunction")
 local PocketFn = remote("PocketSave", "RemoteFunction")
 local WheelFn = remote("SpinWheel", "RemoteFunction")
 local EggFn = remote("Egg", "RemoteFunction")
+local HuntFn = remote("Hunt", "RemoteFunction")
+local doSaveRef -- doSave (ниже), для автосдачи
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
 local StoryOpenEv = remote("StoryOpen")
@@ -2834,6 +2861,21 @@ local function chalProgress(plr, d, fn)
 		d.dust += r.dust
 		addSeasonXp(d, r.sxp)
 		NoticeEv:FireClient(plr, ("Все испытания дня! Бонус +%d монет и +%d пыли"):format(r.coins, r.dust))
+		-- недельный сундук
+		local wk = Live.week(os.time())
+		if typeof(d.weekChal) ~= "table" or d.weekChal.week ~= wk then d.weekChal = { week = wk, days = 0, got = false } end
+		d.weekChal.days += 1
+		if d.weekChal.days >= Live.WeekChest.days and not d.weekChal.got then
+			d.weekChal.got = true
+			local wc = Live.WeekChest
+			local coins = wc.coins + wc.perLevel * d.level
+			d.coins += coins
+			d.dust += wc.dust
+			if #(d.eggs or {}) < Live.EggSlots then table.insert(d.eggs, { id = wc.egg, at = os.time() }) end
+			task.delay(4, function()
+				NoticeEv:FireClient(plr, ("Недельный сундук открыт! +%d монет, +%d пыли и Лунное яйцо (готово в инкубаторе)"):format(coins, wc.dust))
+			end)
+		end
 	end
 end
 local RARITY_RANK = {}
@@ -2885,6 +2927,7 @@ local function liveOnCatch(plr, d, kind: string, district: string, variant: stri
 	local rar = Catalog.Kinds[kind].rarity
 	weeklyCatch(plr, d, kind, variant)
 	Social.clubCatch(plr)
+	if d.hunt and os.clock() < d.hunt.ends then d.hunt.n += 1 end
 	local sinfo = { kind = kind, district = district, rarity = rar, variant = variant }
 	for _, typ in { "kind", "district", "rarity", "variant" } do storyEvent(plr, d, typ, sinfo) end
 	-- альбом редких поимок
@@ -2933,6 +2976,10 @@ local function luckOf(d)
 	if workspace:GetAttribute("MoonActive") then
 		mult *= L.moon
 		table.insert(parts, ("Красная луна x%.1f"):format(L.moon))
+	end
+	if Live.isWeekend(os.time()) then
+		mult *= 2
+		table.insert(parts, "Выходные x2")
 	end
 	local streak = math.min(Live.Streak.max, (d.loginStreak and d.loginStreak.n) or 0)
 	if streak > 1 then
@@ -3172,6 +3219,13 @@ local function migrate(raw): Profile
 		if typeof(raw.loginStreak) == "table" then d.loginStreak = { day = math.floor(num(raw.loginStreak.day, 0, 1e7, 0)), n = math.floor(num(raw.loginStreak.n, 0, 1000, 0)) } end
 		if typeof(raw.wheel) == "table" then d.wheel = { day = math.floor(num(raw.wheel.day, 0, 1e7, 0)), used = math.floor(num(raw.wheel.used, 0, 10, 0)) } end
 		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
+		d.huntBest = math.floor(num(raw.huntBest, 0, 1e6, 0))
+		if typeof(raw.weekChal) == "table" then d.weekChal = { week = math.floor(num(raw.weekChal.week, 0, 1e7, 0)), days = math.floor(num(raw.weekChal.days, 0, 7, 0)), got = raw.weekChal.got == true } end
+		if typeof(raw.streakClaimed) == "table" then
+			d.streakClaimed = {}
+			for k, v in raw.streakClaimed do if v == true then d.streakClaimed[tostring(k)] = true end end
+		end
+		if typeof(raw.referredBy) == "number" then d.referredBy = raw.referredBy end
 		if typeof(raw.eggs) == "table" then
 			for _, e in raw.eggs do
 				if typeof(e) == "table" and Live.Eggs[e.id] and #d.eggs < Live.EggSlots then table.insert(d.eggs, { id = e.id, at = math.floor(num(e.at, 0, 1e12, 0)) }) end
@@ -3344,7 +3398,9 @@ local function pushState(plr)
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
-		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(),
+		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0,
+		hunt = d.hunt and { ends = os.time() + math.max(0, math.floor(d.hunt.ends - os.clock())), n = d.hunt.n } or nil,
+		weekend = Live.isWeekend(os.time()),
 		spinsLeft = (function()
 			local today = Live.day(os.time())
 			local used = (d.wheel and d.wheel.day == today) and d.wheel.used or 0
@@ -3778,6 +3834,11 @@ RunService.Heartbeat:Connect(function(dt)
 				table.insert(jars[plr], { k = s.kind, v = variant })
 				CaughtEv:FireClient(plr, s.kind, s.pos, #g, variant, variant ~= base)
 				lanternBurst(plr)
+				if #jars[plr] >= cap(data[plr]) and hasPass(data[plr], "autoDeliver") and doSaveRef then
+					task.delay(1.5, function()
+						if plr.Parent and #(jars[plr] or {}) > 0 then SaveResultEv:FireClient(plr, doSaveRef(plr, true)) end
+					end)
+				end
 				local d = data[plr]
 				local xp = math.floor((Catalog.Progress.XP[info.rarity] or 4) * (1 + compPct(d, "xp")) + 0.5)
 				d.xp += xp
@@ -4187,6 +4248,7 @@ end
 savePrompt.Triggered:Connect(function(plr)
 	SaveResultEv:FireClient(plr, doSave(plr))
 end)
+doSaveRef = doSave
 -- карманный алтарь: сдать улов где угодно (перезарядка по уровню)
 local pocketAt = {}
 PocketFn.OnServerInvoke = function(plr)
@@ -4818,6 +4880,28 @@ EggFn.OnServerInvoke = function(plr, action, arg)
 	pushState(plr)
 	return { ok = true }
 end
+HuntFn.OnServerInvoke = function(plr)
+	local d = data[plr]
+	if not d then return { ok = false } end
+	if d.hunt and os.clock() < d.hunt.ends then return { ok = false, msg = "Охота уже идёт" } end
+	d.hunt = { ends = os.clock() + Live.Hunt.seconds, n = 0 }
+	pushState(plr)
+	task.delay(Live.Hunt.seconds + 0.5, function()
+		local dd = data[plr]
+		if not (dd and dd.hunt and plr.Parent) then return end
+		local n = dd.hunt.n
+		dd.hunt = nil
+		local coins, dust = n * Live.Hunt.coinsPer, n * Live.Hunt.dustPer
+		dd.coins += coins
+		dd.dust += dust
+		local record = n > (dd.huntBest or 0)
+		if record then dd.huntBest = n end
+		NoticeEv:FireClient(plr, ("Охота окончена: %d духов! +%d монет, +%d пыли%s"):format(n, coins, dust, record and ". НОВЫЙ РЕКОРД!" or (" (рекорд " .. (dd.huntBest or 0) .. ")")))
+		persist(plr)
+		pushState(plr)
+	end)
+	return { ok = true }
+end
 EvolveFn.OnServerInvoke = function(plr, kind)
 	local d = data[plr]
 	local info = d and typeof(kind) == "string" and Catalog.Kinds[kind]
@@ -5106,6 +5190,42 @@ task.spawn(function()
 	while true do
 		pcall(renderRareBoard)
 		task.wait(90)
+	end
+end)
+-- доска «Самые длинные серии входов»
+task.spawn(function()
+	while true do
+		pcall(function()
+			local st = DataStoreService:GetOrderedDataStore("SC_LoginStreak")
+			local pages = st:GetSortedAsync(false, 8)
+			local list = pages:GetCurrentPage()
+			local gui = map.streakGui
+			for _, c in gui:GetChildren() do c:Destroy() end
+			local frame = Instance.new("Frame")
+			frame.Size, frame.BackgroundColor3 = UDim2.fromScale(1, 1), Color3.fromRGB(22, 36, 40)
+			frame.Parent = gui
+			local title = Instance.new("TextLabel")
+			title.Size, title.BackgroundTransparency, title.TextScaled, title.Font = UDim2.new(1, 0, 0.15, 0), 1, true, Enum.Font.GothamBlack
+			title.Text, title.TextColor3 = "СЕРИЯ ВХОДОВ (ДНЕЙ ПОДРЯД)", Color3.fromRGB(120, 230, 200)
+			title.Parent = frame
+			for i, e in list do
+				local uid = tonumber(string.sub(e.key, 2))
+				local name = uid and nameCache[uid]
+				if not name and uid then
+					local okN, n = pcall(function() return Players:GetNameFromUserIdAsync(uid) end)
+					name = okN and n or ("#" .. uid)
+					nameCache[uid] = name
+				end
+				local row = Instance.new("TextLabel")
+				row.Size, row.Position = UDim2.new(0.94, 0, 0.1, 0), UDim2.new(0.03, 0, 0.16 + (i - 1) * 0.105, 0)
+				row.BackgroundTransparency, row.TextScaled, row.Font = 1, true, Enum.Font.GothamBold
+				row.TextXAlignment = Enum.TextXAlignment.Left
+				row.TextColor3 = i == 1 and Color3.fromRGB(255, 220, 90) or Color3.new(1, 1, 1)
+				row.Text = ("%d. %s  -  %d дн."):format(i, name or "?", e.value)
+				row.Parent = frame
+			end
+		end)
+		task.wait(120)
 	end
 end)
 
@@ -5468,6 +5588,23 @@ Players.PlayerAdded:Connect(function(plr)
 			d.loginStreak = ls
 			local luckPct = math.floor((math.min(ls.n, Live.Streak.max) - 1) * Live.Streak.per * 100 + 0.5)
 			table.insert(msgs, ("Серия входов: %d день! Удача +%d%%. Заходи завтра, будет ещё +5%%"):format(ls.n, luckPct))
+			d.streakClaimed = d.streakClaimed or {}
+			for _, sr in Live.StreakRewards do
+				if ls.n >= sr.days and not d.streakClaimed[tostring(sr.days)] then
+					d.streakClaimed[tostring(sr.days)] = true
+					d.coins += sr.coins
+					d.dust += sr.dust
+					if sr.egg and #d.eggs < Live.EggSlots then table.insert(d.eggs, { id = sr.egg, at = os.time() }) end
+					if sr.title then
+						d.titles[sr.title] = true
+					end
+					table.insert(msgs, ("Награда серии «%s»: +%d монет, +%d пыли%s%s"):format(sr.text, sr.coins, sr.dust, sr.egg and ", яйцо" or "", sr.title and (", титул «" .. sr.title .. "»") or ""))
+				end
+			end
+			task.spawn(function()
+				local ok, st = pcall(function() return DataStoreService:GetOrderedDataStore("SC_LoginStreak") end)
+				if ok and st and not d.loadFailed then pcall(function() st:SetAsync("u" .. plr.UserId, ls.n) end) end
+			end)
 		end
 		if (d.lastSeen or 0) > 0 and distinct(d) > 0 then
 			local hours = (os.time() - d.lastSeen) / 3600
@@ -5477,6 +5614,45 @@ Players.PlayerAdded:Connect(function(plr)
 				table.insert(msgs, ("Пока тебя не было, духи двора собрали %d пыли"):format(dust))
 			end
 		end
+		-- пришёл по приглашению друга
+		local okJ, jd = pcall(function() return plr:GetJoinData() end)
+		local ref = okJ and typeof(jd) == "table" and jd.ReferredByPlayerId
+		if typeof(ref) == "number" and ref > 0 and ref ~= plr.UserId and not d.referredBy then
+			d.referredBy = ref
+			d.coins += Live.Invite.guest.coins
+			table.insert(msgs, ("Тебя пригласил друг: +%d монет!"):format(Live.Invite.guest.coins))
+			local inviter = Players:GetPlayerByUserId(ref)
+			local idata = inviter and data[inviter]
+			if idata then
+				idata.coins += Live.Invite.inviter.coins
+				idata.dust += Live.Invite.inviter.dust
+				NoticeEv:FireClient(inviter, ("%s пришёл по твоему приглашению! +%d монет, +%d пыли"):format(plr.DisplayName, Live.Invite.inviter.coins, Live.Invite.inviter.dust))
+				pushState(inviter)
+			else
+				task.spawn(function()
+					pcall(function()
+						DataStoreService:GetDataStore("SC_Referrals"):UpdateAsync("r" .. ref, function(n) return (tonumber(n) or 0) + 1 end)
+					end)
+				end)
+			end
+		end
+		-- награды за друзей, пришедших, пока меня не было
+		task.spawn(function()
+			pcall(function()
+				local rs = DataStoreService:GetDataStore("SC_Referrals")
+				local got = 0
+				rs:UpdateAsync("r" .. plr.UserId, function(n)
+					got = tonumber(n) or 0
+					return 0
+				end)
+				if got > 0 and data[plr] then
+					data[plr].coins += Live.Invite.inviter.coins * got
+					data[plr].dust += Live.Invite.inviter.dust * got
+					NoticeEv:FireClient(plr, ("Друзей пришло по приглашению: %d. +%d монет"):format(got, Live.Invite.inviter.coins * got))
+					pushState(plr)
+				end
+			end)
+		end)
 		task.delay(9, function()
 			for _, m in msgs do
 				if plr.Parent then NoticeEv:FireClient(plr, m) end
@@ -5591,8 +5767,13 @@ local function light(parent, color, range, brightness)
 	l.Parent = parent
 	return l
 end
+-- граница района: видимая — каменный бортик и мерцающая туманная завеса (вместо невидимой стены)
 local function wall(size, pos)
 	block("Boundary", size, CFrame.new(pos), Color3.new(), nil, { Transparency = 1, CanQuery = false })
+	local base = 0.5
+	block("BoundaryStone", Vector3.new(size.X, 2.2, size.Z), CFrame.new(pos.X, base + 1.1, pos.Z), Color3.fromRGB(96, 98, 112), Enum.Material.Cobblestone)
+	deco("BoundaryMist", Vector3.new(math.max(size.X, 0.4), 9, math.max(size.Z, 0.4)), CFrame.new(pos.X, base + 2.2 + 4.5, pos.Z), Color3.fromRGB(150, 190, 255), Enum.Material.ForceField,
+		{ Transparency = 0.55, CanQuery = false })
 end
 local function sign(parent, text, color, face)
 	local g = Instance.new("SurfaceGui")
@@ -5979,6 +6160,15 @@ function Map.build()
 	boardGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
 	boardGui.PixelsPerStud = 30
 	boardGui.Parent = board
+	-- третья доска: самые длинные серии входов
+	local streakBoard = block("StreakBoard", Vector3.new(14, 9, 0.6), CFrame.new(-26, 6, 2) * CFrame.Angles(0, math.rad(-90), 0), Color3.fromRGB(30, 40, 45), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(-26, 3, -4), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(-26, 3, 8), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
+	local streakGui = Instance.new("SurfaceGui")
+	streakGui.Face = Enum.NormalId.Front
+	streakGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+	streakGui.PixelsPerStud = 30
+	streakGui.Parent = streakBoard
 	-- вторая доска: «Редчайший улов недели»
 	local rareBoard = block("RareBoard", Vector3.new(14, 9, 0.6), CFrame.new(26, 6, 20) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(40, 30, 45), Enum.Material.Wood)
 	block("BoardPost", Vector3.new(0.8, 6, 0.8), CFrame.new(26, 3, 14), Color3.fromRGB(80, 55, 40), Enum.Material.Wood)
@@ -6201,6 +6391,7 @@ function Map.build()
 		gates = gates,
 		boardGui = boardGui,
 		rareGui = rareGui,
+		streakGui = streakGui,
 		altar = altar,
 		altarPos = sp(altarPos),
 		spawnCF = spawnCF,
@@ -7274,6 +7465,18 @@ do
 	K.gradient(goalPill, Color3.fromRGB(255, 200, 90), Color3.fromRGB(200, 120, 40))
 	K.icon(goalPill, "target", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(-6, -2) })
 	goalL = K.text(goalPill, "", { Size = UDim2.new(1, -50, 1, -10), Position = UDim2.fromOffset(40, 5), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 16 })
+	-- во время охоты плашка цели показывает таймер и счёт
+	task.spawn(function()
+		while true do
+			task.wait(0.5)
+			local h = state.hunt
+			if h and h.ends > os.time() then
+				local left = h.ends - os.time()
+				goalPill.Visible = not hud:GetAttribute("Collapsed")
+				goalL.Text = ("ОХОТА %d:%02d   поймано: %d   рекорд: %d"):format(left // 60, left % 60, h.n or 0, state.huntBest or 0)
+			end
+		end
+	end)
 	-- кнопка «Скрыть»: убирает боковые кнопки и плашки, чтобы освободить экран
 	local hideB, hideL = K.button(gui, "Скрыть", Color3.fromRGB(90, 90, 120), { Name = "HideHud", Position = UDim2.fromOffset(232, 12), Size = UDim2.fromOffset(96, 36), MaxText = 15 })
 	hideB.Activated:Connect(function()
@@ -7291,7 +7494,7 @@ do
 		end
 	end)
 	-- модификатор дня под таймером события
-	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(240, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
+	modPill = K.make("Frame", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 14), Size = UDim2.fromOffset(300, 30), BackgroundColor3 = Color3.new(1, 1, 1), Visible = false }, hud)
 	K.corner(modPill, UDim.new(1, 0))
 	K.stroke(modPill, T.ink, 2)
 	modL = K.text(modPill, "", { Size = UDim2.new(1, -16, 1, -6), Position = UDim2.fromOffset(8, 3), MaxText = 15 })
@@ -7792,6 +7995,17 @@ do
 		end)
 		questRows[i] = { title = title, bar = bar, reward = reward, go = go }
 	end
+	local huntB, huntBL = K.button(questList, "Охота за 3 минуты: лови как можно больше!", T.red, { Size = UDim2.new(1, -10, 0, 50), LayoutOrder = -1, MaxText = 18 })
+	huntB.Activated:Connect(function()
+		local r = remotes.Hunt:InvokeServer()
+		if r and r.ok then
+			K.close(questW)
+			play("legendary")
+			showToast("Охота началась! 3 минуты, каждый дух: +150 монет", 3, Color3.fromRGB(150, 40, 40))
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
 	local storyB = K.button(questList, "Сюжет: задания Хранителя алтаря", T.gold, { Size = UDim2.new(1, -10, 0, 50), LayoutOrder = 0, MaxText = 18 })
 	storyB.Activated:Connect(function()
 		K.close(questW)
@@ -7799,6 +8013,7 @@ do
 	end)
 	K.text(questList, "Задание засчитывается, когда сдаёшь банку у алтаря. Новое появляется сразу.", { Size = UDim2.new(1, -10, 0, 22), LayoutOrder = 10, MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
 	refreshQuests = function()
+		huntBL.Text = ("Охота за 3 минуты (рекорд: %d)"):format(state.huntBest or 0)
 		for i, r in questRows do
 			local o = state.orders[i]
 			if o then
@@ -7840,6 +8055,7 @@ do
 	end
 	local r = Live.ChallengeReward
 	local b = Live.ChallengeAllBonus
+	local weekL = K.text(dayPage, "", { Size = UDim2.new(1, -10, 0, 30), LayoutOrder = 4, MaxText = 17, TextColor3 = T.gold })
 	K.text(dayPage, ("Каждое: %d монет, %d пыли, %d опыта сезона. Все три: ещё %d монет и %d пыли. Новые испытания каждый день."):format(r.coins, r.dust, r.sxp, b.coins, b.dust),
 		{ Size = UDim2.new(1, -10, 0, 44), LayoutOrder = 5, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, TextWrapped = true, StrokeThickness = 1 })
 
@@ -7932,6 +8148,10 @@ do
 		for _, m in Live.Modifiers do
 			if m.id == state.dayMod then mod = m end
 		end
+		local wc = state.weekChal
+		local wdays = (wc and wc.week == Live.week(os.time())) and wc.days or 0
+		weekL.Text = (wc and wc.got and wc.week == Live.week(os.time())) and "Недельный сундук получен! Новый с понедельника"
+			or ("Недельный сундук: %d/%d дней со всеми испытаниями"):format(wdays, Live.WeekChest.days)
 		modTitle.Text = mod and ("Модификатор дня: " .. mod.name) or "Модификатор дня"
 		modDesc.Text = mod and mod.desc or ""
 		modCard.BackgroundColor3 = mod and K.darken(mod.color, 0.6) or T.panel2
@@ -8138,6 +8358,11 @@ do
 	-- друзья на других серверах
 	local friendPage = K.scroll(body, { Position = UDim2.fromOffset(0, 44), Size = UDim2.new(1, 0, 1, -44), Visible = false })
 	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, friendPage)
+	local inviteB = K.button(friendPage, "Пригласить друга: тебе 2000 монет, ему 1000", T.green, { Size = UDim2.new(1, -10, 0, 48), LayoutOrder = -1, MaxText = 17 })
+	inviteB.Activated:Connect(function()
+		local ok = pcall(function() game:GetService("SocialService"):PromptGameInvite(plr) end)
+		if not ok then showToast("Приглашения сейчас недоступны", 2) end
+	end)
 	local fHead = K.text(friendPage, "Друзья, которые сейчас ловят духов на других серверах:", { Size = UDim2.new(1, -10, 0, 30), LayoutOrder = 0, MaxText = 15, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1, TextXAlignment = Enum.TextXAlignment.Left })
 	local function drawFriends()
 		for _, c in friendPage:GetChildren() do
@@ -9352,7 +9577,7 @@ do
 		end
 		modPill.Visible = mod ~= nil and not collapsed
 		if mod then
-			modL.Text = "Сегодня: " .. mod.name
+			modL.Text = "Сегодня: " .. mod.name .. (state.weekend and "  |  Выходные: удача x2" or "")
 			modPill.BackgroundColor3 = K.darken(mod.color, 0.35)
 		end
 		local c = state.comp

@@ -401,6 +401,13 @@ do
 	frames(80)
 end
 
+stage("охота за 3 минуты")
+do
+	local h = inv("Hunt")
+	if not (h and (h.ok or string.find(tostring(h.msg), "уже"))) then table.insert(SIM.errors, "охота: " .. tostring(h and h.msg)) end
+	frames(3700)
+end
+
 stage("траты монет")
 do
 	for _ = 1, 30 do inv("Admin", "coins") end
