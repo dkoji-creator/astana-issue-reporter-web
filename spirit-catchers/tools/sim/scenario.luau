@@ -425,5 +425,16 @@ for _ = 1, 7200 do
 	if workspace:GetAttribute("FogActive") then sawFog = true end
 end
 if not sawFog then table.insert(SIM.errors, "туманная ночь не наступила") end
+stage("нет моделей, застрявших в центре карты (перед алтарём)")
+do
+	local stuck = {}
+	for _, m in workspace:GetDescendants() do
+		if m:IsA("Model") and m.PrimaryPart and m.Name ~= "AltarKeeper" then
+			local p = m.PrimaryPart.Position
+			if Vector3.new(p.X, 0, p.Z).Magnitude < 14 then table.insert(stuck, m.Name .. " @ " .. tostring(m.Parent and m.Parent.Name)) end
+		end
+	end
+	if #stuck > 0 then table.insert(SIM.errors, "в центре карты стоят модели: " .. table.concat(stuck, ", ")) end
+end
 stage("конец")
 return SIM
