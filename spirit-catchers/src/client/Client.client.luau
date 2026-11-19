@@ -112,22 +112,35 @@ do
 
 end
 ------------------------------------------------------------------ HUD: левая колонка
-local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason, btnSocial
+local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason, btnSocial, btnMenu, menuPanel
 do
-	local leftCol = K.make("Frame", { Name = "LeftCol", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 22), Size = UDim2.fromOffset(136, 360), BackgroundTransparency = 1 }, hud)
-	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
+	-- на экране только 3 кнопки: Атлас, Магазин и Меню; остальное в выпадающем меню
+	local leftCol = K.make("Frame", { Name = "LeftCol", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 10), Size = UDim2.fromOffset(62, 210), BackgroundTransparency = 1 }, hud)
+	K.make("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder }, leftCol)
 	btnAtlas = K.iconButton(leftCol, "atlas", "Атлас", T.blue)
-	btnQuests = K.iconButton(leftCol, "quests", "Задания", T.orange)
 	btnShop = K.iconButton(leftCol, "shop", "Магазин", T.red)
-	btnGift = K.iconButton(leftCol, "gift", "Каждый день", T.green)
-	btnTeleport = K.iconButton(leftCol, "portal", "Телепорт", T.purple)
-	btnSettings = K.iconButton(leftCol, "settings", "Опции", Color3.fromRGB(120, 125, 150))
-	btnAdmin = K.iconButton(leftCol, "admin", "Админ", Color3.fromRGB(230, 160, 30))
-	btnPower = K.iconButton(leftCol, "level", "Сила", Color3.fromRGB(240, 180, 40))
-	btnSeason = K.iconButton(leftCol, "trophy", "Сезон", Color3.fromRGB(255, 130, 60))
-	btnSocial = K.iconButton(leftCol, "paw", "Ловцы", Color3.fromRGB(90, 190, 200))
+	btnMenu = K.iconButton(leftCol, "settings", "Меню", Color3.fromRGB(110, 115, 145))
+	btnAtlas.LayoutOrder, btnShop.LayoutOrder, btnMenu.LayoutOrder = 1, 2, 3
+	menuPanel = K.panel(hud, { Name = "MenuPanel", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 82, 0.5, 10), Size = UDim2.fromOffset(300, 160), Visible = false, BackgroundColor3 = T.panel })
+	K.make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, menuPanel)
+	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, menuPanel)
+	btnGift = K.iconButton(menuPanel, "gift", "Каждый день", T.green)
+	btnSeason = K.iconButton(menuPanel, "trophy", "Сезон", Color3.fromRGB(255, 130, 60))
+	btnQuests = K.iconButton(menuPanel, "quests", "Задания", T.orange)
+	btnPower = K.iconButton(menuPanel, "level", "Сила", Color3.fromRGB(240, 180, 40))
+	btnSocial = K.iconButton(menuPanel, "paw", "Ловцы", Color3.fromRGB(90, 190, 200))
+	btnTeleport = K.iconButton(menuPanel, "portal", "Телепорт", T.purple)
+	btnSettings = K.iconButton(menuPanel, "settings", "Опции", Color3.fromRGB(120, 125, 150))
+	btnAdmin = K.iconButton(menuPanel, "admin", "Админ", Color3.fromRGB(230, 160, 30))
 	btnAdmin.Visible = false
-	for i, b in { btnAtlas, btnSeason, btnPower, btnQuests, btnShop, btnSocial, btnGift, btnTeleport, btnSettings, btnAdmin } do b.LayoutOrder = i end
+	for i, b in { btnGift, btnSeason, btnQuests, btnPower, btnSocial, btnTeleport, btnSettings, btnAdmin } do
+		b.LayoutOrder = i
+		b.Activated:Connect(function() menuPanel.Visible = false end)
+	end
+	btnMenu.Activated:Connect(function()
+		menuPanel.Visible = not menuPanel.Visible
+		if menuPanel.Visible then K.pop(menuPanel) end
+	end)
 
 end
 ------------------------------------------------------------------ HUD: справа валюты и уровень
@@ -136,17 +149,17 @@ local levelL, _, xpFill
 do
 	local rightCol = K.make("Frame", { Name = "RightCol", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 58), Size = UDim2.fromOffset(170, 190), BackgroundTransparency = 1 }, hud)
 	K.make("UIListLayout", { Padding = UDim.new(0, 10), HorizontalAlignment = Enum.HorizontalAlignment.Right, SortOrder = Enum.SortOrder.LayoutOrder }, rightCol)
-	coinPill, coinL = K.pill(rightCol, "coin", Color3.fromRGB(230, 170, 30), 160)
-	dustPill, dustL = K.pill(rightCol, "dust", T.purple, 160)
+	coinPill, coinL = K.pill(rightCol, "coin", Color3.fromRGB(230, 170, 30), 140)
+	dustPill, dustL = K.pill(rightCol, "dust", T.purple, 140)
 	coinPill.LayoutOrder, dustPill.LayoutOrder = 1, 2
-	luckPill = K.make("TextButton", { Size = UDim2.fromOffset(160, 40), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, LayoutOrder = 4 }, rightCol)
+	luckPill = K.make("TextButton", { Size = UDim2.fromOffset(140, 40), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, LayoutOrder = 4 }, rightCol)
 	K.corner(luckPill, UDim.new(1, 0))
 	K.stroke(luckPill, T.ink, 3)
 	K.gradient(luckPill, Color3.fromRGB(110, 230, 130), Color3.fromRGB(40, 130, 70))
 	K.icon(luckPill, "luck", { Size = UDim2.fromOffset(46, 46), Position = UDim2.fromOffset(-12, -4) })
 	luckL = K.text(luckPill, "Удача x1", { Size = UDim2.new(1, -46, 0, 20), Position = UDim2.fromOffset(38, 2), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17 })
 	luckSub = K.text(luckPill, "", { Size = UDim2.new(1, -46, 0, 14), Position = UDim2.fromOffset(38, 22), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 11, Font = Enum.Font.GothamBold, StrokeThickness = 1 })
-	levelPill = K.make("Frame", { Size = UDim2.fromOffset(160, 40), BackgroundColor3 = T.panel, LayoutOrder = 3 }, rightCol)
+	levelPill = K.make("Frame", { Size = UDim2.fromOffset(140, 40), BackgroundColor3 = T.panel, LayoutOrder = 3, Visible = false }, rightCol)
 	K.corner(levelPill, UDim.new(1, 0))
 	K.stroke(levelPill, T.ink, 3)
 	K.icon(levelPill, "level", { Size = UDim2.fromOffset(46, 46), Position = UDim2.fromOffset(-12, -4) })
@@ -158,7 +171,7 @@ end
 local eventPill, eventGrad, eventL, trackPill, trackL, showToast, modPill, modL, compPill, compL, goalPill, goalL
 do
 	-- одна главная цель на экране (текущая глава Хранителя); нажатие открывает разговор
-	goalPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 80), Size = UDim2.fromOffset(380, 38), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
+	goalPill = K.make("TextButton", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(330, 30), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
 	K.corner(goalPill, UDim.new(1, 0))
 	K.stroke(goalPill, T.ink, 3)
 	K.gradient(goalPill, Color3.fromRGB(255, 200, 90), Color3.fromRGB(200, 120, 40))
@@ -359,6 +372,17 @@ do
 	local tabAch = K.button(atlasTabs, "Достижения", T.panel2, { Size = UDim2.fromOffset(140, 34), MaxText = 16 })
 	local tabWorlds = K.button(atlasTabs, "Миры", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16, Visible = false })
 	local tabAlbum = K.button(atlasTabs, "Альбом", T.panel2, { Size = UDim2.fromOffset(120, 34), MaxText = 16 })
+	-- спутник: уровень и кормление (раньше было плашкой на экране)
+	local feedB, feedL = K.button(atlasTabs, "", T.pink, { Size = UDim2.fromOffset(250, 34), MaxText = 14, Visible = false })
+	feedB.Activated:Connect(function()
+		local r = remotes.FeedCompanion:InvokeServer()
+		if r and r.ok then
+			play("save")
+			showToast(("Спутник покормлен! Уровень %d"):format(r.level), 2, Color3.fromRGB(150, 60, 120))
+		elseif r and r.msg then
+			showToast(r.msg)
+		end
+	end)
 	spiritGrid = K.scroll(atlasBody, { Position = UDim2.fromOffset(0, 70), Size = UDim2.new(1, 0, 1, -70) })
 	K.make("UIGridLayout", { CellSize = UDim2.new(0.25, -8, 0, 212), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, spiritGrid)
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 4), PaddingLeft = UDim.new(0, 2), PaddingRight = UDim.new(0, 8) }, spiritGrid)
@@ -642,6 +666,12 @@ do
 
 	refreshAtlas = function()
 		if albumPage.Visible then refreshAlbum() end
+		local comp = state.comp
+		feedB.Visible = comp ~= nil
+		if comp then
+			feedL.Text = comp.level >= Catalog.Live.CompanionMax and ("%s ур.%d: максимум"):format(Catalog.Kinds[comp.kind].short, comp.level)
+				or ("Покормить %s (%d пыли)"):format(Catalog.Kinds[comp.kind].short, Catalog.Live.feedCost(comp.level))
+		end
 		for _, c in cards do refreshCard(c) end
 		refreshTiers()
 		refreshAch()
@@ -2207,7 +2237,7 @@ local hudUnlockSeen = false
 do
 	refreshHUD = function()
 		local n = #state.jar
-		jarL.Text = ("Банка %d/%d"):format(n, state.cap)
+		jarL.Text = ("Банка %d/%d   ур. %d"):format(n, state.cap, state.level or 1)
 		jarFill.Size = UDim2.fromScale(math.clamp(n / math.max(state.cap, 1), 0, 1), 1)
 		local names = {}
 		for _, e in state.jar do
@@ -2270,17 +2300,22 @@ do
 			end
 		end
 		btnSeason.Badge.Visible = seasonReady
+		local anyBadge = false
+		for _, b in { btnGift, btnSeason, btnQuests, btnPower, btnSocial } do
+			if b.Badge.Visible then anyBadge = true end
+		end
+		btnMenu.Badge.Visible = anyBadge
 		local mod = nil
 		for _, m in Live.Modifiers do
 			if m.id == state.dayMod then mod = m end
 		end
-		modPill.Visible = mod ~= nil and not collapsed
+		modPill.Visible = false -- модификатор дня виден в окне «Сезон», не загромождает экран
 		if mod then
 			modL.Text = "Сегодня: " .. mod.name .. (state.weekend and "  |  Выходные: удача x2" or "")
 			modPill.BackgroundColor3 = K.darken(mod.color, 0.35)
 		end
 		local c = state.comp
-		compPill.Visible = c ~= nil and not collapsed and not catchBtn.Visible
+		compPill.Visible = false -- спутник виден в Атласе
 		if c then
 			local cost = Live.feedCost(c.level)
 			compL.Text = ("%s ур.%d: %s\n%s"):format(Catalog.Kinds[c.kind].short, c.level, c.text,

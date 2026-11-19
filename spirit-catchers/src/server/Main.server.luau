@@ -100,10 +100,11 @@ Lighting.Ambient = Color3.fromRGB(44, 44, 72)
 Lighting.OutdoorAmbient = Color3.fromRGB(48, 50, 80)
 Lighting.EnvironmentDiffuseScale = 0.3
 local cc = Instance.new("ColorCorrectionEffect")
+cc.Saturation, cc.Contrast = -0.15, 0.04 -- спокойнее цвета: меньше «кислотности» неона
 cc.Parent = Lighting
 local bloom = Instance.new("BloomEffect")
 bloom.Name = "Bloom"
-bloom.Intensity, bloom.Size, bloom.Threshold = 0.15, 12, 2
+bloom.Intensity, bloom.Size, bloom.Threshold = 0.08, 10, 2.2
 bloom.Parent = Lighting
 local atm = Instance.new("Atmosphere")
 atm.Density, atm.Haze, atm.Color, atm.Decay = 0.3, 1.1, Color3.fromRGB(80, 90, 150), Color3.fromRGB(40, 30, 80)
@@ -1855,7 +1856,7 @@ local function applyPassEffects(plr)
 	local head = plr.Character and plr.Character:FindFirstChild("Head")
 	if head and hasPass(d, "vip") and not head:FindFirstChild("VipTag") then
 		local b = Instance.new("BillboardGui")
-		b.Name, b.Size, b.StudsOffset, b.MaxDistance = "VipTag", UDim2.fromOffset(90, 30), Vector3.new(0, 2.6, 0), 80
+		b.Name, b.Size, b.StudsOffset, b.MaxDistance = "VipTag", UDim2.fromOffset(46, 18), Vector3.new(0, 2.4, 0), 60
 		local t = Instance.new("TextLabel")
 		t.Size, t.BackgroundColor3, t.Text, t.TextScaled, t.Font = UDim2.fromScale(1, 1), Color3.fromRGB(255, 190, 40), "VIP", true, Enum.Font.GothamBlack
 		t.TextColor3 = Color3.fromRGB(60, 30, 0)
