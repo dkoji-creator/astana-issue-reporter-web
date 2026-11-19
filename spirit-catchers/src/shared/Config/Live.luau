@@ -390,4 +390,19 @@ function L.ritualMult(t: number): number
 	return L.Ritual.growth ^ math.max(0, t)
 end
 
+------------------------------------------------------------------ Ритуал у алтаря за пыль: дороже = редче дух, но ниже шанс
+-- при неудаче пыль сгорает, но шанс этого уровня растёт на pity до успеха
+L.RitualOrder = { "small", "medium", "great", "forbidden" }
+L.Rituals = {
+	small = { name = "Малый ритуал", dust = 25, chance = 0.8, luck = 1.5, color = Color3.fromRGB(110, 190, 255),
+		weights = { rare = 70, epic = 25, legendary = 5 } },
+	medium = { name = "Средний ритуал", dust = 80, chance = 0.55, luck = 2, color = Color3.fromRGB(190, 120, 255),
+		weights = { epic = 65, legendary = 30, mythic = 5 } },
+	great = { name = "Великий ритуал", dust = 250, chance = 0.3, luck = 3, color = Color3.fromRGB(255, 190, 60),
+		weights = { legendary = 70, mythic = 27, secret = 3 } },
+	forbidden = { name = "Запретный ритуал", dust = 700, chance = 0.12, luck = 5, color = Color3.fromRGB(255, 70, 90),
+		weights = { mythic = 70, secret = 30 } },
+}
+L.RitualPity = 0.05
+
 return L

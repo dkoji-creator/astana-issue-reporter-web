@@ -88,6 +88,8 @@ local HuntFn = remote("Hunt", "RemoteFunction")
 local ThrowFn = remote("Throw", "RemoteFunction")
 local RitualFn = remote("Ritual", "RemoteFunction")
 local RitualEv = remote("RitualState")
+local AltarRitualFn = remote("AltarRitual", "RemoteFunction")
+local RitualOpenEv = remote("RitualOpen")
 local doSaveRef -- doSave (ниже), для автосдачи
 local FurnitureFn = remote("BuyFurniture", "RemoteFunction")
 local StoryFn = remote("Story", "RemoteFunction")
@@ -580,6 +582,12 @@ local function migrate(raw): Profile
 		d.lastSeen = math.floor(num(raw.lastSeen, 0, 1e12, 0))
 		d.huntBest = math.floor(num(raw.huntBest, 0, 1e6, 0))
 		d.ritualBest = num(raw.ritualBest, 0, 1e6, 0)
+		if typeof(raw.ritualPity) == "table" then
+			d.ritualPity = {}
+			for k, v in raw.ritualPity do
+				if Live.Rituals[k] then d.ritualPity[k] = num(v, 0, 1, 0) end
+			end
+		end
 		if typeof(raw.weekChal) == "table" then d.weekChal = { week = math.floor(num(raw.weekChal.week, 0, 1e7, 0)), days = math.floor(num(raw.weekChal.days, 0, 7, 0)), got = raw.weekChal.got == true } end
 		if typeof(raw.streakClaimed) == "table" then
 			d.streakClaimed = {}
@@ -758,7 +766,7 @@ local function pushState(plr)
 		end)(),
 		season = ensureSeason(d), title = d.title, titles = d.titles, album = d.album, weekBest = d.weekBest,
 		club = Social.clubView(d), yardLikes = d.yardLikes or 0, evolved = d.evolved, furniture = d.furniture, story = d.story, shrine = d.shrine or 0,
-		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0, ritualBest = d.ritualBest or 0,
+		loginStreak = d.loginStreak, eggs = d.eggs, now = os.time(), weekChal = d.weekChal, huntBest = d.huntBest or 0, ritualBest = d.ritualBest or 0, ritualPity = d.ritualPity,
 		hunt = d.hunt and { ends = os.time() + math.max(0, math.floor(d.hunt.ends - os.clock())), n = d.hunt.n } or nil,
 		weekend = Live.isWeekend(os.time()),
 		spinsLeft = (function()
@@ -2483,6 +2491,77 @@ task.spawn(function()
 	end
 end)
 Players.PlayerRemoving:Connect(function(plr) rituals[plr] = nil end)
+
+-- ритуал у алтаря за пыль
+AltarRitualFn.OnServerInvoke = function(plr, id)
+	local d = data[plr]
+	local cfg = d and typeof(id) == "string" and Live.Rituals[id]
+	if not cfg then return { ok = false } end
+	if d.dust < cfg.dust then return { ok = false, msg = ("Нужно %d пыли (пыль дают дубликаты духов)"):format(cfg.dust) } end
+	d.dust -= cfg.dust
+	d.ritualPity = d.ritualPity or {}
+	local pity = d.ritualPity[id] or 0
+	local chance = math.min(0.95, cfg.chance + pity)
+	if math.random() >= chance then
+		d.ritualPity[id] = pity + Live.RitualPity
+		persist(plr)
+		pushState(plr)
+		return { ok = true, success = false, chance = chance }
+	end
+	d.ritualPity[id] = 0
+	local total = 0
+	for _, w in cfg.weights do total += w end
+	local r, rar = math.random() * total, "rare"
+	for k, w in cfg.weights do
+		r -= w
+		if r <= 0 then rar = k break end
+	end
+	local pool = {}
+	for kind, info in Catalog.Kinds do
+		if info.rarity == rar and not info.holiday then table.insert(pool, kind) end
+	end
+	if #pool == 0 then
+		for kind, info in Catalog.Kinds do
+			if RARITY_RANK[info.rarity] >= RARITY_RANK.legendary and not info.holiday then table.insert(pool, kind) end
+		end
+	end
+	local kind = pool[math.random(#pool)]
+	local variant, pVar = "normal", 1
+	local luck = luckOf(d) * cfg.luck
+	for vi = #Catalog.VariantOrder, 2, -1 do
+		local key = Catalog.VariantOrder[vi]
+		local vc = Catalog.Variants[key]
+		if not vc.moonOnly and math.random() < vc.chance * luck then
+			variant, pVar = key, vc.chance
+			break
+		end
+	end
+	d.saved[kind] = (d.saved[kind] or 0) + 1
+	d.firstSaved[kind] = true
+	d.variants[kind] = d.variants[kind] or {}
+	d.variants[kind][variant] = true
+	liveOnCatch(plr, d, kind, "plaza", variant)
+	local odds = math.max(1, math.floor(total / cfg.weights[rar] * #pool / pVar / chance + 0.5))
+	local root = rootOf(plr)
+	CaughtEv:FireClient(plr, kind, root and (root.Position + root.CFrame.LookVector * 6 + Vector3.new(0, 4, 0)) or map.altarPos, 1, variant, variant ~= "normal", odds)
+	if RARITY_RANK[rar] >= RARITY_RANK.mythic or variant ~= "normal" then
+		for _, p in Players:GetPlayers() do
+			NoticeEv:FireClient(p, ("%s провёл %s: %s%s!"):format(plr.DisplayName, cfg.name:lower(), variant ~= "normal" and (Catalog.Variants[variant].name .. " ") or "", Catalog.Kinds[kind].name))
+		end
+	end
+	persist(plr)
+	pushState(plr)
+	return { ok = true, success = true, kind = kind, variant = variant }
+end
+do -- кнопка «Ритуал» у алтаря
+	local rp = Instance.new("ProximityPrompt")
+	rp.ActionText, rp.ObjectText = "Ритуал", "Алтарь"
+	rp.HoldDuration, rp.MaxActivationDistance, rp.RequiresLineOfSight = 0, ALTAR_RANGE + 6, false
+	rp.KeyboardKeyCode = Enum.KeyCode.R
+	rp.UIOffset = Vector2.new(0, 70)
+	rp.Parent = map.altar
+	rp.Triggered:Connect(function(plr) RitualOpenEv:FireClient(plr) end)
+end
 
 HuntFn.OnServerInvoke = function(plr)
 	local d = data[plr]

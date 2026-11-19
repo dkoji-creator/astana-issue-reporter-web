@@ -428,31 +428,20 @@ do
 	end
 end
 
-stage("ритуал фонаря")
+stage("ритуал у алтаря")
 do
-	inv("Teleport", "street")
-	frames(5)
-	local banked, crashed = 0, 0
-	for _ = 1, 8 do
-		local st = inv("Ritual", "start")
-		if not (st and st.ok) then table.insert(SIM.errors, "ритуал: " .. tostring(st and st.msg)) break end
-		frames(70) -- 3.5 секунды
-		local b = inv("Ritual", "bank")
-		if b and b.ok and (b.n or 0) > 0 then banked += 1 else crashed += 1 end
-		frames(10)
-	end
-	stage(("ритуал: запечатано %d, тьма %d"):format(banked, crashed))
-	if banked == 0 then table.insert(SIM.errors, "ритуал: ни разу не удалось запечатать") end
-	-- кнопка на экране
-	local rb = hud:FindFirstChild("RitualBtn", true)
-	if rb then
-		rb.Activated:Fire()
-		frames(80)
-		rb.Activated:Fire()
+	for _ = 1, 3 do inv("Admin", "dust") end
+	local okN, succ = 0, 0
+	for _, id in { "small", "small", "medium", "great", "forbidden" } do
+		local r = inv("AltarRitual", id)
+		if r and r.ok then
+			okN += 1
+			if r.success then succ += 1 end
+		end
 		frames(20)
-	else
-		table.insert(SIM.errors, "нет кнопки РИТУАЛ")
 	end
+	stage(("ритуал: проведено %d, успехов %d"):format(okN, succ))
+	if okN == 0 then table.insert(SIM.errors, "ритуал у алтаря не работает") end
 end
 
 stage("охота за 3 минуты")

@@ -113,7 +113,7 @@ do
 
 end
 ------------------------------------------------------------------ HUD: левая колонка
-local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason, btnSocial, btnMenu, menuPanel
+local btnAtlas, btnQuests, btnShop, btnGift, btnTeleport, btnSettings, btnAdmin, btnPower, btnSeason, btnSocial, btnMenu, menuPanel, btnRitual
 do
 	-- на экране только 3 кнопки: Атлас, Магазин и Меню; остальное в выпадающем меню
 	local leftCol = K.make("Frame", { Name = "LeftCol", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 10, 0.5, 10), Size = UDim2.fromOffset(62, 210), BackgroundTransparency = 1 }, hud)
@@ -122,9 +122,10 @@ do
 	btnShop = K.iconButton(leftCol, "shop", "Магазин", T.red)
 	btnMenu = K.iconButton(leftCol, "settings", "Меню", Color3.fromRGB(110, 115, 145))
 	btnAtlas.LayoutOrder, btnShop.LayoutOrder, btnMenu.LayoutOrder = 1, 2, 3
-	menuPanel = K.panel(hud, { Name = "MenuPanel", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 82, 0.5, 10), Size = UDim2.fromOffset(300, 160), Visible = false, BackgroundColor3 = T.panel })
+	menuPanel = K.panel(hud, { Name = "MenuPanel", AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 82, 0.5, 10), Size = UDim2.fromOffset(300, 236), Visible = false, BackgroundColor3 = T.panel })
 	K.make("UIPadding", { PaddingTop = UDim.new(0, 8), PaddingLeft = UDim.new(0, 8), PaddingRight = UDim.new(0, 8) }, menuPanel)
 	K.make("UIGridLayout", { CellSize = UDim2.fromOffset(62, 62), CellPadding = UDim2.fromOffset(10, 10), SortOrder = Enum.SortOrder.LayoutOrder }, menuPanel)
+	btnRitual = K.iconButton(menuPanel, "moon", "Ритуал", Color3.fromRGB(170, 90, 230))
 	btnGift = K.iconButton(menuPanel, "gift", "Каждый день", T.green)
 	btnSeason = K.iconButton(menuPanel, "trophy", "Сезон", Color3.fromRGB(255, 130, 60))
 	btnQuests = K.iconButton(menuPanel, "quests", "Задания", T.orange)
@@ -134,7 +135,7 @@ do
 	btnSettings = K.iconButton(menuPanel, "settings", "Опции", Color3.fromRGB(120, 125, 150))
 	btnAdmin = K.iconButton(menuPanel, "admin", "Админ", Color3.fromRGB(230, 160, 30))
 	btnAdmin.Visible = false
-	for i, b in { btnGift, btnSeason, btnQuests, btnPower, btnSocial, btnTeleport, btnSettings, btnAdmin } do
+	for i, b in { btnRitual, btnGift, btnSeason, btnQuests, btnPower, btnSocial, btnTeleport, btnSettings, btnAdmin } do
 		b.LayoutOrder = i
 		b.Activated:Connect(function() menuPanel.Visible = false end)
 	end
@@ -352,7 +353,7 @@ do
 			or ColorSequence.new(Color3.fromRGB(255, 200, 90), Color3.fromRGB(230, 120, 40))
 	end)
 	-- РИТУАЛ ФОНАРЯ: «рискни или забери». Свет растёт, духи слетаются, «Запечатать» до прихода Тьмы
-	local ritB = K.make("TextButton", { Name = "RitualBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(120, 120), Position = UDim2.new(1, -136, 1, -104), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false }, hud)
+	local ritB = K.make("TextButton", { Name = "RitualBtn", AnchorPoint = Vector2.new(1, 1), Size = UDim2.fromOffset(120, 120), Position = UDim2.new(1, -136, 1, -104), BackgroundColor3 = Color3.new(1, 1, 1), Text = "", AutoButtonColor = false, Visible = false }, hud)
 	K.corner(ritB, UDim.new(1, 0))
 	K.stroke(ritB, T.ink, 4)
 	local ritGrad = K.gradient(ritB, Color3.fromRGB(255, 205, 100), Color3.fromRGB(225, 120, 40))
@@ -1660,6 +1661,69 @@ task.delay(12, function()
 		showToast(("Праздник «%s»: лимитированный дух %s во всех районах!"):format(h.name, Catalog.Kinds[h.kind].name), 5, Color3.fromRGB(160, 70, 30))
 	end
 end)
+------------------------------------------------------------------ окно: Ритуал у алтаря (за пыль)
+local ritualW, refreshRitual
+do
+	local Live = Catalog.Live
+	local body
+	ritualW, body = K.window(gui, "Ритуал у алтаря", "moon", Color3.fromRGB(150, 80, 210), 0.84, 0.8)
+	local info = K.text(body, "Подношение пыли призывает редкого духа. Дороже: реже дух, но ниже шанс. Неудача сжигает пыль, зато следующий шанс этого ритуала выше.",
+		{ Size = UDim2.new(1, 0, 0, 40), MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true, TextColor3 = Color3.fromRGB(225, 228, 245), StrokeThickness = 1 })
+	local row = K.make("Frame", { Position = UDim2.fromOffset(0, 46), Size = UDim2.new(1, 0, 1, -46), BackgroundTransparency = 1 }, body)
+	K.make("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), HorizontalAlignment = Enum.HorizontalAlignment.Center }, row)
+	local dark = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 0, 20), BackgroundTransparency = 1, ZIndex = 30 }, gui)
+	local cards = {}
+	local NAMES = { rare = "редкий", epic = "эпический", legendary = "легендарный", mythic = "мифический", secret = "секретный" }
+	for _, id in Live.RitualOrder do
+		local cfg = Live.Rituals[id]
+		local f = K.panel(row, { Size = UDim2.new(1 / #Live.RitualOrder, -8, 1, 0), BackgroundColor3 = K.darken(cfg.color, 0.65) })
+		f:FindFirstChildOfClass("UIStroke").Color = cfg.color
+		K.text(f, cfg.name, { Size = UDim2.new(1, -10, 0, 26), Position = UDim2.fromOffset(5, 6), MaxText = 18, TextColor3 = cfg.color, TextWrapped = true })
+		local lo, hi
+		for _, rk in Catalog.RarityOrder do
+			if cfg.weights[rk] then
+				lo = lo or rk
+				hi = rk
+			end
+		end
+		K.text(f, ("Дух: %s - %s"):format(NAMES[lo] or lo, NAMES[hi] or hi), { Size = UDim2.new(1, -10, 0, 22), Position = UDim2.fromOffset(5, 36), MaxText = 15, Font = Enum.Font.GothamBold, TextWrapped = true })
+		local chanceL = K.text(f, "", { Size = UDim2.new(1, -10, 0, 34), Position = UDim2.fromOffset(5, 62), MaxText = 26, TextColor3 = T.gold })
+		K.text(f, ("Удача x%.1f к разновидности"):format(cfg.luck), { Size = UDim2.new(1, -10, 0, 20), Position = UDim2.fromOffset(5, 100), MaxText = 14, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+		local b, l = K.button(f, ("%d пыли"):format(cfg.dust), T.green, { Size = UDim2.new(1, -12, 0, 46), Position = UDim2.new(0, 6, 1, -52), MaxText = 18 })
+		local busy = false
+		b.Activated:Connect(function()
+			if busy then return end
+			busy = true
+			play("reveal")
+			local r = remotes.AltarRitual:InvokeServer(id)
+			if r and r.ok then
+				K.close(ritualW)
+				if not r.success then
+					play("oniHit")
+					dark.BackgroundTransparency = 0.1
+					TweenService:Create(dark, TweenInfo.new(1.2), { BackgroundTransparency = 1 }):Play()
+					showToast(("Тьма приняла подношение... Ничего (шанс был %d%%). Следующий шанс выше"):format(math.floor(r.chance * 100 + 0.5)), 3.5, Color3.fromRGB(90, 20, 60))
+				end
+			elseif r and r.msg then
+				showToast(r.msg, 3)
+			end
+			busy = false
+		end)
+		cards[id] = { chance = chanceL, b = b }
+	end
+	refreshRitual = function()
+		for id, c in cards do
+			local cfg = Live.Rituals[id]
+			local pity = (state.ritualPity and state.ritualPity[id]) or 0
+			local ch = math.min(0.95, cfg.chance + pity)
+			c.chance.Text = ("Шанс %d%%"):format(math.floor(ch * 100 + 0.5))
+			K.recolor(c.b, state.dust >= cfg.dust and T.green or Color3.fromRGB(90, 90, 105))
+		end
+	end
+	remotes.RitualOpen.OnClientEvent:Connect(function()
+		if toggleWindow and not ritualW.Visible then toggleWindow(ritualW, refreshRitual) end
+	end)
+end
 ------------------------------------------------------------------ окно: Магазин
 local shopW, shopBody, refreshDonate, refreshUpgrades, refreshSkins
 do
@@ -2359,7 +2423,7 @@ do
 		K.close(adminW)
 	end)
 
-	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW, seasonW, socialW }
+	local allWindows = { atlasW, questW, shopW, giftW, setW, tpW, newsW, adminW, powerW, seasonW, socialW, ritualW }
 	toggleWindow = function(w, refresh)
 		local willOpen = not w.Visible
 		for _, x in allWindows do K.close(x) end
@@ -2371,6 +2435,7 @@ do
 	btnAtlas.Activated:Connect(function() toggleWindow(atlasW, refreshAtlas) end)
 	btnQuests.Activated:Connect(function() toggleWindow(questW, refreshQuests) end)
 	btnSeason.Activated:Connect(function() toggleWindow(seasonW, refreshSeason) end)
+	btnRitual.Activated:Connect(function() toggleWindow(ritualW, refreshRitual) end)
 	btnSocial.Activated:Connect(function() toggleWindow(socialW, refreshSocial) end)
 	goalPill.Activated:Connect(function()
 		if openStory then openStory() end
@@ -2518,6 +2583,7 @@ do
 		if giftW.Visible then refreshGift() end
 		if powerW.Visible then refreshPower() end
 		if seasonW.Visible then refreshSeason() end
+		if ritualW.Visible then refreshRitual() end
 		if socialW.Visible then refreshSocial() end
 	end
 
@@ -2760,8 +2826,8 @@ local tut, arrowPart, arrow, setStep, finishTutorial
 do
 	tut = { step = 0 }
 	local TUT_TEXT = {
-		"1/4  Зажми БРОСОК и отпусти, когда полоска наверху: фонарик приманит духа",
-		"2/4  Чем точнее бросок, тем реже дух. Ещё можно искать тени фонарём и ловить",
+		"1/4  Найди тень рядом с площадью и наведи на неё фонарь",
+		"2/4  Жми ЛОВИТЬ и держи кнопку: зелёная зона должна держать метку духа",
 		"3/4  Неси банку к алтарю (голубой луч) и сохрани улов",
 		"4/4  Открой Атлас и возьми лиса спутником",
 	}
