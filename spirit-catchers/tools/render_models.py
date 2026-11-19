@@ -21,50 +21,41 @@ def load(path, only=None):
             tr=float(tr), neon=mat == "Neon", name=name))
     return models
 
-def render(parts, yaw=-0.6, pitch=0.25):
-    pts = np.array([p["pos"] for p in parts])
-    ext = max(np.max([np.max(p["size"]) for p in parts]), 1)
-    center = (pts.min(0) + pts.max(0)) / 2
-    radius = np.max(np.linalg.norm(pts - center, axis=1)) + ext * 0.6
-    # камера спереди-сбоку (духи смотрят в -Z)
-    fwd = np.array([np.sin(yaw) * np.cos(pitch), -np.sin(pitch), np.cos(yaw) * np.cos(pitch)])
-    cam = center - fwd * radius * 3.2
+def trace(parts, cam, fwd, w, h, fovdeg=40, bg=(0.12, 0.13, 0.2), ambient=0.35, fog=None):
+    fwd = fwd / np.linalg.norm(fwd)
     right = np.cross(fwd, [0, 1, 0]); right /= np.linalg.norm(right)
     up = np.cross(right, fwd)
-    xs, ys = np.meshgrid(np.linspace(-1, 1, W), np.linspace(1, -1, H))
-    fov = np.tan(np.radians(20))
-    dirs = fwd[None, None] + (xs[..., None] * right + ys[..., None] * up) * fov
+    aspect = w / h
+    xs, ys = np.meshgrid(np.linspace(-1, 1, w), np.linspace(1, -1, h))
+    fov = np.tan(np.radians(fovdeg / 2))
+    dirs = fwd[None, None] + (xs[..., None] * right * aspect + ys[..., None] * up) * fov
     dirs /= np.linalg.norm(dirs, axis=2, keepdims=True)
     D = dirs.reshape(-1, 3)
     depth = np.full(len(D), np.inf)
-    img = np.zeros((len(D), 3)) + np.array([0.12, 0.13, 0.2])
+    img = np.zeros((len(D), 3)) + np.array(bg)
     light = np.array([-0.4, 0.8, -0.5]); light /= np.linalg.norm(light)
     for p in parts:
         if p["tr"] > 0.85:
             continue
         R, half = p["R"], p["size"] / 2
-        o = (cam - p["pos"]) @ R  # в локальные координаты детали
+        o = (cam - p["pos"]) @ R
         d = D @ R
-        n_local = None
         if "Ball" in p["shape"]:
-            s = half
-            oo, dd = o / s, d / s
-            a = (dd * dd).sum(1); b = 2 * (oo * dd).sum(1); c = (oo * oo).sum() - 1
-            disc = b * b - 4 * a * c
-            hit = disc > 0
-            t = np.where(hit, (-b - np.sqrt(np.maximum(disc, 0))) / (2 * a), np.inf)
+            s_ = half
+            oo, dd = o / s_, d / s_
+            a_ = (dd * dd).sum(1); b_ = 2 * (oo * dd).sum(1); c_ = (oo * oo).sum() - 1
+            disc = b_ * b_ - 4 * a_ * c_
+            t = np.where(disc > 0, (-b_ - np.sqrt(np.maximum(disc, 0))) / (2 * a_), np.inf)
             hp = o + d * t[:, None]
-            n_local = hp / (s * s)
+            n_local = hp / (s_ * s_)
         elif "Cylinder" in p["shape"]:
             r = min(half[1], half[2])
-            a = d[:, 1] ** 2 + d[:, 2] ** 2; b = 2 * (o[1] * d[:, 1] + o[2] * d[:, 2]); c = o[1] ** 2 + o[2] ** 2 - r * r
-            disc = b * b - 4 * a * c
-            t = np.where(disc > 0, (-b - np.sqrt(np.maximum(disc, 0))) / (2 * np.maximum(a, 1e-9)), np.inf)
+            a_ = d[:, 1] ** 2 + d[:, 2] ** 2; b_ = 2 * (o[1] * d[:, 1] + o[2] * d[:, 2]); c_ = o[1] ** 2 + o[2] ** 2 - r * r
+            disc = b_ * b_ - 4 * a_ * c_
+            t = np.where(disc > 0, (-b_ - np.sqrt(np.maximum(disc, 0))) / (2 * np.maximum(a_, 1e-9)), np.inf)
             hp = o + d * t[:, None]
-            inside = np.abs(hp[:, 0]) <= half[0]
-            t = np.where(inside, t, np.inf)
+            t = np.where(np.abs(hp[:, 0]) <= half[0], t, np.inf)
             n_local = np.stack([np.zeros(len(D)), hp[:, 1], hp[:, 2]], 1)
-            # торцы
             with np.errstate(divide="ignore", invalid="ignore"):
                 for sgn in (-1, 1):
                     tc = (sgn * half[0] - o[0]) / d[:, 0]
@@ -76,27 +67,22 @@ def render(parts, yaw=-0.6, pitch=0.25):
             with np.errstate(divide="ignore", invalid="ignore"):
                 t1 = (-half - o) / d; t2 = (half - o) / d
             tmin = np.nanmax(np.minimum(t1, t2), 1); tmax = np.nanmin(np.maximum(t1, t2), 1)
-            hit = (tmax >= tmin) & (tmax > 0)
             rel_n = None
             if "Wedge" in p["shape"]:
-                # клин Roblox: тело там, где y/hy <= z/hz (наклонная грань смотрит вверх-вперёд)
                 hy, hz = half[1], half[2]
                 fo = o[1] / hy - o[2] / hz
                 fd = d[:, 1] / hy - d[:, 2] / hz
                 with np.errstate(divide="ignore", invalid="ignore"):
                     tp = -fo / fd
-                enter_plane = fd < 0  # снаружи -> внутрь по t
-                new_min = np.where(enter_plane, np.maximum(tmin, tp), tmin)
-                new_max = np.where(~enter_plane, np.minimum(tmax, tp), tmax)
-                inside0 = fo <= 0
-                new_min = np.where(np.abs(fd) < 1e-9, np.where(inside0, tmin, np.inf), new_min)
-                plane_hit = enter_plane & (tp > tmin)
-                tmin, tmax = new_min, new_max
-                hit = (tmax >= tmin) & (tmax > 0)
-                rel_n = plane_hit
-            t = np.where(hit, tmin, np.inf)
+                enter_plane = fd < 0
+                rel_n = enter_plane & (tp > tmin)
+                tmin2 = np.where(enter_plane, np.maximum(tmin, tp), tmin)
+                tmax = np.where(~enter_plane, np.minimum(tmax, tp), tmax)
+                tmin = np.where(np.abs(fd) < 1e-9, np.where(fo <= 0, tmin, np.inf), tmin2)
+            hit = (tmax >= tmin) & (tmax > 0)
+            t = np.where(hit, np.maximum(tmin, 0), np.inf)
             hp = o + d * t[:, None]
-            rel = hp / half
+            rel = hp / np.maximum(half, 1e-6)
             ax = np.argmax(np.abs(rel), 1)
             n_local = np.zeros((len(D), 3)); n_local[np.arange(len(D)), ax] = np.sign(rel[np.arange(len(D)), ax])
             if rel_n is not None:
@@ -106,15 +92,30 @@ def render(parts, yaw=-0.6, pitch=0.25):
         closer = t < depth
         if not closer.any():
             continue
-        n = n_local @ R.T
+        with np.errstate(invalid="ignore"):
+            n = n_local @ R.T
         n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-9)
-        shade = 1.0 if p["neon"] else np.clip(0.35 + 0.75 * np.clip((n * light).sum(1), 0, 1), 0, 1.1)[:, None]
-        colr = np.clip(p["col"] * shade * (1.25 if p["neon"] else 1), 0, 1)
-        colr = colr if np.ndim(colr) == 2 else np.broadcast_to(colr, (len(D), 3))
+        if p["neon"]:
+            colr = np.broadcast_to(np.clip(p["col"] * 1.25, 0, 1), (len(D), 3))
+        else:
+            shade = np.clip(ambient + 0.7 * np.clip((n * light).sum(1), 0, 1), 0, 1.1)[:, None]
+            colr = np.clip(p["col"] * shade, 0, 1)
+        if fog is not None:
+            f = np.clip(t / fog[0], 0, 1)[:, None]
+            colr = colr * (1 - f) + np.array(fog[1]) * f
         alpha = 1 - p["tr"]
         img[closer] = img[closer] * (1 - alpha) + colr[closer] * alpha
         depth = np.where(closer & (alpha > 0.5), t, depth)
-    return Image.fromarray((img.reshape(H, W, 3) * 255).astype(np.uint8))
+    return Image.fromarray((np.clip(img, 0, 1).reshape(h, w, 3) * 255).astype(np.uint8))
+
+def render(parts, yaw=-0.6, pitch=0.25):
+    pts = np.array([p["pos"] for p in parts])
+    ext = max(np.max([np.max(p["size"]) for p in parts]), 1)
+    center = (pts.min(0) + pts.max(0)) / 2
+    radius = np.max(np.linalg.norm(pts - center, axis=1)) + ext * 0.6
+    fwd = np.array([np.sin(yaw) * np.cos(pitch), -np.sin(pitch), np.cos(yaw) * np.cos(pitch)])
+    cam = center - fwd * radius * 3.2
+    return trace(parts, cam, fwd, W, H, fovdeg=40)
 
 if __name__ == "__main__":
     only = sys.argv[3].split(",") if len(sys.argv) > 3 else None

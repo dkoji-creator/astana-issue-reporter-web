@@ -108,7 +108,7 @@ function Map.build()
 	---------------------------------------------------------------- земля (дорога светлая, вода — яркая)
 	block("StreetGround", Vector3.new(40, 1, 106), CFrame.new(0, 0, 83), Color3.fromRGB(66, 60, 62), Enum.Material.Cobblestone)
 	block("StreetPath", Vector3.new(10, 0.1, 106), CFrame.new(0, 0.55, 83), Color3.fromRGB(96, 84, 76), Enum.Material.Cobblestone, { CanCollide = false })
-	block("PlazaGround", Vector3.new(70, 1, 38), CFrame.new(0, 0, 11), Color3.fromRGB(82, 84, 96), Enum.Material.Slate)
+	block("PlazaGround", Vector3.new(70, 1, 38), CFrame.new(0, 0, 11), Color3.fromRGB(118, 108, 100), Enum.Material.Cobblestone)
 	block("NorthBank", Vector3.new(124, 1, 12), CFrame.new(0, 0, -14), Color3.fromRGB(72, 76, 86), Enum.Material.Slate)
 	block("SouthBank", Vector3.new(124, 1, 32), CFrame.new(0, 0, -56), Color3.fromRGB(72, 76, 86), Enum.Material.Slate)
 	block("GardenGround", Vector3.new(92, 1, 80), CFrame.new(0, 0, -112), Color3.fromRGB(46, 92, 52), Enum.Material.Grass)
@@ -211,6 +211,49 @@ function Map.build()
 	billboard(orb, "Алтарь", COLD, Vector3.new(0, 4, 0))
 	for _, p in { Vector3.new(-25, 0.5, 24), Vector3.new(25, 0.5, 24), Vector3.new(-25, 0.5, -2), Vector3.new(25, 0.5, -2) } do
 		stoneLantern(p, COLD)
+	end
+
+	---------------------------------------------------------------- украшения площади: первое, что видит игрок
+	do
+		-- узор вокруг алтаря
+		for i, r in { 11, 14.5 } do
+			deco("PlazaRing", Vector3.new(0.12, r * 2, r * 2), CFrame.new(0, 0.56 + i * 0.01, 12) * CFrame.Angles(0, 0, math.rad(90)),
+				i == 1 and Color3.fromRGB(170, 140, 95) or Color3.fromRGB(140, 120, 100), Enum.Material.Slate, { Shape = Enum.PartType.Cylinder })
+		end
+		for k = 0, 7 do
+			local a = k / 8 * math.pi * 2
+			deco("PlazaRay", Vector3.new(0.6, 0.06, 3.2), CFrame.new(math.cos(a) * 12.75, 0.6, 12 + math.sin(a) * 12.75) * CFrame.Angles(0, -a + math.pi / 2, 0),
+				Color3.fromRGB(255, 200, 120), Enum.Material.Neon, { Transparency = 0.35 })
+		end
+		-- гирлянды бумажных фонариков над площадью
+		local colors = { Color3.fromRGB(230, 70, 60), Color3.fromRGB(255, 170, 70), Color3.fromRGB(255, 235, 200), Color3.fromRGB(240, 110, 160) }
+		for gi, z in { 2, 22 } do
+			for x = -30, 30, 4 do
+				local sag = 1.6 * (1 - (x / 30) ^ 2)
+				local l = deco("PlazaLantern", Vector3.new(1.1, 1.4, 1.1), CFrame.new(x, 11 - sag, z), colors[(x // 4 + gi) % 4 + 1], Enum.Material.Neon, { Shape = Enum.PartType.Ball })
+				if x % 12 == 0 then light(l, Color3.fromRGB(255, 190, 130), 18, 0.5) end
+			end
+			deco("PlazaString", Vector3.new(62, 0.08, 0.08), CFrame.new(0, 11.4, z), Color3.fromRGB(40, 30, 30))
+			for _, x in { -31, 31 } do
+				block("GarlandPole", Vector3.new(0.6, 12, 0.6), CFrame.new(x, 6, z), Color3.fromRGB(110, 40, 35), Enum.Material.Wood)
+			end
+		end
+		-- сакуры по углам и клумбы
+		for _, p in { Vector3.new(-30, 0.5, -4), Vector3.new(30, 0.5, -4), Vector3.new(-30, 0.5, 28), Vector3.new(30, 0.5, 28) } do
+			sakura(p, 0.9)
+			for k = 0, 5 do
+				local a = k / 6 * math.pi * 2
+				deco("Flower", Vector3.new(0.7, 0.7, 0.7), CFrame.new(p + Vector3.new(math.cos(a) * 3, 0.35, math.sin(a) * 3)),
+					({ Color3.fromRGB(255, 120, 160), Color3.fromRGB(255, 220, 120), Color3.fromRGB(180, 140, 255) })[k % 3 + 1], Enum.Material.SmoothPlastic, { Shape = Enum.PartType.Ball })
+			end
+		end
+		-- скамейки у досок рекордов
+		for _, x in { -20, 20 } do
+			for _, z in { 6, 18 } do
+				block("Bench", Vector3.new(1.6, 0.4, 5), CFrame.new(x, 1.6, z), Color3.fromRGB(120, 85, 55), Enum.Material.WoodPlanks)
+				for _, dz in { -2, 2 } do block("BenchLeg", Vector3.new(1.4, 1.2, 0.4), CFrame.new(x, 1, z + dz), Color3.fromRGB(60, 45, 35), Enum.Material.Wood) end
+			end
+		end
 	end
 
 	---------------------------------------------------------------- КАНАЛ С МОСТАМИ (бирюзовый свет)
@@ -362,7 +405,7 @@ function Map.build()
 		gates[g[1]] = barrier
 	end
 	do -- барьер канала (уровень 3) и ворота порта (уровень 20)
-		local canalGate = block("CanalGate", Vector3.new(70, 13, 1), CFrame.new(0, 6.5, -8), Color3.fromRGB(80, 230, 220), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
+		local canalGate = block("CanalGate", Vector3.new(70, 13, 1), CFrame.new(0, 6.5, -8), Color3.fromRGB(80, 230, 220), Enum.Material.ForceField, { Transparency = 0.55, CanQuery = false })
 		gates.CanalGate = canalGate
 		local portGate = block("PortGate", Vector3.new(1, 13, 10), CFrame.new(62.5, 6.5, -47), Color3.fromRGB(150, 200, 230), Enum.Material.ForceField, { Transparency = 0.2, CanQuery = false })
 		sign(portGate, "Туманный порт", Color3.new(1, 1, 1), Enum.NormalId.Right)
