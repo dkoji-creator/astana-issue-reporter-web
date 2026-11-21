@@ -26,7 +26,7 @@ local Audio = require(Shared:WaitForChild("Config"):WaitForChild("Audio"))
 local sfx = {}
 do
 	local sfxGroup = make("SoundGroup", { Name = "Sfx", Volume = 0.7 }, SoundService)
-	local musicGroup = make("SoundGroup", { Name = "Music", Volume = 0.4 }, SoundService)
+	local musicGroup = make("SoundGroup", { Name = "Music", Volume = 0.32 }, SoundService)
 	for k, id in Audio.Sfx do
 		sfx[k] = make("Sound", { SoundId = id, SoundGroup = sfxGroup, Volume = 0.8 }, SoundService)
 	end
@@ -627,8 +627,8 @@ end
 
 ------------------------------------------------------------------ левая колонка кнопок и панель семян
 do
-	local col = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 64), Size = UDim2.fromOffset(60, 420) }, hud)
-	listLayout(col, nil, 6)
+	local col = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 58), Size = UDim2.fromOffset(56, 420) }, hud)
+	listLayout(col, nil, 5)
 	local defs = {
 		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "index", "atlas", "Атлас", T.purple },
 		{ "market", "news", "Рынок", T.pink }, { "upgrades", "upgrade", "Мастерская", T.cold }, { "daily", "gift", "Подарок", T.orange },
@@ -636,7 +636,7 @@ do
 	if plr.UserId == ADMIN_ID then table.insert(defs, { "admin", "admin", "Админ", T.red }) end
 	UI.buttons = {}
 	for i, d in defs do
-		local b = K.iconButton(col, d[2], d[3], d[4], 54)
+		local b = K.iconButton(col, d[2], d[3], d[4], 48)
 		b.LayoutOrder = i
 		b.Activated:Connect(function() openWindow(d[1]) end)
 		UI.buttons[d[1]] = b
