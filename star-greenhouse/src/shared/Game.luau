@@ -251,12 +251,15 @@ G.StartCoins = 60
 G.WaterCooldown = 20
 
 ------------------------------------------------------------------ падающие звёзды по карте
-G.Stars = { max = 22, meteorMax = 50, every = 5, life = 120, meteorChance = 0.04 }
--- награда за звезду зависит от самой дальней открытой планеты
+G.Stars = { max = 14, every = 1.7, fall = 1.6, glow = 14, meteorChance = 0.04 }
+-- награда за звезду: скромная, зависит от самой дальней открытой планеты
 function G.starReward(planets: number, meteor: boolean): number
 	local mult = G.Planets[math.clamp(planets, 1, #G.Planets)].mult
-	return math.floor((meteor and 120 or 9) * mult)
+	return math.floor((meteor and 60 or 6) * mult)
 end
+-- растения своей планеты растут быстрее, если огород стоит на ней
+G.NativeBonus = 1.25
+G.TravelTime = 3.4
 
 ------------------------------------------------------------------ задания: всегда три, за выполнение монеты
 G.QuestOrder = { "stars", "water", "harvest", "sell", "plant", "mutation" }

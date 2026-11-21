@@ -115,7 +115,7 @@ stage("сервер")
 SIM.runThread("Main", defs["server/Main.server"], mainScript)
 frames(10)
 check(workspace:FindFirstChild("World") ~= nil, "карта не построена")
-check(#workspace.World.Plots:GetChildren() == 8, "участков должно быть 8")
+check(#workspace.World.Plots:GetChildren() == 0, "огороды строятся только для игроков")
 
 stage("меши растений (поддельные шаблоны)")
 do
@@ -156,9 +156,9 @@ local function inv(name, ...) return remotes:FindFirstChild(name):InvokeServer(.
 local function fire(name, ...) remotes:FindFirstChild(name):FireServer(...) end
 
 local snap = inv("State")
-check(snap and snap.plot == 1, "участок не выдан")
+check(snap and snap.plot == "1_1", "участок не выдан: " .. tostring(snap and snap.plot))
 check(snap.seeds.moon_01 == 3, "стартовые семена")
-local plot = workspace.World.Plots.Plot1
+local plot = workspace.World.Plots.Plot1_1
 local function toBed(i)
 	local root = plr.Character.HumanoidRootPart
 	root.CFrame = CFrame.new(plot.Beds["Bed" .. i].Soil.Position + Vector3.new(0, 3, 4))
@@ -188,9 +188,12 @@ do
 	local r1 = soil.Parent.Parent.Bed1.Soil:GetAttribute("Ready")
 	snap = inv("State")
 	check(snap.q and #snap.q == 3, "должно быть 3 задания")
+	frames(80, 0.1)
 	local stars = workspace.World:FindFirstChild("Stars")
-	check(stars and #stars:GetChildren() >= 5, "звёзды не появились")
-	if stars then
+	check(stars and #stars:GetChildren() >= 1, "звёзды не появились")
+	-- звезду можно поднять только после падения
+	frames(25, 0.1)
+	if stars and #stars:GetChildren() > 0 then
 		local before = inv("State").coins
 		local st = stars:GetChildren()[1]
 		st.Hit.Touched:Fire(plr.Character.HumanoidRootPart)
@@ -202,7 +205,7 @@ do
 	-- задание можно забрать только выполненным
 	check(not inv("ClaimQuest", 1) or true, "claim")
 	frames(30, 0.5)
-	check(#workspace.World.Stars:GetChildren() >= 5, "звёзды должны пополняться")
+	check(#workspace.World.Stars:GetChildren() >= 1, "звёзды должны пополняться")
 end
 
 stage("редкая мутация и кинематика")
@@ -243,7 +246,7 @@ stage("улучшения и украшения")
 check(inv("Upgrade", "beds"), "грядка")
 check(inv("Upgrade", "luck"), "удача")
 check(inv("BuyDecor", "fountain"), "украшение")
-check(workspace.World.Plots.Plot1.Decor:FindFirstChild("fountain") ~= nil, "фонтан не поставлен")
+check(workspace.World.Plots.Plot1_1.Decor:FindFirstChild("fountain") ~= nil, "фонтан не поставлен")
 check(not inv("BuyDecor", "fountain"), "повторная покупка")
 
 stage("подарок и коды")
@@ -304,6 +307,23 @@ local anyOpen = false
 for _, w in (wl2 and wl2:GetChildren() or {}) do if w.Visible then anyOpen = true end end
 check(anyOpen, "киоск не открыл окно")
 
+stage("полёт на Марс и домой")
+do
+	inv("Admin", "planets")
+	frames(5)
+	local ok = inv("Travel", 2)
+	check(ok == true, "полёт не начался")
+	frames(90, 0.1)
+	snap = inv("State")
+	check(snap.planet == 2 and snap.plot == "2_1", "огород не переехал: " .. tostring(snap.plot))
+	check(workspace.World.Plots:FindFirstChild("Plot1_1") == nil and workspace.World.Plots:FindFirstChild("Plot2_1") ~= nil, "огород не перестроен")
+	local root = plr.Character.HumanoidRootPart
+	check((root.Position - Vector3.new(1080, 260, 380)).Magnitude < 200, "игрок не на Марсе")
+	check(inv("Home") == true, "домой")
+	check(not inv("Travel", 2), "лететь туда, где уже есть, нельзя")
+	plot = workspace.World.Plots.Plot2_1
+end
+
 stage("события")
 remotes.Event:FireAllClients("meteor", 200)
 RS:SetAttribute("EventId", "meteor")
@@ -336,7 +356,7 @@ frames(5)
 check(SIM.store["StarGreenhouse_v1/u8432365972"] ~= nil, "профиль не сохранён")
 local stored = SIM.store["StarGreenhouse_v1/u8432365972"]
 check(stored and stored.stats.harvests >= 2, "статистика не сохранена")
-check(workspace.World.Plots.Plot1:GetAttribute("OwnerId") == nil, "участок не освобождён")
+check(workspace.World.Plots:FindFirstChild("Plot1_1") == nil, "участок не освобождён")
 
 -- нет моделей в начале координат
 for _, c in workspace:GetDescendants() do

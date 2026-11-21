@@ -19,8 +19,11 @@ end
 local Map = require(mapMod)
 Map.build()
 local G = require(shared.Game)
-for i = 1, 3 do Map.placeDecor(1, G.DecorOrder[i]) end
-for _, id in G.DecorOrder do Map.placeDecor(2, id) end
+local p1 = Map.buildPlot(1, 1)
+local p2 = Map.buildPlot(1, 2)
+for i = 1, 3 do Map.placeDecor(p1.id, G.DecorOrder[i]) end
+for _, id in G.DecorOrder do Map.placeDecor(p2.id, id) end
+Map.buildPlot(2, 1)
 local n = 0
 for _, p in workspace.World:GetDescendants() do
 	if p:IsA("BasePart") and p.Transparency < 0.97 then
@@ -35,7 +38,7 @@ for _, p in workspace.World:GetDescendants() do
 		n += 1
 	end
 end
-local MC = { Grass = { 64, 128, 122 }, LeafyGrass = { 98, 92, 160 }, Mud = { 62, 50, 62 }, Cobblestone = { 118, 112, 128 }, Basalt = { 58, 54, 72 }, Rock = { 92, 90, 108 }, Slate = { 66, 64, 82 }, Salt = { 150, 146, 168 }, Glacier = { 150, 186, 228 }, Ground = { 70, 60, 74 }, Limestone = { 120, 112, 140 } }
+local MC = { Sand = { 196, 102, 64 }, Sandstone = { 152, 72, 50 }, Brick = { 122, 62, 50 }, Glacier = { 150, 200, 236 }, Snow = { 228, 236, 246 }, Ice = { 116, 166, 220 }, CrackedLava = { 255, 120, 40 }, Asphalt = { 64, 54, 52 }, Pavement = { 232, 212, 164 }, Grass = { 64, 128, 122 }, LeafyGrass = { 98, 92, 160 }, Mud = { 62, 50, 62 }, Cobblestone = { 118, 112, 128 }, Basalt = { 58, 54, 72 }, Rock = { 92, 90, 108 }, Slate = { 66, 64, 82 }, Salt = { 150, 146, 168 }, Glacier = { 150, 186, 228 }, Ground = { 70, 60, 74 }, Limestone = { 120, 112, 140 } }
 for _, op in SIM.terrain do
 	local mat = tostring(op[#op]):gsub("Enum.Material.", "")
 	local col = MC[mat]

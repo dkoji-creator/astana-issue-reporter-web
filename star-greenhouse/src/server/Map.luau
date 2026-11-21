@@ -1,5 +1,6 @@
--- Мир «Звёздной оранжереи»: парящий астероид-станция, площадь с киосками, 8 стеклянных куполов с грядками, фон из планет.
--- Все координаты: платформа радиусом 100 с верхом на y = 0, центр в (0, 0, 0).
+-- Мир «Звёздной оранжереи»: шесть парящих планет-островов в одном космосе, видных друг с друга.
+-- На каждой: площадь с ракетой и киосками, восемь мест под огороды игроков, своя флора.
+-- Огород игрока строится на той планете, где он сейчас, и переезжает вместе с ним на ракете.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Lighting = game:GetService("Lighting")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
@@ -10,11 +11,13 @@ local SkyImg = require(Shared:WaitForChild("Config"):WaitForChild("Sky"))
 local WT = require(script.Parent:WaitForChild("WorldTerrain"))
 
 local Map = {}
-Map.PlotCount = 8
-Map.PlotRadius = 100
-Map.plots = {}
-Map.RingBeds = { { r = 5.5, n = 6 }, { r = 10.5, n = 10 }, { r = 15.5, n = 14 } }
+Map.SlotsPerPlanet = 8
+Map.PlotRing = 100
 Map.MaxBeds = 30
+Map.BedCols, Map.BedStep = 6, 9.6
+Map.planets = {}
+Map.plots = {}
+Map.boardLabels = {}
 
 local V3, CF, A = Vector3.new, CFrame.new, CFrame.Angles
 local PI, sin, cos = math.pi, math.sin, math.cos
@@ -24,13 +27,12 @@ local Mat = Enum.Material
 local COL = {
 	hull = c(38, 44, 62), hull2 = c(58, 66, 90), dark = c(22, 26, 40), plate = c(84, 94, 120),
 	cyan = c(70, 175, 205), mag = c(190, 90, 165), warm = c(255, 196, 140), gold = c(225, 180, 100), green = c(90, 200, 140),
-	trim = c(120, 140, 170),
-	glass = c(150, 220, 255), soil = c(58, 40, 36),
+	trim = c(120, 140, 170), wood = c(124, 88, 62), wood2 = c(98, 68, 48), soil = c(64, 44, 36),
 }
+-- цвет камня площади на каждой планете
+local PLAZA = { c(120, 118, 132), c(150, 90, 70), c(170, 200, 225), c(70, 62, 64), c(92, 80, 140), c(196, 168, 110) }
 
 local world, deco
-local DECOR_EXT
-
 local function part(parent, name, size, cf, color, mat, props)
 	local p = Instance.new("Part")
 	p.Name, p.Size, p.CFrame, p.Color = name, size, cf, color
@@ -122,22 +124,6 @@ local function prompt(parent, text, objText, dist, name)
 	return pr
 end
 
------------------------------------------------------------------- основание: рельеф астероида
-local function buildHull()
-	WT.build()
-	-- невидимая стена у подножия гор: игроки не уходят за край
-	local wall = Instance.new("Folder")
-	wall.Name = "Barrier"
-	wall.Parent = world
-	local R = WT.PlayRadius
-	for i = 1, 64 do
-		local a0, a1 = (i - 1) / 64 * PI * 2, i / 64 * PI * 2
-		local p0, p1 = V3(cos(a0) * R, 40, sin(a0) * R), V3(cos(a1) * R, 40, sin(a1) * R)
-		part(wall, "Wall", V3(2, 120, (p1 - p0).Magnitude + 0.2), CFrame.lookAt((p0 + p1) / 2, p1), COL.hull, Mat.SmoothPlastic, { Transparency = 1, CanQuery = false })
-	end
-end
-
------------------------------------------------------------------- центральная площадь
 local function kiosk(parent, name, cf, color, title)
 	local m = Instance.new("Model")
 	m.Name = name
@@ -162,314 +148,140 @@ local function kiosk(parent, name, cf, color, title)
 	return m
 end
 
-local function buildHub()
-	local f = Instance.new("Folder")
-	f.Name = "Hub"
-	f.Parent = world
-	cyl(f, "Plaza", CF(0, 0.2, 0), 0.5, 70, c(44, 48, 64), Mat.Concrete)
-	cyl(f, "PlazaInner", CF(0, 0.3, 0), 0.5, 40, c(52, 56, 74), Mat.Slate)
-	for i, r in { 10, 20, 34.6 } do
-		dcyl(f, "PlazaRing", CF(0, 0.52, 0), 0.06, r * 2, COL.trim, Mat.Metal)
-		dcyl(f, "PlazaRingCut", CF(0, 0.54, 0), 0.07, r * 2 - 0.6, i == 3 and c(44, 48, 64) or c(52, 56, 74), i == 3 and Mat.Concrete or Mat.Slate)
-	end
-	-- клумбы с растениями по кругу площади (заполняются растениями в buildFlora)
-	Map.planters = {}
-	for i = 1, 8 do
-		local a = (i - 0.5) / 8 * PI * 2 + PI / 8
-		local pos = V3(cos(a) * 29.5, 0, sin(a) * 29.5)
-		cyl(f, "Planter", CF(pos + V3(0, 0.7, 0)), 1.0, 7, COL.hull2, Mat.Metal)
-		cyl(f, "PlanterSoil", CF(pos + V3(0, 1.22, 0)), 0.1, 6.2, COL.soil, Mat.Ground, { CanCollide = false })
-		table.insert(Map.planters, pos + V3(0, 1.25, 0))
-	end
-	-- маяк в центре: башня и вращающиеся кольца
-	cyl(f, "BeaconBase", CF(0, 1.2, 0), 2.4, 9, COL.hull2, Mat.Metal)
-	cyl(f, "BeaconBase2", CF(0, 2.6, 0), 0.8, 6.4, COL.plate, Mat.Metal)
-	dcyl(f, "BeaconGlow", CF(0, 2.6, 0), 0.14, 6.48, COL.cyan, Mat.Neon, { Transparency = 0.3 })
-	cyl(f, "BeaconTower", CF(0, 9, 0), 12, 2.2, COL.hull, Mat.Metal)
-	cyl(f, "BeaconTower2", CF(0, 17, 0), 6, 1.4, COL.plate, Mat.Metal)
-	for k = 1, 4 do
-		dcyl(f, "BeaconStripe", CF(0, 5 + k * 2.4, 0), 0.5, 2.35, COL.cyan, Mat.Neon, { Transparency = 0.1 })
-	end
-	local crystal = Instance.new("Model")
-	crystal.Name = "BeaconCrystal"
-	crystal.Parent = f
-	crystal:SetAttribute("Spin", 0.5)
-	crystal:SetAttribute("Pivot", V3(0, 23, 0))
-	ell(crystal, "Gem", CF(0, 23, 0) * A(0, 0.5, 0), V3(5, 9, 5), COL.cyan, Mat.Glass, { Transparency = 0.2, CanCollide = false, CastShadow = false })
-	ell(crystal, "GemCore", CF(0, 23, 0), V3(2.2, 5, 2.2), c(255, 255, 255), Mat.Neon, { CanCollide = false, CastShadow = false })
-	for i = 1, 4 do
-		local a = i / 4 * PI * 2
-		ell(crystal, "GemShard", CF(cos(a) * 3.2, 23 + sin(a * 2) * 1.2, sin(a) * 3.2) * A(0.5, a, 0.3), V3(1.2, 4, 1.2), COL.mag, Mat.Glass, { Transparency = 0.25, CanCollide = false, CastShadow = false })
-	end
-	crystal.PrimaryPart = crystal:FindFirstChild("Gem")
-	local lightPart = ball(f, "BeaconLight", V3(0, 23, 0), 1, COL.cyan, Mat.Neon, { Transparency = 1 })
-	light(lightPart, COL.cyan, 60, 1.6)
-	for i, spec in { { 7, 0.9, COL.cyan, 14 }, { 10, -0.6, COL.mag, 19 }, { 13, 0.4, COL.cyan, 24 } } do
-		local sp = Instance.new("Model")
-		sp.Name = "BeaconRing" .. i
-		sp.Parent = f
-		sp:SetAttribute("Spin", spec[2])
-		sp:SetAttribute("Pivot", V3(0, spec[4], 0))
-		local r, y = spec[1], spec[4]
-		for k = 1, 28 do
-			local a0, a1 = (k - 1) / 28 * PI * 2, k / 28 * PI * 2
-			local p0, p1 = V3(cos(a0) * r, y, sin(a0) * r), V3(cos(a1) * r, y, sin(a1) * r)
-			local s = part(sp, "RingSeg", V3(0.5, 0.5, (p1 - p0).Magnitude + 0.05), CFrame.lookAt((p0 + p1) / 2, p1), spec[3], Mat.Neon, { CanCollide = false, CastShadow = false, Transparency = 0.5 })
-			if k == 1 then sp.PrimaryPart = s end
-		end
-		ball(sp, "RingOrb", V3(r, y, 0), 1.2, c(255, 255, 255), Mat.Neon)
-	end
 
-	-- киоски по сторонам света
-	local kiosks = {
-		{ id = "shop", ang = 0, col = COL.green, title = "СЕМЕНА", prompt = "Магазин семян" },
-		{ id = "sell", ang = 90, col = COL.gold, title = "ПРОДАЖА", prompt = "Продать урожай" },
-		{ id = "market", ang = 180, col = COL.mag, title = "РЫНОК", prompt = "Рынок и спрос" },
-		{ id = "upgrades", ang = 270, col = COL.cyan, title = "МАСТЕРСКАЯ", prompt = "Улучшения станции" },
-	}
-	Map.kiosks = {}
-	for _, k in kiosks do
-		local a = math.rad(k.ang)
-		local pos = V3(cos(a) * 18, 0.45, sin(a) * 18)
-		local cf = CFrame.lookAt(pos, V3(0, 0.3, 0))
-		local m = kiosk(f, "Kiosk_" .. k.id, cf, k.col, k.title)
-		Map.kiosks[k.id] = m
-		-- интерьер
-		if k.id == "shop" then
-			for s = -1, 1 do
-				part(m, "Shelf", V3(0.6, 3.4, 4.2), cf * CF(s * 3.3, 2.8, 2.4) * A(0, s * 0.5, 0), COL.plate, Mat.Metal, { CanCollide = false })
-			end
-			for i = 1, 14 do
-				local jar = ball(m, "Jar", (cf * CF(-3.6 + (i % 7) * 1.2, 1.8 + math.floor(i / 7) * 1.5, 3.2)).Position, 0.8, Game.PlanetColors[(i - 1) % 6 + 1], Mat.Neon, { Transparency = 0.1 })
-				if i % 5 == 0 then light(jar, jar.Color, 8, 0.6) end
-			end
-		elseif k.id == "sell" then
-			cyl(m, "Pad", cf * CF(0, 1.1, 1.0), 0.3, 6, COL.dark, Mat.Metal)
-			dcyl(m, "PadRing", cf * CF(0, 1.1, 1.0), 0.12, 6.08, COL.gold, Mat.Neon, { Transparency = 0.35 })
-			for i = 1, 3 do
-				part(m, "Crate", V3(1.8, 1.6, 1.8), cf * CF(-3.5 + i * 0.4, 1.4 + (i - 1) * 1.6, 2.6) * A(0, i, 0), c(80, 90, 120), Mat.Metal, { CanCollide = false })
-				dcyl(m, "CrateGlow", cf * CF(-3.5 + i * 0.4, 1.4 + (i - 1) * 1.6, 2.6) * A(0, i, 0), 1.7, 0.18, COL.gold, Mat.Neon)
-			end
-			ball(m, "Holo", (cf * CF(0, 5.5, 1.0)).Position, 2.4, COL.gold, Mat.Neon, { Transparency = 0.6 })
-		elseif k.id == "market" then
-			local scr = part(m, "Screen", V3(9, 5.2, 0.4), cf * CF(0, 4.2, 2.8), c(8, 10, 20), Mat.SmoothPlastic, { CanCollide = false })
-			Map.boardLabel = surfaceText(scr, Enum.NormalId.Front, "Рынок загружается", COL.mag, 30)
-			Map.boardLabel.TextScaled = false
-			Map.boardLabel.TextSize = 22
-			Map.boardLabel.RichText = true
-			dcyl(m, "ScreenFrameT", cf * CF(0, 6.9, 2.8) * A(0, 0, PI / 2), 9.2, 0.25, COL.mag, Mat.Neon)
-			dcyl(m, "ScreenFrameB", cf * CF(0, 1.5, 2.8) * A(0, 0, PI / 2), 9.2, 0.25, COL.mag, Mat.Neon)
-		else
-			part(m, "Desk", V3(6, 1.6, 2.2), cf * CF(0, 1.7, 2.4), COL.plate, Mat.Metal, { CanCollide = false })
-			part(m, "Monitor", V3(4, 2.4, 0.3), cf * CF(0, 3.9, 3.1) * A(0.25, 0, 0), c(10, 14, 28), Mat.SmoothPlastic, { CanCollide = false })
-			deco(m, "MonitorGlow", V3(3.6, 2.0, 0.1), cf * CF(0, 3.9, 2.9) * A(0.25, 0, 0), COL.cyan, Mat.Neon, { Transparency = 0.35 })
-			local a1, a2, a3 = (cf * CF(-3.4, 1.6, 3.0)).Position, (cf * CF(-3.4, 4.8, 3.0)).Position, (cf * CF(-1.6, 6.0, 2.4)).Position
-			seg(m, "ArmA", a1, a2, 0.5, COL.plate, Mat.Metal)
-			seg(m, "ArmB", a2, a3, 0.4, COL.plate, Mat.Metal)
-			ball(m, "ArmJoint", a2, 0.8, COL.cyan, Mat.Neon)
-		end
-		local trig = part(m, "PromptPart", V3(5, 3, 3), cf * CF(0, 2.2, 1.6), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
-		local pr = prompt(trig, k.prompt, "", 12, "Open_" .. k.id)
-		pr:SetAttribute("Window", k.id)
-	end
+------------------------------------------------------------------ места под огороды
+local function slotCF(pi, j)
+	local ctr = WT.Centers[pi]
+	local ang = (j - 1) / Map.SlotsPerPlanet * PI * 2 + PI / Map.SlotsPerPlanet
+	local pos = V3(ctr.X + cos(ang) * Map.PlotRing, ctr.Y, ctr.Z + sin(ang) * Map.PlotRing)
+	return CFrame.lookAt(pos, V3(ctr.X, ctr.Y, ctr.Z)), ang
 end
-
------------------------------------------------------------------- участки игроков: купол, грядки, ворота
-local function plotCF(i)
-	local ang = (i - 1) / Map.PlotCount * PI * 2 + PI / Map.PlotCount
-	local center = V3(cos(ang) * Map.PlotRadius, 0, sin(ang) * Map.PlotRadius)
-	return CFrame.lookAt(center, V3(0, 0, 0)), ang
-end
-Map.plotCF = plotCF
+Map.slotCF = slotCF
 
 function Map.bedLocalPos(index: number): Vector3
-	local n = index
-	for ri, rg in Map.RingBeds do
-		if n <= rg.n then
-			local a = -PI / 2 + (n - 0.5) / rg.n * PI * 2
-			return V3(cos(a) * rg.r, 0, sin(a) * rg.r)
-		end
-		n -= rg.n
-	end
-	return V3()
+	local r = (index - 1) // Map.BedCols
+	local k = (index - 1) % Map.BedCols
+	return V3((k - (Map.BedCols - 1) / 2) * Map.BedStep, 0, -19.2 + r * Map.BedStep)
 end
 
-local function buildPlot(i, parent)
-	local cf, ang = plotCF(i)
-	local pm = Instance.new("Model")
-	pm.Name = "Plot" .. i
-	pm.Parent = parent
-	local plot = { cf = cf, model = pm, beds = {}, index = i, ang = ang }
-	pm:SetAttribute("Center", cf.Position)
-	local function W(x, y, z) return cf:PointToWorldSpace(V3(x, y, z)) end
-	local entrance = function(a) -- вход со стороны -Z локально (угол -pi/2 в локальных x,z)
-		local d = (a - (-PI / 2)) % (PI * 2)
-		return d < 0.36 or d > PI * 2 - 0.36
-	end
-	-- пол и подсветка
-	-- пол купола: живой газон (рельеф с травой) и каменные дорожки
-	WT.patch(cf.Position.X, cf.Position.Z, 20.5, Mat.Grass)
-	local stone = c(118, 112, 128)
-	for _, r in { 8.0, 13.0 } do
-		ring(pm, "Path", V3(), r, 0.08, 1.7, 0.2, stone, Mat.Cobblestone, 40, nil, nil)
-	end
-	dcyl(pm, "CenterDisk", cf * CF(0, 0.1, 0), 0.2, 6.4, stone, Mat.Cobblestone)
-	part(pm, "EntryPath", V3(2.6, 0.2, 13), cf * CF(0, 0.1, -13.2), stone, Mat.Cobblestone, { CanCollide = false })
-	-- бордюр по краю участка
-	ring(pm, "Curb", V3(), 19.4, 0.55, 1.0, 1.1, COL.hull2, Mat.Metal, 36, entrance, nil)
-	-- ring() считает от (0,0,0): перенесём бордюр в систему участка
-	for _, p in pm:GetChildren() do
-		if p.Name == "Curb" or p.Name == "Path" then
-			local rel = p.CFrame
-			p.CFrame = cf * rel
+local function slotMarker(pi, j, parent)
+	local cf = slotCF(pi, j)
+	local m = Instance.new("Model")
+	m.Name = ("Slot%d_%d"):format(pi, j)
+	for _, sx in { -1, 1 } do
+		for _, sz in { -1, 1 } do
+			part(m, "Stake", V3(0.5, 1.6, 0.5), cf * CF(sx * 29, 0.8, sz * 24.5), COL.wood, Mat.Wood, { CanCollide = false })
 		end
 	end
-	-- купол: стекло и рёбра
-	local glass = ball(pm, "Dome", W(0, 0, 0), 38, COL.glass, Mat.Glass, { Transparency = 0.93, Reflectance = 0.05 })
-	glass.CanCollide = false
-	local R = 18.8
-	for k = 0, 3 do
-		local az = k * PI / 4 + PI / 8
-		local dx, dz = cos(az), sin(az)
-		local prev
-		for s = 0, 14 do
-			local t = s / 14 * PI
-			local x = cos(t) * R
-			local p = W(dx * x, sin(t) * R, dz * x)
-			if prev and not (entrance(math.atan2(dz * (cos(t)), dx * cos(t))) and sin(t) < 0.35) then
-				seg(pm, "DomeRib", prev, p, 0.34, COL.hull2, Mat.Metal)
-			end
-			prev = p
-		end
-	end
-	for _, lv in { { 0.38, 14 }, { 0.72, 18 }, { 0.93, 22 } } do
-		local y = sin(lv[1] * PI / 2) * R * 0.98
-		local rr = math.sqrt(R * R - y * y)
-		for q = 1, lv[2] do
-			local a0, a1 = (q - 1) / lv[2] * PI * 2, q / lv[2] * PI * 2
-			if not (lv[1] < 0.5 and entrance((a0 + a1) / 2)) then
-				seg(pm, "DomeRing", W(cos(a0) * rr, y, sin(a0) * rr), W(cos(a1) * rr, y, sin(a1) * rr), 0.28, COL.hull2, Mat.Metal)
-			end
-		end
-	end
-	ball(pm, "DomeTop", W(0, R + 0.4, 0), 1.6, COL.cyan, Mat.Neon)
-	-- свет внутри купола
-	-- подвесные лампы под куполом
-	for k = 0, 3 do
-		local a = k * PI / 2 + PI / 4
-		local x, z = cos(a) * 9, sin(a) * 9
-		local top = math.sqrt(R * R - 81) - 0.3
-		seg(pm, "LampCable", W(x, top, z), W(x, 9.2, z), 0.06, COL.hull, Mat.Metal)
-		ell(pm, "LampShade", cf * CF(x, 9.0, z), V3(1.6, 0.8, 1.6), COL.hull2, Mat.Metal, { CanCollide = false })
-		local bulb = ball(pm, "LampBulb2", W(x, 8.65, z), 0.6, COL.warm, Mat.Neon)
-		light(bulb, c(255, 226, 190), 18, 0.8)
-	end
-	-- верстак с горшками и лейкой, ящики и бочка у входа
-	do
-		local wb = cf * CF(-6.5, 0, -15.5) * A(0, 0.35, 0)
-		local wood = c(120, 86, 64)
-		part(pm, "Bench", V3(3.6, 0.25, 1.4), wb * CF(0, 1.5, 0), wood, Mat.WoodPlanks)
-		for _, lx in { -1.6, 1.6 } do
-			for _, lz in { -0.55, 0.55 } do part(pm, "BenchLeg", V3(0.2, 1.4, 0.2), wb * CF(lx, 0.7, lz), wood:Lerp(Color3.new(0, 0, 0), 0.25), Mat.Wood, { CanCollide = false }) end
-		end
-		for q = -1, 1 do
-			local pc = wb * CF(q * 1.05, 1.93, 0)
-			cyl(pm, "Pot", pc, 0.6, 0.62, c(176, 104, 76), Mat.Slate, { CanCollide = false })
-			ball(pm, "PotSprout", (pc * CF(0, 0.45, 0)).Position, 0.36, c(100, 190, 130), Mat.SmoothPlastic)
-		end
-		local can = wb * CF(1.2, 0.35, 1.1)
-		cyl(pm, "Can", can, 0.7, 0.6, c(90, 140, 190), Mat.Metal, { CanCollide = false })
-		seg(pm, "CanSpout", (can * CF(0.2, 0.1, 0)).Position, (can * CF(0.75, 0.45, 0)).Position, 0.1, c(90, 140, 190), Mat.Metal)
-		local cr = cf * CF(6.5, 0, -15.5) * A(0, -0.4, 0)
-		part(pm, "Crate", V3(1.6, 1.4, 1.6), cr * CF(0, 0.7, 0), c(140, 104, 74), Mat.WoodPlanks)
-		part(pm, "Crate", V3(1.2, 1.0, 1.2), cr * CF(0.2, 1.9, 0.1) * A(0, 0.5, 0), c(150, 112, 80), Mat.WoodPlanks)
-		cyl(pm, "Barrel", cr * CF(1.6, 0.8, -0.4), 1.6, 1.1, c(80, 110, 150), Mat.Metal)
-	end
-	-- фонарные столбы по кругу
-	for q = 1, 8 do
-		local a = q / 8 * PI * 2 + PI / 8
-		if not entrance(a) then
-			local base = W(cos(a) * 17.6, 0.55, sin(a) * 17.6)
-			seg(pm, "LampPole", base, base + V3(0, 4.6, 0), 0.22, COL.plate, Mat.Metal)
-			local lb = ball(pm, "LampBulb", base + V3(0, 5, 0), 0.9, COL.warm, Mat.Neon)
-			if q % 2 == 0 then light(lb, COL.warm, 15, 0.7) end
-		end
-	end
-	-- ворота
+	local board = part(m, "Board", V3(7, 2.2, 0.3), cf * CF(0, 2.4, -26) * A(0, PI, 0), COL.wood2, Mat.WoodPlanks, { CanCollide = false })
+	surfaceText(board, Enum.NormalId.Front, "Свободный участок", c(230, 220, 200), 34)
+	surfaceText(board, Enum.NormalId.Back, "Свободный участок", c(230, 220, 200), 34)
+	part(m, "BoardPost", V3(0.35, 2.4, 0.35), cf * CF(0, 1.2, -26), COL.wood, Mat.Wood, { CanCollide = false })
+	m.Parent = parent
+	return m
+end
+
+-- деревянный приподнятый ящик-грядка
+local function bedBox(parent, bcf, i, plotId)
+	local bed = Instance.new("Model")
+	bed.Name = "Bed" .. i
+	bed.Parent = parent
+	local w = 7.6
 	for _, s in { -1, 1 } do
-		part(pm, "GatePillar", V3(1.4, 9, 1.4), cf * CF(s * 4.4, 4.5, -19.6), COL.hull2, Mat.Metal, { CanCollide = false })
-		dcyl(pm, "GateGlow", cf * CF(s * 4.4, 4.5, -19.6), 8.8, 0.3, COL.trim, Mat.Metal)
-		ball(pm, "GateOrb", W(s * 4.4, 9.6, -19.6), 1.2, COL.cyan, Mat.Neon)
+		part(bed, "Plank", V3(w, 1.0, 0.5), bcf * CF(0, 0.5, s * (w / 2 - 0.25)), COL.wood, Mat.WoodPlanks)
+		part(bed, "Plank", V3(0.5, 1.0, w - 1), bcf * CF(s * (w / 2 - 0.25), 0.5, 0), COL.wood, Mat.WoodPlanks)
 	end
-	part(pm, "GateBeam", V3(10.6, 1.2, 1.2), cf * CF(0, 9.4, -19.6), COL.hull2, Mat.Metal, { CanCollide = false })
-	local signP = part(pm, "Sign", V3(9, 2.6, 0.4), cf * CF(0, 11.4, -19.6) * A(0, PI, 0), COL.dark, Mat.SmoothPlastic, { CanCollide = false })
-	plot.signFront = surfaceText(signP, Enum.NormalId.Front, "Свободный участок", COL.cyan, 40)
-	plot.signBack = surfaceText(signP, Enum.NormalId.Back, "Свободный участок", COL.cyan, 40)
-	plot.sign = signP
+	local soil = part(bed, "Soil", V3(w - 1, 0.4, w - 1), bcf * CF(0, 0.82, 0), COL.soil, Mat.Ground, { CanCollide = false })
+	soil:SetAttribute("Idx", i)
+	soil:SetAttribute("Plot", plotId)
+	local cover = part(bed, "Cover", V3(w - 0.6, 0.25, w - 0.6), bcf * CF(0, 1.12, 0), c(30, 32, 42), Mat.Metal, { CanCollide = false })
+	local lockOrb = ball(bed, "LockOrb", (bcf * CF(0, 1.7, 0)).Position, 0.6, c(255, 110, 100), Mat.Neon)
+	return { soil = soil, cover = cover, lockOrb = lockOrb, model = bed, pos = (bcf * CF(0, 1.02, 0)).Position, cf = bcf * CF(0, 1.02, 0) }
+end
+
+function Map.buildPlot(pi, j)
+	local id = ("%d_%d"):format(pi, j)
+	if Map.plots[id] then return Map.plots[id] end
+	local cf, ang = slotCF(pi, j)
+	local P = Map.planets[pi]
+	if P.markers[j] then P.markers[j].Parent = nil end
+	local pm = Instance.new("Model")
+	pm.Name = "Plot" .. id
+	pm:SetAttribute("Center", cf.Position)
+	pm:SetAttribute("Planet", pi)
+	local plot = { id = id, planet = pi, slot = j, cf = cf, model = pm, beds = {}, ang = ang }
+	-- земля огорода: тёмная почва
+	local t = workspace:FindFirstChildOfClass("Terrain")
+	if t then t:FillBlock(cf * CF(0, -1.5, 0), V3(62, 3, 54), Mat.Ground) end
+	-- низкий деревянный забор с проходом спереди
+	local function rail(a, b)
+		seg(pm, "Rail", a, b, 0.22, COL.wood2, Mat.Wood)
+	end
+	local W2, D2 = 30, 25.5
+	local corners = { V3(-W2, 0, -D2), V3(W2, 0, -D2), V3(W2, 0, D2), V3(-W2, 0, D2) }
+	for k = 1, 4 do
+		local a, b = corners[k], corners[k % 4 + 1]
+		local len = (b - a).Magnitude
+		local n = math.floor(len / 6)
+		for q = 0, n do
+			local p = a + (b - a) * (q / n)
+			if not (k == 1 and math.abs(p.X) < 4) then
+				part(pm, "Post", V3(0.4, 1.6, 0.4), cf * CF(p + V3(0, 0.8, 0)), COL.wood, Mat.Wood)
+			end
+		end
+		if k == 1 then
+			rail(cf:PointToWorldSpace(a + V3(0, 1.2, 0)), cf:PointToWorldSpace(V3(-4, 1.2, -D2)))
+			rail(cf:PointToWorldSpace(V3(4, 1.2, -D2)), cf:PointToWorldSpace(b + V3(0, 1.2, 0)))
+		else
+			rail(cf:PointToWorldSpace(a + V3(0, 1.2, 0)), cf:PointToWorldSpace(b + V3(0, 1.2, 0)))
+			rail(cf:PointToWorldSpace(a + V3(0, 0.6, 0)), cf:PointToWorldSpace(b + V3(0, 0.6, 0)))
+		end
+	end
+	-- дорожка от входа
+	part(pm, "EntryPath", V3(5, 0.2, 6), cf * CF(0, 0.1, -D2 - 1), c(120, 112, 104), Mat.Cobblestone, { CanCollide = false })
+	-- фонари по углам
+	for _, p in corners do
+		local base = cf:PointToWorldSpace(p * 1.04)
+		seg(pm, "LampPole", base, base + V3(0, 6, 0), 0.25, COL.plate, Mat.Metal)
+		local b = ball(pm, "LampBulb", base + V3(0, 6.3, 0), 0.8, COL.warm, Mat.Neon)
+		light(b, c(255, 226, 190), 22, 0.8)
+	end
+	-- табличка с именем
+	local board = part(pm, "Sign", V3(8, 2.4, 0.3), cf * CF(-9, 3, -D2 - 0.5) * A(0, PI, 0), COL.wood2, Mat.WoodPlanks, { CanCollide = false })
+	plot.signFront = surfaceText(board, Enum.NormalId.Front, "Огород", COL.gold, 34)
+	plot.signBack = surfaceText(board, Enum.NormalId.Back, "Огород", COL.gold, 34)
+	for _, sx in { -3.6, 3.6 } do part(pm, "SignPost", V3(0.35, 3.4, 0.35), cf * CF(-9 + sx, 1.7, -D2 - 0.5), COL.wood, Mat.Wood, { CanCollide = false }) end
 	-- грядки
 	local beds = Instance.new("Folder")
 	beds.Name = "Beds"
 	beds.Parent = pm
 	for bi = 1, Map.MaxBeds do
 		local lp = Map.bedLocalPos(bi)
-		local bcf = cf * CF(lp)
-		local bed = Instance.new("Model")
-		bed.Name = "Bed" .. bi
-		bed.Parent = beds
-		cyl(bed, "Rim", bcf * CF(0, 0.9, 0), 0.85, 4.7, COL.hull2, Mat.Metal)
-		dcyl(bed, "RimGlow", bcf * CF(0, 1.34, 0), 0.06, 4.75, COL.trim, Mat.Metal)
-		local soil = cyl(bed, "Soil", bcf * CF(0, 1.3, 0), 0.12, 4.0, COL.soil, Mat.Ground, { CanCollide = false })
-		-- мелкие камешки на почве
-		for q = 1, 4 do
-			local sa = q * 1.9 + bi
-			ball(bed, "Pebble", (bcf * CF(cos(sa) * 1.5, 1.4, sin(sa) * 1.5)).Position, 0.22, c(95, 80, 74), Mat.Slate)
-		end
-		local cover = cyl(bed, "Cover", bcf * CF(0, 1.42, 0), 0.3, 4.2, c(20, 24, 34), Mat.Metal, { CanCollide = false })
-		cover.Transparency = bi <= Game.StartBeds and 1 or 0
-		local lockOrb = ball(bed, "LockOrb", (bcf * CF(0, 1.9, 0)).Position, 0.6, c(255, 90, 90), Mat.Neon, { Transparency = bi <= Game.StartBeds and 1 or 0.2 })
-		soil:SetAttribute("Idx", bi)
-		soil:SetAttribute("Plot", i)
-		plot.beds[bi] = { soil = soil, cover = cover, lockOrb = lockOrb, model = bed, pos = (bcf * CF(0, 1.36, 0)).Position, cf = bcf * CF(0, 1.36, 0) }
+		plot.beds[bi] = bedBox(beds, cf * CF(lp), bi, id)
 	end
-	-- точки появления игрока: перед воротами
-	plot.entrance = cf * CF(0, 3, -24)
-	plot.center = W(0, 0, 0)
-	-- папка для украшений
+	plot.entrance = cf * CF(0, 3, -D2 - 5) * A(0, PI, 0)
+	plot.center = cf.Position
 	local d = Instance.new("Folder")
 	d.Name = "Decor"
 	d.Parent = pm
 	plot.decor = d
+	pm.Parent = P.plotsFolder
+	Map.plots[id] = plot
 	return plot
 end
 
-local function buildWalkways(parent)
-	for i = 1, Map.PlotCount do
-		local _, ang = plotCF(i)
-		local dirv = V3(cos(ang), 0, sin(ang))
-		local r0, r1 = 34.5, Map.PlotRadius - 19.4
-		local len = r1 - r0
-		local mid = dirv * ((r0 + r1) / 2)
-		local wcf = CFrame.lookAt(V3(mid.X, 0.25, mid.Z), V3(mid.X, 0.25, mid.Z) - dirv)
-		part(parent, "Walkway", V3(9, 0.5, len), wcf, c(50, 54, 70), Mat.Concrete)
-		for _, s in { -1, 1 } do
-			part(parent, "WalkEdge", V3(0.6, 0.7, len), wcf * CF(s * 4.6, 0.1, 0), COL.hull2, Mat.Metal, { CanCollide = false })
-		end
-		for q = 1, math.floor(len / 5) do
-			deco(parent, "WalkSeam", V3(8.4, 0.06, 0.12), wcf * CF(0, 0.27, -len / 2 + q * 5), c(40, 44, 58), Mat.Metal)
-		end
-		for _, s in { -1, 1 } do
-			for q = 1, math.floor(len / 12) do
-				local pos = (wcf * CF(s * 5.4, 0, -len / 2 + q * 12 - 6)).Position
-				seg(parent, "Pole", pos + V3(0, 0.4, 0), pos + V3(0, 4.6, 0), 0.22, COL.plate, Mat.Metal)
-				part(parent, "LampHead", V3(0.9, 0.35, 0.9), CF(pos + V3(0, 4.75, 0)), COL.hull2, Mat.Metal, { CanCollide = false })
-				local b = ball(parent, "Bulb", pos + V3(0, 4.45, 0), 0.55, COL.warm, Mat.Neon)
-				if q % 2 == 1 then light(b, COL.warm, 16, 0.7) end
-			end
-		end
-	end
+function Map.destroyPlot(id)
+	local plot = Map.plots[id]
+	if not plot then return end
+	plot.model:Destroy()
+	Map.plots[id] = nil
+	local t = workspace:FindFirstChildOfClass("Terrain")
+	if t then t:FillBlock(plot.cf * CF(0, -1.5, 0), V3(62, 3, 54), WT.Themes[plot.planet].base) end
+	local P = Map.planets[plot.planet]
+	if P.markers[plot.slot] then P.markers[plot.slot].Parent = P.slotFolder end
 end
 
------------------------------------------------------------------- украшения участка (покупаются за монеты)
+------------------------------------------------------------------ украшения огорода (покупаются за монеты)
 local DECOR = {}
 DECOR.bench = function(parent, cf)
 	for _, sgn in { -1, 1 } do
@@ -478,29 +290,6 @@ DECOR.bench = function(parent, cf)
 		part(parent, "Back", V3(3, 1.1, 0.25), base * CF(0, 2.0, 0.5) * A(-0.15, 0, 0), COL.plate, Mat.Metal, { CanCollide = false })
 		deco(parent, "SeatGlow", V3(3.05, 0.07, 1.15), base * CF(0, 1.1, 0), COL.cyan, Mat.Neon)
 		for _, lg in { -1.2, 1.2 } do part(parent, "Leg", V3(0.2, 1.1, 0.2), base * CF(lg, 0.7, 0), COL.hull, Mat.Metal, { CanCollide = false }) end
-	end
-end
-DECOR.banner = function(parent, cf)
-	for q = 1, 6 do
-		local a = q / 6 * PI * 2 + 0.26
-		local base = cf * CF(cos(a) * 18.6, 0, sin(a) * 18.6)
-		if not (math.abs(sin(a) + 1) < 0.2) then
-			local pos = base.Position
-			seg(parent, "FlagPole", pos + V3(0, 0.5, 0), pos + V3(0, 7.5, 0), 0.22, COL.plate, Mat.Metal)
-			local col = Game.PlanetColors[q]
-			deco(parent, "Flag", V3(0.12, 2.2, 3), base * CF(0, 6.2, 1.7), col, Mat.Neon, { Transparency = 0.15 })
-			ball(parent, "FlagTop", pos + V3(0, 7.7, 0), 0.5, col, Mat.Neon)
-		end
-	end
-end
-DECOR.lamps = function(parent, cf)
-	for q = 1, 10 do
-		local a = q / 10 * PI * 2
-		local base = cf * CF(cos(a) * 8.4, 0, sin(a) * 8.4)
-		local pos = base.Position
-		seg(parent, "Stake", pos + V3(0, 0.5, 0), pos + V3(0, 2.2, 0), 0.14, COL.plate, Mat.Metal)
-		local b = ball(parent, "StakeBulb", pos + V3(0, 2.5, 0), 0.7, Game.PlanetColors[q % 6 + 1], Mat.Neon)
-		light(b, b.Color, 9, 0.5)
 	end
 end
 DECOR.fountain = function(parent, cf)
@@ -577,131 +366,127 @@ DECOR.starpond = function(parent, cf)
 	light(lb, COL.mag, 26, 1)
 end
 
-DECOR_EXT = DECOR
-local DECOR_ANCHOR = { -- локальные координаты участка
-	bench = { CF(0, 0.55, 12.5) },
+
+DECOR.banner = function(parent, cf)
+	for q = 0, 5 do
+		local base = cf * CF(-24 + q * 9.6, 0, 27.5)
+		local pos = base.Position
+		seg(parent, "FlagPole", pos + V3(0, 0.2, 0), pos + V3(0, 7.5, 0), 0.22, COL.plate, Mat.Metal)
+		local col = Game.PlanetColors[q + 1]
+		deco(parent, "Flag", V3(0.12, 2.2, 3), base * CF(0, 6.2, 1.7), col, Mat.SmoothPlastic)
+		ball(parent, "FlagTop", pos + V3(0, 7.7, 0), 0.5, col, Mat.Neon)
+	end
+end
+DECOR.lamps = function(parent, cf)
+	for _, sx in { -32, 32 } do
+		for q = 0, 4 do
+			local pos = (cf * CF(sx, 0, -20 + q * 10)).Position
+			seg(parent, "Stake", pos, pos + V3(0, 2.2, 0), 0.14, COL.plate, Mat.Metal)
+			local b = ball(parent, "StakeBulb", pos + V3(0, 2.5, 0), 0.7, Game.PlanetColors[q % 6 + 1], Mat.Neon)
+			if q % 2 == 0 then light(b, b.Color, 10, 0.5) end
+		end
+	end
+end
+local DECOR_ANCHOR = { -- координаты относительно огорода
+	bench = { CF(0, 0, 30) },
 	banner = { CF() },
 	lamps = { CF() },
-	fountain = { CF(0, 0.5, 0) },
-	telescope = { CF(14.2, 0.55, 8) * A(0, -0.8, 0) },
-	globe = { CF(-14, 0.55, 8) },
-	rocket = { CF(-9, 0, 30) },
-	starpond = { CF(11, 0, 30) },
+	fountain = { CF(-36, 0, -8) },
+	telescope = { CF(36, 0, 10) * A(0, -0.8, 0) },
+	globe = { CF(36, 0, -12) },
+	rocket = { CF(-24, 0, 38) },
+	starpond = { CF(20, 0, 38) },
 }
-function Map.placeDecor(plotIdx: number, id: string)
-	local plot = Map.plots[plotIdx]
-	if not plot or plot.decor:FindFirstChild(id) then return end
+function Map.placeDecor(id, decorId: string)
+	local plot = Map.plots[id]
+	if not plot or plot.decor:FindFirstChild(decorId) then return end
 	local m = Instance.new("Model")
-	m.Name = id
+	m.Name = decorId
 	m.Parent = plot.decor
-	local cf = plot.cf * DECOR_ANCHOR[id][1]
-	DECOR[id](m, cf)
+	DECOR[decorId](m, plot.cf * DECOR_ANCHOR[decorId][1])
 end
-function Map.clearDecor(plotIdx: number)
-	local plot = Map.plots[plotIdx]
+function Map.clearDecor(id)
+	local plot = Map.plots[id]
 	if plot then plot.decor:ClearAllChildren() end
 end
-function Map.setPlotSign(plotIdx: number, text: string, color)
-	local plot = Map.plots[plotIdx]
+function Map.setPlotSign(id, text: string, color)
+	local plot = Map.plots[id]
 	if not plot then return end
 	plot.signFront.Text, plot.signBack.Text = text, text
 	if color then plot.signFront.TextColor3, plot.signBack.TextColor3 = color, color end
 end
-function Map.setBedLocked(plotIdx: number, bedIdx: number, locked: boolean)
-	local plot = Map.plots[plotIdx]
+function Map.setBedLocked(id, bedIdx: number, locked: boolean)
+	local plot = Map.plots[id]
 	local bed = plot and plot.beds[bedIdx]
 	if not bed then return end
 	bed.cover.Transparency = locked and 0 or 1
 	bed.lockOrb.Transparency = locked and 0.2 or 1
 end
 
------------------------------------------------------------------- окружение: техника, камни, площадка с ракетой
-local function onGround(x, z) return WT.groundY(x, z) end
-
-local function antenna(parent, base, k)
-	cyl(parent, "MastBase", CF(base + V3(0, 1, 0)), 2, 4, COL.hull2, Mat.Metal)
-	local top = base + V3(0, 30, 0)
-	seg(parent, "Mast", base + V3(0, 2, 0), top, 0.9, COL.plate, Mat.Metal)
-	for q = 1, 5 do
-		local h = 6 + q * 4.5
-		seg(parent, "MastArm", base + V3(-2.4 + q * 0.2, h, 0), base + V3(2.4 - q * 0.2, h, 0), 0.22, COL.plate, Mat.Metal)
+------------------------------------------------------------------ площадь планеты: ракета, киоски, дорожки
+local KIOSKS = {
+	{ id = "shop", ang = 0, col = COL.green, title = "СЕМЕНА", prompt = "Магазин семян" },
+	{ id = "sell", ang = 90, col = COL.gold, title = "ПРОДАЖА", prompt = "Продать урожай" },
+	{ id = "market", ang = 180, col = COL.mag, title = "РЫНОК", prompt = "Рынок и спрос" },
+	{ id = "upgrades", ang = 270, col = COL.cyan, title = "МАСТЕРСКАЯ", prompt = "Улучшения" },
+}
+local function buildHub(pi, parent)
+	local ctr = WT.Centers[pi]
+	local name = Game.Planets[pi].name
+	local f = Instance.new("Folder")
+	f.Name = "Hub"
+	f.Parent = parent
+	cyl(f, "Plaza", CF(ctr + V3(0, 0.2, 0)), 0.5, 58, PLAZA[pi], Mat.Concrete)
+	dcyl(f, "PlazaRing", CF(ctr + V3(0, 0.46, 0)), 0.06, 58.4, COL.trim, Mat.Metal)
+	dcyl(f, "PlazaInner", CF(ctr + V3(0, 0.47, 0)), 0.06, 57.6, PLAZA[pi], Mat.Concrete)
+	-- ракета в центре: на ней летают между планетами
+	local pad = Instance.new("Model")
+	pad.Name = "RocketPad"
+	pad.Parent = f
+	DECOR.rocket(pad, CF(ctr))
+	local trig = part(pad, "PromptPart", V3(12, 4, 12), CF(ctr + V3(0, 2, 0)), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
+	local pr = prompt(trig, "Полететь на другую планету", "Ракета", 14, "Open_travel")
+	pr:SetAttribute("Window", "travel")
+	-- табличка с названием планеты
+	local sign = part(f, "PlanetSign", V3(14, 3.4, 0.4), CF(ctr + V3(0, 15.5, 0)), COL.dark, Mat.SmoothPlastic, { CanCollide = false })
+	surfaceText(sign, Enum.NormalId.Front, string.upper(name), Game.PlanetColors[pi], 30)
+	surfaceText(sign, Enum.NormalId.Back, string.upper(name), Game.PlanetColors[pi], 30)
+	for i, k in KIOSKS do
+		local a = math.rad(k.ang)
+		local pos = ctr + V3(cos(a) * 19, 0.45, sin(a) * 19)
+		local kcf = CFrame.lookAt(pos, ctr + V3(0, 0.45, 0))
+		local m = kiosk(f, "Kiosk_" .. k.id, kcf, k.col, k.title)
+		if k.id == "market" then
+			local scr = part(m, "Screen", V3(9, 5.2, 0.4), kcf * CF(0, 4.2, 2.8), c(8, 10, 20), Mat.SmoothPlastic, { CanCollide = false })
+			local lbl = surfaceText(scr, Enum.NormalId.Front, "Рынок загружается", COL.mag, 30)
+			lbl.TextScaled = false
+			lbl.TextSize = 22
+			lbl.RichText = true
+			table.insert(Map.boardLabels, lbl)
+		end
+		local t2 = part(m, "PromptPart", V3(5, 3, 3), kcf * CF(0, 2.2, 1.6), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
+		local p2 = prompt(t2, k.prompt, "", 12, "Open_" .. k.id)
+		p2:SetAttribute("Window", k.id)
 	end
-	for _, a in { 0, 2.1, 4.2 } do
-		seg(parent, "Guy", top + V3(0, -6, 0), base + V3(cos(a) * 9, 0.2, sin(a) * 9), 0.08, COL.trim, Mat.Metal)
-	end
-	local b = ball(parent, "MastLight", top + V3(0, 1, 0), 1.0, c(230, 70, 70), Mat.Neon)
-	light(b, c(255, 70, 70), 18, 0.6)
-	b:SetAttribute("Blink", 1.2 + k * 0.13)
-end
-
-local function dish(parent, base, facing)
-	cyl(parent, "DishBase", CF(base + V3(0, 1.4, 0)), 2.8, 4, COL.hull2, Mat.Metal)
-	seg(parent, "DishArm", base + V3(0, 2.5, 0), base + V3(0, 9, 0), 1.1, COL.plate, Mat.Metal)
-	local dcf = CF(base + V3(0, 10, 0)) * A(0, facing, 0) * A(-0.75, 0, 0)
-	ell(parent, "Dish", dcf, V3(16, 1.4, 16), c(200, 206, 222), Mat.Metal)
-	for _, a in { 0, 2.1, 4.2 } do
-		seg(parent, "DishStrut", (dcf * CF(cos(a) * 6.5, 0.3, sin(a) * 6.5)).Position, (dcf * CF(0, 7, 0)).Position, 0.18, COL.plate, Mat.Metal)
-	end
-	ball(parent, "DishTip", (dcf * CF(0, 7, 0)).Position, 0.9, COL.cyan, Mat.Neon)
-end
-
-local function solarArray(parent, cfb)
-	for q = -2, 2 do
-		local pcf = cfb * CF(q * 4.6, 2.6, 0) * A(0.45, 0, 0)
-		part(parent, "Panel", V3(4.2, 0.2, 7), pcf, c(26, 46, 96), Mat.Glass, { CanCollide = false, Reflectance = 0.2 })
-		deco(parent, "PanelFrame", V3(4.4, 0.12, 7.2), pcf * CF(0, -0.12, 0), COL.trim, Mat.Metal)
-		seg(parent, "PanelLeg", (cfb * CF(q * 4.6, 0, 0)).Position, (cfb * CF(q * 4.6, 2.5, 0)).Position, 0.22, COL.plate, Mat.Metal)
-	end
-end
-
-local function buildScenery(parent)
-	local rng = Random.new(2026)
-	-- техника на краю зоны станции, между участками
-	for i = 1, Map.PlotCount do
-		local a = (i - 1) / Map.PlotCount * PI * 2
-		local r = 142
-		local x, z = cos(a) * r, sin(a) * r
-		local base = V3(x, onGround(x, z), z)
-		if i % 2 == 1 then antenna(parent, base, i) else dish(parent, base, -a + PI) end
-		local sa = a + 0.12
-		local sx, sz = cos(sa) * 128, sin(sa) * 128
-		solarArray(parent, CF(sx, onGround(sx, sz), sz) * A(0, -sa + PI / 2, 0))
-	end
-	-- площадка с ракетой и обсерватория во внешней зоне
-	do
-		local a = 0.35
-		local x, z = cos(a) * 168, sin(a) * 168
-		local m = Instance.new("Model")
-		m.Name = "LaunchPad"
-		m.Parent = parent
-		DECOR_EXT.rocket(m, CF(x, onGround(x, z), z))
-		local a2 = PI + 0.5
-		local x2, z2 = cos(a2) * 166, sin(a2) * 166
-		local y2 = onGround(x2, z2)
-		cyl(parent, "ObsBase", CF(x2, y2 + 2, z2), 4, 18, COL.hull2, Mat.Concrete)
-		ell(parent, "ObsDome", CF(x2, y2 + 4, z2), V3(16, 14, 16), c(196, 202, 220), Mat.Metal)
-		part(parent, "ObsSlit", V3(2.2, 7, 12), CF(x2, y2 + 9, z2) * A(0.6, 0.4, 0), c(20, 24, 36), Mat.SmoothPlastic, { CanCollide = false })
-		cyl(parent, "ObsScope", CF(x2, y2 + 10, z2) * A(0.6, 0.4, 0), 9, 2.2, COL.plate, Mat.Metal, { CanCollide = false })
-	end
-	-- валуны во внешней зоне и немного камней между участками
-	for q = 1, 70 do
-		local a = rng:NextNumber(0, PI * 2)
-		local r = q <= 20 and rng:NextNumber(40, 125) or rng:NextNumber(WT.StationRadius + 4, WT.PlayRadius - 4)
-		local x, z = cos(a) * r, sin(a) * r
-		local sz = q <= 20 and rng:NextNumber(1, 2.5) or rng:NextNumber(1.5, 6)
-		local y = onGround(x, z)
-		local m = Instance.new("Model")
-		m.Name = "Boulder"
-		m.Parent = parent
-		local col = ({ c(80, 76, 94), c(70, 66, 84), c(96, 90, 104) })[q % 3 + 1]
-		ell(m, "Rock", CF(x, y + sz * 0.25, z) * A(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6), 0), V3(sz * 1.6, sz, sz * 1.3), col, Mat.Slate, { CanCollide = sz > 2 })
-		if sz > 2.5 then
-			ell(m, "Rock2", CF(x + sz * 0.8, y + sz * 0.15, z + sz * 0.3), V3(sz * 0.8, sz * 0.55, sz * 0.7), col, Mat.Slate, { CanCollide = false })
+	-- дорожки к огородам
+	for j = 1, Map.SlotsPerPlanet do
+		local _, ang = slotCF(pi, j)
+		local dirv = V3(cos(ang), 0, sin(ang))
+		local r0, r1 = 29, Map.PlotRing - 31
+		local len = r1 - r0
+		local mid = ctr + dirv * ((r0 + r1) / 2)
+		local wcf = CFrame.lookAt(V3(mid.X, ctr.Y + 0.2, mid.Z), V3(mid.X, ctr.Y + 0.2, mid.Z) - dirv)
+		part(f, "Walkway", V3(7, 0.4, len), wcf, PLAZA[pi]:Lerp(c(60, 60, 70), 0.35), Mat.Cobblestone)
+		for _, s in { -1, 1 } do
+			local pos = (wcf * CF(s * 4.6, 0, 0)).Position
+			seg(f, "Pole", pos, pos + V3(0, 4.6, 0), 0.22, COL.plate, Mat.Metal)
+			local b = ball(f, "Bulb", pos + V3(0, 4.9, 0), 0.6, COL.warm, Mat.Neon)
+			if s == 1 then light(b, COL.warm, 16, 0.6) end
 		end
 	end
 end
 
--- растения: клумбы площади, рощи между участками и гигантская флора во внешней зоне
+------------------------------------------------------------------ флора и камни планеты
 local function bigPlant(parent, id, pos, s, yaw)
 	local ok, m = pcall(PM.build, id, nil)
 	if not ok or not m then return end
@@ -722,63 +507,90 @@ local function bigPlant(parent, id, pos, s, yaw)
 	return m
 end
 
+
+local function free(pi, x, z)
+	local ctr = WT.Centers[pi]
+	local dx, dz = x - ctr.X, z - ctr.Z
+	local r = math.sqrt(dx * dx + dz * dz)
+	if r < 34 or r > WT.PlayRadius - 4 then return false end
+	for j = 1, Map.SlotsPerPlanet do
+		local cf = slotCF(pi, j)
+		local lp = cf:PointToObjectSpace(V3(x, ctr.Y, z))
+		if math.abs(lp.X) < 40 and lp.Z > -34 and lp.Z < 44 then return false end
+		-- дорожка к огороду
+		local ang = select(2, slotCF(pi, j))
+		local along = dx * cos(ang) + dz * sin(ang)
+		local across = math.abs(-dx * sin(ang) + dz * cos(ang))
+		if along > 20 and along < 75 and across < 7 then return false end
+	end
+	return true
+end
+
 function Map.buildFlora()
-	local parent = world:FindFirstChild("Scenery")
-	if not parent or parent:FindFirstChild("Flora") then return end
+	if world:FindFirstChild("Flora") then return end
 	local fl = Instance.new("Folder")
 	fl.Name = "Flora"
-	fl.Parent = parent
+	fl.Parent = world
 	local rng = Random.new(4242)
-	local byForm = {}
-	for _, p in Game.PlantList do
-		byForm[p.form] = byForm[p.form] or {}
-		table.insert(byForm[p.form], p.id)
-	end
-	local function pick(forms)
-		local f = forms[rng:NextInteger(1, #forms)]
-		local list = byForm[f]
-		return list and list[rng:NextInteger(1, #list)] or "moon_01"
-	end
-	-- клумбы на площади
-	for i, pos in Map.planters or {} do
-		bigPlant(fl, pick({ "flower", "tulip", "orb", "spiral" }), pos, 1.2, i)
-	end
-	-- маленькие цветы вдоль бордюра в каждом куполе
-	for _, plot in Map.plots do
-		for k = 1, 6 do
-			local a = -PI / 2 + 0.6 + (k - 0.5) / 6 * (PI * 2 - 1.2)
-			local lp = plot.cf:PointToWorldSpace(V3(cos(a) * 18.2, 0, sin(a) * 18.2))
-			bigPlant(fl, pick({ "flower", "tulip", "grass", "orb" }), lp, 0.55, a)
+	for pi = 1, #WT.Centers do
+		local ctr = WT.Centers[pi]
+		local pid = Game.Planets[pi].id
+		local mine = {}
+		for _, p in Game.PlantList do
+			if p.planet == pid then table.insert(mine, p.id) end
 		end
-	end
-	-- рощи между участками
-	for i = 1, Map.PlotCount do
-		local a = (i - 1) / Map.PlotCount * PI * 2
-		for k = 1, 4 do
-			local r = 100 + rng:NextNumber(-14, 14)
-			local aa = a + rng:NextNumber(-0.08, 0.08)
-			local x, z = cos(aa) * r, sin(aa) * r
-			bigPlant(fl, pick({ "tree", "mushroom", "coral", "crystal" }), V3(x, onGround(x, z), z), rng:NextNumber(2.2, 3.6), rng:NextNumber(0, 6.28))
+		local placed, tries = 0, 0
+		while placed < 26 and tries < 400 do
+			tries += 1
+			local a = rng:NextNumber(0, PI * 2)
+			local r = rng:NextNumber(34, WT.PlayRadius - 6)
+			local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
+			if free(pi, x, z) then
+				local id = mine[rng:NextInteger(1, #mine)]
+				bigPlant(fl, id, V3(x, WT.groundY(x, z, pi), z), rng:NextNumber(2.2, 5.5), rng:NextNumber(0, PI * 2))
+				placed += 1
+			end
 		end
-	end
-	-- внешняя зона: гигантская флора
-	for q = 1, 46 do
-		local a = rng:NextNumber(0, PI * 2)
-		local r = rng:NextNumber(WT.StationRadius + 6, WT.PlayRadius - 6)
-		local x, z = cos(a) * r, sin(a) * r
-		local forms = q % 3 == 0 and { "crystal", "geode" } or { "tree", "mushroom", "coral", "jelly", "spiral", "cactus" }
-		bigPlant(fl, pick(forms), V3(x, onGround(x, z), z), rng:NextNumber(3, 6.5), rng:NextNumber(0, 6.28))
-	end
-	-- кристаллы у подножия гор
-	for q = 1, 24 do
-		local a = q / 24 * PI * 2 + rng:NextNumber(-0.1, 0.1)
-		local r = WT.PlayRadius - rng:NextNumber(4, 12)
-		local x, z = cos(a) * r, sin(a) * r
-		bigPlant(fl, pick({ "crystal" }), V3(x, onGround(x, z) - 0.5, z), rng:NextNumber(4, 8), rng:NextNumber(0, 6.28))
 	end
 end
 
------------------------------------------------------------------- фон: планеты, станция, астероиды
+local function buildRocks(pi, parent)
+	local ctr = WT.Centers[pi]
+	local rng = Random.new(900 + pi)
+	local col = WT.Colors[WT.Themes[pi].rim] or c(80, 76, 94)
+	local n = 0
+	for _ = 1, 200 do
+		if n >= 26 then break end
+		local a = rng:NextNumber(0, PI * 2)
+		local r = rng:NextNumber(34, WT.PlayRadius - 4)
+		local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
+		if free(pi, x, z) then
+			n += 1
+			local sz = rng:NextNumber(1.2, 5)
+			local y = WT.groundY(x, z, pi)
+			ell(parent, "Rock", CF(x, y + sz * 0.25, z) * A(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6), 0), V3(sz * 1.6, sz, sz * 1.3), col, Mat.Slate, { CanCollide = sz > 2.5 })
+		end
+	end
+end
+
+local function buildBarrier(pi, parent)
+	local ctr = WT.Centers[pi]
+	local R = WT.PlayRadius
+	for i = 1, 48 do
+		local a0, a1 = (i - 1) / 48 * PI * 2, i / 48 * PI * 2
+		local p0 = ctr + V3(cos(a0) * R, 40, sin(a0) * R)
+		local p1 = ctr + V3(cos(a1) * R, 40, sin(a1) * R)
+		part(parent, "Wall", V3(2, 120, (p1 - p0).Magnitude + 0.2), CFrame.lookAt((p0 + p1) / 2, p1), COL.hull, Mat.SmoothPlastic, { Transparency = 1, CanQuery = false })
+	end
+end
+
+function Map.padCF(pi)
+	local ctr = WT.Centers[pi]
+	return CF(ctr + V3(0, 3, 12)) * A(0, PI, 0)
+end
+Map.planetAt = WT.planetAt
+
+------------------------------------------------------------------ фон
 local function billboard(parent, name, image, pos, size)
 	-- картинка планеты на невидимой плоскости, повёрнутой к центру станции (SurfaceGui не зависит от прозрачности детали)
 	local p = part(parent, name, V3(size, size, 0.2), CFrame.lookAt(pos, V3(0, 0, 0)), c(255, 255, 255), Mat.SmoothPlastic,
@@ -798,56 +610,29 @@ local function billboard(parent, name, image, pos, size)
 	return p
 end
 
+
 local function buildBackdrop(parent)
-	billboard(parent, "GasGiant", PlanetImg.gas, V3(1500, 640, -2200), 3200)
-	billboard(parent, "BlueWorld", PlanetImg.earth, V3(-2300, 380, -900), 1100)
-	billboard(parent, "Moon", PlanetImg.moon, V3(1400, 520, 1900), 520)
-	billboard(parent, "Moon2", PlanetImg.moon, V3(-1100, 650, 2300), 260)
-	-- кольцевая станция
-	local sc = CF(-650, 240, 900) * A(0.5, 0.4, 0.2)
-	local segs = 44
-	for i = 1, segs do
-		local a0, a1 = (i - 1) / segs * PI * 2, i / segs * PI * 2
-		local R = 190
-		local p0, p1 = (sc * CF(cos(a0) * R, 0, sin(a0) * R)).Position, (sc * CF(cos(a1) * R, 0, sin(a1) * R)).Position
-		local mid = (p0 + p1) / 2
-		local look = CFrame.lookAt(mid, p1, (sc * CF(0, 1, 0)).Position - sc.Position)
-		part(parent, "StationSeg", V3(26, 18, (p1 - p0).Magnitude + 0.5), look, i % 2 == 0 and c(150, 158, 178) or c(120, 128, 150), Mat.Metal, { CanCollide = false })
-		if i % 2 == 0 then
-			deco(parent, "StationWin", V3(26.5, 3, 7), look * CF(0, 2, 0), COL.warm, Mat.Neon, { Transparency = 0.1 })
-		end
-	end
-	for k = 1, 4 do
-		local a = k / 4 * PI * 2
-		seg(parent, "StationSpoke", sc.Position, (sc * CF(cos(a) * 190, 0, sin(a) * 190)).Position, 5, c(130, 138, 160), Mat.Metal)
-	end
-	ball(parent, "StationHub", sc.Position, 46, c(170, 178, 198), Mat.Metal, { CanCollide = false })
-	ball(parent, "StationHubGlow", sc.Position, 22, COL.cyan, Mat.Neon, { Transparency = 0.2 })
-	-- астероиды вокруг
+	billboard(parent, "GasGiant", PlanetImg.gas, V3(5200, 1800, -6400), 6400)
+	billboard(parent, "BlueWorld", PlanetImg.earth, V3(-6200, 900, -3000), 1800)
 	local rng = Random.new(404)
 	local fl = Instance.new("Folder")
 	fl.Name = "Drift"
 	fl.Parent = parent
-	for i = 1, 44 do
-		local a = rng:NextNumber(0, PI * 2)
-		local r = rng:NextNumber(340, 800)
-		local y = rng:NextNumber(-60, 220)
-		local s = rng:NextNumber(5, 38)
-		local col = ({ c(88, 80, 92), c(104, 92, 84), c(70, 74, 92), c(96, 84, 108) })[i % 4 + 1]
-		local rock = Instance.new("Model")
-		rock.Name = "Asteroid"
-		rock.Parent = fl
-		local main = ell(rock, "Main", CF(cos(a) * r, y, sin(a) * r) * A(rng:NextNumber(0, 6), rng:NextNumber(0, 6), 0), V3(s * 1.4, s, s * 1.2), col, Mat.Slate, { CanCollide = false, CastShadow = false })
-		for k = 1, 3 do
-			ell(rock, "Lump", main.CFrame * CF(rng:NextNumber(-s, s) * 0.5, rng:NextNumber(-s, s) * 0.4, rng:NextNumber(-s, s) * 0.5), V3(s * 0.7, s * 0.6, s * 0.65), col:Lerp(c(120, 110, 120), 0.2), Mat.Slate, { CanCollide = false, CastShadow = false })
+	for i = 1, 34 do
+		local p = V3(rng:NextNumber(-1400, 1400), rng:NextNumber(-200, 1500), rng:NextNumber(-1400, 1400))
+		local near = false
+		for _, ctr in WT.Centers do
+			if (p - ctr).Magnitude < 320 then near = true end
 		end
-		if i % 5 == 0 then
-			local gc = i % 10 == 0 and COL.mag or COL.cyan
-			local g = ell(rock, "Crystal", main.CFrame * CF(0, s * 0.5, 0) * A(0.3, 0, 0.3), V3(s * 0.25, s * 0.9, s * 0.25), gc, Mat.Glass, { Transparency = 0.1, CanCollide = false, CastShadow = false })
-			light(g, gc, s * 3, 1)
+		if not near then
+			local s = rng:NextNumber(8, 34)
+			local rock = Instance.new("Model")
+			rock.Name = "Asteroid"
+			rock.Parent = fl
+			local main = ell(rock, "Main", CF(p) * A(rng:NextNumber(0, 6), rng:NextNumber(0, 6), 0), V3(s * 1.4, s, s * 1.2), c(88, 82, 96), Mat.Slate, { CanCollide = false, CastShadow = false })
+			rock.PrimaryPart = main
+			rock:SetAttribute("Drift", rng:NextNumber(0.02, 0.07) * (i % 2 == 0 and 1 or -1))
 		end
-		rock.PrimaryPart = main
-		rock:SetAttribute("Drift", rng:NextNumber(0.02, 0.08) * (i % 2 == 0 and 1 or -1))
 	end
 end
 
@@ -883,35 +668,46 @@ local function buildLighting()
 	rays.Parent = Lighting
 end
 
+
 function Map.build()
 	world = Instance.new("Folder")
 	world.Name = "World"
 	world.Parent = workspace
 	workspace.Gravity = 120
 	buildLighting()
-	buildHull()
-	buildHub()
-	local plots = Instance.new("Folder")
-	plots.Name = "Plots"
-	plots.Parent = world
-	for i = 1, Map.PlotCount do
-		Map.plots[i] = buildPlot(i, plots)
+	WT.build()
+	local plotsFolder = Instance.new("Folder")
+	plotsFolder.Name = "Plots"
+	plotsFolder.Parent = world
+	for pi = 1, #WT.Centers do
+		local pf = Instance.new("Folder")
+		pf.Name = "Planet" .. pi
+		pf.Parent = world
+		local slots = Instance.new("Folder")
+		slots.Name = "Slots"
+		slots.Parent = pf
+		local P = { index = pi, center = WT.Centers[pi], markers = {}, plotsFolder = plotsFolder, slotFolder = slots }
+		Map.planets[pi] = P
+		buildHub(pi, pf)
+		for j = 1, Map.SlotsPerPlanet do
+			P.markers[j] = slotMarker(pi, j, slots)
+		end
+		local rocks = Instance.new("Folder")
+		rocks.Name = "Rocks"
+		rocks.Parent = pf
+		buildRocks(pi, rocks)
+		local bar = Instance.new("Folder")
+		bar.Name = "Barrier"
+		bar.Parent = pf
+		buildBarrier(pi, bar)
 	end
-	local walk = Instance.new("Folder")
-	walk.Name = "Walkways"
-	walk.Parent = world
-	buildWalkways(walk)
-	local sc = Instance.new("Folder")
-	sc.Name = "Scenery"
-	sc.Parent = world
-	buildScenery(sc)
 	local bg = Instance.new("Folder")
 	bg.Name = "Backdrop"
 	bg.Parent = world
 	buildBackdrop(bg)
 	local spawn = Instance.new("SpawnLocation")
 	spawn.Name = "Spawn"
-	spawn.Size, spawn.CFrame, spawn.Anchored = V3(8, 1, 8), CF(0, 0.5, 30), true
+	spawn.Size, spawn.CFrame, spawn.Anchored = V3(8, 1, 8), Map.padCF(1) * CF(0, -2.5, 0), true
 	spawn.Transparency, spawn.CanCollide, spawn.Neutral = 1, false, true
 	spawn.Parent = world
 	Map.spawn = spawn

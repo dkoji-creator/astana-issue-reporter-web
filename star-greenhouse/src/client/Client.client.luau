@@ -321,14 +321,15 @@ do
 	local left = K.scroll(body, { Size = UDim2.new(0.55, -6, 1, -50) })
 	listLayout(left, nil, 4)
 	local right = K.panel(body, { Position = UDim2.new(0.55, 4, 0, 0), Size = UDim2.new(0.45, -4, 1, -50), BackgroundColor3 = T.panel2 })
-	local vpHold = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0.5, 0) }, right)
-	local info = K.text(right, "Выбери плод слева", { Position = UDim2.new(0, 6, 0.5, 10), Size = UDim2.new(1, -12, 0, 24), MaxText = 20 })
-	local info2 = K.text(right, "", { Position = UDim2.new(0, 6, 0.5, 36), Size = UDim2.new(1, -12, 0, 18), MaxText = 15, TextColor3 = T.sub })
-	local info3 = K.text(right, "", { Position = UDim2.new(0, 6, 0.5, 56), Size = UDim2.new(1, -12, 0, 20), MaxText = 18, TextColor3 = T.gold })
-	local sellOne = K.button(right, "Продать этот", T.green, { Position = UDim2.new(0, 8, 1, -84), Size = UDim2.new(0.55, -10, 0, 34), MaxText = 16 })
-	local favBtn = K.button(right, "Избранное", T.purple, { Position = UDim2.new(0.55, 2, 1, -84), Size = UDim2.new(0.45, -10, 0, 34), MaxText = 15 })
+	-- снизу вверх: подсказка, кнопки, три строки описания; превью занимает всё остальное
+	local vpHold = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 1, -150) }, right)
+	local info = K.text(right, "Выбери плод слева", { Position = UDim2.new(0, 6, 1, -140), Size = UDim2.new(1, -12, 0, 20), MaxText = 17 })
+	local info2 = K.text(right, "", { Position = UDim2.new(0, 6, 1, -118), Size = UDim2.new(1, -12, 0, 15), MaxText = 13, TextColor3 = T.sub, Medium = true })
+	local info3 = K.text(right, "", { Position = UDim2.new(0, 6, 1, -101), Size = UDim2.new(1, -12, 0, 17), MaxText = 15, TextColor3 = T.gold })
+	local sellOne = K.button(right, "Продать этот", T.green, { Position = UDim2.new(0, 8, 1, -78), Size = UDim2.new(0.55, -10, 0, 32), MaxText = 15 })
+	local favBtn = K.button(right, "Избранное", T.purple, { Position = UDim2.new(0.55, 2, 1, -78), Size = UDim2.new(0.45, -10, 0, 32), MaxText = 14 })
 	local sellAll = K.button(body, "Продать всё", T.gold, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(1, 0, 0, 42), MaxText = 22 })
-	UI.bagInfo = K.text(right, "", { Position = UDim2.new(0, 6, 1, -44), Size = UDim2.new(1, -12, 0, 36), MaxText = 15, TextColor3 = T.sub })
+	UI.bagInfo = K.text(right, "", { Position = UDim2.new(0, 6, 1, -40), Size = UDim2.new(1, -12, 0, 32), MaxText = 12, TextColor3 = T.sub, TextWrapped = true, Medium = true })
 	local selUid
 	local previewVp
 	local function priceOf(fr)
@@ -603,6 +604,40 @@ do
 	end
 end
 
+------------------------------------------------------------------ окно: полёт на ракете
+local playLaunch -- кинематика, объявлена ниже
+do
+	local f, body = mkWindow("travel", "Полёт на другую планету", "rocket", T.pink, 0.8, 0.84)
+	local scroll = K.scroll(body, {})
+	listLayout(scroll, nil, 6)
+	function hooks.travel()
+		clear(scroll)
+		label(scroll, "Огород летит вместе с тобой. Растения своей планеты растут на ней на 25% быстрее", { Size = UDim2.new(1, -8, 0, 30), TextColor3 = T.sub, MaxText = 14, TextWrapped = true, LayoutOrder = 0 })
+		for i, p in G.Planets do
+			local r = K.panel(scroll, { Size = UDim2.new(1, -8, 0, 48), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+			local dot = make("Frame", { Size = UDim2.fromOffset(26, 26), Position = UDim2.fromOffset(10, 11), BackgroundColor3 = G.PlanetColors[i] }, r)
+			K.corner(dot, UDim.new(1, 0))
+			K.text(r, p.name, { Position = UDim2.fromOffset(46, 5), Size = UDim2.new(0.5, 0, 0, 20), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = G.PlanetColors[i] })
+			local here = (ST.planet or 1) == i
+			local open = i <= (ST.planets or 1)
+			local sub = here and "Ты здесь" or (open and "Открыта" or ("Откроется после " .. G.fmt(G.PlanetUnlock[i]) .. " заработанных монет"))
+			K.text(r, sub, { Position = UDim2.fromOffset(46, 26), Size = UDim2.new(0.62, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
+			if open and not here then
+				local b = K.button(r, "Лететь", T.pink, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(110, 34), MaxText = 16 })
+				b.Activated:Connect(function()
+					local ok, err = remotes.Travel:InvokeServer(i)
+					if ok then
+						K.close(f)
+						task.spawn(playLaunch, i)
+					else
+						toast(err or "Нельзя улететь", "bad")
+					end
+				end)
+			end
+		end
+	end
+end
+
 ------------------------------------------------------------------ админ-панель (только владелец)
 if plr.UserId == ADMIN_ID then
 	local f, body = mkWindow("admin", "Админ", "admin", T.red, 0.5, 0.7)
@@ -627,18 +662,25 @@ end
 
 ------------------------------------------------------------------ левая колонка кнопок и панель семян
 do
-	local col = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 58), Size = UDim2.fromOffset(56, 420) }, hud)
-	listLayout(col, nil, 5)
+	local col = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 56), Size = UDim2.fromOffset(50, 440) }, hud)
+	listLayout(col, nil, 4)
 	local defs = {
 		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "index", "atlas", "Атлас", T.purple },
-		{ "market", "news", "Рынок", T.pink }, { "upgrades", "upgrade", "Мастерская", T.cold }, { "daily", "gift", "Подарок", T.orange },
+		{ "market", "news", "Рынок", T.pink }, { "upgrades", "upgrade", "Мастерская", T.cold }, { "travel", "rocket", "Ракета", T.pink },
+		{ "home", "home", "Домой", T.gold }, { "daily", "gift", "Подарок", T.orange },
 	}
 	if plr.UserId == ADMIN_ID then table.insert(defs, { "admin", "admin", "Админ", T.red }) end
 	UI.buttons = {}
 	for i, d in defs do
-		local b = K.iconButton(col, d[2], d[3], d[4], 48)
+		local b = K.iconButton(col, d[2], d[3], d[4], 42)
 		b.LayoutOrder = i
-		b.Activated:Connect(function() openWindow(d[1]) end)
+		b.Activated:Connect(function()
+			if d[1] == "home" then
+				if not remotes.Home:InvokeServer() then toast("Сейчас нельзя", "bad") end
+			else
+				openWindow(d[1])
+			end
+		end)
 		UI.buttons[d[1]] = b
 	end
 	-- панель семян
@@ -726,7 +768,8 @@ local function hintText()
 			end
 		end
 	end
-	if not ST.plot then return "Все участки заняты. Подожди, когда один освободится" end
+	if not ST.plot then return "На этой планете все места заняты: улети на другую" end
+	if (ST.planets or 1) > (ST.planet or 1) and (ST.stats.harvests or 0) < 400 and ready == 0 then return "Открыта новая планета: лети на ракете в центре площади" end
 	if ready > 0 then return "Растение созрело. Подойди к грядке и нажми «Собрать»" end
 	if #ST.fruits > 0 then return "Продай урожай у золотого киоска на площади" end
 	if next(ST.seeds) == nil and growing == 0 then return "Купи семена в зелёном киоске на площади" end
@@ -780,7 +823,7 @@ end)
 ------------------------------------------------------------------ растения в мире
 local cache = {} -- Soil -> { model, key, kind }
 local fxFolder = make("Folder", { Name = "FX" }, workspace)
-local SHOW_DIST = 80
+local SHOW_DIST = 110
 
 local function bedKey(soil)
 	return (soil:GetAttribute("Plant") or "") .. "|" .. (soil:GetAttribute("Muts") or "")
@@ -806,7 +849,8 @@ end
 local function addLabel(model, text, color)
 	local root = model.PrimaryPart
 	if not root then return end
-	local bb = make("BillboardGui", { Name = "Tag", Size = UDim2.fromOffset(210, 54), StudsOffset = Vector3.new(0, 6.2, 0), AlwaysOnTop = false, MaxDistance = 60 }, root)
+	local h = model:GetExtentsSize().Y
+	local bb = make("BillboardGui", { Name = "Tag", Size = UDim2.fromOffset(210, 54), StudsOffset = Vector3.new(0, h * 0.6 + 2, 0), AlwaysOnTop = false, MaxDistance = 90 }, root)
 	K.text(bb, text, { Size = UDim2.new(1, 0, 0.55, 0), MaxText = 24, TextColor3 = color })
 	return bb
 end
@@ -826,12 +870,15 @@ local function refreshEntry(soil)
 		local m
 		if kind == "sprout" then m = PM.sproutModel(plant) else m = PM.build(id, mutList(soil:GetAttribute("Muts"))) end
 		local yaw = (soil:GetAttribute("Idx") or 1) * 1.7
-		m:PivotTo(CFrame.new(soil.Position + Vector3.new(0, 0.1, 0)) * CFrame.Angles(0, yaw, 0))
+		m:PivotTo(CFrame.new(soil.Position + Vector3.new(0, soil.Size.Y / 2, 0)) * CFrame.Angles(0, yaw, 0))
 		m.Parent = fxFolder
 		e = { model = m, key = key, kind = kind, yaw = yaw, ready = false }
 		cache[soil] = e
 	end
-	local s = kind == "sprout" and (0.55 + 0.45 * prog / 0.15) or (0.3 + 0.7 * ((prog - 0.15) / 0.85) ^ 0.7)
+	-- чем тяжелее плод, тем больше растение (900 кг — огромное)
+	local wscale = math.clamp(((soil:GetAttribute("Kg") or plant.kg) / plant.kg) ^ (1 / 3), 0.8, 7)
+	e.wscale = wscale
+	local s = kind == "sprout" and (0.55 + 0.45 * prog / 0.15) or (0.3 + 0.7 * ((prog - 0.15) / 0.85) ^ 0.7) * wscale
 	if math.abs((e.scale or 0) - s) > 0.01 then
 		e.scale = s
 		e.model:ScaleTo(s)
@@ -841,7 +888,7 @@ local function refreshEntry(soil)
 		if not e.timer then
 			local root = e.model.PrimaryPart
 			if root then
-				local bb = make("BillboardGui", { Name = "Timer", Size = UDim2.fromOffset(110, 34), StudsOffset = Vector3.new(0, 4.2, 0), MaxDistance = 45, LightInfluence = 0 }, root)
+				local bb = make("BillboardGui", { Name = "Timer", Size = UDim2.fromOffset(110, 34), StudsOffset = Vector3.new(0, 2.5 + 3.5 * plant.scale * s, 0), MaxDistance = 60, LightInfluence = 0 }, root)
 				local bg = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = T.panel, BackgroundTransparency = 0.25 }, bb)
 				K.corner(bg, UDim.new(0, 8))
 				e.timerText = K.text(bg, "", { Size = UDim2.new(1, -8, 0, 18), Position = UDim2.fromOffset(4, 2), MaxText = 14 })
@@ -873,19 +920,65 @@ local function refreshEntry(soil)
 	end
 end
 
--- удалённые от камеры модели не держим
+-- дальний огонь: светящийся шар на месте большого или редкого растения (виден с других планет)
+local far = {}
+local function farGlow(soil)
+	local id = soil:GetAttribute("Plant")
+	local plant = id and G.Plants[id]
+	local f = far[soil]
+	if not plant then
+		if f then f:Destroy() far[soil] = nil end
+		return
+	end
+	local muts = mutList(soil:GetAttribute("Muts"))
+	local rar = G.rarestMut(muts)
+	local tier = rar and G.Mut[rar].tier or 0
+	local wscale = math.clamp(((soil:GetAttribute("Kg") or plant.kg) / plant.kg) ^ (1 / 3), 0.8, 7)
+	if tier < 3 and wscale < 1.8 then
+		if f then f:Destroy() far[soil] = nil end
+		return
+	end
+	local prog = progressOf(soil)
+	local size = math.max(1.5, 3.2 * plant.scale * wscale * (0.3 + 0.7 * prog))
+	if not f then
+		f = make("Part", { Name = "FarGlow", Shape = Enum.PartType.Ball, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+			Material = Enum.Material.Neon, Transparency = 0.15 }, fxFolder)
+		far[soil] = f
+	end
+	f.Color = rar and G.Mut[rar].color or plant.c2
+	f.Size = Vector3.new(size, size, size)
+	f.CFrame = CFrame.new(soil.Position + Vector3.new(0, size * 0.7, 0))
+end
+local function dropFar(soil)
+	if far[soil] then far[soil]:Destroy() far[soil] = nil end
+end
+
+-- рядом: настоящие модели; далеко: только огни больших и редких растений
 loop(0.4, function()
 	local cam = workspace.CurrentCamera
 	local cp = cam and cam.CFrame.Position or Vector3.zero
+	for soil in far do
+		if not soil.Parent then dropFar(soil) end
+	end
+	for soil in cache do
+		if not soil.Parent then dropEntry(soil) end
+	end
 	for _, plot in plotsFolder:GetChildren() do
 		local beds = plot:FindFirstChild("Beds")
 		local center = plot:GetAttribute("Center")
 		if beds and center then
-			local near = (center - cp).Magnitude < SHOW_DIST + 30
+			local dist = (center - cp).Magnitude
+			local near = dist < SHOW_DIST + 40
 			for _, bed in beds:GetChildren() do
 				local soil = bed:FindFirstChild("Soil")
 				if soil then
-					if near and (soil.Position - cp).Magnitude < SHOW_DIST then refreshEntry(soil) else dropEntry(soil) end
+					if near and (soil.Position - cp).Magnitude < SHOW_DIST then
+						dropFar(soil)
+						refreshEntry(soil)
+					else
+						dropEntry(soil)
+						if dist < 4000 then farGlow(soil) else dropFar(soil) end
+					end
 				end
 			end
 		end
@@ -913,6 +1006,7 @@ loop(0.4, function()
 	do
 		ensurePrompts()
 		for soil, pr in prompts do
+			if not soil.Parent then prompts[soil] = nil continue end
 			local idx = soil:GetAttribute("Idx") or 0
 			local id = soil:GetAttribute("Plant")
 			if idx > ST.bedCount then
@@ -982,23 +1076,169 @@ remotes:WaitForChild("Collected").OnClientEvent:Connect(function(coins, seed, po
 	playSfx(meteor and "harvestRare" or "coins")
 	if typeof(pos) == "Vector3" then burst(pos, meteor and Color3.fromRGB(255, 170, 90) or Color3.fromRGB(255, 232, 160), meteor and 40 or 18) end
 end)
+-- звезда летит с неба (ярко, со шлейфом), после падения светится и постепенно гаснет
 RunService.RenderStepped:Connect(function()
 	local starF = world:FindFirstChild("Stars")
 	if not starF then return end
-	local t = os.clock()
+	local t = nowS()
+	local clock = os.clock()
 	for _, m in starF:GetChildren() do
 		local core = m:FindFirstChild("Core")
-		if core then
-			local base = m:GetAttribute("BaseY")
-			if not base then
-				base = core.Position.Y
-				m:SetAttribute("BaseY", base)
+		local landAt = m:GetAttribute("LandAt")
+		if core and landAt then
+			local land = m:GetAttribute("LandPos")
+			if not land then
+				land = core.Position
+				m:SetAttribute("LandPos", land)
+				local a0 = make("Attachment", { Position = Vector3.new(0, 0.5, 0) }, core)
+				local a1 = make("Attachment", { Position = Vector3.new(0, -0.5, 0) }, core)
+				make("Trail", { Attachment0 = a0, Attachment1 = a1, Lifetime = 0.5, LightEmission = 1, Color = ColorSequence.new(core.Color),
+					Transparency = NumberSequence.new(0.1, 1), WidthScale = NumberSequence.new(1, 0), FaceCamera = true }, core)
 			end
-			local p = core.Position
-			core.CFrame = CFrame.new(p.X, base + math.sin(t * 2 + p.X) * 0.35, p.Z) * CFrame.Angles(0, t * 1.5, 0.3)
+			local glow = core:FindFirstChild("Glow")
+			if t < landAt then
+				local k = math.clamp((landAt - t) / G.Stars.fall, 0, 1)
+				local a = m:GetAttribute("Angle") or 0
+				local off = Vector3.new(math.cos(a) * 90, 190, math.sin(a) * 90) * k
+				core.CFrame = CFrame.new(land + off)
+				core.Transparency = 0
+				if glow then glow.Brightness = 3 end
+			else
+				local k = math.clamp((t - landAt) / G.Stars.glow, 0, 1)
+				if not m:GetAttribute("Landed") then
+					m:SetAttribute("Landed", true)
+					if (land - (workspace.CurrentCamera and workspace.CurrentCamera.CFrame.Position or land)).Magnitude < 220 then
+						burst(land, core.Color, m:GetAttribute("Meteor") and 30 or 14)
+					end
+				end
+				core.CFrame = CFrame.new(land + Vector3.new(0, math.sin(clock * 2 + land.X) * 0.25, 0)) * CFrame.Angles(0, clock * 1.5, 0.3)
+				core.Transparency = 0.05 + 0.85 * k ^ 1.4
+				if glow then glow.Brightness = 1.6 * (1 - k) end
+				local tr = core:FindFirstChildOfClass("Trail")
+				if tr then tr.Enabled = false end
+			end
 		end
 	end
 end)
+
+------------------------------------------------------------------ полёт: ракета взлетает, экран светлеет, прилёт на новую планету
+function playLaunch(target)
+	local cam = workspace.CurrentCamera
+	local ch = plr.Character
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+	if not cam or not root then return end
+	local here = root.Position
+	local best, bd
+	for _, pf in world:GetChildren() do
+		local pad = pf:FindFirstChild("Hub") and pf.Hub:FindFirstChild("RocketPad")
+		if pad then
+			local d = (pad:GetPivot().Position - here).Magnitude
+			if not bd or d < bd then best, bd = pad, d end
+		end
+	end
+	local base = best and best:GetPivot().Position or here
+	-- местная копия ракеты, которая улетает
+	local rk = Instance.new("Model")
+	rk.Name = "LaunchRocket"
+	local function rp(size, cf, color, mat, shape)
+		local p = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false, Size = size, CFrame = cf, Color = color, Material = mat }, rk)
+		if shape then p.Shape = shape end
+		return p
+	end
+	local body = rp(Vector3.new(12, 4.2, 4.2), CFrame.new(base + Vector3.new(0, 7.5, 0)) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(235, 238, 248), Enum.Material.Metal, Enum.PartType.Cylinder)
+	local nose = rp(Vector3.new(4.2, 6, 4.2), CFrame.new(base + Vector3.new(0, 14.5, 0)), Color3.fromRGB(235, 70, 80), Enum.Material.Metal)
+	make("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, nose)
+	local flame = rp(Vector3.new(3.4, 6, 3.4), CFrame.new(base + Vector3.new(0, -1, 0)), Color3.fromRGB(255, 190, 110), Enum.Material.Neon)
+	make("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, flame)
+	make("PointLight", { Color = Color3.fromRGB(255, 190, 120), Range = 40, Brightness = 3 }, flame)
+	rk.PrimaryPart = body
+	rk.Parent = fxFolder
+	local gui = make("ScreenGui", { Name = "Launch", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 60 }, pg)
+	local fade = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 248, 235), BackgroundTransparency = 1 }, gui)
+	local title = K.text(gui, "Полёт на планету " .. G.Planets[target].name, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.82), Size = UDim2.fromOffset(600, 40), MaxText = 30, TextColor3 = G.PlanetColors[target], TextTransparency = 1 })
+	playSfx("legendary")
+	cam.CameraType = Enum.CameraType.Scriptable
+	local t0 = os.clock()
+	local start = rk:GetPivot()
+	local conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - t0
+		local h = t < 0.6 and 0 or (t - 0.6) ^ 2 * 22
+		local shake = t < 1.2 and Vector3.new(math.random() - 0.5, 0, math.random() - 0.5) * 0.6 or Vector3.zero
+		rk:PivotTo(start + Vector3.new(0, h, 0) + shake)
+		flame.Size = Vector3.new(3.4, 6 + math.sin(t * 40) * 1.5 + math.min(t, 2) * 3, 3.4)
+		local rpPos = rk:GetPivot().Position
+		cam.CFrame = CFrame.lookAt(base + Vector3.new(26, 10 + h * 0.55, 30), rpPos)
+		fade.BackgroundTransparency = math.clamp(1 - (t - 2.2) / 0.9, 0, 1)
+		title.TextTransparency = math.clamp(1 - (t - 1.2) / 0.6, 0, 1)
+	end)
+	task.wait(G.TravelTime + 0.15)
+	conn:Disconnect()
+	rk:Destroy()
+	cam.CameraType = Enum.CameraType.Custom
+	if ch:FindFirstChild("Humanoid") then cam.CameraSubject = ch.Humanoid end
+	for i = 1, 10 do
+		fade.BackgroundTransparency = i / 10
+		task.wait(0.05)
+	end
+	task.wait(1.2)
+	gui:Destroy()
+	toast("Добро пожаловать на планету " .. G.Planets[target].name .. "!", "rare", 4)
+end
+
+-- столб света над своим огородом: его видно издалека, легко вернуться
+do
+	local beacon = make("Part", { Name = "HomeBeacon", Shape = Enum.PartType.Cylinder, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+		Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 214, 120), Transparency = 0.82, Size = Vector3.new(260, 1.2, 1.2) }, fxFolder)
+	local tagPart = make("Part", { Name = "HomeTag", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Transparency = 1, Size = Vector3.new(1, 1, 1) }, fxFolder)
+	local bb = make("BillboardGui", { Size = UDim2.fromOffset(160, 40), AlwaysOnTop = true, LightInfluence = 0, MaxDistance = 2500 }, tagPart)
+	local tag = K.text(bb, "ТВОЙ ОГОРОД", { MaxText = 16, TextColor3 = T.gold })
+	loop(0.5, function()
+		local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
+		local center = plot and plot:GetAttribute("Center")
+		if not center then
+			beacon.Transparency, bb.Enabled = 1, false
+			return
+		end
+		beacon.CFrame = CFrame.new(center + Vector3.new(0, 130, 0)) * CFrame.Angles(0, 0, math.pi / 2)
+		tagPart.CFrame = CFrame.new(center + Vector3.new(0, 14, 0))
+		local ch = plr.Character
+		local root = ch and ch:FindFirstChild("HumanoidRootPart")
+		local d = root and (root.Position - center).Magnitude or 0
+		bb.Enabled = d > 45
+		beacon.Transparency = d > 45 and 0.82 or 1
+		tag.Text = ("ТВОЙ ОГОРОД  %d м"):format(math.floor(d))
+	end)
+end
+
+-- оттенок картинки зависит от планеты, на которой стоишь
+do
+	local current = 0
+	local PLANET_CENTERS = {}
+	loop(1, function()
+		if #PLANET_CENTERS == 0 then
+			for i = 1, #G.Planets do
+				local pf = world:FindFirstChild("Planet" .. i)
+				local pad = pf and pf:FindFirstChild("Hub") and pf.Hub:FindFirstChild("RocketPad")
+				if pad then PLANET_CENTERS[i] = pad:GetPivot().Position end
+			end
+		end
+		local ch = plr.Character
+		local root = ch and ch:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+		local best, bd = 1, math.huge
+		for i, c in PLANET_CENTERS do
+			local d = (c - root.Position).Magnitude
+			if d < bd then best, bd = i, d end
+		end
+		if best ~= current then
+			current = best
+			local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
+			if cc then
+				TweenService:Create(cc, TweenInfo.new(2), { TintColor = Color3.new(1, 1, 1):Lerp(G.PlanetColors[best], 0.12) }):Play()
+			end
+		end
+	end)
+end
 
 ------------------------------------------------------------------ показ редких мутаций (кинематика)
 local revealQueue, revealing = {}, false
@@ -1150,7 +1390,7 @@ RunService.RenderStepped:Connect(function(dt)
 		if e.model and e.kind == "plant" then
 			if (soil.Position - cp).Magnitude < 60 then PM.animate(e.model, t) end
 			if e.ready then
-				e.model:PivotTo(CFrame.new(soil.Position + Vector3.new(0, 0.1 + math.sin(t * 2 + soil.Position.X) * 0.06, 0)) * CFrame.Angles(0, e.yaw, 0))
+				e.model:PivotTo(CFrame.new(soil.Position + Vector3.new(0, soil.Size.Y / 2 + math.sin(t * 2 + soil.Position.X) * 0.06, 0)) * CFrame.Angles(0, e.yaw, 0))
 			end
 		end
 	end

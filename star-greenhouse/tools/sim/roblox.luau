@@ -548,6 +548,10 @@ function Inst.PivotTo(self, cf)
 		self.CFrame = cf
 	end
 end
+function Inst.GetExtentsSize(self)
+	local _, size = self:GetBoundingBox()
+	return size
+end
 function Inst.GetBoundingBox(self)
 	local pp = self.__p.PrimaryPart
 	return pp and pp.CFrame or CFrame.new(), Vector3.new(4, 4, 6)
@@ -639,7 +643,7 @@ function Inst.FillBlock(self, cf, size, m)
 end
 function Inst.SetMaterialColor(self, m, c) assert(getmetatable(c) == C3, "SetMaterialColor(material, Color3)") end
 function Inst.Clear(self) table.clear(SIM.terrain) end
-function Inst.GetServerTimeNow() return os.time() + (SIM.now % 1) end
+function Inst.GetServerTimeNow() return os.time() + SIM.now end
 function Inst.Raycast() return nil end
 
 local Players = Inst.GetService(game, "Players")

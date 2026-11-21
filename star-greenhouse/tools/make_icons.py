@@ -242,6 +242,22 @@ def _(d):
     d.arc([P(0.38, 0.3), P(0.62, 0.74)], 200, 340, fill=TEAL, width=36)
 
 
+@icon("rocket", PINK)
+def _(d):
+    d.polygon([P(0.5, 0.08), P(0.64, 0.3), P(0.64, 0.66), P(0.36, 0.66), P(0.36, 0.3)], outline=W, width=46)
+    d.polygon([P(0.36, 0.48), P(0.2, 0.7), P(0.36, 0.66)], fill=W)
+    d.polygon([P(0.64, 0.48), P(0.8, 0.7), P(0.64, 0.66)], fill=W)
+    circle(d, 0.5, 0.36, 0.06, PINK, None, 30)
+    d.polygon([P(0.42, 0.7), P(0.58, 0.7), P(0.5, 0.94)], fill=GOLD)
+
+
+@icon("home", GOLD)
+def _(d):
+    d.polygon([P(0.5, 0.14), P(0.88, 0.48), P(0.12, 0.48)], outline=W, width=LW)
+    rrect(d, 0.22, 0.46, 0.78, 0.86, 0.03)
+    rrect(d, 0.43, 0.62, 0.57, 0.86, 0.02, GOLD, GOLD, 10)
+
+
 if __name__ == "__main__":
     for name, (fn, glow) in icons.items():
         img = new()

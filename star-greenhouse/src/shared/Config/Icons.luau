@@ -1,5 +1,7 @@
 -- Иконки интерфейса (art/icons, Image-ассеты). Создано tools/upload_icons.py
 return {
+	rocket = "rbxassetid://121743131094758",
+	home = "rbxassetid://95439576600451",
 	admin = "rbxassetid://114410623165842",
 	atlas = "rbxassetid://102097331063835",
 	bed = "rbxassetid://133953719540966",

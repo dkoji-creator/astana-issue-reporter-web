@@ -33,7 +33,7 @@ for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -58,7 +58,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {},
+		q = {}, planet = 1,
 	}
 end
 
@@ -122,7 +122,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1,
 	}
 end
 local function push(plr, ...)
@@ -133,7 +133,7 @@ local function push(plr, ...)
 end
 
 ------------------------------------------------------------------ участки и грядки
-local plotOwner = {} -- индекс участка -> игрок
+local plotOwner = {} -- id огорода ("планета_место") -> игрок
 local function refreshBed(plr, i)
 	local s, d = S[plr], D[plr]
 	local plot = s.plot and Map.plots[s.plot]
@@ -158,18 +158,21 @@ local function refreshAllBeds(plr)
 	for i = 1, Map.MaxBeds do refreshBed(plr, i) end
 end
 
+-- огород строится на той планете, где сейчас игрок (d.planet)
 local function claimPlot(plr)
-	local s = S[plr]
+	local s, d = S[plr], D[plr]
 	if s.plot then return true end
-	for i = 1, Map.PlotCount do
-		if not plotOwner[i] then
-			plotOwner[i] = plr
-			s.plot = i
-			local plot = Map.plots[i]
+	local pi = math.clamp(d.planet or 1, 1, #G.Planets)
+	for j = 1, Map.SlotsPerPlanet do
+		local key = pi .. "_" .. j
+		if not plotOwner[key] then
+			plotOwner[key] = plr
+			local plot = Map.buildPlot(pi, j)
+			s.plot = plot.id
 			plot.model:SetAttribute("OwnerId", plr.UserId)
-			Map.setPlotSign(i, plr.DisplayName, G.PlanetColors[math.clamp(unlockedPlanets(D[plr]), 1, 6)])
+			Map.setPlotSign(plot.id, plr.DisplayName, G.PlanetColors[math.clamp(unlockedPlanets(d), 1, 6)])
 			for _, id in G.DecorOrder do
-				if D[plr].decor[id] then Map.placeDecor(i, id) end
+				if d.decor[id] then Map.placeDecor(plot.id, id) end
 			end
 			refreshAllBeds(plr)
 			return true
@@ -180,31 +183,11 @@ end
 local function releasePlot(plr)
 	local s = S[plr]
 	if not s or not s.plot then return end
-	local i = s.plot
-	local plot = Map.plots[i]
-	plotOwner[i] = nil
-	plot.model:SetAttribute("OwnerId", nil)
-	Map.setPlotSign(i, "Свободный участок", Color3.fromRGB(70, 220, 255))
-	Map.clearDecor(i)
-	for bi = 1, Map.MaxBeds do
-		local soil = plot.beds[bi].soil
-		for _, k in { "Plant", "T0", "Ready", "Wa", "Sp", "Muts", "Kg", "WaterAt" } do soil:SetAttribute(k, nil) end
-		Map.setBedLocked(i, bi, bi > G.StartBeds)
-	end
+	local id = s.plot
+	plotOwner[id] = nil
+	Map.destroyPlot(id)
 	s.plot = nil
-	-- очередь ожидающих
-	for _, other in Players:GetPlayers() do
-		if other ~= plr and S[other] and not S[other].plot and S[other].loaded then
-			if claimPlot(other) then
-				push(other, "plot")
-				local ch = other.Character
-				if ch then ch:PivotTo(Map.plots[S[other].plot].entrance) end
-				notify(other, "Освободился участок, он твой", "ok")
-			end
-		end
-	end
 end
-
 local function teleportToPlot(plr)
 	local s = S[plr]
 	local ch = plr.Character
@@ -260,6 +243,7 @@ end
 local function newBed(plr, d, plantId, regrow)
 	local plant = G.Plants[plantId]
 	local speed = G.upgradeValue("speed", d.upg.speed) * (d.perms.growth2x and 2 or 1)
+	if G.PlanetIndex[plant.planet] == (d.planet or 1) then speed *= G.NativeBonus end
 	local base = plant.grow * (regrow and plant.regrow > 0 and plant.regrow or 1)
 	local t = now()
 	local ready = t + math.max(3, base / speed)
@@ -431,7 +415,7 @@ local function addCoins(plr, amount)
 	local after = unlockedPlanets(d)
 	if after > before then
 		local pl = G.Planets[after]
-		notify(plr, "Открыта планета: " .. pl.name .. "!", "ok")
+		notify(plr, "Открыта планета: " .. pl.name .. "! Лети на ракете в центре площади", "ok")
 		if S[plr].plot then Map.setPlotSign(S[plr].plot, plr.DisplayName, G.PlanetColors[after]) end
 	end
 end
@@ -613,9 +597,21 @@ do
 	local WT = require(script.Parent:WaitForChild("WorldTerrain"))
 	Stars.start({
 		parent = workspace:WaitForChild("World"),
-		groundY = WT.groundY,
-		radiusMin = 22,
-		radiusMax = WT.PlayRadius - 8,
+		-- случайная точка на планете случайного игрока (звёзды падают там, где играют)
+		pickSpot = function()
+			local list = {}
+			for plr, d in D do
+				local ch = plr.Character
+				if ch and ch.PrimaryPart then table.insert(list, d.planet or 1) end
+			end
+			if #list == 0 then return nil end
+			local pi = list[math.random(1, #list)]
+			local ctr = WT.Centers[pi]
+			local a = math.random() * math.pi * 2
+			local r = 26 + math.sqrt(math.random()) * (WT.PlayRadius - 34)
+			local x, z = ctr.X + math.cos(a) * r, ctr.Z + math.sin(a) * r
+			return Vector3.new(x, WT.groundY(x, z, pi), z)
+		end,
 		isMeteorEvent = function()
 			local ev = eventNow()
 			return ev ~= nil and ev.id == "meteor"
@@ -655,6 +651,40 @@ RX.State.OnServerInvoke = function(plr)
 end
 
 ------------------------------------------------------------------ админ (для съёмок и проверки)
+------------------------------------------------------------------ полёт на ракете и путь домой
+RX.Travel.OnServerInvoke = function(plr, pi)
+	local d, s = D[plr], S[plr]
+	if not d or type(pi) ~= "number" then return false end
+	pi = math.floor(pi)
+	if pi < 1 or pi > #G.Planets then return false end
+	if pi > unlockedPlanets(d) then return false, "Планета ещё закрыта" end
+	if pi == (d.planet or 1) then return false, "Ты уже здесь" end
+	if s.traveling then return false end
+	s.traveling = true
+	releasePlot(plr)
+	d.planet = pi
+	claimPlot(plr)
+	push(plr, "plot", "planet")
+	task.delay(G.TravelTime, function()
+		s.traveling = false
+		local ch = plr.Character
+		if ch and plr.Parent then
+			local plot = s.plot and Map.plots[s.plot]
+			ch:PivotTo(plot and plot.entrance or Map.padCF(pi))
+		end
+	end)
+	return true, G.TravelTime
+end
+RX.Home.OnServerInvoke = function(plr)
+	local s = S[plr]
+	local ch = plr.Character
+	if s and s.plot and ch and Map.plots[s.plot] and not s.traveling then
+		ch:PivotTo(Map.plots[s.plot].entrance)
+		return true
+	end
+	return false
+end
+
 RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if plr.UserId ~= ADMIN_ID then return false end
 	local d, s = D[plr], S[plr]
@@ -728,6 +758,7 @@ local function onJoin(plr)
 	S[plr].loaded = true
 	S[plr].sel = next(d.seeds)
 	ensureQuests(d)
+	d.planet = math.clamp(d.planet or 1, 1, math.max(1, unlockedPlanets(d)))
 	claimPlot(plr)
 	-- что выросло, пока игрока не было
 	local ripe = 0
@@ -825,13 +856,13 @@ task.spawn(function()
 		end
 		currentSold()
 		-- табло рынка раз в 10 секунд
-		if Map.boardLabel and t - lastBoard >= 10 then
+		if #Map.boardLabels > 0 and t - lastBoard >= 10 then
 			lastBoard = t
 			local epoch = G.marketEpoch(t)
 			local lines = { "<b>ГОРЯЧИЙ СПРОС x3</b>" }
 			for id in G.hotPlants(epoch) do table.insert(lines, G.Plants[id].name) end
 			table.insert(lines, "Обновление через " .. G.fmtTime(G.marketTimeLeft(t)))
-			Map.boardLabel.Text = table.concat(lines, "\n")
+			for _, lbl in Map.boardLabels do lbl.Text = table.concat(lines, "\n") end
 		end
 	end
 end)
