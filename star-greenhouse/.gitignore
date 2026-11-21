@@ -2,3 +2,4 @@
 tools/sim/.bundle.luau
 tools/sim/node_modules
 __pycache__/
+art/plants/*.glb

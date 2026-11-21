@@ -15,6 +15,12 @@ local BAG_CAP = 120
 local MAX_PLOT_DIST = 22
 
 Map.build()
+task.spawn(function()
+	local Loader = require(script.Parent:WaitForChild("PlantLoader"))
+	local n = Loader.run()
+	Map.buildFlora()
+	print("PlantLoader: меши растений", n)
+end)
 
 ------------------------------------------------------------------ ремоуты
 local remotes = Instance.new("Folder")

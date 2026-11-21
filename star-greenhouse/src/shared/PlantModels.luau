@@ -431,6 +431,56 @@ F.seedcore = function(m, pl)
 	blade(m, "L", V3(0, 3.0, 0), V3(-1, 0.7, 0), 0.9, 0.45, 0.07, leafColor(pl), Material.Grass)
 end
 
+------------------------------------------------------------------ сборка из загруженных мешей
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+-- материал и прозрачность ролей по форме: F плод, A акцент, L листья, G свечение, R камень
+local MESH_STYLE = {
+	crystal = { F = { Material.Glass, 0.2 } },
+	geode = { F = { Material.Glass, 0.22 } },
+	jelly = { F = { Material.Glass, 0.42 }, A = { Material.Glass, 0.3 } },
+	crown = { F = { Material.Metal, 0 } },
+}
+local function meshTemplate(id)
+	if not ReplicatedStorage:GetAttribute("MeshesReady") then return nil end
+	local root = ReplicatedStorage:FindFirstChild("PlantMeshes")
+	local f = root and root:FindFirstChild(id)
+	if f and f:FindFirstChildWhichIsA("BasePart") then return f end
+	return nil
+end
+function PM.hasMeshes(id) return meshTemplate(id) ~= nil end
+
+local function meshModel(model, plant, tpl)
+	local c1, c2 = plant.c1, plant.c2
+	local roles = {
+		F = c1, A = c2, L = plant.c1:Lerp(Color3.fromRGB(70, 150, 80), 0.6),
+		G = c2:Lerp(Color3.new(1, 1, 1), 0.35), R = c1:Lerp(Color3.fromRGB(40, 38, 50), 0.75),
+	}
+	local style = MESH_STYLE[plant.form] or {}
+	for _, src in tpl:GetChildren() do
+		if src:IsA("BasePart") then
+			local role = src.Name
+			local p = src:Clone()
+			p.Name = role .. "M"
+			p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery = true, false, false, false
+			p.Color = roles[role] or c1
+			local st = style[role]
+			if role == "G" then
+				p.Material = Material.Neon
+			elseif role == "L" then
+				p.Material = Material.SmoothPlastic
+			elseif role == "R" then
+				p.Material = Material.Slate
+			elseif st then
+				p.Material = st[1]
+				p.Transparency = st[2]
+			else
+				p.Material = Material.SmoothPlastic
+			end
+			p.Parent = model
+		end
+	end
+end
+
 ------------------------------------------------------------------ сборка
 local function rootPart(model)
 	local r = base(model, "Root", V3(0.2, 0.2, 0.2), CF(), Color3.new(1, 1, 1), Material.SmoothPlastic, 1)
@@ -469,8 +519,14 @@ function PM.build(plantId: string, muts: { string }?): Model
 	local m = Instance.new("Model")
 	m.Name = plant.name
 	rootPart(m)
-	F[plant.form](m, plant)
+	local tpl = meshTemplate(plantId)
 	local k = plant.scale
+	if tpl then
+		meshModel(m, plant, tpl)
+		k = 1 -- размер уже заложен в модели
+	else
+		F[plant.form](m, plant)
+	end
 	local rarest = nil
 	if muts and #muts > 0 then
 		rarest = G.rarestMut(muts)
@@ -517,7 +573,7 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 	for _, p in m:GetChildren() do
 		if p:IsA("BasePart") and p.Name ~= "Root" then
 			local n = p.Name:sub(1, 1)
-			if n == "F" then
+			if n == "F" or n == "A" then
 				i += 1
 				local base = p.Color
 				if isRainbow then

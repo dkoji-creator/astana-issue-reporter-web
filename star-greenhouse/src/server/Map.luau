@@ -648,28 +648,6 @@ local function buildScenery(parent)
 			seg(parent, "PanelLeg", (base * CF(q * 4.4, 0, 0)).Position, (base * CF(q * 4.4, 2.2, 0)).Position, 0.2, COL.plate, Mat.Metal)
 		end
 	end
-	-- светящиеся кристаллы и грибы у кромки: берём модели растений
-	local pool = { "moon_10", "mars_11", "europa_14", "io_14", "nebula_13", "core_15", "moon_04", "io_02", "nebula_02", "core_06", "europa_05", "mars_03" }
-	for q = 1, 36 do
-		local a = rng:NextNumber(0, PI * 2)
-		local r = rng:NextNumber(88, 95)
-		local id = pool[q % #pool + 1]
-		local ok, m = pcall(PM.build, id, nil)
-		if ok and m then
-			local s = rng:NextNumber(1.2, 2.2)
-			for _, p in m:GetChildren() do
-				if p:IsA("BasePart") and p.Name ~= "Root" then
-					local pos = p.Position
-					local rot = CF(pos):Inverse() * p.CFrame
-					p.Size = p.Size * s
-					p.CFrame = CF(pos * s) * rot
-					p.CanCollide = false
-				end
-			end
-			m:PivotTo(CF(cos(a) * r, 0, sin(a) * r) * A(0, rng:NextNumber(0, PI * 2), 0))
-			m.Parent = parent
-		end
-	end
 	-- камни
 	for q = 1, 40 do
 		local a = rng:NextNumber(0, PI * 2)
@@ -695,6 +673,41 @@ local function buildScenery(parent)
 		local pos = V3(cos(a) * 97, 0.4, sin(a) * 97)
 		local b = ball(parent, "EdgeLamp", pos + V3(0, 1.2, 0), 1.1, i % 2 == 0 and COL.cyan or COL.mag, Mat.Neon)
 		if i % 4 == 0 then light(b, b.Color, 16, 0.6) end
+	end
+end
+
+-- растения у кромки платформы (строятся после загрузки мешей, чтобы выглядели красиво)
+function Map.buildFlora()
+	local parent = world:FindFirstChild("Scenery")
+	if not parent or parent:FindFirstChild("Flora") then return end
+	local fl = Instance.new("Folder")
+	fl.Name = "Flora"
+	fl.Parent = parent
+	parent = fl
+	local rng = Random.new(2026)
+	local pool = { "moon_10", "mars_11", "europa_14", "io_14", "nebula_13", "core_15", "moon_04", "io_02", "nebula_02", "core_06", "europa_05", "mars_03" }
+	for q = 1, 36 do
+		local a = rng:NextNumber(0, PI * 2)
+		local r = rng:NextNumber(88, 95)
+		local id = pool[q % #pool + 1]
+		local ok, m = pcall(PM.build, id, nil)
+		if ok and m then
+			local s = rng:NextNumber(1.2, 2.2)
+			for _, p in m:GetChildren() do
+				if p:IsA("BasePart") and p.Name ~= "Root" then
+					local pos = p.Position
+					local rot = CF(pos):Inverse() * p.CFrame
+					p.Size = p.Size * s
+					p.CFrame = CF(pos * s) * rot
+					p.CanCollide = false
+				end
+			end
+			for _, l in m:GetDescendants() do
+				if l:IsA("PointLight") then l:Destroy() end
+			end
+			m:PivotTo(CF(cos(a) * r, 0, sin(a) * r) * A(0, rng:NextNumber(0, PI * 2), 0))
+			m.Parent = parent
+		end
 	end
 end
 

@@ -13,10 +13,11 @@ local shared = folder("Shared", RS)
 mod("ModuleScript", "Game", shared, "shared/Game")
 mod("ModuleScript", "PlantModels", shared, "shared/PlantModels")
 local cfg = folder("Config", shared)
-for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
+for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantMeshes" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
 local srv = folder("Server", game:GetService("ServerScriptService"))
 local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")
+mod("ModuleScript", "PlantLoader", srv, "server/PlantLoader")
 local sps = folder("StarterPlayerScripts", game:GetService("StarterPlayer"))
 local cl = folder("Client", sps)
 local clientScript = mod("LocalScript", "Client", cl, "client/Client.client")
@@ -34,6 +35,26 @@ require = function(m)
 	return cache[key]
 end
 
+-- InsertService:LoadAsset в эмуляторе: возвращает модель с мешами двух растений
+do
+	local ins = game:GetService("InsertService")
+	rawset(ins.__p, "LoadAsset", function(self, id)
+		local m = Instance.new("Model")
+		for _, pid in { "moon_01", "mars_01" } do
+			for _, role in { "F", "A", "L", "G", "R" } do
+				local nm = Instance.new("Model")
+				nm.Name = pid .. "__" .. role .. "_Node"
+				nm.Parent = m
+				local mp = Instance.new("MeshPart")
+				mp.Name = pid .. "__" .. role
+				mp.Size = Vector3.new(1, 2, 1)
+				mp.CFrame = CFrame.new(0, 1, 0)
+				mp.Parent = nm
+			end
+		end
+		return m
+	end)
+end
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local function frames(n, dt)
@@ -93,6 +114,22 @@ SIM.runThread("Main", defs["server/Main.server"], mainScript)
 frames(10)
 check(workspace:FindFirstChild("World") ~= nil, "карта не построена")
 check(#workspace.World.Plots:GetChildren() == 8, "участков должно быть 8")
+
+stage("меши растений (поддельные шаблоны)")
+do
+	local root = RS:FindFirstChild("PlantMeshes")
+	check(root ~= nil, "нет папки PlantMeshes")
+	check(root:FindFirstChild("moon_01") ~= nil, "загрузчик не разложил шаблоны")
+	check(RS:GetAttribute("MeshesReady") == true, "MeshesReady не выставлен")
+	check(PM.hasMeshes("moon_01"), "шаблон не найден")
+	local m = PM.build("moon_01", nil)
+	check(m:FindFirstChild("FM") ~= nil and m:FindFirstChild("GM") ~= nil, "модель не собрана из мешей")
+	check(m:FindFirstChild("GM").Material == Enum.Material.Neon, "свечение должно быть Neon")
+	local m2 = PM.build("moon_01", { "golden", "giant" })
+	check(m2:FindFirstChild("FM").Color.R > 0.9, "золотая мутация не перекрасила меш")
+	check(not PM.hasMeshes("moon_02"), "для moon_02 шаблона быть не должно")
+	check(PM.build("moon_02", nil) ~= nil, "запасная модель")
+end
 
 stage("вход игрока")
 local plr = SIM.makePlayer(8432365972, "Damirchekke")

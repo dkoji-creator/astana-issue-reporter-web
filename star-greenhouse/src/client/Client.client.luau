@@ -715,6 +715,7 @@ loop(0.5, function()
 	end
 end)
 hooks.seedbar()
+ReplicatedStorage:GetAttributeChangedSignal("MeshesReady"):Connect(function() dirty.seeds = true end)
 remotes:WaitForChild("Stock").OnClientEvent:Connect(function(epoch, sold)
 	ST.sold = sold
 	dirty.sold = true
@@ -723,7 +724,7 @@ end)
 ------------------------------------------------------------------ растения в мире
 local cache = {} -- Soil -> { model, key, kind }
 local fxFolder = make("Folder", { Name = "FX" }, workspace)
-local SHOW_DIST = 110
+local SHOW_DIST = 80
 
 local function bedKey(soil)
 	return (soil:GetAttribute("Plant") or "") .. "|" .. (soil:GetAttribute("Muts") or "")
@@ -762,7 +763,7 @@ local function refreshEntry(soil)
 	local prog = progressOf(soil)
 	local ready = prog >= 1
 	local kind = prog < 0.15 and "sprout" or "plant"
-	local key = bedKey(soil) .. "|" .. kind
+	local key = bedKey(soil) .. "|" .. kind .. "|" .. tostring(ReplicatedStorage:GetAttribute("MeshesReady") == true)
 	local e = cache[soil]
 	if e and e.key ~= key then dropEntry(soil) e = nil end
 	if not e then

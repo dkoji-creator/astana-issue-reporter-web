@@ -1,0 +1,59 @@
+"""Строит меши всех растений из Config/Plants.luau: art/plants/<planet>.glb (по одному на планету) и листы превью.
+python3 build_all.py [planet ...]"""
+import os, re, sys, numpy as np
+sys.path.insert(0, os.path.dirname(__file__))
+import forms, render, preview
+from glb import write_glb
+
+ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
+OUT = os.path.join(ROOT, "art", "plants")
+os.makedirs(OUT, exist_ok=True)
+RANK = {"common": 0, "uncommon": 1, "rare": 2, "epic": 3, "legendary": 4, "mythic": 5}
+
+
+def parse_plants():
+    txt = open(os.path.join(ROOT, "src", "shared", "Config", "Plants.luau"), encoding="utf8").read()
+    out = []
+    for line in txt.splitlines():
+        m = re.match(r'\s*\{ id = "(\w+)", name = "([^"]+)", planet = "(\w+)", rarity = "(\w+)", form = "(\w+)", c1 = Color3.fromRGB\((\d+), (\d+), (\d+)\), c2 = Color3.fromRGB\((\d+), (\d+), (\d+)\), glow = ([\d.]+), scale = ([\d.]+)', line)
+        if m:
+            g = m.groups()
+            out.append(dict(id=g[0], name=g[1], planet=g[2], rarity=g[3], form=g[4], c1=np.array([int(g[5]), int(g[6]), int(g[7])]) / 255.0,
+                            c2=np.array([int(g[8]), int(g[9]), int(g[10])]) / 255.0, glow=float(g[11]), scale=float(g[12]), index=len(out) + 1))
+    return out
+
+
+def build(p):
+    rng = np.random.default_rng(p["index"] * 977 + 13)
+    lvl = RANK[p["rarity"]] / 5.0
+    parts = forms.FORMS[p["form"]](rng, lvl)
+    sc = p["scale"]
+    out = {}
+    for role, m in parts.items():
+        m = m.copy()
+        m.fix_winding()
+        out[role] = m.xform(None, (0, 0, 0), sc)
+    return out
+
+
+if __name__ == "__main__":
+    want = sys.argv[1:]
+    plants = parse_plants()
+    planets = []
+    for p in plants:
+        if p["planet"] not in planets:
+            planets.append(p["planet"])
+    for pl in planets:
+        if want and pl not in want:
+            continue
+        glb, ims, labs = [], [], []
+        for p in [q for q in plants if q["planet"] == pl]:
+            parts = build(p)
+            for role, m in parts.items():
+                glb.append(dict(name=f"{p['id']}__{role}", v=m.v, n=m.n, i=m.i))
+            so = forms.STYLE.get(p["form"])
+            ims.append(render.render(preview.layers_for(parts, p["c1"], p["c2"], so), size=220, ss=2))
+            labs.append(f"{p['id']} {p['name']} {sum(m.tris() for m in parts.values())}t")
+        write_glb(os.path.join(OUT, pl + ".glb"), glb)
+        render.sheet(ims, labs, cols=5, tile=220).save(os.path.join(OUT, pl + ".png"))
+        print(pl, "tris", sum(len(g["i"]) for g in glb), "size", os.path.getsize(os.path.join(OUT, pl + ".glb")) // 1024, "KB", flush=True)

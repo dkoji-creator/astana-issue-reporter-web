@@ -52,7 +52,7 @@ def form_for(name, i):
 
 
 def hexcol(h, s, v):
-    r, g, b = colorsys.hsv_to_rgb(h % 1, max(0, min(1, s)), max(0, min(1, v)))
+    r, g, b = colorsys.hsv_to_rgb(h % 1, max(0, min(0.95, s)), max(0, min(1, v)))
     return "Color3.fromRGB(%d, %d, %d)" % (round(r * 255), round(g * 255), round(b * 255))
 
 
@@ -80,7 +80,7 @@ for pi, (pid, pname, hue, spread, mul) in enumerate(PLANETS):
         seedv = int(round(seed * mul * (1 + 0.5 * t)))
         h1 = hue + spread * math.sin(k * 2.399 + pi)
         h2 = h1 + 0.06 + 0.04 * math.cos(k * 1.7)
-        s1 = (0.55 + 0.25 * math.sin(k * 1.3) + 0.1 * (ri / 5)) * {'moon': 0.55, 'europa': 0.75}.get(pid, 1)
+        s1 = (0.55 + 0.25 * math.sin(k * 1.3) + 0.1 * (ri / 5)) * {'moon': 0.55, 'europa': 0.8, 'mars': 1.15, 'io': 1.2, 'nebula': 1.4, 'core': 1.25}.get(pid, 1)
         v1 = 0.78 + 0.15 * math.cos(k * 0.9)
         form = form_for(nm, k)
         scale = round(0.85 + 0.12 * ri + 0.1 * math.sin(k * 3.1), 2)
