@@ -176,7 +176,7 @@ local function buildHub()
 	Map.planters = {}
 	for i = 1, 8 do
 		local a = (i - 0.5) / 8 * PI * 2 + PI / 8
-		local pos = V3(cos(a) * 28, 0, sin(a) * 28)
+		local pos = V3(cos(a) * 29.5, 0, sin(a) * 29.5)
 		cyl(f, "Planter", CF(pos + V3(0, 0.7, 0)), 1.0, 7, COL.hull2, Mat.Metal)
 		cyl(f, "PlanterSoil", CF(pos + V3(0, 1.22, 0)), 0.1, 6.2, COL.soil, Mat.Ground, { CanCollide = false })
 		table.insert(Map.planters, pos + V3(0, 1.25, 0))
