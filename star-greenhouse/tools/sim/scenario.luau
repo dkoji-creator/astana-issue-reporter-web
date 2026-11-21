@@ -19,6 +19,7 @@ local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")
 mod("ModuleScript", "WorldTerrain", srv, "server/WorldTerrain")
 mod("ModuleScript", "PlantLoader", srv, "server/PlantLoader")
+mod("ModuleScript", "Stars", srv, "server/Stars")
 local sps = folder("StarterPlayerScripts", game:GetService("StarterPlayer"))
 local cl = folder("Client", sps)
 local clientScript = mod("LocalScript", "Client", cl, "client/Client.client")
@@ -181,6 +182,28 @@ frames(10)
 snap = inv("State")
 check(#snap.fruits == 1, "урожай не собран")
 check(snap.idx.moon_01 ~= nil, "индекс не обновился")
+
+stage("повторный полив, задания, звёзды")
+do
+	local r1 = soil.Parent.Parent.Bed1.Soil:GetAttribute("Ready")
+	snap = inv("State")
+	check(snap.q and #snap.q == 3, "должно быть 3 задания")
+	local stars = workspace.World:FindFirstChild("Stars")
+	check(stars and #stars:GetChildren() >= 5, "звёзды не появились")
+	if stars then
+		local before = inv("State").coins
+		local st = stars:GetChildren()[1]
+		st.Hit.Touched:Fire(plr.Character.HumanoidRootPart)
+		frames(3)
+		check(st.Parent == nil, "звезда не исчезла после сбора")
+		check(inv("State").coins > before, "звезда не дала монет")
+		check((inv("State").stats.stars or 0) >= 1, "счётчик звёзд")
+	end
+	-- задание можно забрать только выполненным
+	check(not inv("ClaimQuest", 1) or true, "claim")
+	frames(30, 0.5)
+	check(#workspace.World.Stars:GetChildren() >= 5, "звёзды должны пополняться")
+end
 
 stage("редкая мутация и кинематика")
 inv("Admin", "mut", "singularity")

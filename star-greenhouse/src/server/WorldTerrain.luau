@@ -27,6 +27,8 @@ local function patch(x, z, r, mat)
 	if t then t:FillCylinder(CFrame.new(x, -1.5, z), 3, r, mat) end
 end
 
+WT.patch = function(x, z, r, mat) local t = terrain() if t then t:FillCylinder(CFrame.new(x, -1.5, z), 3, r, mat) end end
+
 function WT.groundY(x: number, z: number): number
 	local d0 = math.sqrt(x * x + z * z)
 	local h = d0 <= WT.BaseRadius and 0 or -60
@@ -62,6 +64,10 @@ function WT.build()
 			t:SetMaterialColor(Mat.Glacier, Color3.fromRGB(150, 186, 228))
 			t:SetMaterialColor(Mat.Ground, Color3.fromRGB(70, 60, 74))
 			t:SetMaterialColor(Mat.Limestone, Color3.fromRGB(120, 112, 140))
+			t:SetMaterialColor(Mat.Grass, Color3.fromRGB(64, 128, 122))
+			t:SetMaterialColor(Mat.LeafyGrass, Color3.fromRGB(98, 92, 160))
+			t:SetMaterialColor(Mat.Mud, Color3.fromRGB(62, 50, 62))
+			t.Decoration = true -- колышущиеся травинки на траве
 		end)
 		-- основание: толстый диск, верх на y = 0
 		t:FillCylinder(CFrame.new(0, -16, 0), 32, WT.BaseRadius, Mat.Basalt)
@@ -69,10 +75,23 @@ function WT.build()
 		t:FillCylinder(CFrame.new(0, -1.5, 0), 3, WT.StationRadius, Mat.Slate)
 	end
 	local rng = Random.new(77)
-	-- пятна пыли внутри станции между участками
-	for i = 1, 16 do
-		local x, z = polar(rng:NextNumber(40, 130), rng:NextNumber(0, math.pi * 2))
-		patch(x, z, rng:NextNumber(6, 14), i % 2 == 0 and Mat.Salt or Mat.Ground)
+	-- живая земля станции: трава, почва, песок и камень пятнами разного размера
+	for i = 1, 70 do
+		local x, z = polar(rng:NextNumber(36, 132), rng:NextNumber(0, math.pi * 2))
+		local k = i % 7
+		local mat = (k <= 2) and Mat.Grass or (k == 3 and Mat.LeafyGrass or (k == 4 and Mat.Ground or (k == 5 and Mat.Salt or Mat.Mud)))
+		patch(x, z, rng:NextNumber(4, 13), mat)
+	end
+	-- кольцо травы вокруг площади
+	for i = 1, 24 do
+		local x, z = polar(rng:NextNumber(37, 44), i / 24 * math.pi * 2)
+		patch(x, z, rng:NextNumber(5, 8), i % 3 == 0 and Mat.LeafyGrass or Mat.Grass)
+	end
+	-- внешняя зона: тоже не однотонная
+	for i = 1, 40 do
+		local x, z = polar(rng:NextNumber(WT.StationRadius, WT.PlayRadius), rng:NextNumber(0, math.pi * 2))
+		local k = i % 5
+		patch(x, z, rng:NextNumber(6, 16), ({ Mat.Ground, Mat.Salt, Mat.Rock, Mat.Grass, Mat.Mud })[k + 1])
 	end
 	-- холмы во внешней зоне
 	for i = 1, 26 do

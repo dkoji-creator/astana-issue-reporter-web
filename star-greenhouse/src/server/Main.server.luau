@@ -27,13 +27,13 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -57,7 +57,8 @@ local function newProfile()
 		decor = {}, idx = {}, mutSeen = {}, perms = {},
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
-		stats = { harvests = 0, sold = 0, bestChance = 1 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
+		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
+		q = {},
 	}
 end
 
@@ -121,7 +122,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {},
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q,
 	}
 end
 local function push(plr, ...)
@@ -143,12 +144,13 @@ local function refreshBed(plr, i)
 		soil:SetAttribute("Plant", b.id)
 		soil:SetAttribute("T0", b.t0)
 		soil:SetAttribute("Ready", b.ready)
-		soil:SetAttribute("Wa", b.wa == true)
+		soil:SetAttribute("Wa", b.wt ~= nil)
+		soil:SetAttribute("WaterAt", (b.wt or 0) + G.WaterCooldown)
 		soil:SetAttribute("Sp", b.sp == true)
 		soil:SetAttribute("Muts", table.concat(b.m, ","))
 		soil:SetAttribute("Kg", b.w)
 	else
-		for _, k in { "Plant", "T0", "Ready", "Wa", "Sp", "Muts", "Kg" } do soil:SetAttribute(k, nil) end
+		for _, k in { "Plant", "T0", "Ready", "Wa", "Sp", "Muts", "Kg", "WaterAt" } do soil:SetAttribute(k, nil) end
 	end
 	Map.setBedLocked(s.plot, i, i > d.bedCount)
 end
@@ -186,7 +188,7 @@ local function releasePlot(plr)
 	Map.clearDecor(i)
 	for bi = 1, Map.MaxBeds do
 		local soil = plot.beds[bi].soil
-		for _, k in { "Plant", "T0", "Ready", "Wa", "Sp", "Muts", "Kg" } do soil:SetAttribute(k, nil) end
+		for _, k in { "Plant", "T0", "Ready", "Wa", "Sp", "Muts", "Kg", "WaterAt" } do soil:SetAttribute(k, nil) end
 		Map.setBedLocked(i, bi, bi > G.StartBeds)
 	end
 	s.plot = nil
@@ -209,6 +211,36 @@ local function teleportToPlot(plr)
 	if ch and s and s.plot then
 		task.defer(function() ch:PivotTo(Map.plots[s.plot].entrance) end)
 	end
+end
+
+------------------------------------------------------------------ задания
+local function ensureQuests(d)
+	d.q = d.q or {}
+	local have = {}
+	for _, q in d.q do have[q.k] = true end
+	local tries = 0
+	while #d.q < 3 and tries < 30 do
+		tries += 1
+		local k = G.QuestOrder[math.random(1, #G.QuestOrder)]
+		if not have[k] then
+			local def = G.Quests[k]
+			local need = math.random(def.min, def.max)
+			table.insert(d.q, { k = k, need = need, have = 0, reward = G.questReward(k, need, math.max(1, unlockedPlanets(d))) })
+			have[k] = true
+		end
+	end
+end
+local function questProgress(plr, kind, n)
+	local d = D[plr]
+	if not d then return end
+	local changed = false
+	for _, q in d.q do
+		if q.k == kind and q.have < q.need then
+			q.have = math.min(q.need, q.have + (n or 1))
+			changed = true
+		end
+	end
+	if changed then push(plr, "q") end
 end
 
 ------------------------------------------------------------------ события по часам
@@ -253,6 +285,7 @@ local function newBed(plr, d, plantId, regrow)
 		local pct = math.min(0.6, (G.upgradeValue("water", d.upg.water) + 5 * sp) / 100)
 		bed.ready = t + (bed.ready - t) * (1 - pct)
 		bed.sp = true
+		bed.wt = t
 	end
 	return bed
 end
@@ -273,18 +306,22 @@ local function plantSeed(plr, i)
 	d.beds[i] = newBed(plr, d, id)
 	refreshBed(plr, i)
 	push(plr, "seeds", "potion", "sel")
+	questProgress(plr, "plant", 1)
 end
 
 local function waterBed(plr, i)
 	local d = D[plr]
 	local b = d.beds[i]
 	local t = now()
-	if b.wa then notify(plr, "Уже полито, осталось " .. G.fmtTime(b.ready - t), "info") return end
+	if b.wt and t - b.wt < G.WaterCooldown then
+		notify(plr, ("Полить снова можно через %d с"):format(G.WaterCooldown - (t - b.wt)), "info")
+		return
+	end
 	local pct = G.upgradeValue("water", d.upg.water) / 100
 	b.ready = t + (b.ready - t) * (1 - pct)
-	b.wa = true
+	b.wt = t
 	refreshBed(plr, i)
-	notify(plr, ("Полито: рост быстрее на %d%%"):format(math.floor(pct * 100 + 0.5)), "ok")
+	questProgress(plr, "water", 1)
 end
 
 local function weekKey() return math.floor(now() / 604800) end
@@ -340,6 +377,8 @@ local function harvestBed(plr, i, silent)
 		RX.Announce:FireAllClients(plr.DisplayName, plant.name, G.mutTitle(b.m), chance)
 	end
 	push(plr, "fruits", "idx", "mutSeen", "stats")
+	questProgress(plr, "harvest", 1)
+	if #b.m > 0 then questProgress(plr, "mutation", 1) end
 	return true
 end
 
@@ -427,6 +466,7 @@ RX.Sell.OnServerInvoke = function(plr, mode, uid)
 	if count == 0 then return false, "Нечего продавать" end
 	addCoins(plr, total)
 	d.stats.sold += count
+	questProgress(plr, "sell", count)
 	push(plr, "coins", "earned", "fruits", "planets", "stats")
 	return true, total, count
 end
@@ -556,6 +596,59 @@ RX.Top.OnServerInvoke = function(plr)
 	return out
 end
 
+RX.ClaimQuest.OnServerInvoke = function(plr, i)
+	local d = D[plr]
+	local q = d and type(i) == "number" and d.q[i]
+	if not q or q.have < q.need then return false end
+	table.remove(d.q, i)
+	addCoins(plr, q.reward)
+	ensureQuests(d)
+	push(plr, "coins", "earned", "planets", "q")
+	return true, q.reward
+end
+
+-- падающие звёзды
+do
+	local Stars = require(script.Parent:WaitForChild("Stars"))
+	local WT = require(script.Parent:WaitForChild("WorldTerrain"))
+	Stars.start({
+		parent = workspace:WaitForChild("World"),
+		groundY = WT.groundY,
+		radiusMin = 22,
+		radiusMax = WT.PlayRadius - 8,
+		isMeteorEvent = function()
+			local ev = eventNow()
+			return ev ~= nil and ev.id == "meteor"
+		end,
+		onCollect = function(plr, meteor, pos)
+			local d = D[plr]
+			if not d then return end
+			local pn = math.max(1, unlockedPlanets(d))
+			local coins = G.starReward(pn, meteor)
+			addCoins(plr, coins)
+			d.stats.stars = (d.stats.stars or 0) + 1
+			-- иногда звезда приносит семя
+			local seed
+			local roll = math.random()
+			if meteor or roll < 0.08 then
+				local pool = {}
+				local want = (meteor and math.random() < 0.5) and "rare" or (roll < 0.015 and "rare" or (math.random() < 0.4 and "uncommon" or "common"))
+				for _, p in G.PlantList do
+					if p.rarity == want and G.PlanetIndex[p.planet] <= pn then table.insert(pool, p.id) end
+				end
+				seed = pool[math.random(1, math.max(1, #pool))]
+				if seed then
+					d.seeds[seed] = (d.seeds[seed] or 0) + 1
+					if not S[plr].sel then S[plr].sel = seed end
+				end
+			end
+			RX.Collected:FireClient(plr, coins, seed, pos, meteor)
+			push(plr, "coins", "earned", "planets", "seeds", "sel", "stats")
+			questProgress(plr, "stars", 1)
+		end,
+	})
+end
+
 RX.State.OnServerInvoke = function(plr)
 	if not D[plr] then return nil end
 	return snapshot(plr)
@@ -634,6 +727,7 @@ local function onJoin(plr)
 	S[plr].canSave = ok
 	S[plr].loaded = true
 	S[plr].sel = next(d.seeds)
+	ensureQuests(d)
 	claimPlot(plr)
 	-- что выросло, пока игрока не было
 	local ripe = 0

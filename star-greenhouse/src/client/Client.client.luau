@@ -670,6 +670,42 @@ do
 	end
 end
 
+------------------------------------------------------------------ задания (справа под событием)
+do
+	local qp = K.panel(hud, { Name = "Quests", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 60), Size = UDim2.fromOffset(230, 112) })
+	K.text(qp, "ЗАДАНИЯ", { Size = UDim2.new(1, -16, 0, 16), Position = UDim2.fromOffset(8, 5), MaxText = 12, TextColor3 = T.gold, TextXAlignment = Enum.TextXAlignment.Left })
+	UI.questRows = {}
+	for i = 1, 3 do
+		local row = make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -12, 0, 28), Position = UDim2.fromOffset(6, 22 + (i - 1) * 29) }, qp)
+		local txt = K.text(row, "", { Size = UDim2.new(1, -70, 0, 15), Position = UDim2.fromOffset(2, 0), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, Medium = true })
+		local back, fill = K.bar(row, T.cold, { Size = UDim2.new(1, -70, 0, 4), Position = UDim2.fromOffset(2, 19) })
+		local num = K.text(row, "", { Size = UDim2.fromOffset(62, 15), Position = UDim2.new(1, -64, 0, 0), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.sub })
+		local claim = K.button(row, "Забрать", T.gold, { Size = UDim2.fromOffset(64, 24), Position = UDim2.new(1, -64, 0, 1), MaxText = 12, Visible = false })
+		claim.Activated:Connect(function()
+			local ok, reward = remotes.ClaimQuest:InvokeServer(i)
+			if ok then
+				toast("Задание выполнено: +" .. G.fmt(reward) .. " монет", "ok")
+				playSfx("coins")
+			end
+		end)
+		UI.questRows[i] = { txt = txt, fill = fill, num = num, claim = claim, row = row }
+	end
+	function hooks.quests()
+		for i, r in UI.questRows do
+			local q = ST.q and ST.q[i]
+			r.row.Visible = q ~= nil
+			if q then
+				r.txt.Text = G.Quests[q.k].text:format(q.need)
+				r.fill.Size = UDim2.fromScale(math.clamp(q.have / q.need, 0, 1), 1)
+				local done = q.have >= q.need
+				r.num.Text = done and "" or (q.have .. "/" .. q.need)
+				r.claim.Visible = done
+				r.txt.TextColor3 = done and T.gold or T.text
+			end
+		end
+	end
+end
+
 ------------------------------------------------------------------ обновление HUD
 local function nextPlanetInfo()
 	local n = ST.planets
@@ -695,7 +731,8 @@ local function hintText()
 	if #ST.fruits > 0 then return "Продай урожай у золотого киоска на площади" end
 	if next(ST.seeds) == nil and growing == 0 then return "Купи семена в зелёном киоске на площади" end
 	if next(ST.seeds) and growing == 0 then return "Выбери семя внизу и подойди к грядке" end
-	if growing > 0 and (ST.stats.harvests or 0) < 3 then return "Нажми на растущую грядку, чтобы полить: рост ускорится" end
+	if growing > 0 and (ST.stats.harvests or 0) < 3 then return "Поливай грядки раз в 20 с, а пока ждёшь, собирай падающие звёзды" end
+	if growing > 0 and (ST.stats.stars or 0) < 3 then return "Видишь столбы света? Это звёзды: беги и собирай их" end
 	return ""
 end
 
@@ -723,6 +760,7 @@ loop(0.5, function()
 		UI.buttons.daily:FindFirstChild("Badge").Visible = ST.daily.can
 		-- обновления окон
 		if dirty.seeds or dirty.sel then hooks.seedbar() end
+		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
 		if windows.bag.Visible and (dirty.fruits or dirty.coins) then hooks.bag() end
 		if windows.shop.Visible and (dirty.sold or dirty.bought or dirty.planets) then hooks.shop() end
 		if windows.index.Visible and (dirty.idx or dirty.mutSeen) then hooks.index() end
@@ -798,6 +836,31 @@ local function refreshEntry(soil)
 		e.scale = s
 		e.model:ScaleTo(s)
 	end
+	-- таймер роста над своими растениями
+	if not ready and soil:GetAttribute("Plot") == ST.plot then
+		if not e.timer then
+			local root = e.model.PrimaryPart
+			if root then
+				local bb = make("BillboardGui", { Name = "Timer", Size = UDim2.fromOffset(110, 34), StudsOffset = Vector3.new(0, 4.2, 0), MaxDistance = 45, LightInfluence = 0 }, root)
+				local bg = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = T.panel, BackgroundTransparency = 0.25 }, bb)
+				K.corner(bg, UDim.new(0, 8))
+				e.timerText = K.text(bg, "", { Size = UDim2.new(1, -8, 0, 18), Position = UDim2.fromOffset(4, 2), MaxText = 14 })
+				local back, fill = K.bar(bg, T.green, { Size = UDim2.new(1, -12, 0, 5), Position = UDim2.new(0, 6, 1, -10) })
+				e.timerFill = fill
+				e.timer = bb
+			end
+		end
+		if e.timerText then
+			local waitW = (soil:GetAttribute("WaterAt") or 0) - nowS()
+			e.timerText.Text = G.fmtTime((soil:GetAttribute("Ready") or 0) - nowS()) .. (waitW <= 0 and "  · полей" or "")
+			e.timerText.TextColor3 = waitW <= 0 and T.cold or T.text
+			e.timerFill.Size = UDim2.fromScale(prog, 1)
+		end
+	elseif e.timer then
+		e.timer:Destroy()
+		e.timer = nil
+		e.timerText = nil
+	end
 	if ready and not e.ready then
 		e.ready = true
 		local kg = soil:GetAttribute("Kg") or 0
@@ -864,12 +927,15 @@ loop(0.4, function()
 				if ready then
 					pr.Enabled = true
 					pr.ActionText = "Собрать урожай"
-				elseif soil:GetAttribute("Wa") then
-					pr.Enabled = true
-					pr.ActionText = "Растёт: " .. G.fmtTime((soil:GetAttribute("Ready") or 0) - nowS())
 				else
 					pr.Enabled = true
-					pr.ActionText = "Полить: " .. G.fmtTime((soil:GetAttribute("Ready") or 0) - nowS())
+					local waitW = (soil:GetAttribute("WaterAt") or 0) - nowS()
+					local left = G.fmtTime((soil:GetAttribute("Ready") or 0) - nowS())
+					if waitW > 0 then
+						pr.ActionText = ("Растёт %s · полив через %d с"):format(left, math.ceil(waitW))
+					else
+						pr.ActionText = ("Полить (быстрее) · %s"):format(left)
+					end
 				end
 			end
 		end
@@ -906,6 +972,32 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 end)
 remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance)
 	toast(("%s нашёл «%s %s» (%s)!"):format(who, title, plant, G.fmtOdds(chance)), "rare", 7)
+end)
+
+------------------------------------------------------------------ падающие звёзды: покачивание и сбор
+remotes:WaitForChild("Collected").OnClientEvent:Connect(function(coins, seed, pos, meteor)
+	local text = (meteor and "Метеорит! +" or "Звезда: +") .. G.fmt(coins) .. " монет"
+	if seed then text ..= ", семя «" .. plantName(seed) .. "»" end
+	toast(text, (meteor or seed) and "rare" or "ok", 3)
+	playSfx(meteor and "harvestRare" or "coins")
+	if typeof(pos) == "Vector3" then burst(pos, meteor and Color3.fromRGB(255, 170, 90) or Color3.fromRGB(255, 232, 160), meteor and 40 or 18) end
+end)
+RunService.RenderStepped:Connect(function()
+	local starF = world:FindFirstChild("Stars")
+	if not starF then return end
+	local t = os.clock()
+	for _, m in starF:GetChildren() do
+		local core = m:FindFirstChild("Core")
+		if core then
+			local base = m:GetAttribute("BaseY")
+			if not base then
+				base = core.Position.Y
+				m:SetAttribute("BaseY", base)
+			end
+			local p = core.Position
+			core.CFrame = CFrame.new(p.X, base + math.sin(t * 2 + p.X) * 0.35, p.Z) * CFrame.Angles(0, t * 1.5, 0.3)
+		end
+	end
 end)
 
 ------------------------------------------------------------------ показ редких мутаций (кинематика)

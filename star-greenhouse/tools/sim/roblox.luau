@@ -650,6 +650,12 @@ function Inst.GetPlayers(self)
 	end
 	return out
 end
+function Inst.GetPlayerFromCharacter(self, ch)
+	for _, p in Players:GetPlayers() do
+		if p.Character == ch then return p end
+	end
+	return nil
+end
 function Inst.GetPlayerByUserId(self, id)
 	for _, p in Players:GetPlayers() do
 		if p.UserId == id then return p end

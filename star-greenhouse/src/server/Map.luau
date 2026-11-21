@@ -214,7 +214,7 @@ local function buildHub()
 		for k = 1, 28 do
 			local a0, a1 = (k - 1) / 28 * PI * 2, k / 28 * PI * 2
 			local p0, p1 = V3(cos(a0) * r, y, sin(a0) * r), V3(cos(a1) * r, y, sin(a1) * r)
-			local s = part(sp, "RingSeg", V3(0.5, 0.5, (p1 - p0).Magnitude + 0.05), CFrame.lookAt((p0 + p1) / 2, p1), spec[3], Mat.Neon, { CanCollide = false, CastShadow = false, Transparency = 0.1 })
+			local s = part(sp, "RingSeg", V3(0.5, 0.5, (p1 - p0).Magnitude + 0.05), CFrame.lookAt((p0 + p1) / 2, p1), spec[3], Mat.Neon, { CanCollide = false, CastShadow = false, Transparency = 0.5 })
 			if k == 1 then sp.PrimaryPart = s end
 		end
 		ball(sp, "RingOrb", V3(r, y, 0), 1.2, c(255, 255, 255), Mat.Neon)
@@ -307,18 +307,19 @@ local function buildPlot(i, parent)
 		return d < 0.36 or d > PI * 2 - 0.36
 	end
 	-- пол и подсветка
-	cyl(pm, "Floor", cf * CF(0, 0.15, 0), 0.5, 39, c(30, 52, 60), Mat.Metal, { Reflectance = 0.1 })
-	cyl(pm, "FloorInner", cf * CF(0, 0.42, 0), 0.08, 36, c(24, 40, 48), Mat.Slate)
-	for _, r in { 8.2, 13.2, 17.8 } do
-		dcyl(pm, "FloorRing", cf * CF(0, 0.47, 0), 0.05, r * 2, COL.trim, Mat.Metal)
-		dcyl(pm, "FloorRingCut", cf * CF(0, 0.48, 0), 0.06, r * 2 - 0.4, c(24, 40, 48), Mat.Slate)
+	-- пол купола: живой газон (рельеф с травой) и каменные дорожки
+	WT.patch(cf.Position.X, cf.Position.Z, 20.5, Mat.Grass)
+	local stone = c(118, 112, 128)
+	for _, r in { 8.0, 13.0 } do
+		ring(pm, "Path", V3(), r, 0.08, 1.7, 0.2, stone, Mat.Cobblestone, 40, nil, nil)
 	end
-	dcyl(pm, "CenterDisk", cf * CF(0, 0.5, 0), 0.05, 6.2, c(18, 30, 36), Mat.Metal)
+	dcyl(pm, "CenterDisk", cf * CF(0, 0.1, 0), 0.2, 6.4, stone, Mat.Cobblestone)
+	part(pm, "EntryPath", V3(2.6, 0.2, 13), cf * CF(0, 0.1, -13.2), stone, Mat.Cobblestone, { CanCollide = false })
 	-- бордюр по краю участка
 	ring(pm, "Curb", V3(), 19.4, 0.55, 1.0, 1.1, COL.hull2, Mat.Metal, 36, entrance, nil)
 	-- ring() считает от (0,0,0): перенесём бордюр в систему участка
 	for _, p in pm:GetChildren() do
-		if p.Name == "Curb" then
+		if p.Name == "Curb" or p.Name == "Path" then
 			local rel = p.CFrame
 			p.CFrame = cf * rel
 		end
@@ -353,8 +354,37 @@ local function buildPlot(i, parent)
 	end
 	ball(pm, "DomeTop", W(0, R + 0.4, 0), 1.6, COL.cyan, Mat.Neon)
 	-- свет внутри купола
-	local lamp = ball(pm, "DomeLight", W(0, 14, 0), 1, COL.warm, Mat.Neon, { Transparency = 1 })
-	light(lamp, c(255, 235, 210), 40, 1.1)
+	-- подвесные лампы под куполом
+	for k = 0, 3 do
+		local a = k * PI / 2 + PI / 4
+		local x, z = cos(a) * 9, sin(a) * 9
+		local top = math.sqrt(R * R - 81) - 0.3
+		seg(pm, "LampCable", W(x, top, z), W(x, 9.2, z), 0.06, COL.hull, Mat.Metal)
+		ell(pm, "LampShade", cf * CF(x, 9.0, z), V3(1.6, 0.8, 1.6), COL.hull2, Mat.Metal, { CanCollide = false })
+		local bulb = ball(pm, "LampBulb2", W(x, 8.65, z), 0.6, COL.warm, Mat.Neon)
+		light(bulb, c(255, 226, 190), 18, 0.8)
+	end
+	-- верстак с горшками и лейкой, ящики и бочка у входа
+	do
+		local wb = cf * CF(-6.5, 0, -15.5) * A(0, 0.35, 0)
+		local wood = c(120, 86, 64)
+		part(pm, "Bench", V3(3.6, 0.25, 1.4), wb * CF(0, 1.5, 0), wood, Mat.WoodPlanks)
+		for _, lx in { -1.6, 1.6 } do
+			for _, lz in { -0.55, 0.55 } do part(pm, "BenchLeg", V3(0.2, 1.4, 0.2), wb * CF(lx, 0.7, lz), wood:Lerp(Color3.new(0, 0, 0), 0.25), Mat.Wood, { CanCollide = false }) end
+		end
+		for q = -1, 1 do
+			local pc = wb * CF(q * 1.05, 1.93, 0)
+			cyl(pm, "Pot", pc, 0.6, 0.62, c(176, 104, 76), Mat.Slate, { CanCollide = false })
+			ball(pm, "PotSprout", (pc * CF(0, 0.45, 0)).Position, 0.36, c(100, 190, 130), Mat.SmoothPlastic)
+		end
+		local can = wb * CF(1.2, 0.35, 1.1)
+		cyl(pm, "Can", can, 0.7, 0.6, c(90, 140, 190), Mat.Metal, { CanCollide = false })
+		seg(pm, "CanSpout", (can * CF(0.2, 0.1, 0)).Position, (can * CF(0.75, 0.45, 0)).Position, 0.1, c(90, 140, 190), Mat.Metal)
+		local cr = cf * CF(6.5, 0, -15.5) * A(0, -0.4, 0)
+		part(pm, "Crate", V3(1.6, 1.4, 1.6), cr * CF(0, 0.7, 0), c(140, 104, 74), Mat.WoodPlanks)
+		part(pm, "Crate", V3(1.2, 1.0, 1.2), cr * CF(0.2, 1.9, 0.1) * A(0, 0.5, 0), c(150, 112, 80), Mat.WoodPlanks)
+		cyl(pm, "Barrel", cr * CF(1.6, 0.8, -0.4), 1.6, 1.1, c(80, 110, 150), Mat.Metal)
+	end
 	-- фонарные столбы по кругу
 	for q = 1, 8 do
 		local a = q / 8 * PI * 2 + PI / 8
@@ -712,6 +742,14 @@ function Map.buildFlora()
 	-- клумбы на площади
 	for i, pos in Map.planters or {} do
 		bigPlant(fl, pick({ "flower", "tulip", "orb", "spiral" }), pos, 1.2, i)
+	end
+	-- маленькие цветы вдоль бордюра в каждом куполе
+	for _, plot in Map.plots do
+		for k = 1, 6 do
+			local a = -PI / 2 + 0.6 + (k - 0.5) / 6 * (PI * 2 - 1.2)
+			local lp = plot.cf:PointToWorldSpace(V3(cos(a) * 18.2, 0, sin(a) * 18.2))
+			bigPlant(fl, pick({ "flower", "tulip", "grass", "orb" }), lp, 0.55, a)
+		end
 	end
 	-- рощи между участками
 	for i = 1, Map.PlotCount do

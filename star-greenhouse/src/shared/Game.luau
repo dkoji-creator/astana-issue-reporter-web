@@ -246,5 +246,31 @@ function G.growSeconds(plant, speed: number): number
 end
 
 G.StartCoins = 60
+
+------------------------------------------------------------------ полив: можно повторять раз в WaterCooldown секунд, каждый раз рост быстрее
+G.WaterCooldown = 20
+
+------------------------------------------------------------------ падающие звёзды по карте
+G.Stars = { max = 22, meteorMax = 50, every = 5, life = 120, meteorChance = 0.04 }
+-- награда за звезду зависит от самой дальней открытой планеты
+function G.starReward(planets: number, meteor: boolean): number
+	local mult = G.Planets[math.clamp(planets, 1, #G.Planets)].mult
+	return math.floor((meteor and 120 or 9) * mult)
+end
+
+------------------------------------------------------------------ задания: всегда три, за выполнение монеты
+G.QuestOrder = { "stars", "water", "harvest", "sell", "plant", "mutation" }
+G.Quests = {
+	stars = { text = "Собери звёзд: %d", min = 4, max = 9, unit = 14 },
+	water = { text = "Полей грядки: %d раз", min = 6, max = 14, unit = 7 },
+	harvest = { text = "Собери урожай: %d раз", min = 3, max = 8, unit = 22 },
+	sell = { text = "Продай плодов: %d", min = 5, max = 14, unit = 12 },
+	plant = { text = "Посади семян: %d", min = 3, max = 8, unit = 10 },
+	mutation = { text = "Мутаций в урожае: %d", min = 1, max = 3, unit = 90 },
+}
+function G.questReward(kind: string, need: number, planets: number): number
+	local mult = G.Planets[math.clamp(planets, 1, #G.Planets)].mult
+	return math.floor(G.Quests[kind].unit * need * mult * 1.5)
+end
 G.StartBeds = 6
 return G

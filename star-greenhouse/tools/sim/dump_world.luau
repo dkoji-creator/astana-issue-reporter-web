@@ -35,7 +35,7 @@ for _, p in workspace.World:GetDescendants() do
 		n += 1
 	end
 end
-local MC = { Basalt = { 58, 54, 72 }, Rock = { 92, 90, 108 }, Slate = { 66, 64, 82 }, Salt = { 150, 146, 168 }, Glacier = { 150, 186, 228 }, Ground = { 70, 60, 74 }, Limestone = { 120, 112, 140 } }
+local MC = { Grass = { 64, 128, 122 }, LeafyGrass = { 98, 92, 160 }, Mud = { 62, 50, 62 }, Cobblestone = { 118, 112, 128 }, Basalt = { 58, 54, 72 }, Rock = { 92, 90, 108 }, Slate = { 66, 64, 82 }, Salt = { 150, 146, 168 }, Glacier = { 150, 186, 228 }, Ground = { 70, 60, 74 }, Limestone = { 120, 112, 140 } }
 for _, op in SIM.terrain do
 	local mat = tostring(op[#op]):gsub("Enum.Material.", "")
 	local col = MC[mat]
