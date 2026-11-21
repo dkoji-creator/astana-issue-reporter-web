@@ -103,7 +103,9 @@ local function label(parent, text, props)
 		BackgroundTransparency = 1, Text = text, TextColor3 = T.sub, Font = Enum.Font.GothamBold, TextScaled = true,
 		Size = UDim2.new(1, 0, 0, 20), TextXAlignment = Enum.TextXAlignment.Left,
 	}, parent)
-	for k, v in props or {} do l[k] = v end
+	for k, v in props or {} do
+		if k ~= "MaxText" then l[k] = v end
+	end
 	make("UITextSizeConstraint", { MaxTextSize = (props and props.MaxText) or 18, MinTextSize = 8 }, l)
 	return l
 end
@@ -860,6 +862,7 @@ end)
 -- киоски открывают окна (срабатывает для любой подсказки с атрибутом Window)
 game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr)
 	local w = pr:GetAttribute("Window")
+	if w == "sell" then w = "bag" end
 	if w and windows[w] and not windows[w].Visible then openWindow(w) end
 end)
 
