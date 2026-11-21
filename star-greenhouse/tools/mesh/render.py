@@ -102,7 +102,7 @@ def shade(alb, nor, pos, emi, spc, cam, rim=(0.35, 0.55, 1.0)):
     return col
 
 
-def render(layers, size=260, ss=2, cam_dir=(-0.55, 0.42, 1.0), bg=True, fov=32, focus=None, dist=None, zoom=1.0, ground=True):
+def render(layers, size=260, ss=2, cam_dir=(-0.55, 0.42, 1.0), bg=True, fov=32, focus=None, dist=None, zoom=1.0, ground=True, rgba=False):
     W = H = size * ss
     pts = np.vstack([m.v for m, _ in layers])
     lo, hi = pts.min(0), pts.max(0)
@@ -110,7 +110,7 @@ def render(layers, size=260, ss=2, cam_dir=(-0.55, 0.42, 1.0), bg=True, fov=32, 
     radius = np.linalg.norm(hi - lo) / 2
     d = unit(cam_dir)
     cam = center + d * (radius / np.tan(np.radians(fov) / 2) * 1.05 / zoom if dist is None else dist)
-    if ground:
+    if ground and not rgba:
         ext = max(hi[0] - lo[0], hi[2] - lo[2], 2.0)
         gr = ext * 0.8
         disc = lathe([(1e-3, 0.0), (gr, 0.0), (gr * 1.04, -0.05)], 36)
@@ -125,7 +125,7 @@ def render(layers, size=260, ss=2, cam_dir=(-0.55, 0.42, 1.0), bg=True, fov=32, 
     bgc = np.array([0.075, 0.07, 0.15]) * (1 - np.clip(rr, 0, 1))[..., None] + np.array([0.02, 0.02, 0.05]) * np.clip(rr, 0, 1)[..., None]
     hit = np.isfinite(zb)
     col = shade(alb, nor, pos, emi, spc, cam)
-    img = np.where(hit[..., None], col, bgc)
+    img = np.where(hit[..., None], col, bgc if not rgba else 0.0)
     glow = np.where(hit[..., None], alb * emi[..., None], 0.0)
     if trans:
         zt, albt, nort, post, emit, spct, alpt = rasterize(trans, cam, center, W, H, fov, zref=np.where(hit, zb, np.inf))
@@ -141,6 +141,14 @@ def render(layers, size=260, ss=2, cam_dir=(-0.55, 0.42, 1.0), bg=True, fov=32, 
     img = img + b1 * 0.9 + b2 * 0.8
     img = 1 - np.exp(-img * 1.35)
     img = np.clip(img, 0, 1) ** (1 / 1.08)
+    if rgba:
+        a = np.clip(hit.astype(np.float64) + (b1 + b2).max(2) * 0.9, 0, 1)
+        if trans:
+            a = np.maximum(a, np.where(th, np.clip(alpt, 0, 1), 0))
+        # цвет без фона: там, где пикселя нет, берём только свечение
+        rgb = np.where(hit[..., None] | (a[..., None] > 0), img, 0)
+        out = Image.fromarray(np.dstack([np.clip(rgb, 0, 1) * 255, a * 255]).astype(np.uint8), "RGBA")
+        return out.resize((size, size), Image.LANCZOS) if ss > 1 else out
     out = Image.fromarray((img * 255).astype(np.uint8))
     if ss > 1:
         out = out.resize((size, size), Image.LANCZOS)
