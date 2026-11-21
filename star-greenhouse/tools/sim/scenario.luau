@@ -13,7 +13,7 @@ local shared = folder("Shared", RS)
 mod("ModuleScript", "Game", shared, "shared/Game")
 mod("ModuleScript", "PlantModels", shared, "shared/PlantModels")
 local cfg = folder("Config", shared)
-for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
+for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
 local srv = folder("Server", game:GetService("ServerScriptService"))
 local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")

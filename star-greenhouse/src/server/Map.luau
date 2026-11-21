@@ -280,7 +280,7 @@ local function buildHub()
 			local scr = part(m, "Screen", V3(9, 5.2, 0.4), cf * CF(0, 4.2, 2.8), c(8, 10, 20), Mat.SmoothPlastic, { CanCollide = false })
 			Map.boardLabel = surfaceText(scr, Enum.NormalId.Front, "Рынок загружается", COL.mag, 30)
 			Map.boardLabel.TextScaled = false
-			Map.boardLabel.TextSize = 24
+			Map.boardLabel.TextSize = 22
 			Map.boardLabel.RichText = true
 			dcyl(m, "ScreenFrameT", cf * CF(0, 6.9, 2.8) * A(0, 0, PI / 2), 9.2, 0.25, COL.mag, Mat.Neon)
 			dcyl(m, "ScreenFrameB", cf * CF(0, 1.5, 2.8) * A(0, 0, PI / 2), 9.2, 0.25, COL.mag, Mat.Neon)
@@ -386,7 +386,7 @@ local function buildPlot(i, parent)
 			local base = W(cos(a) * 17.6, 0.55, sin(a) * 17.6)
 			seg(pm, "LampPole", base, base + V3(0, 4.6, 0), 0.22, COL.plate, Mat.Metal)
 			local lb = ball(pm, "LampBulb", base + V3(0, 5, 0), 0.9, COL.warm, Mat.Neon)
-			light(lb, COL.warm, 15, 0.7)
+			if q % 2 == 0 then light(lb, COL.warm, 15, 0.7) end
 		end
 	end
 	-- ворота
@@ -699,12 +699,20 @@ end
 
 ------------------------------------------------------------------ фон: планеты, станция, астероиды
 local function billboard(parent, name, image, pos, size)
+	-- картинка планеты на невидимой плоскости, повёрнутой к центру станции (SurfaceGui не зависит от прозрачности детали)
 	local p = part(parent, name, V3(size, size, 0.2), CFrame.lookAt(pos, V3(0, 0, 0)), c(255, 255, 255), Mat.SmoothPlastic,
 		{ Transparency = 1, CanCollide = false, CanQuery = false, CastShadow = false })
-	local d = Instance.new("Decal")
-	d.Face = Enum.NormalId.Front
-	d.Texture = image
-	d.Parent = p
+	local gui = Instance.new("SurfaceGui")
+	gui.Face = Enum.NormalId.Front
+	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
+	gui.CanvasSize = Vector2.new(1024, 1024)
+	gui.LightInfluence = 0
+	gui.Parent = p
+	local img = Instance.new("ImageLabel")
+	img.BackgroundTransparency = 1
+	img.Size = UDim2.fromScale(1, 1)
+	img.Image = image
+	img.Parent = gui
 	return p
 end
 

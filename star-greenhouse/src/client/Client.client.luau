@@ -16,6 +16,33 @@ local T = K.T
 local make = K.make
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local ADMIN_ID = 8432365972
+plr.CameraMaxZoomDistance = 90
+local SoundService = game:GetService("SoundService")
+local Audio = require(Shared:WaitForChild("Config"):WaitForChild("Audio"))
+
+-- звуки: музыка и эффекты (если ассет недоступен, игра просто молчит)
+local sfx = {}
+do
+	local sfxGroup = make("SoundGroup", { Name = "Sfx", Volume = 0.7 }, SoundService)
+	local musicGroup = make("SoundGroup", { Name = "Music", Volume = 0.4 }, SoundService)
+	for k, id in Audio.Sfx do
+		sfx[k] = make("Sound", { SoundId = id, SoundGroup = sfxGroup, Volume = 0.8 }, SoundService)
+	end
+	local music = make("Sound", { SoundId = Audio.Music.main, Looped = true, SoundGroup = musicGroup, Volume = 0.8 }, SoundService)
+	task.spawn(function()
+		task.wait(1)
+		if not music.IsLoaded and Audio.Music.fallback then music.SoundId = Audio.Music.fallback end
+		music:Play()
+	end)
+end
+local function playSfx(name)
+	local s = sfx[name]
+	if s then
+		s.TimePosition = 0
+		s:Play()
+	end
+end
+K.onClick(function() playSfx("click") end)
 
 local function nowS() return workspace:GetServerTimeNow() end
 
@@ -241,7 +268,7 @@ do
 				local btn, bl = K.button(card, G.fmt(p.seed) .. " монет", can and T.green or T.panel, { Position = UDim2.fromOffset(8, 154), Size = UDim2.new(1, -16, 0, 40), MaxText = 17 })
 				btn.Activated:Connect(function()
 					local ok, res = remotes.Buy:InvokeServer(p.id, 1)
-					if ok then toast("Куплено: " .. p.name, "ok") else toast(res or "Не получилось", "bad") end
+					if ok then toast("Куплено: " .. p.name, "ok") playSfx("coins") else toast(res or "Не получилось", "bad") end
 				end)
 			end
 		end
@@ -323,14 +350,14 @@ do
 	sellOne.Activated:Connect(function()
 		if not selUid then toast("Выбери плод", "bad") return end
 		local ok, total = remotes.Sell:InvokeServer("one", selUid)
-		if ok then toast("+" .. G.fmtInt(total) .. " монет", "ok") selUid = nil select(nil) end
+		if ok then toast("+" .. G.fmtInt(total) .. " монет", "ok") playSfx("coins") selUid = nil select(nil) end
 	end)
 	favBtn.Activated:Connect(function()
 		if selUid then remotes.Fav:InvokeServer(selUid) end
 	end)
 	sellAll.Activated:Connect(function()
 		local ok, total, count = remotes.Sell:InvokeServer("all")
-		if ok then toast(("Продано %d шт.: +%s монет"):format(count, G.fmtInt(total)), "ok") else toast(total or "Нечего продавать", "bad") end
+		if ok then toast(("Продано %d шт.: +%s монет"):format(count, G.fmtInt(total)), "ok") playSfx("coins") else toast(total or "Нечего продавать", "bad") end
 	end)
 end
 
@@ -848,6 +875,7 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 	local name = plantName(id)
 	local title = G.mutTitle(muts or {})
 	toast(("%s%s, %.2f кг"):format(title ~= "" and (title .. " ") or "", name, kg or 0), title ~= "" and "rare" or "ok")
+	playSfx(title ~= "" and "harvestRare" or "harvest")
 end)
 remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance)
 	toast(("%s нашёл «%s %s» (%s)!"):format(who, title, plant, G.fmtOdds(chance)), "rare", 7)
@@ -859,6 +887,7 @@ local function playReveal(info)
 	local rarest = G.rarestMut(info.m)
 	local mt = G.Mut[rarest]
 	local col = mt.color
+	playSfx(mt.tier >= 5 and "legendary" or "reveal")
 	local gui = make("ScreenGui", { Name = "Reveal", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 50 }, pg)
 	local back = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1 }, gui)
 	TweenService:Create(back, TweenInfo.new(0.5), { BackgroundTransparency = 0.12 }):Play()
