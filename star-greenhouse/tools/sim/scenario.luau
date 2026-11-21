@@ -325,6 +325,14 @@ do
 end
 
 stage("события")
+-- отклик на действия: подсказка у грядки и удар метеорита
+for _, d in plot:GetDescendants() do
+	if d:IsA("ProximityPrompt") then d.Triggered:Fire(plr) end
+end
+frames(20, 0.1)
+remotes.Strike:FireAllClients(plot.Beds.Bed1.Soil.Position, "neon", "Тест")
+remotes.Strike:FireAllClients(plot.Beds.Bed2.Soil.Position, nil, "Тест")
+frames(30, 0.1)
 remotes.Event:FireAllClients("meteor", 200)
 RS:SetAttribute("EventId", "meteor")
 frames(40, 0.2)

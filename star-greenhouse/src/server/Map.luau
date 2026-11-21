@@ -211,8 +211,8 @@ function Map.buildPlot(pi, j)
 	pm:SetAttribute("Planet", pi)
 	local plot = { id = id, planet = pi, slot = j, cf = cf, model = pm, beds = {}, ang = ang }
 	-- земля огорода: тёмная почва
-	local t = workspace:FindFirstChildOfClass("Terrain")
-	if t then t:FillBlock(cf * CF(0, -1.5, 0), V3(62, 3, 54), Mat.Ground) end
+	-- земля огорода: тонкий слой почвы поверх рельефа (рельеф не трогаем, чтобы не засыпать грядки)
+	part(pm, "Ground", V3(62, 0.2, 54), cf * CF(0, 0.08, 0), c(70, 52, 42), Mat.Ground)
 	-- низкий деревянный забор с проходом спереди
 	local function rail(a, b)
 		seg(pm, "Rail", a, b, 0.22, COL.wood2, Mat.Wood)
@@ -275,8 +275,6 @@ function Map.destroyPlot(id)
 	if not plot then return end
 	plot.model:Destroy()
 	Map.plots[id] = nil
-	local t = workspace:FindFirstChildOfClass("Terrain")
-	if t then t:FillBlock(plot.cf * CF(0, -1.5, 0), V3(62, 3, 54), WT.Themes[plot.planet].base) end
 	local P = Map.planets[plot.planet]
 	if P.markers[plot.slot] then P.markers[plot.slot].Parent = P.slotFolder end
 end
@@ -448,7 +446,7 @@ local function buildHub(pi, parent)
 	local pr = prompt(trig, "Полететь на другую планету", "Ракета", 14, "Open_travel")
 	pr:SetAttribute("Window", "travel")
 	-- табличка с названием планеты
-	local sign = part(f, "PlanetSign", V3(14, 3.4, 0.4), CF(ctr + V3(0, 15.5, 0)), COL.dark, Mat.SmoothPlastic, { CanCollide = false })
+	local sign = part(f, "PlanetSign", V3(14, 3.4, 0.4), CF(ctr + V3(0, 23, 0)), COL.dark, Mat.SmoothPlastic, { CanCollide = false })
 	surfaceText(sign, Enum.NormalId.Front, string.upper(name), Game.PlanetColors[pi], 30)
 	surfaceText(sign, Enum.NormalId.Back, string.upper(name), Game.PlanetColors[pi], 30)
 	for i, k in KIOSKS do

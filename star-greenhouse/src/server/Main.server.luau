@@ -27,7 +27,7 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
@@ -827,23 +827,35 @@ task.spawn(function()
 					for i, b in d.beds do b.ready = t + flareRemaining(b.ready - t, left) end
 					if S[plr].plot then refreshAllBeds(plr) end
 				end
-			elseif ev.luck then
-				-- метеорит задевает грядки: дополнительный бросок мутаций
-				for plr, d in D do
-					local hit = 0
+			end
+		end
+		-- метеоритный дождь: метеориты по очереди бьют в растущие грядки и могут добавить мутацию
+		if ev and ev.luck and math.random() < 0.3 then
+			local cands = {}
+			for plr, d in D do
+				if S[plr].plot then
 					for i, b in d.beds do
-						local extra = G.rollMutations(G.upgradeValue("luck", d.upg.luck) * ev.luck, Random.new())
-						for _, mid in extra do
-							if not table.find(b.m, mid) then
-								table.insert(b.m, mid)
-								hit += 1
-							end
-						end
-						if #extra > 0 then b.w = G.rollWeight(G.Plants[b.id], Random.new(), b.m) end
+						if t < b.ready then table.insert(cands, { plr, d, i, b }) end
 					end
-					if S[plr].plot then refreshAllBeds(plr) end
-					if hit > 0 then notify(plr, ("Метеориты задели грядки: новые мутации: %d"):format(hit), "ok") end
 				end
+			end
+			if #cands > 0 then
+				local pick = cands[math.random(1, #cands)]
+				local plr, d, i, b = pick[1], pick[2], pick[3], pick[4]
+				local added
+				for _, mid in G.rollMutations(G.upgradeValue("luck", d.upg.luck) * ev.luck, Random.new()) do
+					if not table.find(b.m, mid) then
+						table.insert(b.m, mid)
+						added = added or mid
+					end
+				end
+				if added then
+					b.w = G.rollWeight(G.Plants[b.id], Random.new(), b.m)
+					refreshBed(plr, i)
+				end
+				local plot = Map.plots[S[plr].plot]
+				local pos = plot and plot.beds[i] and plot.beds[i].pos
+				if pos then RX.Strike:FireAllClients(pos, added, plr.DisplayName) end
 			end
 		end
 		-- авто-сбор

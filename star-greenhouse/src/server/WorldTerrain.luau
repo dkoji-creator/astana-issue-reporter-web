@@ -57,7 +57,7 @@ end
 -- тонкое пятно другого материала на поверхности (форма не меняется)
 function WT.patch(x, y, z, r, mat)
 	local t = terrain()
-	if t then t:FillCylinder(CFrame.new(x, y - 1.5, z), 3, r, mat) end
+	if t then t:FillCylinder(CFrame.new(x, y - 2, z), 4, r, mat) end
 end
 
 function WT.planetAt(pos: Vector3): number

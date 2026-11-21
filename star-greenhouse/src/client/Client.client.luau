@@ -47,6 +47,7 @@ end
 K.onClick(function() playSfx("click") end)
 
 local function nowS() return workspace:GetServerTimeNow() end
+local FX = {} -- эффекты (заполняются ниже, вызываются раньше)
 -- фоновый цикл: ошибка в одной итерации не убивает цикл
 local function loop(dt, fn)
 	task.spawn(function()
@@ -155,7 +156,7 @@ end
 fitScale()
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
 
-local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 84), Size = UDim2.fromOffset(400, 200), ZIndex = 20 }, hud)
+local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 104), Size = UDim2.fromOffset(400, 200), ZIndex = 20 }, hud)
 listLayout(toastHolder, nil, 4, Enum.HorizontalAlignment.Center)
 local function toast(text, kind, dur)
 	local col = kind == "ok" and T.green or kind == "bad" and T.red or kind == "rare" and T.gold or T.sub
@@ -198,7 +199,7 @@ do
 	UI.eventFrame = f
 	UI.eventTitle = K.text(f, "", { Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 4), MaxText = 15 })
 	UI.eventSub = K.text(f, "", { Size = UDim2.new(1, -16, 0, 16), Position = UDim2.fromOffset(8, 25), MaxText = 12, TextColor3 = T.sub, Medium = true })
-	local hint = K.panel(hud, { Name = "Hint", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -104), Size = UDim2.fromOffset(420, 30) })
+	local hint = K.panel(hud, { Name = "Hint", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 70), Size = UDim2.fromOffset(400, 28) })
 	K.stroke(hint, T.gold, 1, false, 0.4)
 	UI.hintFrame = hint
 	UI.hint = K.text(hint, "", { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), MaxText = 15, TextColor3 = T.gold, Medium = true })
@@ -712,6 +713,20 @@ do
 	end
 end
 
+-- счётчик монет плавно набегает
+do
+	local shown = ST.coins or 0
+	RunService.RenderStepped:Connect(function(dt)
+		local target = UI.coinTarget or ST.coins or 0
+		if math.abs(target - shown) < 1 then
+			shown = target
+		else
+			shown += (target - shown) * math.min(1, dt * 6)
+		end
+		if UI.coins then UI.coins.Text = G.fmt(shown) end
+	end)
+end
+
 ------------------------------------------------------------------ задания (справа под событием)
 do
 	local qp = K.panel(hud, { Name = "Quests", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 60), Size = UDim2.fromOffset(230, 112) })
@@ -781,7 +796,7 @@ end
 
 loop(0.5, function()
 	do
-		UI.coins.Text = G.fmt(ST.coins)
+		UI.coinTarget = ST.coins
 		local frac, txt = nextPlanetInfo()
 		UI.planetFill.Size = UDim2.fromScale(frac, 1)
 		UI.planetText.Text = txt
@@ -850,8 +865,10 @@ local function addLabel(model, text, color)
 	local root = model.PrimaryPart
 	if not root then return end
 	local h = model:GetExtentsSize().Y
-	local bb = make("BillboardGui", { Name = "Tag", Size = UDim2.fromOffset(210, 54), StudsOffset = Vector3.new(0, h * 0.6 + 2, 0), AlwaysOnTop = false, MaxDistance = 90 }, root)
-	K.text(bb, text, { Size = UDim2.new(1, 0, 0.55, 0), MaxText = 24, TextColor3 = color })
+	local bb = make("BillboardGui", { Name = "Tag", Size = UDim2.fromOffset(120, 26), StudsOffset = Vector3.new(0, h * 0.6 + 1.5, 0), AlwaysOnTop = false, MaxDistance = 40 }, root)
+	local bg = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = T.panel, BackgroundTransparency = 0.3 }, bb)
+	K.corner(bg, UDim.new(1, 0))
+	K.text(bg, "Готово · " .. text, { Size = UDim2.new(1, -10, 1, -6), Position = UDim2.fromOffset(5, 3), MaxText = 13, TextColor3 = color })
 	return bb
 end
 
@@ -912,8 +929,18 @@ local function refreshEntry(soil)
 		e.ready = true
 		local kg = soil:GetAttribute("Kg") or 0
 		local rar = G.rarestMut(mutList(soil:GetAttribute("Muts")))
-		local tag = addLabel(e.model, ("%s %.2f кг"):format(plant.name, kg), rar and G.Mut[rar].color or rarityColor(id))
-		e.tag = tag
+		if soil:GetAttribute("Plot") == ST.plot then
+			e.tag = addLabel(e.model, ("%.2f кг"):format(kg), rar and G.Mut[rar].color or rarityColor(id))
+		end
+		-- созревшее растение сияет и искрится
+		local root = e.model.PrimaryPart
+		if root then
+			local att = make("Attachment", { Name = "ReadyFx", Position = Vector3.new(0, 2.5 * plant.scale * (e.wscale or 1), 0) }, root)
+			make("ParticleEmitter", { Color = ColorSequence.new(Color3.fromRGB(255, 236, 160)), LightEmission = 1, Rate = 6, Lifetime = NumberRange.new(0.8, 1.6),
+				Speed = NumberRange.new(0.5, 1.5), SpreadAngle = Vector2.new(180, 180), Size = NumberSequence.new(0.25, 0), Transparency = NumberSequence.new(0, 1) }, att)
+			e.readyLight = make("PointLight", { Color = Color3.fromRGB(255, 228, 160), Range = 10, Brightness = 0.8 }, root)
+			e.model:ScaleTo((e.scale or 1) * 1.08)
+		end
 	elseif not ready and e.ready then
 		e.ready = false
 		if e.tag then e.tag:Destroy() end
@@ -997,7 +1024,22 @@ local function ensurePrompts()
 		if soil and not prompts[soil] then
 			local idx = soil:GetAttribute("Idx")
 			local pr = make("ProximityPrompt", { Name = "BedPrompt", MaxActivationDistance = 11, HoldDuration = 0, RequiresLineOfSight = false, ActionText = "Посадить", ObjectText = "Грядка", UIOffset = Vector2.new(0, 0) }, soil)
-			pr.Triggered:Connect(function() remotes.Act:FireServer(idx) end)
+			pr.Triggered:Connect(function()
+				local id = soil:GetAttribute("Plant")
+				local top = soil.Position + Vector3.new(0, 1, 0)
+				if not id or id == "" then
+					if ST.sel then
+						FX.splash(top, Color3.fromRGB(110, 80, 60), 18, 14)
+						FX.floatText(top + Vector3.new(0, 2, 0), "Посажено!", T.green, 18)
+						playSfx("click")
+					end
+				elseif nowS() < (soil:GetAttribute("Ready") or 0) and nowS() >= (soil:GetAttribute("WaterAt") or 0) then
+					FX.splash(top + Vector3.new(0, 4, 0), Color3.fromRGB(120, 190, 255), 30, 10)
+					FX.floatText(top + Vector3.new(0, 2.5, 0), "Полито: быстрее", T.cold, 18)
+					playSfx("click")
+				end
+				remotes.Act:FireServer(idx)
+			end)
 			prompts[soil] = pr
 		end
 	end
@@ -1051,13 +1093,61 @@ local function burst(pos, color, n)
 	e:Emit(n or 24)
 	task.delay(1.5, function() att:Destroy() end)
 end
+-- всплывающий текст в мире
+local function floatText(pos, text, color, size)
+	local p = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(pos) }, fxFolder)
+	local bb = make("BillboardGui", { Size = UDim2.fromOffset(220, 40), AlwaysOnTop = true, LightInfluence = 0, MaxDistance = 120 }, p)
+	local l = K.text(bb, text, { MaxText = size or 22, TextColor3 = color or T.gold })
+	K.pop(bb:FindFirstChildOfClass("TextLabel") or l)
+	TweenService:Create(bb, TweenInfo.new(1.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { StudsOffset = Vector3.new(0, 4, 0) }):Play()
+	task.delay(0.8, function()
+		if l.Parent then TweenService:Create(l, TweenInfo.new(0.6), { TextTransparency = 1 }):Play() end
+	end)
+	task.delay(1.5, function() p:Destroy() end)
+end
+-- плод летит к игроку по дуге
+local function flyToPlayer(from, color, size)
+	local ch = plr.Character
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	local b = make("Part", { Shape = Enum.PartType.Ball, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+		Material = Enum.Material.Neon, Color = color, Size = Vector3.new(size, size, size), CFrame = CFrame.new(from) }, fxFolder)
+	local t0 = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local k = math.clamp((os.clock() - t0) / 0.55, 0, 1)
+		local to = root.Position + Vector3.new(0, 1.5, 0)
+		local p = from:Lerp(to, k) + Vector3.new(0, math.sin(k * math.pi) * 5, 0)
+		b.CFrame = CFrame.new(p)
+		b.Size = Vector3.new(size, size, size) * (1 - 0.6 * k)
+		if k >= 1 then
+			conn:Disconnect()
+			b:Destroy()
+		end
+	end)
+end
+local function splash(pos, color, n, speed)
+	local att = make("Part", { Anchored = true, CanCollide = false, Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(pos) }, fxFolder)
+	local a = make("Attachment", {}, att)
+	local e = make("ParticleEmitter", { Color = ColorSequence.new(color), LightEmission = 0.3, Rate = 0, Lifetime = NumberRange.new(0.5, 0.9), Speed = NumberRange.new(speed * 0.5, speed),
+		SpreadAngle = Vector2.new(50, 50), Acceleration = Vector3.new(0, -40, 0), EmissionDirection = Enum.NormalId.Top, Size = NumberSequence.new(0.35, 0.1) }, a)
+	e:Emit(n)
+	task.delay(1.2, function() att:Destroy() end)
+end
+
+FX.splash, FX.floatText = splash, floatText
+
 remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts, kg)
 	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
 	local bedsF = plot and plot:FindFirstChild("Beds")
 	local bed = bedsF and bedsF:FindFirstChild("Bed" .. tostring(bedIdx))
 	if bed and bed:FindFirstChild("Soil") then
 		local rar = G.rarestMut(muts or {})
-		burst(bed.Soil.Position + Vector3.new(0, 3, 0), rar and G.Mut[rar].color or rarityColor(id), 24 + (rar and 20 or 0))
+		local col = rar and G.Mut[rar].color or rarityColor(id)
+		local top = bed.Soil.Position + Vector3.new(0, 3, 0)
+		burst(top, col, 24 + (rar and 20 or 0))
+		flyToPlayer(top, G.Plants[id].c1, 1.2)
+		floatText(top + Vector3.new(0, 2, 0), ("+%.2f кг"):format(kg or 0), col, 24)
 	end
 	local name = plantName(id)
 	local title = G.mutTitle(muts or {})
@@ -1240,6 +1330,39 @@ do
 	end)
 end
 
+remotes:WaitForChild("Strike").OnClientEvent:Connect(function(pos, mut, who)
+	local cam = workspace.CurrentCamera
+	if not cam or (cam.CFrame.Position - pos).Magnitude > 400 then return end
+	local from = pos + Vector3.new(60, 160, 30)
+	local m = make("Part", { Shape = Enum.PartType.Ball, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+		Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 160, 80), Size = Vector3.new(2.2, 2.2, 2.2), CFrame = CFrame.new(from) }, fxFolder)
+	local a0 = make("Attachment", { Position = Vector3.new(0, 0.6, 0) }, m)
+	local a1 = make("Attachment", { Position = Vector3.new(0, -0.6, 0) }, m)
+	make("Trail", { Attachment0 = a0, Attachment1 = a1, Lifetime = 0.5, LightEmission = 1, Color = ColorSequence.new(Color3.fromRGB(255, 190, 110)), FaceCamera = true,
+		Transparency = NumberSequence.new(0, 1), WidthScale = NumberSequence.new(1, 0) }, m)
+	make("PointLight", { Color = Color3.fromRGB(255, 170, 90), Range = 30, Brightness = 3 }, m)
+	local t0 = os.clock()
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local k = math.clamp((os.clock() - t0) / 0.8, 0, 1)
+		m.CFrame = CFrame.new(from:Lerp(pos, k * k))
+		if k >= 1 then
+			conn:Disconnect()
+			m:Destroy()
+			burst(pos + Vector3.new(0, 1, 0), Color3.fromRGB(255, 170, 90), 50)
+			splash(pos, Color3.fromRGB(255, 140, 70), 30, 22)
+			local flash = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(pos + Vector3.new(0, 3, 0)) }, fxFolder)
+			local l = make("PointLight", { Color = Color3.fromRGB(255, 200, 140), Range = 40, Brightness = 8 }, flash)
+			TweenService:Create(l, TweenInfo.new(0.8), { Brightness = 0 }):Play()
+			task.delay(0.9, function() flash:Destroy() end)
+			playSfx(mut and "harvestRare" or "harvest")
+			if mut then
+				floatText(pos + Vector3.new(0, 5, 0), "Метеорит! " .. G.Mut[mut].name, G.Mut[mut].color, 26)
+			end
+		end
+	end)
+end)
+
 ------------------------------------------------------------------ показ редких мутаций (кинематика)
 local revealQueue, revealing = {}, false
 local function playReveal(info)
@@ -1388,9 +1511,14 @@ RunService.RenderStepped:Connect(function(dt)
 	end
 	for soil, e in cache do
 		if e.model and e.kind == "plant" then
-			if (soil.Position - cp).Magnitude < 60 then PM.animate(e.model, t) end
-			if e.ready then
-				e.model:PivotTo(CFrame.new(soil.Position + Vector3.new(0, soil.Size.Y / 2 + math.sin(t * 2 + soil.Position.X) * 0.06, 0)) * CFrame.Angles(0, e.yaw, 0))
+			local d = (soil.Position - cp).Magnitude
+			if d < 60 then
+				PM.animate(e.model, t)
+				-- лёгкое покачивание, созревшие ещё и подпрыгивают
+				local ph = soil.Position.X * 0.7 + soil.Position.Z
+				local bob = e.ready and math.abs(math.sin(t * 2.2 + ph)) * 0.18 or 0
+				e.model:PivotTo(CFrame.new(soil.Position + Vector3.new(0, soil.Size.Y / 2 + bob, 0)) * CFrame.Angles(math.sin(t * 1.3 + ph) * 0.035, e.yaw, math.cos(t * 1.1 + ph) * 0.03))
+				if e.readyLight then e.readyLight.Brightness = 0.6 + 0.4 * math.sin(t * 3 + ph) end
 			end
 		end
 	end
