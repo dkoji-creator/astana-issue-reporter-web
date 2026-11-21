@@ -184,15 +184,15 @@ end
 ------------------------------------------------------------------ улучшения станции
 G.UpgradeOrder = { "beds", "luck", "speed", "water", "sprinkler" }
 G.Upgrades = {
-	beds = { name = "Грядки", desc = "Больше мест для растений", icon = "jar", min = 6, max = 30, fmt = "%d шт.",
+	beds = { name = "Грядки", desc = "Больше мест для растений", icon = "bed", min = 6, max = 30, fmt = "%d шт.",
 		value = function(l) return l end, cost = function(l) return math.floor(100 * 1.45 ^ (l - 6)) end },
 	luck = { name = "Удобрение удачи", desc = "Мутации выпадают чаще", icon = "luck", min = 1, max = 20, fmt = "x%.2f",
 		value = function(l) return 1 + 0.1 * (l - 1) end, cost = function(l) return math.floor(500 * 1.5 ^ (l - 1)) end },
-	speed = { name = "Ускоритель роста", desc = "Растения созревают быстрее", icon = "upgrade", min = 1, max = 15, fmt = "x%.2f",
+	speed = { name = "Ускоритель роста", desc = "Растения созревают быстрее", icon = "speed", min = 1, max = 15, fmt = "x%.2f",
 		value = function(l) return 1 + 0.06 * (l - 1) end, cost = function(l) return math.floor(400 * 1.55 ^ (l - 1)) end },
-	water = { name = "Лейка", desc = "Полив сокращает время роста сильнее", icon = "potion", min = 1, max = 11, fmt = "-%d%%",
+	water = { name = "Лейка", desc = "Полив сокращает время роста сильнее", icon = "water", min = 1, max = 11, fmt = "-%d%%",
 		value = function(l) return math.floor((0.15 + 0.02 * (l - 1)) * 100 + 0.5) end, cost = function(l) return math.floor(300 * 1.5 ^ (l - 1)) end },
-	sprinkler = { name = "Спринклеры", desc = "Поливают сами при посадке", icon = "gift", min = 0, max = 5, fmt = "ур. %d", off = "нет",
+	sprinkler = { name = "Спринклеры", desc = "Поливают сами при посадке", icon = "sprinkler", min = 0, max = 5, fmt = "ур. %d", off = "нет",
 		value = function(l) return l end, cost = function(l) return ({ 2000, 20000, 200000, 2000000, 20000000 })[l + 1] or 0 end },
 }
 function G.upgradeValue(key: string, level: number)

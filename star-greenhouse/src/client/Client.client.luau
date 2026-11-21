@@ -155,14 +155,14 @@ end
 fitScale()
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
 
-local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 96), Size = UDim2.fromOffset(420, 200), ZIndex = 20 }, hud)
+local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 84), Size = UDim2.fromOffset(400, 200), ZIndex = 20 }, hud)
 listLayout(toastHolder, nil, 4, Enum.HorizontalAlignment.Center)
 local function toast(text, kind, dur)
 	local col = kind == "ok" and T.green or kind == "bad" and T.red or kind == "rare" and T.gold or T.sub
-	local f = make("Frame", { Size = UDim2.fromOffset(400, 30), BackgroundColor3 = T.panel, BackgroundTransparency = 0.15, ZIndex = 21 }, toastHolder)
-	K.corner(f, UDim.new(0, 10))
-	K.stroke(f, col, 2)
-	K.text(f, text, { Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3), TextColor3 = col, MaxText = 18, ZIndex = 22 })
+	local f = make("Frame", { Size = UDim2.fromOffset(380, 28), BackgroundColor3 = T.panel, BackgroundTransparency = 0.12, ZIndex = 21 }, toastHolder)
+	K.corner(f, UDim.new(0, 9))
+	K.stroke(f, col, 1, false, 0.35)
+	K.text(f, text, { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), TextColor3 = col, MaxText = 15, ZIndex = 22 })
 	task.delay(dur or 3.2, function()
 		if f.Parent then
 			TweenService:Create(f, TweenInfo.new(0.4), { BackgroundTransparency = 1 }):Play()
@@ -182,29 +182,26 @@ remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
 
 -- монеты и прогресс планет
 do
-	local top = make("Frame", { Name = "Top", BackgroundTransparency = 1, Position = UDim2.new(0.5, -170, 0, 8), Size = UDim2.fromOffset(340, 84) }, hud)
-	local pill, lbl = K.pill(top, "coin", T.gold, 230)
-	pill.Position = UDim2.fromOffset(55, 4)
-	pill.Size = UDim2.fromOffset(230, 40)
+	local top = make("Frame", { Name = "Top", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(260, 70) }, hud)
+	local pill, lbl = K.pill(top, "coin", T.gold, 190)
+	pill.AnchorPoint = Vector2.new(0.5, 0)
+	pill.Position = UDim2.new(0.5, 0, 0, 0)
 	UI.coins = lbl
-	local bar, fill = K.bar(top, T.cold, { Position = UDim2.fromOffset(40, 52), Size = UDim2.fromOffset(260, 12) })
+	local bar, fill = K.bar(top, T.cold, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 42), Size = UDim2.fromOffset(200, 5) })
 	UI.planetFill = fill
-	UI.planetText = K.text(top, "", { Position = UDim2.fromOffset(20, 64), Size = UDim2.fromOffset(300, 18), MaxText = 14, TextColor3 = T.sub })
+	UI.planetText = K.text(top, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 50), Size = UDim2.fromOffset(260, 15), MaxText = 12, TextColor3 = T.sub, Medium = true })
 end
 
 -- плашка события и подсказка
 do
-	local f = make("Frame", { Name = "Event", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(250, 50), BackgroundColor3 = T.panel, BackgroundTransparency = 0.1 }, hud)
-	K.corner(f, UDim.new(0, 12))
-	K.stroke(f, T.ink, 3)
+	local f = K.panel(hud, { Name = "Event", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 8), Size = UDim2.fromOffset(230, 46) })
 	UI.eventFrame = f
-	UI.eventTitle = K.text(f, "", { Size = UDim2.new(1, -12, 0, 24), Position = UDim2.fromOffset(6, 3), MaxText = 18 })
-	UI.eventSub = K.text(f, "", { Size = UDim2.new(1, -12, 0, 18), Position = UDim2.fromOffset(6, 28), MaxText = 14, TextColor3 = T.sub })
-	local hint = make("Frame", { Name = "Hint", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -112), Size = UDim2.fromOffset(440, 34), BackgroundColor3 = T.panel, BackgroundTransparency = 0.2 }, hud)
-	K.corner(hint, UDim.new(0, 12))
-	K.stroke(hint, T.gold, 2)
+	UI.eventTitle = K.text(f, "", { Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 4), MaxText = 15 })
+	UI.eventSub = K.text(f, "", { Size = UDim2.new(1, -16, 0, 16), Position = UDim2.fromOffset(8, 25), MaxText = 12, TextColor3 = T.sub, Medium = true })
+	local hint = K.panel(hud, { Name = "Hint", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -104), Size = UDim2.fromOffset(420, 30) })
+	K.stroke(hint, T.gold, 1, false, 0.4)
 	UI.hintFrame = hint
-	UI.hint = K.text(hint, "", { Size = UDim2.new(1, -16, 1, -6), Position = UDim2.fromOffset(8, 3), MaxText = 20, TextColor3 = T.gold })
+	UI.hint = K.text(hint, "", { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), MaxText = 15, TextColor3 = T.gold, Medium = true })
 end
 
 ------------------------------------------------------------------ окна: общий каркас
@@ -245,24 +242,46 @@ local function shade(buttons, active, items)
 end
 
 ------------------------------------------------------------------ окно: магазин семян
+-- общий каркас «листа»: шапка (таймер/счётчик и вкладки) прокручивается вместе с карточками
+local function sheetLayout(body, cell)
+	local scroll = K.scroll(body, {})
+	listLayout(scroll, nil, 8)
+	local head = make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -6, 0, 66), LayoutOrder = 0 }, scroll)
+	local grid = make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, -6, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = 1 }, scroll)
+	local gl = make("UIGridLayout", { CellSize = cell, CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Left }, grid)
+	return scroll, head, grid, gl
+end
+local function planetTabs(head, extra, onPick)
+	local items = {}
+	for i, p in G.Planets do table.insert(items, { key = i, text = p.name, color = G.PlanetColors[i] }) end
+	if extra then table.insert(items, extra) end
+	local row, btns = tabs(head, items, onPick, 30)
+	row.Position = UDim2.fromOffset(0, 32)
+	return items, btns
+end
+local function coinButton(parent, amount, can, props)
+	local b = K.button(parent, G.fmt(amount), can and T.green or T.panel2, props)
+	local lbl = b:FindFirstChildOfClass("TextLabel")
+	if lbl then
+		lbl.Position = UDim2.new(0, 26, 0, 4)
+		lbl.Size = UDim2.new(1, -32, 1, -8)
+	end
+	K.icon(b, "coin", { Size = UDim2.fromOffset(18, 18), AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 8, 0.5, 0) })
+	return b
+end
 do
 	local f, body = mkWindow("shop", "Магазин семян", "shop", T.green, 0.92, 0.84)
-	local head = make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 26) }, body)
-	UI.shopTimer = K.text(head, "", { Size = UDim2.new(0.6, 0, 1, 0), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 20, TextColor3 = T.gold })
-	local planetItems = {}
-	for i, p in G.Planets do table.insert(planetItems, { key = i, text = p.name, color = G.PlanetColors[i] }) end
-	local tabRow, tabBtns = tabs(body, planetItems, function(k) UI.shopTab = k hooks.shop() end, 32)
-	tabRow.Position = UDim2.fromOffset(0, 30)
-	local scroll = K.scroll(body, { Position = UDim2.fromOffset(0, 68), Size = UDim2.new(1, 0, 1, -68) })
-	make("UIGridLayout", { CellSize = UDim2.fromOffset(150, 205), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
+	local scroll, head, grid = sheetLayout(body, UDim2.fromOffset(236, 92))
+	UI.shopTimer = K.text(head, "", { Size = UDim2.new(1, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextColor3 = T.gold })
 	UI.shopTab = 1
-	UI.shopScroll = scroll
+	local planetItems, tabBtns
+	planetItems, tabBtns = planetTabs(head, nil, function(k) UI.shopTab = k hooks.shop() end)
 	function hooks.shop()
 		local epoch = G.shopEpoch(nowS())
 		local stock = G.shopStock(ReplicatedStorage:GetAttribute("ShopSeed") or 0, epoch)
 		local sold = ST.sold or {}
 		shade(tabBtns, UI.shopTab, planetItems)
-		clear(scroll)
+		clear(grid)
 		local tab = UI.shopTab
 		local unlocked = tab <= ST.planets
 		local n = 0
@@ -270,16 +289,18 @@ do
 			if G.PlanetIndex[p.planet] == tab and stock[p.id] then
 				local left = stock[p.id] - (sold[p.id] or 0)
 				n += 1
-				local card = K.panel(scroll, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
-				K.stroke(card, rarityColor(p.id), 3)
-				local vpHolder = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 4), Size = UDim2.new(1, -12, 0, 90) }, card)
+				local card = K.panel(grid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+				local rc = rarityColor(p.id)
+				local strip = make("Frame", { Size = UDim2.new(0, 3, 1, -16), Position = UDim2.fromOffset(0, 8), BackgroundColor3 = rc, BorderSizePixel = 0 }, card)
+				K.corner(strip, UDim.new(1, 0))
+				local vpHolder = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.fromOffset(78, 78) }, card)
 				modelView(vpHolder, p.id, nil, false)
-				K.text(card, p.name, { Position = UDim2.fromOffset(4, 96), Size = UDim2.new(1, -8, 0, 20), MaxText = 15, TextColor3 = rarityColor(p.id) })
-				K.text(card, G.Rarity[p.rarity].name .. ", " .. G.fmtTime(p.grow), { Position = UDim2.fromOffset(4, 116), Size = UDim2.new(1, -8, 0, 15), MaxText = 12, TextColor3 = T.sub })
+				K.text(card, p.name, { Position = UDim2.fromOffset(88, 6), Size = UDim2.new(1, -94, 0, 18), MaxText = 15, TextColor3 = rc, TextXAlignment = Enum.TextXAlignment.Left })
+				K.text(card, G.Rarity[p.rarity].name .. "  ·  " .. G.fmtTime(p.grow), { Position = UDim2.fromOffset(88, 25), Size = UDim2.new(1, -94, 0, 14), MaxText = 12, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Left, Medium = true })
 				local lim = G.Rarity[p.rarity].limit - ((ST.bought or {})[p.id] or 0)
-				K.text(card, ("В наличии: %d  Лимит: %d"):format(math.max(0, left), math.max(0, lim)), { Position = UDim2.fromOffset(4, 133), Size = UDim2.new(1, -8, 0, 15), MaxText = 12, TextColor3 = T.sub })
+				K.text(card, ("есть %d  ·  лимит %d"):format(math.max(0, left), math.max(0, lim)), { Position = UDim2.fromOffset(88, 40), Size = UDim2.new(1, -94, 0, 13), MaxText = 11, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Left, Medium = true })
 				local can = unlocked and left > 0 and lim > 0
-				local btn, bl = K.button(card, G.fmt(p.seed) .. " монет", can and T.green or T.panel, { Position = UDim2.fromOffset(8, 154), Size = UDim2.new(1, -16, 0, 40), MaxText = 17 })
+				local btn = coinButton(card, p.seed, can, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -8, 1, -7), Size = UDim2.new(1, -96, 0, 28), MaxText = 15 })
 				btn.Activated:Connect(function()
 					local ok, res = remotes.Buy:InvokeServer(p.id, 1)
 					if ok then toast("Куплено: " .. p.name, "ok") playSfx("coins") else toast(res or "Не получилось", "bad") end
@@ -287,10 +308,9 @@ do
 			end
 		end
 		if not unlocked then
-			local need = G.PlanetUnlock[tab]
-			label(scroll, "Планета откроется после " .. G.fmt(need) .. " заработанных монет", { Size = UDim2.new(1, 0, 0, 40), TextColor3 = T.sub, MaxText = 20 })
+			label(grid, "Планета откроется после " .. G.fmt(G.PlanetUnlock[tab]) .. " заработанных монет", { Size = UDim2.new(1, 0, 0, 40), TextColor3 = T.sub, MaxText = 18 })
 		elseif n == 0 then
-			label(scroll, "Сейчас на этой планете пусто. Ассортимент обновится совсем скоро", { Size = UDim2.new(1, 0, 0, 40), TextColor3 = T.sub, MaxText = 20 })
+			label(grid, "Сейчас на этой планете пусто. Ассортимент скоро обновится", { Size = UDim2.new(1, 0, 0, 40), TextColor3 = T.sub, MaxText = 18 })
 		end
 	end
 end
@@ -343,7 +363,7 @@ do
 			if i > 80 then break end
 			local row = make("TextButton", { Size = UDim2.new(1, -6, 0, 42), BackgroundColor3 = fr.uid == selUid and T.blue or T.panel2, Text = "", AutoButtonColor = false, LayoutOrder = i }, left)
 			K.corner(row, UDim.new(0, 10))
-			K.stroke(row, #fr.m > 0 and G.Mut[G.rarestMut(fr.m)].color or rarityColor(fr.id), 2)
+			K.stroke(row, #fr.m > 0 and G.Mut[G.rarestMut(fr.m)].color or rarityColor(fr.id), 1, false, 0.35)
 			local sw = make("Frame", { Size = UDim2.fromOffset(10, 30), Position = UDim2.fromOffset(6, 6), BackgroundColor3 = G.Plants[fr.id].c1 }, row)
 			K.corner(sw, UDim.new(0, 4))
 			local title = plantName(fr.id)
@@ -378,47 +398,43 @@ end
 ------------------------------------------------------------------ окно: атлас
 do
 	local f, body = mkWindow("index", "Атлас растений", "atlas", T.purple, 0.92, 0.84)
-	local items = {}
-	for i, p in G.Planets do table.insert(items, { key = i, text = p.name, color = G.PlanetColors[i] }) end
-	table.insert(items, { key = "mut", text = "Мутации", color = T.pink })
-	local btns
-	local tabRow
-	tabRow, btns = tabs(body, items, function(k) UI.idxTab = k hooks.index() end, 32)
+	local scroll, head, grid, grid_l = sheetLayout(body, UDim2.fromOffset(104, 128))
+	UI.idxCount = K.text(head, "", { Size = UDim2.new(1, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 15, TextColor3 = T.gold })
 	UI.idxTab = 1
-	UI.idxCount = K.text(body, "", { Position = UDim2.fromOffset(0, 36), Size = UDim2.new(1, 0, 0, 22), MaxText = 16, TextColor3 = T.gold })
-	local scroll = K.scroll(body, { Position = UDim2.fromOffset(0, 62), Size = UDim2.new(1, 0, 1, -62) })
-	local grid = make("UIGridLayout", { CellSize = UDim2.fromOffset(120, 150), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder, HorizontalAlignment = Enum.HorizontalAlignment.Center }, scroll)
+	local items, btns
+	items, btns = planetTabs(head, { key = "mut", text = "Мутации", color = T.pink }, function(k) UI.idxTab = k hooks.index() end)
 	function hooks.index()
 		shade(btns, UI.idxTab, items)
-		clear(scroll)
-		local found = 0
+		clear(grid)
+		local found, muts = 0, 0
 		for _ in ST.idx do found += 1 end
-		UI.idxCount.Text = ("Найдено растений: %d из %d, мутаций: %d из %d"):format(found, #G.PlantList, (function() local n = 0 for _ in ST.mutSeen do n += 1 end return n end)(), #G.MutOrder)
+		for _ in ST.mutSeen do muts += 1 end
+		UI.idxCount.Text = ("Найдено растений %d из %d  ·  мутаций %d из %d"):format(found, #G.PlantList, muts, #G.MutOrder)
 		if UI.idxTab == "mut" then
-			grid.CellSize = UDim2.new(1, -12, 0, 44)
+			grid_l.CellSize = UDim2.new(1, -4, 0, 46)
 			for i, id in G.MutOrder do
 				local m = G.Mut[id]
 				local seen = ST.mutSeen[id]
-				local row = K.panel(scroll, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
-				K.stroke(row, seen and m.color or T.ink, 2)
-				K.text(row, seen and m.name or "???", { Position = UDim2.fromOffset(10, 2), Size = UDim2.new(0.45, 0, 0, 24), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = seen and m.color or T.sub })
-				K.text(row, seen and m.desc or "Ещё не встречалась", { Position = UDim2.fromOffset(10, 24), Size = UDim2.new(0.55, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub })
-				K.text(row, G.fmtOdds(m.chance), { Position = UDim2.new(0.55, 0, 0, 2), Size = UDim2.new(0.43, 0, 0, 22), MaxText = 16, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.gold })
-				K.text(row, "цена x" .. G.fmtInt(m.mult), { Position = UDim2.new(0.55, 0, 0, 24), Size = UDim2.new(0.43, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.sub })
+				local row = K.panel(grid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+				local dot = make("Frame", { Size = UDim2.fromOffset(10, 10), Position = UDim2.fromOffset(10, 18), BackgroundColor3 = seen and m.color or T.panel }, row)
+				K.corner(dot, UDim.new(1, 0))
+				K.text(row, seen and m.name or "???", { Position = UDim2.fromOffset(28, 4), Size = UDim2.new(0.45, 0, 0, 20), MaxText = 16, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = seen and m.color or T.sub })
+				K.text(row, seen and m.desc or "Ещё не встречалась", { Position = UDim2.fromOffset(28, 24), Size = UDim2.new(0.5, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
+				K.text(row, G.fmtOdds(m.chance), { Position = UDim2.new(0.5, 0, 0, 4), Size = UDim2.new(0.48, 0, 0, 20), MaxText = 15, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.gold })
+				K.text(row, "цена x" .. G.fmtInt(m.mult), { Position = UDim2.new(0.5, 0, 0, 24), Size = UDim2.new(0.48, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.sub, Medium = true })
 			end
 			return
 		end
-		grid.CellSize = UDim2.fromOffset(120, 150)
+		grid_l.CellSize = UDim2.fromOffset(104, 128)
 		for i, p in G.PlantList do
 			if G.PlanetIndex[p.planet] == UI.idxTab then
 				local e = ST.idx[p.id]
-				local card = K.panel(scroll, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
-				K.stroke(card, e and rarityColor(p.id) or T.ink, 3)
-				local h = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 86) }, card)
+				local card = K.panel(grid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+				if e then K.stroke(card, rarityColor(p.id), 1, false, 0.35) end
+				local h = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 0, 78) }, card)
 				modelView(h, p.id, nil, not e)
-				K.text(card, e and p.name or "???", { Position = UDim2.fromOffset(4, 92), Size = UDim2.new(1, -8, 0, 20), MaxText = 14, TextColor3 = e and rarityColor(p.id) or T.sub })
-				K.text(card, e and ("рекорд %.2f кг"):format(e.best) or G.Rarity[p.rarity].name, { Position = UDim2.fromOffset(4, 112), Size = UDim2.new(1, -8, 0, 16), MaxText = 12, TextColor3 = T.sub })
-				K.text(card, e and ("собрано: %d"):format(e.n) or "", { Position = UDim2.fromOffset(4, 128), Size = UDim2.new(1, -8, 0, 16), MaxText = 12, TextColor3 = T.sub })
+				K.text(card, e and p.name or "???", { Position = UDim2.fromOffset(4, 84), Size = UDim2.new(1, -8, 0, 16), MaxText = 12, TextColor3 = e and rarityColor(p.id) or T.sub })
+				K.text(card, e and ("рекорд %.2f кг"):format(e.best) or G.Rarity[p.rarity].name, { Position = UDim2.fromOffset(4, 102), Size = UDim2.new(1, -8, 0, 13), MaxText = 10, TextColor3 = T.sub, Medium = true })
 			end
 		end
 	end
@@ -434,7 +450,7 @@ do
 	local mode = "market"
 	local function row(parent, order, name, sub, value, color, hot)
 		local r = K.panel(parent, { Size = UDim2.new(1, -8, 0, 40), LayoutOrder = order, BackgroundColor3 = hot and Color3.fromRGB(70, 36, 80) or T.panel2 })
-		K.stroke(r, hot and T.pink or T.ink, hot and 3 or 2)
+		K.stroke(r, hot and T.pink or T.line, 1, false, hot and 0.2 or 0.6)
 		K.text(r, name, { Position = UDim2.fromOffset(10, 2), Size = UDim2.new(0.55, 0, 0, 22), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = color })
 		K.text(r, sub, { Position = UDim2.fromOffset(10, 22), Size = UDim2.new(0.55, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub })
 		K.text(r, value, { Position = UDim2.new(0.55, 0, 0, 4), Size = UDim2.new(0.43, 0, 0, 32), MaxText = 20, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = hot and T.pink or T.text })
@@ -611,7 +627,7 @@ end
 
 ------------------------------------------------------------------ левая колонка кнопок и панель семян
 do
-	local col = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 96), Size = UDim2.fromOffset(78, 330) }, hud)
+	local col = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 64), Size = UDim2.fromOffset(60, 420) }, hud)
 	listLayout(col, nil, 6)
 	local defs = {
 		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "index", "atlas", "Атлас", T.purple },
@@ -620,13 +636,13 @@ do
 	if plr.UserId == ADMIN_ID then table.insert(defs, { "admin", "admin", "Админ", T.red }) end
 	UI.buttons = {}
 	for i, d in defs do
-		local b = K.iconButton(col, d[2], d[3], d[4], 62)
+		local b = K.iconButton(col, d[2], d[3], d[4], 54)
 		b.LayoutOrder = i
 		b.Activated:Connect(function() openWindow(d[1]) end)
 		UI.buttons[d[1]] = b
 	end
 	-- панель семян
-	local bar = make("Frame", { Name = "Seeds", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.fromOffset(560, 96), BackgroundTransparency = 1 }, hud)
+	local bar = make("Frame", { Name = "Seeds", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.fromOffset(470, 80), BackgroundTransparency = 1 }, hud)
 	local scroll = make("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X,
 		ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 4 }, bar)
 	listLayout(scroll, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
@@ -638,13 +654,13 @@ do
 		table.sort(ids, function(a, b) return G.Plants[a].index < G.Plants[b].index end)
 		for i, id in ids do
 			local p = G.Plants[id]
-			local card = make("TextButton", { Size = UDim2.fromOffset(78, 90), BackgroundColor3 = id == ST.sel and T.blue or T.panel, Text = "", AutoButtonColor = false, LayoutOrder = i }, scroll)
-			K.corner(card, UDim.new(0, 12))
-			K.stroke(card, id == ST.sel and T.gold or rarityColor(id), id == ST.sel and 4 or 3)
-			local h = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 2), Size = UDim2.new(1, -8, 0, 54) }, card)
+			local card = make("TextButton", { Size = UDim2.fromOffset(64, 76), BackgroundColor3 = id == ST.sel and T.panel2 or T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, scroll)
+			K.corner(card, UDim.new(0, 10))
+			K.stroke(card, id == ST.sel and T.gold or rarityColor(id), id == ST.sel and 1.6 or 1, false, id == ST.sel and 0 or 0.45)
+			local h = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(3, 2), Size = UDim2.new(1, -6, 0, 46) }, card)
 			modelView(h, id, nil, false)
-			K.text(card, "x" .. ST.seeds[id], { Position = UDim2.new(0, 2, 0, 56), Size = UDim2.new(1, -4, 0, 16), MaxText = 15, TextColor3 = T.gold })
-			K.text(card, p.name, { Position = UDim2.new(0, 2, 0, 72), Size = UDim2.new(1, -4, 0, 15), MaxText = 11, TextColor3 = rarityColor(id) })
+			K.text(card, "x" .. ST.seeds[id], { Position = UDim2.new(1, -26, 0, 2), Size = UDim2.fromOffset(24, 14), MaxText = 12, TextColor3 = T.gold })
+			K.text(card, p.name, { Position = UDim2.new(0, 2, 0, 50), Size = UDim2.new(1, -4, 0, 22), MaxText = 10, TextColor3 = rarityColor(id), TextWrapped = true, Medium = true })
 			card.Activated:Connect(function()
 				ST.sel = id
 				remotes.Select:FireServer(id)
