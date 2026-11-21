@@ -173,10 +173,10 @@ end
 
 ------------------------------------------------------------------ запуск фонарика
 local rng = Random.new()
-local charge, lastThrow = {}, {}
+local charge, lastThrow, perfectStreak = {}, {}, {}
 
 -- один фонарик: дальность -> зона -> дух -> разновидность -> награда. Применяется сразу, показывается по прилёту
-local function launchOne(d, q: number)
+local function launchOne(d, q: number, streakMult: number)
 	local maxDist = Game.upgradeValue("power", d.lv.power)
 	local dist = math.min(Game.MaxDistance - 1, Game.distance(maxDist, q))
 	local zone = Game.zoneAt(dist)
@@ -184,7 +184,7 @@ local function launchOne(d, q: number)
 	local kind, pKind = Game.rollKind(zone, luck, rng)
 	local variant, pVar = Game.rollVariant(luck, zone.luck, rng)
 	local info = Game.Kinds[kind]
-	local coins = Game.coinsFor(info.rarity, variant, coinMultOf(d))
+	local coins = Game.coinsFor(info.rarity, variant, coinMultOf(d) * streakMult)
 	d.coins += coins
 	d.total += 1
 	if dist > d.record then d.record = math.floor(dist) end
@@ -209,14 +209,14 @@ local function checkMilestones(plr, d)
 end
 
 -- общий путь для ручного и авто-запуска; q от 0 до 1
-local function doLaunch(plr, q: number)
+local function doLaunch(plr, q: number, streakMult: number?)
 	local d = data[plr]
 	if not d then return nil end
 	local count = Game.upgradeValue("multi", d.lv.multi)
 	local results, maxFlight = {}, 0
 	for i = 1, count do
 		local qi = i == 1 and q or math.clamp(q + rng:NextNumber(-0.15, 0.15), 0, 1)
-		local r = launchOne(d, qi)
+		local r = launchOne(d, qi, streakMult or 1)
 		r.delay = (i - 1) * 0.18
 		maxFlight = math.max(maxFlight, r.delay + Game.flightTime(r.dist))
 		table.insert(results, r)
@@ -253,9 +253,13 @@ ThrowFn.OnServerInvoke = function(plr)
 	local now = os.clock()
 	if now - (lastThrow[plr] or -1e9) < cooldownOf(d) - 0.15 then return { ok = false } end
 	local q = Game.meterAt(math.min(now - start, 6))
-	local results = doLaunch(plr, q)
+	-- серия идеальных: точный запуск поднимает множитель монет, слабый обрывает серию
+	local streak = perfectStreak[plr] or 0
+	if q >= 0.93 then streak += 1 elseif q < 0.78 then streak = 0 end
+	perfectStreak[plr] = streak
+	local results = doLaunch(plr, q, 1 + Game.StreakStep * math.min(streak, Game.StreakMax))
 	if not results then return { ok = false } end
-	return { ok = true, q = q, results = results, cd = cooldownOf(d) }
+	return { ok = true, q = q, results = results, cd = cooldownOf(d), streak = streak, streakMult = 1 + Game.StreakStep * math.min(streak, Game.StreakMax) }
 end
 
 -- авто-запуск: сервер сам бросает с хорошей, но не идеальной точностью
@@ -413,7 +417,7 @@ Players.PlayerAdded:Connect(onJoin)
 for _, p in Players:GetPlayers() do task.spawn(onJoin, p) end
 Players.PlayerRemoving:Connect(function(plr)
 	persist(plr)
-	data[plr], charge[plr], lastThrow[plr] = nil, nil, nil
+	data[plr], charge[plr], lastThrow[plr], perfectStreak[plr] = nil, nil, nil, nil
 end)
 game:BindToClose(function()
 	for _, plr in Players:GetPlayers() do persist(plr) end

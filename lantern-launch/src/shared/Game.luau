@@ -44,6 +44,8 @@ G.MeterPeriod = 1.5 -- секунд на полный цикл вверх-вни
 function G.meterAt(t: number): number
 	return 0.5 - 0.5 * math.cos(t * 2 * math.pi / G.MeterPeriod)
 end
+-- серия идеальных запусков: +20% монет за каждый подряд, максимум x3
+G.StreakStep, G.StreakMax = 0.2, 10
 function G.qualityName(q: number): string
 	if q >= 0.93 then return "ИДЕАЛЬНО!" end
 	if q >= 0.78 then return "Отлично!" end

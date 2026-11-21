@@ -102,6 +102,20 @@ for _ in kinds do n += 1 end
 stage(("видов получено: %d, лучшая дальность %d"):format(n, bestDist))
 if n < 3 then table.insert(SIM.errors, "слишком мало разных духов за 40 запусков: " .. n) end
 
+stage("серия идеальных запусков")
+do
+	local lastMult = 1
+	for i = 1, 4 do
+		remotes.Charge:FireServer()
+		frames(15) -- 0.75 с: пик полоски
+		local r = inv("Throw")
+		if r and r.ok then lastMult = r.streakMult or 1 end
+		frames(60)
+	end
+	stage(("множитель серии после 4 идеальных: x%.1f"):format(lastMult))
+	if lastMult < 1.4 then table.insert(SIM.errors, "серия идеальных не растёт: x" .. lastMult) end
+end
+
 stage("запуск без зажатия отклоняется")
 local bad = inv("Throw")
 if bad and bad.ok then table.insert(SIM.errors, "запуск без зажатия прошёл") end

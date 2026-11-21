@@ -589,7 +589,7 @@ do
 			if res and res.ok then
 				readyAt = os.clock() + (res.cd or 2)
 				play("click")
-				qualL.Text = ("%s"):format(Game.qualityName(res.q))
+				qualL.Text = Game.qualityName(res.q) .. ((res.streak or 0) >= 2 and ("  серия x%.1f"):format(res.streakMult or 1) or "")
 				qualL.TextColor3 = res.q >= 0.93 and T.gold or (res.q >= 0.78 and T.green or Color3.new(1, 1, 1))
 				qualL.Visible = true
 				K.pop(qualL)
