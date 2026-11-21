@@ -1,0 +1,25 @@
+{
+  "name": "LanternLaunch",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": { "$path": "src/shared" }
+    },
+    "ServerScriptService": {
+      "Server": { "$path": "src/server" }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": { "$path": "src/client" }
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 6.4,
+        "Brightness": 2.2,
+        "Ambient": [0.55, 0.5, 0.6],
+        "OutdoorAmbient": [0.6, 0.55, 0.65]
+      }
+    }
+  }
+}
