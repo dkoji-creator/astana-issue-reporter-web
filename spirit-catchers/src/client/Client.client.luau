@@ -238,16 +238,33 @@ do
 	K.stroke(toast, T.ink, 3)
 	local toastL = K.text(toast, "", { Size = UDim2.new(1, -20, 1, -10), Position = UDim2.fromOffset(10, 5), MaxText = 18, Font = Enum.Font.GothamBold })
 	local toastSeq = 0
-	showToast = function(text, secs, color)
+	-- сообщения идут по очереди, не перебивая друг друга; одинаковые подряд отбрасываются
+	local queue, showing, lastText = {}, false, nil
+	local function nextToast()
+		local item = table.remove(queue, 1)
+		if not item then
+			showing = false
+			toast.Visible = false
+			return
+		end
+		showing = true
 		toastSeq += 1
 		local my = toastSeq
-		toastL.Text = text
-		toast.BackgroundColor3 = color or T.panel
+		toastL.Text = item[1]
+		toast.BackgroundColor3 = item[3] or T.panel
 		toast.Visible = true
 		K.pop(toast)
-		task.delay(secs or 2.4, function()
-			if toastSeq == my then toast.Visible = false end
+		task.delay(math.min(item[2] or 2.4, #queue > 0 and 1.6 or 3.5), function()
+			if toastSeq == my then nextToast() end
 		end)
+	end
+	showToast = function(text, secs, color)
+		if text == lastText and (showing or #queue > 0) then return end
+		lastText = text
+		table.insert(queue, { text, secs, color })
+		while #queue > 3 do table.remove(queue, 1) end -- старые сообщения уступают свежим
+		if not showing then nextToast() end
+		task.delay(6, function() if lastText == text then lastText = nil end end)
 	end
 
 	luckPill.Activated:Connect(function()
@@ -2571,7 +2588,7 @@ do
 		end
 		btnAtlas.Badge.Visible = claimable
 		-- кнопки открываются постепенно, чтобы новичка не засыпало окнами
-		local UNLOCK = { { btnQuests, 2, "Задания" }, { btnTeleport, 3, "Телепорт" }, { btnPower, 3, "Сила" }, { btnSeason, 4, "Сезон" }, { btnSocial, 6, "Ловцы" } }
+		local UNLOCK = { { btnQuests, 2, "Задания" }, { btnTeleport, 3, "Телепорт" }, { btnPower, 3, "Сила" }, { btnSeason, 4, "Сезон" }, { btnSocial, 6, "Ловцы" }, { btnRitual, 8, "Ритуал" } }
 		for _, u in UNLOCK do
 			local open = (state.level or 1) >= u[2] or state.isAdmin == true
 			if open and not u[1].Visible and hudUnlockSeen then
@@ -3120,6 +3137,112 @@ do
 	local rollStroke = K.stroke(rollGui, T.gold, 4)
 	local rollName = K.text(rollGui, "", { Size = UDim2.new(1, -20, 0, 54), Position = UDim2.fromOffset(10, 10), MaxText = 44, ZIndex = 21 })
 	local rollSub = K.text(rollGui, "", { Size = UDim2.new(1, -20, 0, 30), Position = UDim2.fromOffset(10, 70), MaxText = 22, ZIndex = 21, Font = Enum.Font.GothamBold })
+	-- КИНЕМАТОГРАФИЧНОЕ РАСКРЫТИЕ: дух в кристалле, дрожь, вспышка, осколки, лучи, крупное имя. Касание пропускает
+	local cine = K.make("TextButton", { Name = "Cinematic", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(5, 4, 12), BackgroundTransparency = 1,
+		Text = "", AutoButtonColor = false, Visible = false, ZIndex = 60 }, gui)
+	local cineRays = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromOffset(10, 10), BackgroundTransparency = 1, ZIndex = 60 }, cine)
+	local rays = {}
+	for i = 1, 10 do
+		local r = K.make("Frame", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(46, 520), Rotation = i * 36,
+			BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.6, BorderSizePixel = 0, ZIndex = 60 }, cineRays)
+		K.make("UIGradient", { Rotation = 90, Transparency = NumberSequence.new(0, 1) }, r)
+		rays[i] = r
+	end
+	local cineVp = K.make("ViewportFrame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(0.7, 0.7), BackgroundTransparency = 1,
+		Ambient = Color3.fromRGB(190, 190, 210), LightColor = Color3.new(1, 1, 1), LightDirection = Vector3.new(-1, -1, -1), ZIndex = 61 }, cine)
+	K.make("UIAspectRatioConstraint", { AspectRatio = 1 }, cineVp)
+	local cineCam = K.make("Camera", { FieldOfView = 30 }, cineVp)
+	cineVp.CurrentCamera = cineCam
+	local cineFlash = K.make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 1, ZIndex = 63 }, cine)
+	local cineTop = K.text(cine, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.72), Size = UDim2.new(0.9, 0, 0, 60), MaxText = 58, ZIndex = 62, StrokeThickness = 4, Visible = false })
+	local cineSub = K.text(cine, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.72, 62), Size = UDim2.new(0.9, 0, 0, 34), MaxText = 30, ZIndex = 62, StrokeThickness = 3, Visible = false })
+	local cineHint = K.text(cine, "коснись, чтобы продолжить", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -14), Size = UDim2.fromOffset(360, 22), MaxText = 15, ZIndex = 62, Font = Enum.Font.GothamBold, TextColor3 = T.sub, StrokeThickness = 1 })
+	local cineConn, cineBusy, cineT0 = nil, false, 0
+	local function cineClose()
+		if cineConn then cineConn:Disconnect() cineConn = nil end
+		for _, c in cineVp:GetChildren() do
+			if not c:IsA("Camera") then c:Destroy() end
+		end
+		cine.Visible = false
+		cineBusy = false
+	end
+	cine.Activated:Connect(function()
+		if os.clock() - cineT0 > 1.4 then cineClose() end -- до вспышки не пропускаем, чтобы не сбить момент
+	end)
+	local WORD = { legendary = "ЛЕГЕНДАРНЫЙ!", mythic = "МИФИЧЕСКИЙ!", secret = "СЕКРЕТНЫЙ!" }
+	local function cinematic(kind, variant, odds)
+		if cineBusy then return false end
+		local info = Catalog.Kinds[kind]
+		if not (info and Spirits.Builders[kind]) then return false end
+		cineBusy = true
+		cineT0 = os.clock()
+		local rar = Catalog.Rarity[info.rarity]
+		local special = variant and variant ~= "normal"
+		local col = special and Catalog.Variants[variant].color or rar.color
+		local m = Spirits.Builders[kind]()
+		pcall(Spirits.applyVariant, m, special and variant or nil)
+		m.Parent = cineVp
+		local cf, size = m:GetBoundingBox()
+		local r = math.max(size.X, size.Y, size.Z)
+		local center = cf.Position
+		local rel = CFrame.new(center):Inverse() * m:GetPivot() -- опора модели относительно центра, для вращения
+		-- кристалл-скорлупа из светящихся пластин
+		local shards = {}
+		local rng = Random.new()
+		for i = 1, 16 do
+			local dir = Vector3.new(rng:NextNumber(-1, 1), rng:NextNumber(-0.8, 1), rng:NextNumber(-1, 1)).Unit
+			local p = K.make("Part", { Anchored = true, Size = Vector3.new(r * 0.45, r * 0.6, 0.15), Material = Enum.Material.Glass, Color = col:Lerp(Color3.new(1, 1, 1), 0.5), Transparency = 0.25 }, cineVp)
+			local base = CFrame.lookAt(center + dir * r * 0.62, center) * CFrame.Angles(0, 0, rng:NextNumber(0, 6.28))
+			p.CFrame = base
+			shards[i] = { p = p, base = base, dir = dir, spin = rng:NextNumber(-6, 6) }
+		end
+		local dist = r / math.tan(math.rad(15)) * 0.75
+		cineCam.CFrame = CFrame.lookAt(center + Vector3.new(0, r * 0.15, -dist), center)
+		for _, ray in rays do ray.BackgroundColor3 = col end
+		cine.BackgroundTransparency = 1
+		cine.Visible = true
+		cineTop.Visible, cineSub.Visible = false, false
+		cineTop.Text = WORD[info.rarity] or ((special and Catalog.Variants[variant].name:upper() .. "!") or "РЕДКИЙ!")
+		cineTop.TextColor3 = col
+		cineSub.Text = (special and (Catalog.Variants[variant].name .. " ") or "") .. info.name .. ((odds and odds > 1) and ("   1 к %d"):format(odds) or "")
+		TweenService:Create(cine, TweenInfo.new(0.35), { BackgroundTransparency = 0.25 }):Play()
+		play("reveal")
+		local cracked = false
+		cineConn = RunService.RenderStepped:Connect(function()
+			local t = os.clock() - cineT0
+			cineRays.Rotation = t * 25
+			for _, ray in rays do ray.BackgroundTransparency = cracked and (0.45 + math.sin(t * 4) * 0.1) or 0.9 end
+			local spin = CFrame.Angles(0, t * (cracked and 0.9 or 0.3), 0)
+			if not cracked then
+				-- дрожь кристалла нарастает
+				local k = math.min(1, t / 1.3) * r * 0.04
+				local jitter = Vector3.new(rng:NextNumber(-k, k), rng:NextNumber(-k, k), rng:NextNumber(-k, k))
+				for _, sh in shards do sh.p.CFrame = sh.base + jitter end
+				m:PivotTo(CFrame.new(center) * spin * rel)
+				if t > 1.3 then
+					cracked = true
+					cineFlash.BackgroundTransparency = 0
+					TweenService:Create(cineFlash, TweenInfo.new(0.5), { BackgroundTransparency = 1 }):Play()
+					play("legendary")
+					cineTop.Visible, cineSub.Visible = true, true
+					local sc = cineTop:FindFirstChild("Bounce") or K.make("UIScale", { Name = "Bounce" }, cineTop)
+					sc.Scale = 0.3
+					TweenService:Create(sc, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+				end
+			else
+				local k = t - 1.3
+				for _, sh in shards do
+					sh.p.CFrame = (sh.base + sh.dir * (k * r * 2.2)) * CFrame.Angles(k * sh.spin, k * sh.spin * 0.5, 0)
+					sh.p.Transparency = math.min(1, 0.25 + k * 0.9)
+				end
+				m:PivotTo(CFrame.new(center + Vector3.new(0, math.sin(t * 2) * r * 0.04, 0)) * spin * rel)
+				if t > 4.6 then cineClose() end
+			end
+		end)
+		return true
+	end
+	late.cinematic = cinematic
+
 	local function playRoll(kind, variant)
 		local vc = Catalog.Variants[variant]
 		local odds = math.floor(1 / vc.chance + 0.5)
@@ -3173,7 +3296,15 @@ do
 
 	remotes.Caught.OnClientEvent:Connect(function(kind, at, coop, variant, rolled, odds)
 		local rolling = variant and variant ~= "normal" and (rolled or Catalog.Variants[variant].chance <= 1 / 25)
-		if rolling then task.spawn(playRoll, kind, variant) end
+		-- легендарные и реже или разновидность от «Золотого» и реже: кинематографичное раскрытие вместо обычных надписей
+		local info0 = Catalog.Kinds[kind]
+		local rank = info0 and table.find(Catalog.RarityOrder, info0.rarity) or 1
+		local bigVariant = variant and variant ~= "normal" and Catalog.Variants[variant].chance <= 1 / 80
+		if (rank >= 5 or bigVariant) and cinematic(kind, variant, odds) then
+			rolling = true -- обычный баннер не нужен
+		elseif rolling then
+			task.spawn(playRoll, kind, variant)
+		end
 		holding = false
 		catchEffect(kind, at, coop or 1, variant, rolling, odds)
 		if tut.step == 2 or tut.step == 1 then setStep(3) end
