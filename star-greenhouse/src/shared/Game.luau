@@ -231,11 +231,11 @@ G.Potions = {
 
 -- донаты (id = 0: ещё не создан, кнопка скрыта). price в Robux
 G.Products = {
-	small = { id = 0, price = 25, name = "Зелье мутаций", desc = "Мутации x4 на 5 посадок" },
-	big = { id = 0, price = 49, name = "Большое зелье", desc = "Мутации x10 на 10 посадок" },
-	growth2x = { id = 0, price = 149, name = "Рост x2", desc = "Все растения растут вдвое быстрее навсегда", permanent = true },
-	auto = { id = 0, price = 99, name = "Авто-сбор", desc = "Спелые плоды собираются сами", permanent = true },
-	beds = { id = 0, price = 79, name = "+4 грядки", desc = "Четыре дополнительные грядки навсегда" },
+	small = { id = 3734146114, price = 25, name = "Зелье мутаций", desc = "Мутации x4 на 5 посадок" },
+	big = { id = 3734146134, price = 49, name = "Большое зелье", desc = "Мутации x10 на 10 посадок" },
+	growth2x = { id = 3734146135, price = 149, name = "Рост x2", desc = "Все растения растут вдвое быстрее навсегда", permanent = true },
+	auto = { id = 3734146140, price = 99, name = "Авто-сбор", desc = "Спелые плоды собираются сами", permanent = true },
+	beds = { id = 3734146141, price = 79, name = "+4 грядки", desc = "Четыре дополнительные грядки навсегда" },
 }
 G.ProductOrder = { "small", "big", "growth2x", "auto", "beds" }
 

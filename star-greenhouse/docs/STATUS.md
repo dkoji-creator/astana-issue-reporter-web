@@ -28,6 +28,8 @@
 - Просмотр без Studio: `SCENARIO=tools/sim/dump_models.luau node tools/sim/run.mjs > m.txt; python3 tools/render_models.py m.txt out.png`; карта: `dump_world.luau` и `tools/render_scene.py`.
 
 ## Публикация
+Опубликовано в место 99980756426085 (universe 7664327129) как версия 51; донат-продукты созданы, id вписаны в `G.Products`. Название игры и размер сервера через API не меняются (нет прав): сменить в Creator Hub вручную, размер сервера 8.
+
 1. `/tmp/rojo/rojo build -o StarGreenhouse.rbxlx`
 2. Опубликовать версию в нужное место и перезапустить серверы (команды в корневых заметках проекта).
 3. Создать донат-продукты и вписать id в `G.Products` (сейчас id = 0, кнопки скрыты): зелье 25 R$, большое зелье 49, рост x2 149, авто-сбор 99, +4 грядки 79.
