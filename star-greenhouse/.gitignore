@@ -1,0 +1,4 @@
+*.rbxlx
+tools/sim/.bundle.luau
+tools/sim/node_modules
+__pycache__/
