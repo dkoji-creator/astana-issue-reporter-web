@@ -15,6 +15,8 @@ local K = require(script.Parent:WaitForChild("UIKit"))
 local T = K.T
 local make = K.make
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
+local world = workspace:WaitForChild("World")
+local plotsFolder = world:WaitForChild("Plots")
 local ADMIN_ID = 8432365972
 plr.CameraMaxZoomDistance = 90
 local SoundService = game:GetService("SoundService")
@@ -45,6 +47,16 @@ end
 K.onClick(function() playSfx("click") end)
 
 local function nowS() return workspace:GetServerTimeNow() end
+-- фоновый цикл: ошибка в одной итерации не убивает цикл
+local function loop(dt, fn)
+	task.spawn(function()
+		while true do
+			task.wait(dt)
+			local ok, err = pcall(fn)
+			if not ok then warn("loop error", err) end
+		end
+	end)
+end
 
 ------------------------------------------------------------------ состояние
 local ST = {
@@ -650,9 +662,10 @@ end
 
 local function hintText()
 	local growing, ready = 0, 0
-	local plot = ST.plot and workspace:FindFirstChild("World") and workspace.World.Plots:FindFirstChild("Plot" .. ST.plot)
-	if plot then
-		for _, soil in plot.Beds:GetDescendants() do
+	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
+	local bedsF = plot and plot:FindFirstChild("Beds")
+	if bedsF then
+		for _, soil in bedsF:GetDescendants() do
 			if soil.Name == "Soil" and soil:GetAttribute("Plant") then
 				growing += 1
 				if nowS() >= (soil:GetAttribute("Ready") or 0) then ready += 1 end
@@ -668,9 +681,8 @@ local function hintText()
 	return ""
 end
 
-task.spawn(function()
-	while true do
-		task.wait(0.5)
+loop(0.5, function()
+	do
 		UI.coins.Text = G.fmt(ST.coins)
 		local frac, txt = nextPlanetInfo()
 		UI.planetFill.Size = UDim2.fromScale(frac, 1)
@@ -709,8 +721,6 @@ remotes:WaitForChild("Stock").OnClientEvent:Connect(function(epoch, sold)
 end)
 
 ------------------------------------------------------------------ растения в мире
-local world = workspace:WaitForChild("World")
-local plotsFolder = world:WaitForChild("Plots")
 local cache = {} -- Soil -> { model, key, kind }
 local fxFolder = make("Folder", { Name = "FX" }, workspace)
 local SHOW_DIST = 110
@@ -782,14 +792,15 @@ local function refreshEntry(soil)
 end
 
 -- удалённые от камеры модели не держим
-task.spawn(function()
-	while true do
-		task.wait(0.4)
-		local cam = workspace.CurrentCamera
-		local cp = cam and cam.CFrame.Position or Vector3.zero
-		for _, plot in plotsFolder:GetChildren() do
-			local near = (plot:GetPivot().Position - cp).Magnitude < SHOW_DIST + 30
-			for _, bed in plot.Beds:GetChildren() do
+loop(0.4, function()
+	local cam = workspace.CurrentCamera
+	local cp = cam and cam.CFrame.Position or Vector3.zero
+	for _, plot in plotsFolder:GetChildren() do
+		local beds = plot:FindFirstChild("Beds")
+		local center = plot:GetAttribute("Center")
+		if beds and center then
+			local near = (center - cp).Magnitude < SHOW_DIST + 30
+			for _, bed in beds:GetChildren() do
 				local soil = bed:FindFirstChild("Soil")
 				if soil then
 					if near and (soil.Position - cp).Magnitude < SHOW_DIST then refreshEntry(soil) else dropEntry(soil) end
@@ -804,8 +815,9 @@ local prompts = {}
 local function ensurePrompts()
 	if not ST.plot then return end
 	local plot = plotsFolder:FindFirstChild("Plot" .. ST.plot)
-	if not plot then return end
-	for _, bed in plot.Beds:GetChildren() do
+	local beds = plot and plot:FindFirstChild("Beds")
+	if not beds then return end
+	for _, bed in beds:GetChildren() do
 		local soil = bed:FindFirstChild("Soil")
 		if soil and not prompts[soil] then
 			local idx = soil:GetAttribute("Idx")
@@ -815,9 +827,8 @@ local function ensurePrompts()
 		end
 	end
 end
-task.spawn(function()
-	while true do
-		task.wait(0.4)
+loop(0.4, function()
+	do
 		ensurePrompts()
 		for soil, pr in prompts do
 			local idx = soil:GetAttribute("Idx") or 0
@@ -845,16 +856,11 @@ task.spawn(function()
 		end
 	end
 end)
--- киоски открывают окна
-do
-	local function hook(pr)
-		local w = pr:GetAttribute("Window")
-		if w and windows[w] then pr.Triggered:Connect(function() openWindow(w) end) end
-	end
-	for _, d in world:GetDescendants() do
-		if d:IsA("ProximityPrompt") then hook(d) end
-	end
-end
+-- киоски открывают окна (срабатывает для любой подсказки с атрибутом Window)
+game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr)
+	local w = pr:GetAttribute("Window")
+	if w and windows[w] and not windows[w].Visible then openWindow(w) end
+end)
 
 ------------------------------------------------------------------ сбор: частицы и тост
 local function burst(pos, color, n)
@@ -867,7 +873,8 @@ local function burst(pos, color, n)
 end
 remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts, kg)
 	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
-	local bed = plot and plot.Beds:FindFirstChild("Bed" .. tostring(bedIdx))
+	local bedsF = plot and plot:FindFirstChild("Beds")
+	local bed = bedsF and bedsF:FindFirstChild("Bed" .. tostring(bedIdx))
 	if bed and bed:FindFirstChild("Soil") then
 		local rar = G.rarestMut(muts or {})
 		burst(bed.Soil.Position + Vector3.new(0, 3, 0), rar and G.Mut[rar].color or rarityColor(id), 24 + (rar and 20 or 0))

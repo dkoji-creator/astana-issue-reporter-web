@@ -325,6 +325,7 @@ local function buildPlot(i, parent)
 	pm.Name = "Plot" .. i
 	pm.Parent = parent
 	local plot = { cf = cf, model = pm, beds = {}, index = i, ang = ang }
+	pm:SetAttribute("Center", cf.Position)
 	local function W(x, y, z) return cf:PointToWorldSpace(V3(x, y, z)) end
 	local entrance = function(a) -- вход со стороны -Z локально (угол -pi/2 в локальных x,z)
 		local d = (a - (-PI / 2)) % (PI * 2)
@@ -707,6 +708,7 @@ local function billboard(parent, name, image, pos, size)
 	gui.SizingMode = Enum.SurfaceGuiSizingMode.FixedSize
 	gui.CanvasSize = Vector2.new(1024, 1024)
 	gui.LightInfluence = 0
+	pcall(function() gui.MaxDistance = 1000000 end)
 	gui.Parent = p
 	local img = Instance.new("ImageLabel")
 	img.BackgroundTransparency = 1

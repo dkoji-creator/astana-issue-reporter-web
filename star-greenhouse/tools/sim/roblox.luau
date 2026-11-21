@@ -46,6 +46,11 @@ function task.delay(t, f, ...)
 	table.insert(SIM.tasks, { at = SIM.now + (t or 0), fn = f, args = args })
 end
 function task.cancel() end
+warn = function(...)
+	local parts = {}
+	for _, v in { ... } do table.insert(parts, tostring(v)) end
+	table.insert(SIM.errors, "warn: " .. table.concat(parts, " "))
+end
 local function tick() return SIM.now end
 local function time() return SIM.now end
 local function wait(t) return task.wait(t) end
@@ -379,7 +384,7 @@ local SIGNALS = {
 	OnServerEvent = true, OnClientEvent = true, Triggered = true, PromptShown = true, Touched = true, TouchEnded = true,
 	CharacterAdded = true, CharacterRemoving = true, Died = true, Completed = true, Ended = true, PlayerAdded = true, PlayerRemoving = true,
 	Heartbeat = true, RenderStepped = true, Stepped = true, InputBegan = true, InputEnded = true, InputChanged = true,
-	PromptGamePassPurchaseFinished = true, PromptProductPurchaseFinished = true, AttributeChanged = true,
+	PromptTriggered = true, PromptGamePassPurchaseFinished = true, PromptProductPurchaseFinished = true, AttributeChanged = true,
 }
 
 instMeta.__index = function(self, k)
@@ -639,11 +644,30 @@ function Inst.BindToRenderStep() end
 
 local DSS = Inst.GetService(game, "DataStoreService")
 SIM.store = {}
+-- DataStore Roblox не принимает: массивы с пропусками, смешанные ключи, функции, NaN
+local function validateStore(v, path)
+	local t = typeof(v)
+	if t == "function" or t == "thread" or t == "userdata" then error("DataStore: нельзя хранить " .. t .. " в " .. path, 3) end
+	if t == "number" and v ~= v then error("DataStore: NaN в " .. path, 3) end
+	if t ~= "table" then return end
+	local n, maxI, strKeys = 0, 0, 0
+	for k, x in v do
+		n += 1
+		if type(k) == "number" then
+			if k ~= math.floor(k) or k < 1 then error("DataStore: плохой числовой ключ " .. tostring(k) .. " в " .. path, 3) end
+			if k > maxI then maxI = k end
+		else
+			strKeys += 1
+		end
+		validateStore(x, path .. "." .. tostring(k))
+	end
+	if maxI > 0 and (strKeys > 0 or maxI ~= n) then error("DataStore: массив с пропусками или смешанные ключи в " .. path, 3) end
+end
 function Inst.GetDataStore(self, name)
 	return {
 		GetAsync = function(_, key) return SIM.store[name .. "/" .. key] end,
 		SetAsync = function(_, key, v)
-			assert(typeof(v) ~= "function", "SetAsync: функция в данных")
+			validateStore(v, name .. "/" .. key)
 			SIM.store[name .. "/" .. key] = v
 		end,
 		UpdateAsync = function(_, key, f) SIM.store[name .. "/" .. key] = f(SIM.store[name .. "/" .. key]) end,

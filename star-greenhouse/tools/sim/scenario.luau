@@ -230,6 +230,19 @@ for _, b in colFrame:GetChildren() do
 	end
 end
 
+stage("киоск через подсказку")
+for _, d in workspace.World:GetDescendants() do
+	if d:IsA("ProximityPrompt") and d:GetAttribute("Window") == "market" then
+		game:GetService("ProximityPromptService").PromptTriggered:Fire(d, plr)
+		break
+	end
+end
+frames(5)
+local wl2 = pg:FindFirstChild("SpiritWindows")
+local anyOpen = false
+for _, w in (wl2 and wl2:GetChildren() or {}) do if w.Visible then anyOpen = true end end
+check(anyOpen, "киоск не открыл окно")
+
 stage("события")
 remotes.Event:FireAllClients("meteor", 200)
 RS:SetAttribute("EventId", "meteor")

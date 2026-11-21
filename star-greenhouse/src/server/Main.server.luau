@@ -65,10 +65,24 @@ local function mergeDefaults(d)
 	return d
 end
 
+-- DataStore не принимает массивы с пропусками: грядки хранятся с ключами-строками
+local function unpackBeds(d)
+	local beds = {}
+	for k, b in d.beds do beds[tonumber(k)] = b end
+	d.beds = beds
+	return d
+end
+local function packed(d)
+	local copy = table.clone(d)
+	local beds = {}
+	for i, b in d.beds do beds[tostring(i)] = b end
+	copy.beds = beds
+	return copy
+end
 local function load(userId)
 	for attempt = 1, 4 do
 		local ok, res = pcall(function() return STORE:GetAsync("u" .. userId) end)
-		if ok then return res and mergeDefaults(res) or newProfile(), true end
+		if ok then return res and unpackBeds(mergeDefaults(res)) or newProfile(), true end
 		task.wait(1.5 * attempt)
 	end
 	return newProfile(), false
@@ -77,7 +91,8 @@ local function save(plr)
 	local d = D[plr]
 	if not d or not S[plr] or not S[plr].canSave then return end
 	d.lastSeen = now()
-	pcall(function() STORE:SetAsync("u" .. plr.UserId, d) end)
+	local ok, err = pcall(function() STORE:SetAsync("u" .. plr.UserId, packed(d)) end)
+	if not ok then warn("save failed", err) end
 end
 
 ------------------------------------------------------------------ уведомления и синхронизация
