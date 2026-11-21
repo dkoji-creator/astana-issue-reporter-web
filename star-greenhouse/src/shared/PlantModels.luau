@@ -453,7 +453,7 @@ local function meshModel(model, plant, tpl)
 	local c1, c2 = plant.c1, plant.c2
 	local roles = {
 		F = c1, A = c2, L = plant.c1:Lerp(Color3.fromRGB(70, 150, 80), 0.6),
-		G = c2:Lerp(Color3.new(1, 1, 1), 0.35), R = c1:Lerp(Color3.fromRGB(40, 38, 50), 0.75),
+		G = c2:Lerp(Color3.new(1, 1, 1), 0.1), R = c1:Lerp(Color3.fromRGB(40, 38, 50), 0.75),
 	}
 	local style = MESH_STYLE[plant.form] or {}
 	for _, src in tpl:GetChildren() do
@@ -539,7 +539,7 @@ function PM.build(plantId: string, muts: { string }?): Model
 	-- общее свечение сорта: мягкий свет
 	if plant.glow >= 0.4 and not m:FindFirstChildOfClass("PointLight") then
 		local l = Instance.new("PointLight")
-		l.Color, l.Range, l.Brightness = plant.c2, 5 + 6 * plant.glow, 0.5 + plant.glow
+		l.Color, l.Range, l.Brightness = plant.c2, 4 + 4 * plant.glow, 0.25 + 0.5 * plant.glow
 		l.Parent = m.PrimaryPart
 	end
 	return m

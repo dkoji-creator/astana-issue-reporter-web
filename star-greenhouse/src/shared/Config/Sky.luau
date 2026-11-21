@@ -1,9 +1,9 @@
 -- Небо: 6 граней туманности (art/sky, загружены как Image). Создано tools/upload_sky.py
 return {
-	Ft = "rbxassetid://98638465101673",
-	Bk = "rbxassetid://74003115901005",
-	Lf = "rbxassetid://102780397236368",
-	Rt = "rbxassetid://116262805565543",
-	Up = "rbxassetid://115242280862524",
-	Dn = "rbxassetid://136289432664351",
+	Ft = "rbxassetid://120171264133052",
+	Bk = "rbxassetid://137461519355346",
+	Lf = "rbxassetid://130184845511708",
+	Rt = "rbxassetid://113114427257013",
+	Up = "rbxassetid://78962098379427",
+	Dn = "rbxassetid://83187366921441",
 }

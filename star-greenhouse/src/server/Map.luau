@@ -7,10 +7,11 @@ local Game = require(Shared:WaitForChild("Game"))
 local PM = require(Shared:WaitForChild("PlantModels"))
 local PlanetImg = require(Shared:WaitForChild("Config"):WaitForChild("Planets"))
 local SkyImg = require(Shared:WaitForChild("Config"):WaitForChild("Sky"))
+local WT = require(script.Parent:WaitForChild("WorldTerrain"))
 
 local Map = {}
 Map.PlotCount = 8
-Map.PlotRadius = 58
+Map.PlotRadius = 100
 Map.plots = {}
 Map.RingBeds = { { r = 5.5, n = 6 }, { r = 10.5, n = 10 }, { r = 15.5, n = 14 } }
 Map.MaxBeds = 30
@@ -22,11 +23,13 @@ local Mat = Enum.Material
 
 local COL = {
 	hull = c(38, 44, 62), hull2 = c(58, 66, 90), dark = c(22, 26, 40), plate = c(84, 94, 120),
-	cyan = c(70, 220, 255), mag = c(255, 90, 200), warm = c(255, 205, 140), gold = c(255, 200, 90), green = c(90, 235, 150),
+	cyan = c(70, 175, 205), mag = c(190, 90, 165), warm = c(255, 196, 140), gold = c(225, 180, 100), green = c(90, 200, 140),
+	trim = c(120, 140, 170),
 	glass = c(150, 220, 255), soil = c(58, 40, 36),
 }
 
 local world, deco
+local DECOR_EXT
 
 local function part(parent, name, size, cf, color, mat, props)
 	local p = Instance.new("Part")
@@ -119,51 +122,18 @@ local function prompt(parent, text, objText, dist, name)
 	return pr
 end
 
------------------------------------------------------------------- основание: платформа и скальный низ
+------------------------------------------------------------------ основание: рельеф астероида
 local function buildHull()
-	local f = Instance.new("Folder")
-	f.Name = "Hull"
-	f.Parent = world
-	cyl(f, "Deck", CF(0, -1.5, 0), 3, 200, c(46, 52, 72), Mat.Slate)
-	cyl(f, "DeckInner", CF(0, -0.05, 0), 0.2, 150, c(54, 62, 86), Mat.Metal, { Reflectance = 0.08 })
-	cyl(f, "DeckEdge", CF(0, -2.2, 0), 1.5, 203, COL.hull2, Mat.Metal)
-	dcyl(f, "RimGlow", CF(0, 0.06, 0), 0.12, 199, COL.cyan, Mat.Neon)
-	dcyl(f, "RimCut", CF(0, 0.08, 0), 0.14, 197.6, c(46, 52, 72), Mat.Slate)
-	-- скальный низ: стопка эллипсоидов
-	local rock = { c(70, 64, 76), c(58, 54, 66), c(80, 72, 84), c(52, 48, 62) }
-	local rng = Random.new(11)
-	for i = 1, 9 do
-		local k = 1 - i * 0.105
-		ell(f, "Rock", CF(rng:NextNumber(-3, 3), -3.5 - i * 6.5, rng:NextNumber(-3, 3)) * A(0, i, 0), V3(190 * k, 16, 190 * k), rock[i % 4 + 1], Mat.Slate)
-	end
-	for i = 1, 26 do
-		local a = rng:NextNumber(0, PI * 2)
-		local r = rng:NextNumber(10, 82)
-		local depth = 8 + (1 - r / 90) * 40
-		local h = rng:NextNumber(9, 24)
-		local col = i % 3 == 0 and COL.mag or (i % 3 == 1 and COL.cyan or c(160, 120, 255))
-		ell(f, "Spike", CF(cos(a) * r, -depth - h * 0.3, sin(a) * r) * A(PI, a, rng:NextNumber(-0.2, 0.2)), V3(rng:NextNumber(2.5, 5), h, rng:NextNumber(2.5, 5)), col, Mat.Glass, { Transparency = 0.15, CanCollide = false })
-		if i % 4 == 0 then
-			local g = ball(f, "SpikeGlow", V3(cos(a) * r, -depth - h * 0.5, sin(a) * r), 3, col, Mat.Neon, { Transparency = 0.5 })
-			light(g, col, 22, 0.8)
-		end
-	end
-	-- двигатели под платформой
-	for i = 1, 5 do
-		local a = i / 5 * PI * 2
-		local pod = V3(cos(a) * 38, -9, sin(a) * 38)
-		cyl(f, "Engine", CF(pod), 6, 6, COL.hull2, Mat.Metal, { CanCollide = false })
-		local g = ball(f, "EngineGlow", pod + V3(0, -3.5, 0), 5, COL.cyan, Mat.Neon, { Transparency = 0.25 })
-		light(g, COL.cyan, 28, 1.2)
-	end
-	-- невидимая стена по краю: игроки не падают в космос
+	WT.build()
+	-- невидимая стена у подножия гор: игроки не уходят за край
 	local wall = Instance.new("Folder")
 	wall.Name = "Barrier"
 	wall.Parent = world
-	for i = 1, 40 do
-		local a0, a1 = (i - 1) / 40 * PI * 2, i / 40 * PI * 2
-		local p0, p1 = V3(cos(a0) * 98.5, 25, sin(a0) * 98.5), V3(cos(a1) * 98.5, 25, sin(a1) * 98.5)
-		part(wall, "Wall", V3(2, 70, (p1 - p0).Magnitude + 0.1), CFrame.lookAt((p0 + p1) / 2, p1), COL.hull, Mat.SmoothPlastic, { Transparency = 1, CanQuery = false })
+	local R = WT.PlayRadius
+	for i = 1, 64 do
+		local a0, a1 = (i - 1) / 64 * PI * 2, i / 64 * PI * 2
+		local p0, p1 = V3(cos(a0) * R, 40, sin(a0) * R), V3(cos(a1) * R, 40, sin(a1) * R)
+		part(wall, "Wall", V3(2, 120, (p1 - p0).Magnitude + 0.2), CFrame.lookAt((p0 + p1) / 2, p1), COL.hull, Mat.SmoothPlastic, { Transparency = 1, CanQuery = false })
 	end
 end
 
@@ -173,7 +143,7 @@ local function kiosk(parent, name, cf, color, title)
 	m.Name = name
 	m.Parent = parent
 	cyl(m, "Base", cf * CF(0, 0.45, 0), 0.9, 12, COL.hull2, Mat.Metal)
-	dcyl(m, "BaseGlow", cf * CF(0, 0.92, 0), 0.1, 12.2, color, Mat.Neon)
+	dcyl(m, "BaseGlow", cf * CF(0, 0.45, 0), 0.18, 12.15, color, Mat.Neon, { Transparency = 0.35 })
 	for i = 0, 3 do
 		local a = i * PI / 2 + PI / 4
 		local p = cf * CF(cos(a) * 4.6, 4.2, sin(a) * 4.6)
@@ -181,7 +151,7 @@ local function kiosk(parent, name, cf, color, title)
 		dcyl(m, "PillarGlow", p * CF(0, 0, 0), 7.0, 0.2, color, Mat.Neon, { Transparency = 0.2 })
 	end
 	cyl(m, "Roof", cf * CF(0, 8.1, 0), 0.7, 12.5, COL.hull, Mat.Metal)
-	dcyl(m, "RoofGlow", cf * CF(0, 7.7, 0), 0.15, 12.7, color, Mat.Neon)
+	dcyl(m, "RoofGlow", cf * CF(0, 8.1, 0), 0.18, 12.65, color, Mat.Neon, { Transparency = 0.35 })
 	ell(m, "RoofDome", cf * CF(0, 8.6, 0), V3(9, 2.4, 9), COL.hull2, Mat.Metal)
 	local signPart = part(m, "Sign", V3(11, 3.2, 0.5), cf * CF(0, 11.2, 0) * A(0, PI, 0), COL.dark, Mat.SmoothPlastic, { CanCollide = false })
 	surfaceText(signPart, Enum.NormalId.Front, title, color, 36)
@@ -196,20 +166,25 @@ local function buildHub()
 	local f = Instance.new("Folder")
 	f.Name = "Hub"
 	f.Parent = world
-	cyl(f, "Plaza", CF(0, 0.15, 0), 0.4, 46, c(30, 34, 52), Mat.Metal, { Reflectance = 0.15 })
-	for i, r in { 7.5, 13, 18.5, 22 } do
-		dcyl(f, "PlazaRing", CF(0, 0.38, 0), 0.06, r * 2, i % 2 == 0 and COL.mag or COL.cyan, Mat.Neon, { Transparency = 0.15 })
-		dcyl(f, "PlazaRingCut", CF(0, 0.4, 0), 0.07, r * 2 - 0.5, c(30, 34, 52), Mat.Metal)
+	cyl(f, "Plaza", CF(0, 0.2, 0), 0.5, 70, c(44, 48, 64), Mat.Concrete)
+	cyl(f, "PlazaInner", CF(0, 0.3, 0), 0.5, 40, c(52, 56, 74), Mat.Slate)
+	for i, r in { 10, 20, 34.6 } do
+		dcyl(f, "PlazaRing", CF(0, 0.52, 0), 0.06, r * 2, COL.trim, Mat.Metal)
+		dcyl(f, "PlazaRingCut", CF(0, 0.54, 0), 0.07, r * 2 - 0.6, i == 3 and c(44, 48, 64) or c(52, 56, 74), i == 3 and Mat.Concrete or Mat.Slate)
 	end
-	-- радиальные лучи света на плазе
-	for i = 1, 16 do
-		local a = i / 16 * PI * 2
-		deco(f, "PlazaRay", V3(0.35, 0.05, 11), CFrame.lookAt(V3(cos(a) * 13, 0.42, sin(a) * 13), V3(cos(a) * 24, 0.42, sin(a) * 24)), COL.cyan, Mat.Neon, { Transparency = 0.35 })
+	-- клумбы с растениями по кругу площади (заполняются растениями в buildFlora)
+	Map.planters = {}
+	for i = 1, 8 do
+		local a = (i - 0.5) / 8 * PI * 2 + PI / 8
+		local pos = V3(cos(a) * 28, 0, sin(a) * 28)
+		cyl(f, "Planter", CF(pos + V3(0, 0.7, 0)), 1.0, 7, COL.hull2, Mat.Metal)
+		cyl(f, "PlanterSoil", CF(pos + V3(0, 1.22, 0)), 0.1, 6.2, COL.soil, Mat.Ground, { CanCollide = false })
+		table.insert(Map.planters, pos + V3(0, 1.25, 0))
 	end
 	-- маяк в центре: башня и вращающиеся кольца
 	cyl(f, "BeaconBase", CF(0, 1.2, 0), 2.4, 9, COL.hull2, Mat.Metal)
 	cyl(f, "BeaconBase2", CF(0, 2.6, 0), 0.8, 6.4, COL.plate, Mat.Metal)
-	dcyl(f, "BeaconGlow", CF(0, 3.05, 0), 0.12, 6.6, COL.cyan, Mat.Neon)
+	dcyl(f, "BeaconGlow", CF(0, 2.6, 0), 0.14, 6.48, COL.cyan, Mat.Neon, { Transparency = 0.3 })
 	cyl(f, "BeaconTower", CF(0, 9, 0), 12, 2.2, COL.hull, Mat.Metal)
 	cyl(f, "BeaconTower2", CF(0, 17, 0), 6, 1.4, COL.plate, Mat.Metal)
 	for k = 1, 4 do
@@ -255,7 +230,7 @@ local function buildHub()
 	Map.kiosks = {}
 	for _, k in kiosks do
 		local a = math.rad(k.ang)
-		local pos = V3(cos(a) * 15.5, 0.3, sin(a) * 15.5)
+		local pos = V3(cos(a) * 18, 0.45, sin(a) * 18)
 		local cf = CFrame.lookAt(pos, V3(0, 0.3, 0))
 		local m = kiosk(f, "Kiosk_" .. k.id, cf, k.col, k.title)
 		Map.kiosks[k.id] = m
@@ -270,7 +245,7 @@ local function buildHub()
 			end
 		elseif k.id == "sell" then
 			cyl(m, "Pad", cf * CF(0, 1.1, 1.0), 0.3, 6, COL.dark, Mat.Metal)
-			dcyl(m, "PadRing", cf * CF(0, 1.3, 1.0), 0.06, 6, COL.gold, Mat.Neon)
+			dcyl(m, "PadRing", cf * CF(0, 1.1, 1.0), 0.12, 6.08, COL.gold, Mat.Neon, { Transparency = 0.35 })
 			for i = 1, 3 do
 				part(m, "Crate", V3(1.8, 1.6, 1.8), cf * CF(-3.5 + i * 0.4, 1.4 + (i - 1) * 1.6, 2.6) * A(0, i, 0), c(80, 90, 120), Mat.Metal, { CanCollide = false })
 				dcyl(m, "CrateGlow", cf * CF(-3.5 + i * 0.4, 1.4 + (i - 1) * 1.6, 2.6) * A(0, i, 0), 1.7, 0.18, COL.gold, Mat.Neon)
@@ -335,7 +310,7 @@ local function buildPlot(i, parent)
 	cyl(pm, "Floor", cf * CF(0, 0.15, 0), 0.5, 39, c(30, 52, 60), Mat.Metal, { Reflectance = 0.1 })
 	cyl(pm, "FloorInner", cf * CF(0, 0.42, 0), 0.08, 36, c(24, 40, 48), Mat.Slate)
 	for _, r in { 8.2, 13.2, 17.8 } do
-		dcyl(pm, "FloorRing", cf * CF(0, 0.47, 0), 0.05, r * 2, COL.cyan, Mat.Neon, { Transparency = 0.2 })
+		dcyl(pm, "FloorRing", cf * CF(0, 0.47, 0), 0.05, r * 2, COL.trim, Mat.Metal)
 		dcyl(pm, "FloorRingCut", cf * CF(0, 0.48, 0), 0.06, r * 2 - 0.4, c(24, 40, 48), Mat.Slate)
 	end
 	dcyl(pm, "CenterDisk", cf * CF(0, 0.5, 0), 0.05, 6.2, c(18, 30, 36), Mat.Metal)
@@ -393,7 +368,7 @@ local function buildPlot(i, parent)
 	-- ворота
 	for _, s in { -1, 1 } do
 		part(pm, "GatePillar", V3(1.4, 9, 1.4), cf * CF(s * 4.4, 4.5, -19.6), COL.hull2, Mat.Metal, { CanCollide = false })
-		dcyl(pm, "GateGlow", cf * CF(s * 4.4, 4.5, -19.6), 8.8, 0.3, COL.cyan, Mat.Neon, { Transparency = 0.2 })
+		dcyl(pm, "GateGlow", cf * CF(s * 4.4, 4.5, -19.6), 8.8, 0.3, COL.trim, Mat.Metal)
 		ball(pm, "GateOrb", W(s * 4.4, 9.6, -19.6), 1.2, COL.cyan, Mat.Neon)
 	end
 	part(pm, "GateBeam", V3(10.6, 1.2, 1.2), cf * CF(0, 9.4, -19.6), COL.hull2, Mat.Metal, { CanCollide = false })
@@ -412,7 +387,7 @@ local function buildPlot(i, parent)
 		bed.Name = "Bed" .. bi
 		bed.Parent = beds
 		cyl(bed, "Rim", bcf * CF(0, 0.9, 0), 0.85, 4.7, COL.hull2, Mat.Metal)
-		dcyl(bed, "RimGlow", bcf * CF(0, 1.34, 0), 0.06, 4.75, COL.cyan, Mat.Neon, { Transparency = 0.25 })
+		dcyl(bed, "RimGlow", bcf * CF(0, 1.34, 0), 0.06, 4.75, COL.trim, Mat.Metal)
 		local soil = cyl(bed, "Soil", bcf * CF(0, 1.3, 0), 0.12, 4.0, COL.soil, Mat.Ground, { CanCollide = false })
 		-- мелкие камешки на почве
 		for q = 1, 4 do
@@ -441,23 +416,24 @@ local function buildWalkways(parent)
 	for i = 1, Map.PlotCount do
 		local _, ang = plotCF(i)
 		local dirv = V3(cos(ang), 0, sin(ang))
-		local r0, r1 = 21.5, Map.PlotRadius - 19.4
+		local r0, r1 = 34.5, Map.PlotRadius - 19.4
 		local len = r1 - r0
 		local mid = dirv * ((r0 + r1) / 2)
-		local wcf = CFrame.lookAt(V3(mid.X, 0.18, mid.Z), V3(mid.X, 0.18, mid.Z) - dirv)
-		part(parent, "Walkway", V3(8, 0.5, len), wcf, c(36, 42, 62), Mat.Metal, { Reflectance = 0.1 })
+		local wcf = CFrame.lookAt(V3(mid.X, 0.25, mid.Z), V3(mid.X, 0.25, mid.Z) - dirv)
+		part(parent, "Walkway", V3(9, 0.5, len), wcf, c(50, 54, 70), Mat.Concrete)
 		for _, s in { -1, 1 } do
-			deco(parent, "WalkEdge", V3(0.25, 0.12, len), wcf * CF(s * 3.9, 0.3, 0), s == 1 and COL.cyan or COL.mag, Mat.Neon)
+			part(parent, "WalkEdge", V3(0.6, 0.7, len), wcf * CF(s * 4.6, 0.1, 0), COL.hull2, Mat.Metal, { CanCollide = false })
 		end
-		for q = 1, math.floor(len / 6) do
-			deco(parent, "WalkDash", V3(0.5, 0.08, 2.4), wcf * CF(0, 0.28, -len / 2 + q * 6 - 3), COL.cyan, Mat.Neon, { Transparency = 0.3 })
+		for q = 1, math.floor(len / 5) do
+			deco(parent, "WalkSeam", V3(8.4, 0.06, 0.12), wcf * CF(0, 0.27, -len / 2 + q * 5), c(40, 44, 58), Mat.Metal)
 		end
 		for _, s in { -1, 1 } do
-			for q = 1, math.floor(len / 8) do
-				local pos = (wcf * CF(s * 4.4, 0, -len / 2 + q * 8 - 4)).Position
-				seg(parent, "Pole", pos + V3(0, 0.4, 0), pos + V3(0, 4, 0), 0.2, COL.plate, Mat.Metal)
-				local b = ball(parent, "Bulb", pos + V3(0, 4.3, 0), 0.8, s == 1 and COL.cyan or COL.mag, Mat.Neon)
-				if q % 2 == 0 then light(b, b.Color, 14, 0.6) end
+			for q = 1, math.floor(len / 12) do
+				local pos = (wcf * CF(s * 5.4, 0, -len / 2 + q * 12 - 6)).Position
+				seg(parent, "Pole", pos + V3(0, 0.4, 0), pos + V3(0, 4.6, 0), 0.22, COL.plate, Mat.Metal)
+				part(parent, "LampHead", V3(0.9, 0.35, 0.9), CF(pos + V3(0, 4.75, 0)), COL.hull2, Mat.Metal, { CanCollide = false })
+				local b = ball(parent, "Bulb", pos + V3(0, 4.45, 0), 0.55, COL.warm, Mat.Neon)
+				if q % 2 == 1 then light(b, COL.warm, 16, 0.7) end
 			end
 		end
 	end
@@ -520,7 +496,7 @@ DECOR.telescope = function(parent, cf)
 end
 DECOR.globe = function(parent, cf)
 	cyl(parent, "GlobeBase", cf * CF(0, 0.7, 0), 0.4, 2.8, COL.hull2, Mat.Metal)
-	dcyl(parent, "GlobeBaseGlow", cf * CF(0, 0.92, 0), 0.06, 2.9, COL.cyan, Mat.Neon)
+	dcyl(parent, "GlobeBaseGlow", cf * CF(0, 0.7, 0), 0.1, 2.86, COL.cyan, Mat.Neon)
 	local g = ball(parent, "Globe", (cf * CF(0, 3.2, 0)).Position, 3.2, COL.cyan, Mat.Neon, { Transparency = 0.45 })
 	ball(parent, "GlobeCore", (cf * CF(0, 3.2, 0)).Position, 1.6, c(120, 255, 190), Mat.Neon, { Transparency = 0.15 })
 	for q = 1, 3 do
@@ -542,7 +518,7 @@ DECOR.globe = function(parent, cf)
 end
 DECOR.rocket = function(parent, cf)
 	cyl(parent, "Pad", cf * CF(0, 0.4, 0), 0.8, 12, COL.hull2, Mat.Metal)
-	dcyl(parent, "PadRing", cf * CF(0, 0.82, 0), 0.06, 11, COL.gold, Mat.Neon)
+	dcyl(parent, "PadRing", cf * CF(0, 0.4, 0), 0.14, 12.1, COL.gold, Mat.Neon, { Transparency = 0.35 })
 	cyl(parent, "Body", cf * CF(0, 7.5, 0), 12, 4, c(235, 238, 248), Mat.Metal)
 	ell(parent, "Nose", cf * CF(0, 14.5, 0), V3(4, 6, 4), c(235, 70, 80), Mat.Metal)
 	for q = 1, 3 do
@@ -571,6 +547,7 @@ DECOR.starpond = function(parent, cf)
 	light(lb, COL.mag, 26, 1)
 end
 
+DECOR_EXT = DECOR
 local DECOR_ANCHOR = { -- локальные координаты участка
 	bench = { CF(0, 0.55, 12.5) },
 	banner = { CF() },
@@ -608,106 +585,158 @@ function Map.setBedLocked(plotIdx: number, bedIdx: number, locked: boolean)
 	bed.lockOrb.Transparency = locked and 0.2 or 1
 end
 
------------------------------------------------------------------- окружение: оборудование, кристаллы, растения у кромки
-local function buildScenery(parent)
-	local rng = Random.new(2026)
-	-- антенны и тарелки между участками
-	for i = 1, Map.PlotCount do
-		local a = (i - 1) / Map.PlotCount * PI * 2
-		local base = V3(cos(a) * 84, 0, sin(a) * 84)
-		if i % 2 == 1 then
-			-- антенная мачта с огнями
-			cyl(parent, "MastBase", CF(base + V3(0, 1, 0)), 2, 3.6, COL.hull2, Mat.Metal)
-			local top = base + V3(0, 26, 0)
-			seg(parent, "Mast", base + V3(0, 2, 0), top, 0.8, COL.plate, Mat.Metal)
-			for q = 1, 4 do
-				local h = 5 + q * 5
-				seg(parent, "MastArm", base + V3(-2.2, h, 0), base + V3(2.2, h, 0), 0.22, COL.plate, Mat.Metal)
-			end
-			local b = ball(parent, "MastLight", top + V3(0, 1, 0), 1.2, c(255, 70, 70), Mat.Neon)
-			light(b, c(255, 70, 70), 20, 0.8)
-			b:SetAttribute("Blink", 1.2 + i * 0.1)
-		else
-			-- спутниковая тарелка
-			cyl(parent, "DishBase", CF(base + V3(0, 1.2, 0)), 2.4, 3.2, COL.hull2, Mat.Metal)
-			seg(parent, "DishArm", base + V3(0, 2, 0), base + V3(0, 7, 0), 0.9, COL.plate, Mat.Metal)
-			local dcf = CF(base + V3(0, 8, 0)) * A(0, -a + PI, 0) * A(-0.7, 0, 0)
-			ell(parent, "Dish", dcf, V3(12, 1.2, 12), c(205, 212, 232), Mat.Metal)
-			seg(parent, "DishFeed", dcf.Position, (dcf * CF(0, 6, 0)).Position, 0.25, COL.plate, Mat.Metal)
-			ball(parent, "DishTip", (dcf * CF(0, 6, 0)).Position, 0.8, COL.cyan, Mat.Neon)
-		end
+------------------------------------------------------------------ окружение: техника, камни, площадка с ракетой
+local function onGround(x, z) return WT.groundY(x, z) end
+
+local function antenna(parent, base, k)
+	cyl(parent, "MastBase", CF(base + V3(0, 1, 0)), 2, 4, COL.hull2, Mat.Metal)
+	local top = base + V3(0, 30, 0)
+	seg(parent, "Mast", base + V3(0, 2, 0), top, 0.9, COL.plate, Mat.Metal)
+	for q = 1, 5 do
+		local h = 6 + q * 4.5
+		seg(parent, "MastArm", base + V3(-2.4 + q * 0.2, h, 0), base + V3(2.4 - q * 0.2, h, 0), 0.22, COL.plate, Mat.Metal)
 	end
-	-- солнечные панели между мачтами
-	for i = 1, 8 do
-		local a = (i - 0.5) / 8 * PI * 2 + PI / 8
-		local base = CF(cos(a) * 91, 0, sin(a) * 91) * A(0, -a, 0)
-		for q = -1, 1 do
-			local pcf = base * CF(q * 4.4, 2.3, 0) * A(0.5, 0, 0)
-			part(parent, "Panel", V3(4, 0.25, 6), pcf, c(25, 60, 130), Mat.Glass, { CanCollide = false })
-			for g = -1, 1 do deco(parent, "PanelLine", V3(0.08, 0.05, 6), pcf * CF(g * 1.3, 0.16, 0), c(150, 200, 255), Mat.Neon, { Transparency = 0.4 }) end
-			seg(parent, "PanelLeg", (base * CF(q * 4.4, 0, 0)).Position, (base * CF(q * 4.4, 2.2, 0)).Position, 0.2, COL.plate, Mat.Metal)
-		end
+	for _, a in { 0, 2.1, 4.2 } do
+		seg(parent, "Guy", top + V3(0, -6, 0), base + V3(cos(a) * 9, 0.2, sin(a) * 9), 0.08, COL.trim, Mat.Metal)
 	end
-	-- камни
-	for q = 1, 40 do
-		local a = rng:NextNumber(0, PI * 2)
-		local r = rng:NextNumber(24, 96)
-		if not (r > 38 and r < 78 and false) then
-			local sz = rng:NextNumber(1.2, 4)
-			ell(parent, "Boulder", CF(cos(a) * r, sz * 0.2, sin(a) * r) * A(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6), 0), V3(sz * 1.5, sz, sz * 1.3), c(70, 66, 82), Mat.Slate, { CanCollide = false })
-		end
+	local b = ball(parent, "MastLight", top + V3(0, 1, 0), 1.0, c(230, 70, 70), Mat.Neon)
+	light(b, c(255, 70, 70), 18, 0.6)
+	b:SetAttribute("Blink", 1.2 + k * 0.13)
+end
+
+local function dish(parent, base, facing)
+	cyl(parent, "DishBase", CF(base + V3(0, 1.4, 0)), 2.8, 4, COL.hull2, Mat.Metal)
+	seg(parent, "DishArm", base + V3(0, 2.5, 0), base + V3(0, 9, 0), 1.1, COL.plate, Mat.Metal)
+	local dcf = CF(base + V3(0, 10, 0)) * A(0, facing, 0) * A(-0.75, 0, 0)
+	ell(parent, "Dish", dcf, V3(16, 1.4, 16), c(200, 206, 222), Mat.Metal)
+	for _, a in { 0, 2.1, 4.2 } do
+		seg(parent, "DishStrut", (dcf * CF(cos(a) * 6.5, 0.3, sin(a) * 6.5)).Position, (dcf * CF(0, 7, 0)).Position, 0.18, COL.plate, Mat.Metal)
 	end
-	-- светящиеся ленты вдоль платформы
-	for q = 1, 3 do
-		local rr = 52 + q * 14
-		for i = 1, 60 do
-			local a = i / 60 * PI * 2
-			if i % 2 == 0 then
-				deco(parent, "Dash", V3(0.4, 0.05, 2.2), CFrame.lookAt(V3(cos(a) * rr, 0.12, sin(a) * rr), V3(cos(a + 0.05) * rr, 0.12, sin(a + 0.05) * rr)), q == 2 and COL.mag or COL.cyan, Mat.Neon, { Transparency = 0.45 })
-			end
-		end
-	end
-	-- светящиеся огни по краю платформы
-	for i = 1, 40 do
-		local a = i / 40 * PI * 2
-		local pos = V3(cos(a) * 97, 0.4, sin(a) * 97)
-		local b = ball(parent, "EdgeLamp", pos + V3(0, 1.2, 0), 1.1, i % 2 == 0 and COL.cyan or COL.mag, Mat.Neon)
-		if i % 4 == 0 then light(b, b.Color, 16, 0.6) end
+	ball(parent, "DishTip", (dcf * CF(0, 7, 0)).Position, 0.9, COL.cyan, Mat.Neon)
+end
+
+local function solarArray(parent, cfb)
+	for q = -2, 2 do
+		local pcf = cfb * CF(q * 4.6, 2.6, 0) * A(0.45, 0, 0)
+		part(parent, "Panel", V3(4.2, 0.2, 7), pcf, c(26, 46, 96), Mat.Glass, { CanCollide = false, Reflectance = 0.2 })
+		deco(parent, "PanelFrame", V3(4.4, 0.12, 7.2), pcf * CF(0, -0.12, 0), COL.trim, Mat.Metal)
+		seg(parent, "PanelLeg", (cfb * CF(q * 4.6, 0, 0)).Position, (cfb * CF(q * 4.6, 2.5, 0)).Position, 0.22, COL.plate, Mat.Metal)
 	end
 end
 
--- растения у кромки платформы (строятся после загрузки мешей, чтобы выглядели красиво)
+local function buildScenery(parent)
+	local rng = Random.new(2026)
+	-- техника на краю зоны станции, между участками
+	for i = 1, Map.PlotCount do
+		local a = (i - 1) / Map.PlotCount * PI * 2
+		local r = 142
+		local x, z = cos(a) * r, sin(a) * r
+		local base = V3(x, onGround(x, z), z)
+		if i % 2 == 1 then antenna(parent, base, i) else dish(parent, base, -a + PI) end
+		local sa = a + 0.12
+		local sx, sz = cos(sa) * 128, sin(sa) * 128
+		solarArray(parent, CF(sx, onGround(sx, sz), sz) * A(0, -sa + PI / 2, 0))
+	end
+	-- площадка с ракетой и обсерватория во внешней зоне
+	do
+		local a = 0.35
+		local x, z = cos(a) * 168, sin(a) * 168
+		local m = Instance.new("Model")
+		m.Name = "LaunchPad"
+		m.Parent = parent
+		DECOR_EXT.rocket(m, CF(x, onGround(x, z), z))
+		local a2 = PI + 0.5
+		local x2, z2 = cos(a2) * 166, sin(a2) * 166
+		local y2 = onGround(x2, z2)
+		cyl(parent, "ObsBase", CF(x2, y2 + 2, z2), 4, 18, COL.hull2, Mat.Concrete)
+		ell(parent, "ObsDome", CF(x2, y2 + 4, z2), V3(16, 14, 16), c(196, 202, 220), Mat.Metal)
+		part(parent, "ObsSlit", V3(2.2, 7, 12), CF(x2, y2 + 9, z2) * A(0.6, 0.4, 0), c(20, 24, 36), Mat.SmoothPlastic, { CanCollide = false })
+		cyl(parent, "ObsScope", CF(x2, y2 + 10, z2) * A(0.6, 0.4, 0), 9, 2.2, COL.plate, Mat.Metal, { CanCollide = false })
+	end
+	-- валуны во внешней зоне и немного камней между участками
+	for q = 1, 70 do
+		local a = rng:NextNumber(0, PI * 2)
+		local r = q <= 20 and rng:NextNumber(40, 125) or rng:NextNumber(WT.StationRadius + 4, WT.PlayRadius - 4)
+		local x, z = cos(a) * r, sin(a) * r
+		local sz = q <= 20 and rng:NextNumber(1, 2.5) or rng:NextNumber(1.5, 6)
+		local y = onGround(x, z)
+		local m = Instance.new("Model")
+		m.Name = "Boulder"
+		m.Parent = parent
+		local col = ({ c(80, 76, 94), c(70, 66, 84), c(96, 90, 104) })[q % 3 + 1]
+		ell(m, "Rock", CF(x, y + sz * 0.25, z) * A(rng:NextNumber(-0.3, 0.3), rng:NextNumber(0, 6), 0), V3(sz * 1.6, sz, sz * 1.3), col, Mat.Slate, { CanCollide = sz > 2 })
+		if sz > 2.5 then
+			ell(m, "Rock2", CF(x + sz * 0.8, y + sz * 0.15, z + sz * 0.3), V3(sz * 0.8, sz * 0.55, sz * 0.7), col, Mat.Slate, { CanCollide = false })
+		end
+	end
+end
+
+-- растения: клумбы площади, рощи между участками и гигантская флора во внешней зоне
+local function bigPlant(parent, id, pos, s, yaw)
+	local ok, m = pcall(PM.build, id, nil)
+	if not ok or not m then return end
+	for _, p in m:GetChildren() do
+		if p:IsA("BasePart") and p.Name ~= "Root" then
+			local pp = p.Position
+			local rot = CF(pp):Inverse() * p.CFrame
+			p.Size = p.Size * s
+			p.CFrame = CF(pp * s) * rot
+			p.CanCollide = s > 2.5 and (p.Name:sub(1, 1) == "R" or p.Name:sub(1, 1) == "F") or false
+		end
+	end
+	for _, l in m:GetDescendants() do
+		if l:IsA("PointLight") then l:Destroy() end
+	end
+	m:PivotTo(CF(pos) * A(0, yaw, 0))
+	m.Parent = parent
+	return m
+end
+
 function Map.buildFlora()
 	local parent = world:FindFirstChild("Scenery")
 	if not parent or parent:FindFirstChild("Flora") then return end
 	local fl = Instance.new("Folder")
 	fl.Name = "Flora"
 	fl.Parent = parent
-	parent = fl
-	local rng = Random.new(2026)
-	local pool = { "moon_10", "mars_11", "europa_14", "io_14", "nebula_13", "core_15", "moon_04", "io_02", "nebula_02", "core_06", "europa_05", "mars_03" }
-	for q = 1, 36 do
-		local a = rng:NextNumber(0, PI * 2)
-		local r = rng:NextNumber(88, 95)
-		local id = pool[q % #pool + 1]
-		local ok, m = pcall(PM.build, id, nil)
-		if ok and m then
-			local s = rng:NextNumber(1.2, 2.2)
-			for _, p in m:GetChildren() do
-				if p:IsA("BasePart") and p.Name ~= "Root" then
-					local pos = p.Position
-					local rot = CF(pos):Inverse() * p.CFrame
-					p.Size = p.Size * s
-					p.CFrame = CF(pos * s) * rot
-					p.CanCollide = false
-				end
-			end
-			for _, l in m:GetDescendants() do
-				if l:IsA("PointLight") then l:Destroy() end
-			end
-			m:PivotTo(CF(cos(a) * r, 0, sin(a) * r) * A(0, rng:NextNumber(0, PI * 2), 0))
-			m.Parent = parent
+	local rng = Random.new(4242)
+	local byForm = {}
+	for _, p in Game.PlantList do
+		byForm[p.form] = byForm[p.form] or {}
+		table.insert(byForm[p.form], p.id)
+	end
+	local function pick(forms)
+		local f = forms[rng:NextInteger(1, #forms)]
+		local list = byForm[f]
+		return list and list[rng:NextInteger(1, #list)] or "moon_01"
+	end
+	-- клумбы на площади
+	for i, pos in Map.planters or {} do
+		bigPlant(fl, pick({ "flower", "tulip", "orb", "spiral" }), pos, 1.2, i)
+	end
+	-- рощи между участками
+	for i = 1, Map.PlotCount do
+		local a = (i - 1) / Map.PlotCount * PI * 2
+		for k = 1, 4 do
+			local r = 100 + rng:NextNumber(-14, 14)
+			local aa = a + rng:NextNumber(-0.08, 0.08)
+			local x, z = cos(aa) * r, sin(aa) * r
+			bigPlant(fl, pick({ "tree", "mushroom", "coral", "crystal" }), V3(x, onGround(x, z), z), rng:NextNumber(2.2, 3.6), rng:NextNumber(0, 6.28))
 		end
+	end
+	-- внешняя зона: гигантская флора
+	for q = 1, 46 do
+		local a = rng:NextNumber(0, PI * 2)
+		local r = rng:NextNumber(WT.StationRadius + 6, WT.PlayRadius - 6)
+		local x, z = cos(a) * r, sin(a) * r
+		local forms = q % 3 == 0 and { "crystal", "geode" } or { "tree", "mushroom", "coral", "jelly", "spiral", "cactus" }
+		bigPlant(fl, pick(forms), V3(x, onGround(x, z), z), rng:NextNumber(3, 6.5), rng:NextNumber(0, 6.28))
+	end
+	-- кристаллы у подножия гор
+	for q = 1, 24 do
+		local a = q / 24 * PI * 2 + rng:NextNumber(-0.1, 0.1)
+		local r = WT.PlayRadius - rng:NextNumber(4, 12)
+		local x, z = cos(a) * r, sin(a) * r
+		bigPlant(fl, pick({ "crystal" }), V3(x, onGround(x, z) - 0.5, z), rng:NextNumber(4, 8), rng:NextNumber(0, 6.28))
 	end
 end
 
@@ -763,8 +792,8 @@ local function buildBackdrop(parent)
 	fl.Parent = parent
 	for i = 1, 44 do
 		local a = rng:NextNumber(0, PI * 2)
-		local r = rng:NextNumber(150, 520)
-		local y = rng:NextNumber(-120, 160)
+		local r = rng:NextNumber(340, 800)
+		local y = rng:NextNumber(-60, 220)
 		local s = rng:NextNumber(5, 38)
 		local col = ({ c(88, 80, 92), c(104, 92, 84), c(70, 74, 92), c(96, 84, 108) })[i % 4 + 1]
 		local rock = Instance.new("Model")
@@ -790,14 +819,14 @@ local function buildLighting()
 		if ch:IsA("Sky") or ch:IsA("BloomEffect") or ch:IsA("ColorCorrectionEffect") or ch:IsA("SunRaysEffect") or ch:IsA("Atmosphere") then ch:Destroy() end
 	end
 	Lighting.ClockTime = 17.2
-	Lighting.Brightness = 1.8
+	Lighting.Brightness = 1.6
 	Lighting.Ambient = c(70, 66, 110)
 	Lighting.OutdoorAmbient = c(80, 78, 125)
 	Lighting.ColorShift_Top = c(190, 170, 255)
 	Lighting.EnvironmentDiffuseScale = 0.6
 	Lighting.EnvironmentSpecularScale = 0.8
 	Lighting.GlobalShadows = true
-	Lighting.ExposureCompensation = 0.1
+	Lighting.ExposureCompensation = -0.1
 	local sky = Instance.new("Sky")
 	sky.SkyboxBk, sky.SkyboxDn, sky.SkyboxFt = SkyImg.Bk, SkyImg.Dn, SkyImg.Ft
 	sky.SkyboxLf, sky.SkyboxRt, sky.SkyboxUp = SkyImg.Lf, SkyImg.Rt, SkyImg.Up
@@ -805,14 +834,14 @@ local function buildLighting()
 	sky.StarCount = 0
 	sky.Parent = Lighting
 	local bloom = Instance.new("BloomEffect")
-	bloom.Intensity, bloom.Size, bloom.Threshold = 0.55, 28, 1.25
+	bloom.Intensity, bloom.Size, bloom.Threshold = 0.22, 22, 2.2
 	bloom.Parent = Lighting
 	local cc = Instance.new("ColorCorrectionEffect")
-	cc.Contrast, cc.Saturation, cc.Brightness = 0.1, 0.18, 0
+	cc.Contrast, cc.Saturation, cc.Brightness = 0.08, 0.06, 0
 	cc.TintColor = c(245, 240, 255)
 	cc.Parent = Lighting
 	local rays = Instance.new("SunRaysEffect")
-	rays.Intensity, rays.Spread = 0.06, 0.6
+	rays.Intensity, rays.Spread = 0.03, 0.5
 	rays.Parent = Lighting
 end
 

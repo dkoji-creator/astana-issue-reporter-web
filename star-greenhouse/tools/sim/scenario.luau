@@ -17,6 +17,7 @@ for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantM
 local srv = folder("Server", game:GetService("ServerScriptService"))
 local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")
+mod("ModuleScript", "WorldTerrain", srv, "server/WorldTerrain")
 mod("ModuleScript", "PlantLoader", srv, "server/PlantLoader")
 local sps = folder("StarterPlayerScripts", game:GetService("StarterPlayer"))
 local cl = folder("Client", sps)

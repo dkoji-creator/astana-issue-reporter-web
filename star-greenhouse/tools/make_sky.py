@@ -84,45 +84,45 @@ def smooth(a, b, x):
 
 
 def render(face, n):
+    """Небо без видимых швов при любой ориентации граней в Roblox:
+    общая подсветка зависит только от высоты над горизонтом, облака туманности живут внутри грани и гаснут к её краям."""
     d = face_dirs(face, n)
-    # искажение потоком, чтобы облака выглядели как газ, а не как шум
-    warp = np.stack([fbm(d * 1.7 + o, 5 + i, 4) for i, o in enumerate((0, 31.1, 77.7))], -1) - 0.5
-    q = d * 1.6 + warp * 1.4
-    a = fbm(q, 101, 6)
-    b = fbm(q * 1.3 + 40, 202, 6)
-    c = fbm(q * 0.8 - 25, 303, 5)
-    dust = fbm(d * 2.6 + warp * 2.0 + 9, 404, 6)
-
-    base = np.array([0.012, 0.014, 0.04])
-    magenta = np.array([0.80, 0.18, 0.55])
-    teal = np.array([0.10, 0.55, 0.78])
-    violet = np.array([0.34, 0.20, 0.82])
-    amber = np.array([1.00, 0.55, 0.20])
-
-    # широкая светлая полоса Млечного пути вдоль наклонной плоскости
-    band_n = np.array([0.25, 0.9, 0.35])
-    band_n /= np.linalg.norm(band_n)
-    h = d @ band_n
-    band = np.exp(-(h / 0.30) ** 2)
-
-    neb1 = smooth(0.42, 0.78, a) * (0.35 + 0.65 * band)
-    neb2 = smooth(0.45, 0.80, b) * (0.30 + 0.70 * band)
-    neb3 = smooth(0.55, 0.85, c)
+    elev = np.arcsin(np.clip(d[..., 1], -1, 1))
+    # координаты внутри грани
+    u = (np.arange(n) + 0.5) / n * 2 - 1
+    uu, vv = np.meshgrid(u, -u)
+    edge = np.minimum(1 - np.abs(uu), 1 - np.abs(vv))
+    fade = smooth(0.04, 0.42, edge)
+    seed = {"Ft": 1, "Bk": 2, "Lf": 3, "Rt": 4, "Up": 5, "Dn": 6}[face]
+    base = np.array([0.010, 0.012, 0.030])
     col = np.zeros(d.shape) + base
-    col += neb1[..., None] * (magenta * 0.55 + violet * 0.45) * 0.85
-    col += neb2[..., None] * (teal * 0.65 + violet * 0.35) * 0.80
-    col += (neb3 * smooth(0.5, 0.8, a))[..., None] * amber * 0.55
-    col += (band * smooth(0.35, 0.7, fbm(d * 5 + 3, 505, 5)))[..., None] * np.array([0.32, 0.30, 0.42]) * 0.55
-    # пыль съедает свет
-    dust_mask = smooth(0.50, 0.76, dust) * (0.45 + 0.55 * band)
-    col *= (1 - 0.8 * dust_mask)[..., None]
-
-    # звёзды: мелкие частые, средние, редкие яркие с ореолом
-    st = stars(d, 70, 0.22, 11, n) * 1.0 + stars(d, 36, 0.10, 23, n) * 1.4 + stars(d, 16, 0.06, 37, n) * 2.2
-    st *= (1 - 0.7 * dust_mask)[..., None] * (0.7 + 0.8 * band)[..., None]
-    col += st
-    # мягкая тоновая кривая
-    col = 1 - np.exp(-col * 1.35)
+    # общая полоса над горизонтом (одинакова на всех боковых гранях)
+    band = np.exp(-((elev - 0.12) / 0.32) ** 2)
+    glow = np.exp(-((elev + 0.05) / 0.5) ** 2)
+    col += band[..., None] * np.array([0.10, 0.07, 0.18]) * 0.9
+    col += glow[..., None] * np.array([0.03, 0.05, 0.09])
+    # облака туманности внутри грани
+    p2 = np.stack([uu * 1.6 + seed * 13.1, vv * 1.6 - seed * 7.3, np.full_like(uu, seed * 3.7)], -1)
+    warp = np.stack([fbm(p2 * 1.1 + o, 40 + seed + i, 4) for i, o in enumerate((0, 17.0, 33.0))], -1) - 0.5
+    q = p2 + warp * 1.5
+    a1 = fbm(q, 100 + seed, 6)
+    a2 = fbm(q * 1.4 + 9, 200 + seed, 6)
+    dust = fbm(q * 2.2 - 4, 300 + seed, 5)
+    pal = [(np.array([0.70, 0.20, 0.55]), np.array([0.12, 0.45, 0.70])),
+           (np.array([0.30, 0.22, 0.75]), np.array([0.85, 0.45, 0.25])),
+           (np.array([0.15, 0.50, 0.65]), np.array([0.60, 0.25, 0.70]))][seed % 3]
+    neb = smooth(0.45, 0.8, a1) * fade
+    neb2 = smooth(0.5, 0.82, a2) * fade
+    if face in ("Up", "Dn"):
+        neb *= 0.45
+        neb2 *= 0.45
+    col += neb[..., None] * pal[0] * 0.55
+    col += neb2[..., None] * pal[1] * 0.45
+    col *= (1 - 0.6 * smooth(0.52, 0.78, dust) * fade)[..., None]
+    # звёзды
+    st = stars(d, 70, 0.22, 11, n) * 0.9 + stars(d, 36, 0.10, 23, n) * 1.2 + stars(d, 16, 0.05, 37, n) * 1.8
+    col += st * (0.8 + 0.6 * band)[..., None]
+    col = 1 - np.exp(-col * 1.3)
     col = np.clip(col, 0, 1) ** (1 / 1.05)
     return Image.fromarray((col * 255).astype(np.uint8), "RGB")
 

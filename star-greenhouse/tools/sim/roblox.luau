@@ -619,6 +619,26 @@ cam.Name = "Camera"
 cam.Parent = workspace
 rawset(workspace.__p, "CurrentCamera", cam)
 rawset(workspace.__p, "Gravity", 196.2)
+-- рельеф: операции записываются, чтобы tools/sim/dump_world.luau мог их нарисовать
+SIM.terrain = {}
+local terr = newInstance("Terrain")
+terr.Name = "Terrain"
+terr.Parent = workspace
+function Inst.FillBall(self, c, r, m)
+	assert(getmetatable(c) == V3 and num(r), "FillBall(Vector3, radius, material)")
+	assert(r <= 812, "FillBall: радиус больше 812")
+	table.insert(SIM.terrain, { "ball", c, r, m })
+end
+function Inst.FillCylinder(self, cf, h, r, m)
+	assert(getmetatable(cf) == CF and num(h) and num(r), "FillCylinder(CFrame, height, radius, material)")
+	table.insert(SIM.terrain, { "cyl", cf, h, r, m })
+end
+function Inst.FillBlock(self, cf, size, m)
+	assert(getmetatable(cf) == CF and getmetatable(size) == V3, "FillBlock(CFrame, Vector3, material)")
+	table.insert(SIM.terrain, { "block", cf, size, m })
+end
+function Inst.SetMaterialColor(self, m, c) assert(getmetatable(c) == C3, "SetMaterialColor(material, Color3)") end
+function Inst.Clear(self) table.clear(SIM.terrain) end
 function Inst.GetServerTimeNow() return os.time() + (SIM.now % 1) end
 function Inst.Raycast() return nil end
 
