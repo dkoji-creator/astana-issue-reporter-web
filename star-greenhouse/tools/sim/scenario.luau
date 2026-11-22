@@ -103,6 +103,7 @@ local r = Random.new(1)
 local kg = G.rollWeight(G.Plants.moon_01, r, {})
 check(kg > 0, "вес")
 check(G.fmtOdds(1 / 1000000000) == "1 к 1 000 000 000", "fmtOdds " .. G.fmtOdds(1 / 1000000000))
+check(G.ShopPeriod == 180, "магазин: 3 минуты")
 check(G.fmtOdds(1e-60) == "1 к 1×10⁶⁰", "fmtOdds огромный: " .. G.fmtOdds(1e-60))
 check(G.fmtOdds(2e-13) == "1 к 5 трлн", "fmtOdds трлн: " .. G.fmtOdds(2e-13))
 check(not G.fmtOdds(1e-19):find("-"), "fmtOdds без переполнения")
@@ -594,6 +595,42 @@ do
 	check(inv("State").bait.n <= b0 - 1, "наживка")
 	inv("Admin", "resetcd")
 	check(inv("State").bait.n == G.Fishing.baitMax, "сброс наживки")
+end
+
+stage("мистический торговец и донаты")
+do
+	-- игрок сейчас на Луне (после полёта вернулся домой)
+	snap = inv("State")
+	local pi = snap.planet
+	check(inv("Admin", "mystic"), "админ: торговец")
+	frames(25, 0.1)
+	local stall = workspace.World["Planet" .. pi].Hub:FindFirstChild("MysticStall")
+	check(stall ~= nil, "лавка торговца не появилась")
+	local fu = RS:GetAttribute("MysticForce")
+	local open, _, epoch = G.mysticOpen(os.time(), fu)
+	check(open, "торговец должен быть открыт")
+	local stock = G.mysticStock(epoch, pi)
+	check(#stock >= 3, "у торговца мало товара: " .. #stock)
+	check(not inv("BuyMystic", stock[1].id), "покупка издалека")
+	check(inv("Admin", "tp", "mystic" .. pi), "тп к торговцу")
+	frames(3)
+	inv("Admin", "coinsB")
+	local id = stock[#stock].id
+	local n0 = (inv("State").seeds[id] or 0)
+	local bok3, berr3 = inv("BuyMystic", id)
+	check(bok3, "покупка у торговца: " .. tostring(berr3))
+	check((inv("State").seeds[id] or 0) == n0 + 1, "семя от торговца не выдано")
+	for _ = 1, 4 do inv("BuyMystic", id) end
+	check((inv("State").seeds[id] or 0) <= n0 + stock[#stock].limit, "лимит торговца не работает")
+	local mp
+	for _, d in stall:GetDescendants() do if d:IsA("ProximityPrompt") then mp = d end end
+	if mp then game:GetService("ProximityPromptService").PromptTriggered:Fire(mp, plr) end
+	frames(15, 0.2)
+	-- все донаты
+	check(inv("Admin", "alldonate"), "админ: все донаты")
+	snap = inv("State")
+	check(snap.perms.growth2x and snap.perms.auto, "донаты не выданы")
+	check((snap.cans.c5 or 0) >= 10, "лейки сверхновой не выданы")
 end
 
 stage("таблица лидеров")

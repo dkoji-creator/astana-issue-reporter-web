@@ -375,6 +375,66 @@ do
 	end
 end
 
+------------------------------------------------------------------ окно: мистический торговец
+do
+	local f, body = mkWindow("mystic", "Мистический торговец", "potion", T.purple, 0.92, 0.84)
+	local scroll, head, grid = sheetLayout(body, UDim2.fromOffset(236, 92))
+	UI.mysticTimer = K.text(head, "", { Size = UDim2.new(1, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 17, TextColor3 = T.purple })
+	function hooks.mystic()
+		local open, left, epoch = G.mysticOpen(nowS(), ReplicatedStorage:GetAttribute("MysticForce"))
+		local pi = ST.planet or 1
+		UI.mysticTimer.Text = open and ("Редкие травы планеты %s · уйдёт через %s"):format(G.Planets[pi].name, G.fmtTime(left)) or ("Торговец появится через " .. G.fmtTime(left))
+		clear(grid)
+		if not open then
+			label(grid, "Торговец приходит на площадь каждой планеты раз в 10 минут на 3 минуты", { Size = UDim2.new(1, 0, 0, 40), TextColor3 = T.sub, MaxText = 16 })
+			return
+		end
+		for i, it in G.mysticStock(epoch, pi) do
+			local p = G.Plants[it.id]
+			local bought = (ST.mystic or {})[epoch .. ":" .. it.id] or 0
+			local leftN = it.limit - bought
+			local card = K.panel(grid, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+			local rc = rarityColor(p.id)
+			K.stroke(card, rc, 1.2, false, 0.35)
+			local vpHolder = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.fromOffset(78, 78) }, card)
+			modelView(vpHolder, p.id, nil, false)
+			K.text(card, p.name, { Position = UDim2.fromOffset(88, 6), Size = UDim2.new(1, -94, 0, 18), MaxText = 15, TextColor3 = rc, TextXAlignment = Enum.TextXAlignment.Left })
+			K.text(card, G.Rarity[p.rarity].name .. "  ·  " .. G.fmtTime(p.grow), { Position = UDim2.fromOffset(88, 25), Size = UDim2.new(1, -94, 0, 14), MaxText = 12, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Left, Medium = true })
+			K.text(card, ("осталось %d"):format(math.max(0, leftN)), { Position = UDim2.fromOffset(88, 40), Size = UDim2.new(1, -94, 0, 13), MaxText = 11, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Left, Medium = true })
+			local btn = coinButton(card, it.price, leftN > 0 and ST.coins >= it.price, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -8, 1, -7), Size = UDim2.new(1, -96, 0, 28), MaxText = 15 })
+			btn.Activated:Connect(function()
+				local ok, res = remotes.BuyMystic:InvokeServer(it.id)
+				if ok then toast("Куплено: " .. p.name, "rare") playSfx("chest") else toast(res or "Не получилось", "bad") end
+			end)
+		end
+	end
+	-- появление торговца: уведомление со звуком и таймер над лавкой
+	local wasOpen
+	loop(1, function()
+		local open, left = G.mysticOpen(nowS(), ReplicatedStorage:GetAttribute("MysticForce"))
+		if wasOpen ~= nil and open and not wasOpen then
+			toast("На площади появился мистический торговец: редкие травы, 3 минуты!", "rare", 5)
+			playSfx("unlock")
+		end
+		wasOpen = open
+		if open then
+			for pi = 1, #G.Planets do
+				local pf = world:FindFirstChild("Planet" .. pi)
+				local stall = pf and pf:FindFirstChild("Hub") and pf.Hub:FindFirstChild("MysticStall")
+				if stall then
+					for _, d in stall:GetDescendants() do
+						if d:IsA("BillboardGui") and d:GetAttribute("Mystic") then
+							local sub = d:FindFirstChild("Sub")
+							if sub then sub.Text = "уйдёт через " .. G.fmtTime(left) end
+						end
+					end
+				end
+			end
+		end
+		if windows.mystic.Visible then hooks.mystic() end
+	end)
+end
+
 ------------------------------------------------------------------ окно: сумка и продажа
 do
 	local f, body = mkWindow("bag", "Сумка урожая", "jar", T.gold, 0.92, 0.84)
@@ -913,7 +973,9 @@ if plr.UserId == ADMIN_ID then
 	btn("Быстрый бег вкл/выкл", T.blue, cmd("speed"))
 	btn("Опыление сейчас", T.green, cmd("pollen", nil, "Пыльца скоро прилетит"))
 	btn("Витрина для ТикТока", T.gold, cmd("showcase", nil, "Огород заполнен гигантами"))
-	btn("Сброс перезарядок", T.cold, cmd("resetcd", nil, "Пушка и сундук готовы"))
+	btn("Все донаты: разблокировать", T.pink, cmd("alldonate", nil, "Все донаты выданы"))
+	btn("Мистический торговец сейчас", T.purple, cmd("mystic", nil, "Торговец появился на всех площадях"))
+	btn("Сброс перезарядок", T.cold, cmd("resetcd", nil, "Пушка, сундук и наживка готовы"))
 	btn("ТП: алхимия (Луна)", T.purple, cmd("tp", "alchemy"))
 	btn("ТП: пушка (Европа)", T.cold, cmd("tp", "cannon"))
 	btn("ТП: паркур (Туманность)", T.pink, cmd("tp", "spiral"))
@@ -1093,7 +1155,7 @@ end
 
 ------------------------------------------------------------------ окно: настройки (громкость, подсказки)
 do
-	local f, body = mkWindow("settings", "Настройки", "settings", T.green, 0.7, 0.86)
+	local f, body = mkWindow("settings", "Настройки", "settings", T.green, 0.7, 0.74)
 	listLayout(body, nil, 5)
 	local rows = {}
 	local function send()
@@ -1153,21 +1215,6 @@ do
 	end)
 	rows.t = showT
 	showT()
-	local dr = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 5, BackgroundColor3 = T.panel2 })
-	local dl = K.text(dr, "Проверка звука…", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -150, 1, 0), MaxText = 14, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, TextColor3 = T.sub })
-	local db = K.button(dr, "Проверить", T.cold, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(130, 38), MaxText = 17 })
-	db.Activated:Connect(function() FX.testSound() end)
-	local function showD()
-		local ok, total, mus = FX.audioStatus()
-		dl.Text = ("Звуки загружены: %d из %d · музыка: %s"):format(ok, total, mus and "есть" or "нет")
-	end
-	rows.d = showD
-	task.spawn(function()
-		while true do
-			task.wait(2)
-			if windows.settings and windows.settings.Visible then pcall(showD) end
-		end
-	end)
 	function hooks.settings()
 		for _, fn in rows do fn() end
 	end

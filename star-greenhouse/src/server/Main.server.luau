@@ -33,7 +33,7 @@ for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -146,7 +146,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {},
 	}
 end
 local function push(plr, ...)
@@ -934,6 +934,7 @@ local function pollenTick(t)
 	end
 end
 
+local grant -- покупки за Robux (объявлено ниже)
 RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if plr.UserId ~= ADMIN_ID then return false end
 	local d, s = D[plr], S[plr]
@@ -945,6 +946,12 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		addCoins(plr, 1000000000)
 	elseif cmd == "planets" then
 		d.earned = math.max(d.earned, G.PlanetUnlock[6])
+	elseif cmd == "alldonate" then
+		for _, key in G.ProductOrder do
+			if G.Products[key] and grant then grant(plr, key) end
+		end
+	elseif cmd == "mystic" then
+		ReplicatedStorage:SetAttribute("MysticForce", now() + G.Mystic.open)
 	elseif cmd == "resetcd" then
 		d.cd = { cannon = 0, chest = 0 }
 		d.bait = { n = G.Fishing.baitMax, t = now() }
@@ -1095,6 +1102,44 @@ RX.CannonEnd.OnServerInvoke = function(plr, hits)
 	return true, res
 end
 
+-- мистический торговец
+RX.BuyMystic.OnServerInvoke = function(plr, id)
+	local d, s = D[plr], S[plr]
+	if not d or type(id) ~= "string" then return false end
+	local open, _, epoch = G.mysticOpen(now(), ReplicatedStorage:GetAttribute("MysticForce"))
+	if not open then return false, "Торговец уже ушёл" end
+	local pi = d.planet or 1
+	if not nearSpot(plr, "mystic" .. pi, G.Mystic.radius) then return false, "Подойди к торговцу на площади" end
+	local item
+	for _, it in G.mysticStock(epoch, pi) do
+		if it.id == id then item = it end
+	end
+	if not item then return false, "Этого семени у торговца нет" end
+	s.mystic = s.mystic or {}
+	local key = epoch .. ":" .. id
+	if (s.mystic[key] or 0) >= item.limit then return false, "Лимит на этот визит исчерпан" end
+	if d.coins < item.price then return false, "Не хватает монет" end
+	d.coins -= item.price
+	s.mystic[key] = (s.mystic[key] or 0) + 1
+	d.seeds[id] = (d.seeds[id] or 0) + 1
+	push(plr, "coins", "seeds", "mystic")
+	return true
+end
+-- лавка торговца появляется и исчезает по расписанию
+task.spawn(function()
+	local was
+	while true do
+		local open = G.mysticOpen(now(), ReplicatedStorage:GetAttribute("MysticForce"))
+		if open ~= was then
+			was = open
+			for pi, stall in Map.mysticStalls do
+				stall.model.Parent = open and stall.parent or nil
+			end
+		end
+		task.wait(1)
+	end
+end)
+
 -- рыбалка: рыбу выбирает сервер при забросе, клиент только играет вываживание
 RX.FishCast.OnServerInvoke = function(plr)
 	local d, s = D[plr], S[plr]
@@ -1153,7 +1198,7 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr, p
 end)
 
 ------------------------------------------------------------------ покупки за Robux
-local function grant(plr, key)
+function grant(plr, key)
 	local d = D[plr]
 	local prod = G.Products[key]
 	if key == "small" or key == "big" then

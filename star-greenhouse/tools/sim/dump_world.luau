@@ -24,6 +24,7 @@ local p2 = Map.buildPlot(1, 2)
 for i = 1, 3 do Map.placeDecor(p1.id, G.DecorOrder[i]) end
 for _, id in G.DecorOrder do Map.placeDecor(p2.id, id) end
 Map.buildPlot(2, 1)
+for _, st in Map.mysticStalls do st.model.Parent = st.parent end
 local n = 0
 for _, p in workspace.World:GetDescendants() do
 	if p:IsA("BasePart") and p.Transparency < 0.97 then

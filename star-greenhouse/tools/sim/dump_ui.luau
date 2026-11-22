@@ -329,6 +329,30 @@ do
 	dumpState("fishing")
 	UIS.InputEnded:Fire(touch, false)
 end
+do
+	local fg = pg:FindFirstChild("Fishing")
+	if fg then
+		for _, b in fg:GetDescendants() do
+			if b:IsA("TextButton") and b:FindFirstChildOfClass("TextLabel") and b:FindFirstChildOfClass("TextLabel").Text == "Выйти" then b.Activated:Fire() end
+		end
+		local UIS = game:GetService("UserInputService")
+		UIS.InputBegan:Fire({ UserInputType = Enum.UserInputType.Touch, Position = Vector3.new(1, 1, 0) }, false)
+		frames(40, 0.1)
+	end
+	for _, g in pg:GetChildren() do if g.Name == "Reveal" then g:Destroy() end end
+	inv("Admin", "mystic")
+	frames(15, 0.1)
+	inv("Admin", "tp", "mystic1")
+	frames(3)
+	local st = workspace.World.Planet1.Hub:FindFirstChild("MysticStall")
+	if st then
+		for _, d in st:GetDescendants() do
+			if d:IsA("ProximityPrompt") then game:GetService("ProximityPromptService").PromptTriggered:Fire(d, plr) end
+		end
+	end
+	frames(10, 0.2)
+	dumpState("mystic")
+end
 -- превью табло лидеров (SurfaceGui переносится в ScreenGui для рендера)
 do
 	local board = workspace.World:FindFirstChild("LeaderBoard", true)

@@ -19,6 +19,7 @@ Map.planets = {}
 Map.plots = {}
 Map.boardLabels = {}
 Map.leaderBoards = {}
+Map.mysticStalls = {}
 
 local V3, CF, A = Vector3.new, CFrame.new, CFrame.Angles
 local PI, sin, cos = math.pi, math.sin, math.cos
@@ -501,6 +502,33 @@ local KIOSKS = {
 	{ id = "market", ang = 180, col = COL.mag, title = "РЫНОК", prompt = "Рынок и спрос" },
 	{ id = "upgrades", ang = 270, col = COL.cyan, title = "МАСТЕРСКАЯ", prompt = "Улучшения" },
 }
+local function emitter(parent, props)
+	local e = Instance.new("ParticleEmitter")
+	for k, v in props do e[k] = v end
+	e.Parent = parent
+	return e
+end
+local function anchorPart(parent, name, cf, size)
+	return part(parent, name, size or V3(1, 1, 1), cf, c(0, 0, 0), Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+end
+-- голографическая вывеска, видна издалека
+local function holoSign(parent, pos, text, color, sub)
+	local p = anchorPart(parent, "HoloSign", CF(pos), V3(1, 1, 1))
+	local bb = Instance.new("BillboardGui")
+	bb.Size, bb.AlwaysOnTop, bb.LightInfluence, bb.MaxDistance = UDim2.fromOffset(260, 70), false, 0, 420
+	bb.Parent = p
+	local t = Instance.new("TextLabel")
+	t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.new(1, 0, 0.62, 0), 1, true, Enum.Font.GothamBlack
+	t.Text, t.TextColor3, t.TextStrokeTransparency, t.TextStrokeColor3 = text, color, 0.4, c(10, 10, 30)
+	t.Parent = bb
+	local t2 = Instance.new("TextLabel")
+	t2.Name = "Sub"
+	t2.Position, t2.Size, t2.BackgroundTransparency, t2.TextScaled, t2.Font = UDim2.fromScale(0, 0.62), UDim2.fromScale(1, 0.38), 1, true, Enum.Font.GothamBold
+	t2.Text, t2.TextColor3, t2.TextStrokeTransparency = sub or "", c(235, 235, 255), 0.5
+	t2.Parent = bb
+	return p, t2
+end
+
 local function buildHub(pi, parent)
 	local ctr = WT.Centers[pi]
 	local name = Game.Planets[pi].name
@@ -620,6 +648,56 @@ local function buildHub(pi, parent)
 		local trig = part(f, "LeaderPrompt", V3(8, 4, 3), bcf * CF(0, 2, -2), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
 		local pr = prompt(trig, "Таблица лидеров", "", 12, "Open_leaders")
 		pr:SetAttribute("Window", "leaders")
+	end
+	-- мистический торговец: лавка собрана заранее, сервер показывает её по расписанию
+	do
+		local a = math.rad(135)
+		local pos = ctr + V3(cos(a) * 23, lift + 0.45, sin(a) * 23)
+		local scf = CFrame.lookAt(pos, V3(ctr.X, pos.Y, ctr.Z))
+		local m = Instance.new("Model")
+		m.Name = "MysticStall"
+		local violet, deep, gold = c(170, 100, 255), c(40, 20, 70), c(240, 200, 110)
+		cyl(m, "StallBase", scf * CF(0, 0.3, 0), 0.6, 11, c(36, 26, 56), Mat.Slate)
+		dcyl(m, "StallRune", scf * CF(0, 0.62, 0), 0.04, 10.4, violet, Mat.Neon, { Transparency = 0.4 })
+		for _, sx in { -4, 4 } do
+			for _, sz in { -2.5, 2.5 } do
+				cyl(m, "StallPole", scf * CF(sx, 3.6, sz), 6.4, 0.4, gold, Mat.Metal)
+			end
+		end
+		part(m, "StallRoof", V3(9.6, 0.4, 6.6), scf * CF(0, 6.9, 0), deep, Mat.Fabric)
+		part(m, "StallRoofTop", V3(7, 1.2, 4.6), scf * CF(0, 7.6, 0), c(70, 36, 120), Mat.Fabric)
+		ball(m, "StallRoofGem", (scf * CF(0, 8.6, 0)).Position, 0.9, violet, Mat.Neon)
+		for q = -1, 1 do
+			deco(m, "StallFringe", V3(3, 0.6, 0.1), scf * CF(q * 3.1, 6.4, -3.3), q == 0 and violet or deep, Mat.Fabric)
+		end
+		part(m, "StallCounter", V3(7, 2.2, 1.6), scf * CF(0, 1.7, -1.6), c(60, 36, 30), Mat.Wood)
+		deco(m, "StallCloth", V3(7.2, 0.15, 1.8), scf * CF(0, 2.85, -1.6), violet:Lerp(deep, 0.3), Mat.Fabric)
+		-- хрустальный шар и флаконы на прилавке
+		cyl(m, "OrbStand", scf * CF(0, 3.15, -1.6), 0.5, 0.9, gold, Mat.Metal)
+		local orb = ball(m, "CrystalOrb", (scf * CF(0, 3.9, -1.6)).Position, 1.3, c(200, 160, 255), Mat.Glass, { Transparency = 0.25 })
+		ball(m, "OrbCore", (scf * CF(0, 3.9, -1.6)).Position, 0.55, violet, Mat.Neon)
+		light(orb, violet, 18, 1.4)
+		for q, col in { c(120, 255, 190), c(255, 140, 200), c(120, 200, 255) } do
+			ball(m, "Potion", (scf * CF(-3 + q * 0.7, 3.25, -1.4)).Position, 0.5, col, Mat.Neon, { Transparency = 0.1 })
+		end
+		-- торговец в капюшоне
+		ell(m, "MerchantRobe", scf * CF(0, 2.6, 0.6), V3(2.4, 4.6, 2), c(46, 26, 80), Mat.Fabric, { CanCollide = false })
+		ell(m, "MerchantHood", scf * CF(0, 5.1, 0.6), V3(1.8, 1.9, 1.8), c(56, 30, 96), Mat.Fabric, { CanCollide = false })
+		for _, ex in { -0.32, 0.32 } do
+			ball(m, "MerchantEye", (scf * CF(ex, 5.05, -0.25)).Position, 0.22, c(255, 220, 120), Mat.Neon)
+		end
+		-- портал за спиной
+		ring(m, "Portal", (scf * CF(0, 4.2, 3.2)).Position, 3, 0, 0.5, 0.5, violet, Mat.Neon, 20, nil, { Transparency = 0.15 })
+		local pa = anchorPart(m, "PortalFx", scf * CF(0, 4.2, 3.2), V3(4, 4, 0.5))
+		emitter(pa, { Color = ColorSequence.new(violet, c(120, 220, 255)), Size = NumberSequence.new(0.4, 0), LightEmission = 1, Lifetime = NumberRange.new(1.5, 3), Rate = 22,
+			Speed = NumberRange.new(0.5, 2), SpreadAngle = Vector2.new(180, 180) })
+		local trig = part(m, "MysticPrompt", V3(6, 4, 3), scf * CF(0, 2, -3.2), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
+		local pr = prompt(trig, "Редкие травы", "Мистический торговец", 12, "Open_mystic")
+		pr:SetAttribute("Window", "mystic")
+		local _, sub = holoSign(m, pos + V3(0, 12, 0), "МИСТИЧЕСКИЙ ТОРГОВЕЦ", c(200, 150, 255), "редкие травы этой планеты")
+		sub.Parent:SetAttribute("Mystic", true)
+		Map.spots["mystic" .. pi] = (scf * CF(0, 2, -3.2)).Position
+		Map.mysticStalls[pi] = { model = m, parent = f }
 	end
 	-- дорожки к огородам
 	for j = 1, Map.SlotsPerPlanet do
@@ -744,15 +822,6 @@ end
 Map.planetAt = WT.planetAt
 
 ------------------------------------------------------------------ чудо каждой планеты: чем дальше планета, тем зрелищнее
-local function emitter(parent, props)
-	local e = Instance.new("ParticleEmitter")
-	for k, v in props do e[k] = v end
-	e.Parent = parent
-	return e
-end
-local function anchorPart(parent, name, cf, size)
-	return part(parent, name, size or V3(1, 1, 1), cf, c(0, 0, 0), Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
-end
 local function spot(pi, deg, r)
 	local ctr = WT.Centers[pi]
 	local a = math.rad(deg)
@@ -989,24 +1058,6 @@ local function featureSpot(pi, deg, r)
 	local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
 	return V3(x, Map.surfaceY(x, z, pi), z), V3(cos(a), 0, sin(a))
 end
--- голографическая вывеска, видна издалека
-local function holoSign(parent, pos, text, color, sub)
-	local p = anchorPart(parent, "HoloSign", CF(pos), V3(1, 1, 1))
-	local bb = Instance.new("BillboardGui")
-	bb.Size, bb.AlwaysOnTop, bb.LightInfluence, bb.MaxDistance = UDim2.fromOffset(260, 70), false, 0, 420
-	bb.Parent = p
-	local t = Instance.new("TextLabel")
-	t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.new(1, 0, 0.62, 0), 1, true, Enum.Font.GothamBlack
-	t.Text, t.TextColor3, t.TextStrokeTransparency, t.TextStrokeColor3 = text, color, 0.4, c(10, 10, 30)
-	t.Parent = bb
-	local t2 = Instance.new("TextLabel")
-	t2.Name = "Sub"
-	t2.Position, t2.Size, t2.BackgroundTransparency, t2.TextScaled, t2.Font = UDim2.fromScale(0, 0.62), UDim2.fromScale(1, 0.38), 1, true, Enum.Font.GothamBold
-	t2.Text, t2.TextColor3, t2.TextStrokeTransparency = sub or "", c(235, 235, 255), 0.5
-	t2.Parent = bb
-	return p, t2
-end
-
 -- Луна: алхимическая лаборатория под стеклянным куполом с котлом
 FEATURE[1] = function(pi, f)
 	local base, out = featureSpot(pi, 0, 128)

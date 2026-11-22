@@ -156,7 +156,7 @@ function G.fruitValue(plantId: string, muts: { string }, kg: number, market: num
 end
 
 ------------------------------------------------------------------ магазин семян: новый ассортимент каждые 5 минут
-G.ShopPeriod = 300
+G.ShopPeriod = 180
 function G.shopEpoch(t: number): number return math.floor(t / G.ShopPeriod) end
 function G.shopTimeLeft(t: number): number return G.ShopPeriod - t % G.ShopPeriod end
 local PLANET_CHANCE = { 1, 0.9, 0.8, 0.7, 0.6, 0.5 }
@@ -351,6 +351,44 @@ function G.baitNow(b, t: number)
 		t0 = n >= G.Fishing.baitMax and t or t0 + add * G.Fishing.baitEvery
 	end
 	return n, t0
+end
+
+-- мистический торговец: раз в 10 минут на 3 минуты появляется на площади каждой планеты,
+-- продаёт редкие, эпические, легендарные и мифические семена именно этой планеты
+G.Mystic = { period = 600, open = 180, items = 6, priceMult = 3, radius = 30 }
+G.MysticLimit = { rare = 3, epic = 2, legendary = 1, mythic = 1 }
+function G.mysticOpen(t: number, forceUntil: number?)
+	if forceUntil and t < forceUntil then return true, forceUntil - t, -math.floor(forceUntil) end
+	local ph = t % G.Mystic.period
+	local epoch = math.floor(t / G.Mystic.period)
+	if ph < G.Mystic.open then return true, G.Mystic.open - ph, epoch end
+	return false, G.Mystic.period - ph, epoch
+end
+function G.mysticStock(epoch: number, pi: number)
+	local rng = Random.new((epoch * 7919 + pi * 104729) % 2147483647)
+	local planetId = G.Planets[math.clamp(pi, 1, #G.Planets)].id
+	local W = { rare = 45, epic = 30, legendary = 18, mythic = 7 }
+	local pool, out, used = {}, {}, {}
+	for _, p in G.PlantList do
+		if p.planet == planetId and W[p.rarity] then table.insert(pool, p) end
+	end
+	for _ = 1, math.min(G.Mystic.items, #pool) do
+		local total = 0
+		for _, p in pool do if not used[p.id] then total += W[p.rarity] end end
+		local r = rng:NextNumber() * total
+		for _, p in pool do
+			if not used[p.id] then
+				r -= W[p.rarity]
+				if r <= 0 then
+					used[p.id] = true
+					table.insert(out, { id = p.id, limit = G.MysticLimit[p.rarity], price = math.floor(p.seed * G.Mystic.priceMult) })
+					break
+				end
+			end
+		end
+	end
+	table.sort(out, function(a, b) return G.Rarity[G.Plants[a.id].rarity].rank > G.Rarity[G.Plants[b.id].rarity].rank end)
+	return out
 end
 
 -- Туманность: сундук на вершине спутниковой спирали
