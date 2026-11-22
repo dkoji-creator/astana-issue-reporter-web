@@ -619,7 +619,7 @@ do
 	local n0 = (inv("State").seeds[id] or 0)
 	local bok3, berr3 = inv("BuyMystic", id)
 	check(bok3, "покупка у торговца: " .. tostring(berr3))
-	check((inv("State").seeds[id] or 0) == n0 + 1, "семя от торговца не выдано")
+	local n1 = (inv("State").seeds[id] or 0) check(n1 == n0 + 1, ("семя от торговца не выдано: %s %d -> %d"):format(id, n0, n1))
 	for _ = 1, 4 do inv("BuyMystic", id) end
 	check((inv("State").seeds[id] or 0) <= n0 + stock[#stock].limit, "лимит торговца не работает")
 	local mp
