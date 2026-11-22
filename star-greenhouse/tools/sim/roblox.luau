@@ -536,7 +536,7 @@ function Inst.GetFullName(self) return self.__p.Name end
 function Inst.GetPivot(self)
 	if self.__p.ClassName == "Model" then
 		local pp = self.__p.PrimaryPart
-		return pp and pp.CFrame or CFrame.new()
+		return pp and pp.CFrame or self.__p.WorldPivot or CFrame.new()
 	end
 	return self.__p.CFrame
 end

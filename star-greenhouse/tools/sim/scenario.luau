@@ -551,6 +551,41 @@ do
 	frames(20, 0.2)
 end
 
+stage("гонка на Марсе")
+do
+	local PPS = game:GetService("ProximityPromptService")
+	check(not inv("RaceStart"), "гонка издалека")
+	check(inv("Admin", "tp", "raceStart"), "тп к старту гонки")
+	frames(3)
+	-- сервер: слишком быстрый финиш не засчитывается
+	local ok, info = inv("RaceStart")
+	check(ok, "старт гонки")
+	if ok then check(not inv("RaceFinish", info.token, #G.Race.gates), "мгновенный финиш засчитан") end
+	-- клиент: проходим ворота по очереди
+	local rp
+	for _, d in workspace.World:GetDescendants() do
+		if d:IsA("ProximityPrompt") and d:GetAttribute("Game") == "race" then rp = d end
+	end
+	check(rp ~= nil, "нет подсказки гонки")
+	if rp then PPS.PromptTriggered:Fire(rp, plr) end
+	frames(5, 0.1)
+	check(pg:FindFirstChild("RaceGui") ~= nil, "гонка не началась")
+	frames(36, 0.1) -- отсчёт
+	local track = workspace.World:FindFirstChild("RaceTrack", true)
+	local root = plr.Character.HumanoidRootPart
+	for i = 1, #G.Race.gates do
+		local g = track:FindFirstChild("RaceGate" .. i)
+		frames(24, 0.1)
+		root.CFrame = CFrame.new(g:GetPivot().Position + Vector3.new(0, 3, 0))
+		frames(3, 0.1)
+	end
+	frames(40, 0.1)
+	snap = inv("State")
+	check(snap.race and snap.race.best > 0, "время гонки не записано: " .. tostring(snap.race and snap.race.best))
+	check(snap.race.runs >= 1, "забег не засчитан")
+	check((snap.cd.race or 0) > os.time(), "перезарядка награды гонки")
+end
+
 stage("рыбалка на Ио")
 do
 	local PPS = game:GetService("ProximityPromptService")

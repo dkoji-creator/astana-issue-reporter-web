@@ -273,7 +273,7 @@ local function pickSeed(rank, planets, rng)
 end
 G.pickSeed = pickSeed
 
-G.PlanetFeature = { "Алхимия", "", "Метеорная пушка", "Рыбалка в лаве", "Паркур к сундуку", "Телескоп и прыжок в бездну" }
+G.PlanetFeature = { "Алхимия", "Гонка в пыльной буре", "Метеорная пушка", "Рыбалка в лаве", "Паркур к сундуку", "Телескоп и прыжок в бездну" }
 -- Луна: алхимия. Три плода в котёл, на выходе семя (часто реже исходных) и иногда эликсир удачи
 G.Alchemy = { radius = 40, slots = 3 }
 G.Elixir = { luck = 25, uses = 3 }
@@ -312,6 +312,30 @@ function G.cannonReward(hits: number, planets: number, rng)
 	else rank = hits >= 3 and 2 or 1 end
 	local id = pickSeed(rank, planets, rng)
 	return { id = id, qty = hits >= 25 and 2 or 1, coins = hits * G.starReward(planets, false) * 2 }
+end
+
+-- Марс: гонка в пыльной буре. Ворота по порядку (угол от площади, расстояние), финиш у старта
+G.Race = {
+	gates = { { 45, 62 }, { 45, 154 }, { 90, 154 }, { 90, 62 }, { 135, 62 }, { 135, 154 }, { 180, 154 }, { 180, 62 }, { 225, 62 }, { 270, 62 }, { 270, 154 }, { 315, 154 }, { 315, 62 }, { 0, 60 } },
+	start = { 0, 60 }, gold = 55, silver = 68, bronze = 85, limit = 150, minTime = 30, cooldown = 90, radius = 25, gateRadius = 9,
+	boost = 30, boostTime = 2.5,
+}
+G.Medals = {
+	{ id = "gold", name = "Золото", color = rgb(255, 205, 70) },
+	{ id = "silver", name = "Серебро", color = rgb(210, 220, 235) },
+	{ id = "bronze", name = "Бронза", color = rgb(225, 150, 95) },
+	{ id = "finish", name = "Финиш", color = rgb(170, 180, 210) },
+}
+function G.raceMedal(sec: number): number
+	if sec <= G.Race.gold then return 1 end
+	if sec <= G.Race.silver then return 2 end
+	if sec <= G.Race.bronze then return 3 end
+	return 4
+end
+function G.raceReward(medal: number, planets: number, rng)
+	local coins = G.starReward(planets, false) * ({ 60, 35, 20, 8 })[medal]
+	local rank = ({ rng:NextNumber() < 0.3 and 5 or 4, rng:NextNumber() < 0.3 and 4 or 3, 3, 2 })[medal]
+	return { coins = coins, id = pickSeed(rank, planets, rng), qty = medal == 1 and 2 or 1, elixir = medal == 1 and rng:NextNumber() < 0.35 }
 end
 
 -- Ио: рыбалка в лавовом озере. Наживка копится сама (1 штука в 45 с, максимум 10)

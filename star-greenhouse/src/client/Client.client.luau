@@ -408,6 +408,18 @@ do
 			end)
 		end
 	end
+	loop(2, function()
+		local track = world:FindFirstChild("Planet2") and world.Planet2:FindFirstChild("Landmark")
+		local start = track and track:FindFirstChild("RaceTrack")
+		if not start then return end
+		for _, d in start:GetDescendants() do
+			if d:IsA("BillboardGui") and d:GetAttribute("RaceBest") then
+				local sub = d:FindFirstChild("Sub")
+				local best = ST.race and ST.race.best or 0
+				if sub then sub.Text = best > 0 and ("твой рекорд %.1f с · золото до %d с"):format(best, G.Race.gold) or ("13 ворот, успей за %d с на золото"):format(G.Race.gold) end
+			end
+		end
+	end)
 	-- появление торговца: уведомление со звуком и таймер над лавкой
 	local wasOpen
 	loop(1, function()
@@ -817,6 +829,7 @@ do
 		{ key = "rich", text = "Богачи", color = T.gold },
 		{ key = "heavy", text = "Тяжесть", color = T.green },
 		{ key = "rare", text = "Редкость", color = T.purple },
+		{ key = "race", text = "Гонка", color = T.orange },
 		{ key = "server", text = "Сервер", color = T.cold },
 	}
 	local scroll = K.scroll(body, { Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40) })
@@ -830,11 +843,13 @@ do
 		rich = "Больше всех заработали за всё время",
 		heavy = "Самые тяжёлые плоды этой недели",
 		rare = "Самые редкие мутации в урожае",
+		race = "Самые быстрые на Марсе (пыльная гонка)",
 		server = "Игроки на этом сервере",
 	}
 	local function value(e)
 		if mode == "rich" or mode == "server" then return G.fmt(e.v) .. " монет" end
 		if mode == "heavy" then return ("%.2f кг"):format(e.v) end
+		if mode == "race" then return ("%.1f с"):format(e.v) end
 		return G.fmtOdds(e.v)
 	end
 	function hooks.leaders()
@@ -982,6 +997,7 @@ if plr.UserId == ADMIN_ID then
 	btn("ТП: сундук на орбите", T.gold, cmd("tp", "chest"))
 	btn("ТП: телескоп (Ядро)", T.orange, cmd("tp", "telescope"))
 	btn("ТП: рыбалка (Ио)", T.red, cmd("tp", "fishing"))
+	btn("ТП: гонка (Марс)", T.orange, cmd("tp", "raceStart"))
 	local mi = 1
 	local mb
 	mb = btn("Мутация: " .. G.Mut[G.MutOrder[1]].name, T.purple, function()
@@ -1603,6 +1619,7 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr)
 	if gm == "cannon" and FX.cannon then task.spawn(FX.cannon) end
 	if gm == "telescope" and FX.telescope then task.spawn(FX.telescope) end
 	if gm == "fishing" and FX.fishing then task.spawn(FX.fishing) end
+	if gm == "race" and FX.race then task.spawn(FX.race) end
 end)
 
 ------------------------------------------------------------------ сбор: частицы и тост
@@ -2419,6 +2436,143 @@ function FX.cannon()
 	FX.busy = false
 	local ok2, err = remotes.CannonEnd:InvokeServer(hits)
 	if not ok2 then toast(err or "Раунд не засчитан", "bad") end
+end
+
+-- Марс: гонка в пыльной буре. 13 ворот по порядку, ускорители, луч к следующим воротам, время считает сервер
+function FX.race()
+	if FX.busy then return end
+	local track = world:FindFirstChild("RaceTrack", true)
+	if not track then return end
+	local ok, info = remotes.RaceStart:InvokeServer()
+	if not ok then toast(info or "Гонка недоступна", "bad") return end
+	FX.busy = true
+	local ch = plr.Character
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+	local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+	if not root or not hum then FX.busy = false return end
+	local gates = {}
+	for i = 1, #G.Race.gates do
+		local g = track:FindFirstChild("RaceGate" .. i)
+		if g then gates[i] = g end
+	end
+	local function gatePos(g) return g:GetPivot().Position end
+	local pads = {}
+	for _, d in track:GetChildren() do if d:IsA("BasePart") and d:GetAttribute("Boost") then table.insert(pads, d) end end
+	local gui = make("ScreenGui", { Name = "RaceGui", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 40 }, pg)
+	local timeL = K.text(gui, "0.0", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 92), Size = UDim2.fromOffset(240, 44), MaxText = 38 })
+	local gateL = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 136), Size = UDim2.fromOffset(320, 24), MaxText = 18, TextColor3 = T.orange })
+	local big = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(420, 110), MaxText = 90, TextColor3 = T.gold })
+	local quit = K.button(gui, "Сдаться", T.panel2, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 92), Size = UDim2.fromOffset(110, 38), MaxText = 16 })
+	local running = true
+	quit.Activated:Connect(function() running = false end)
+	-- буря: рыжий оттенок, пыль вокруг игрока
+	local storm = make("ColorCorrectionEffect", { Name = "StormCC", TintColor = Color3.new(1, 1, 1), Saturation = 0, Contrast = 0 }, Lighting)
+	TweenService:Create(storm, TweenInfo.new(1.5), { TintColor = Color3.fromRGB(255, 205, 165), Saturation = -0.1, Contrast = 0.05 }):Play()
+	local dustA = make("Attachment", { Name = "StormDust", Position = Vector3.new(0, 4, 0) }, root)
+	local dust = make("ParticleEmitter", { Color = ColorSequence.new(Color3.fromRGB(214, 140, 96)), LightInfluence = 1, Rate = 70, Lifetime = NumberRange.new(1, 1.8),
+		Speed = NumberRange.new(30, 46), SpreadAngle = Vector2.new(25, 25), EmissionDirection = Enum.NormalId.Right,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 6) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 1) }), Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-90, 90) }, dustA)
+	-- луч к следующим воротам
+	local a0 = make("Attachment", { Name = "RaceBeam0", Position = Vector3.new(0, 1, 0) }, root)
+	local tgtPart = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2) }, fxFolder)
+	local a1 = make("Attachment", {}, tgtPart)
+	local beam = make("Beam", { Attachment0 = a0, Attachment1 = a1, Color = ColorSequence.new(Color3.fromRGB(255, 190, 90)), LightEmission = 1, Width0 = 0.5, Width1 = 1.4,
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0.2) }), FaceCamera = true, Segments = 1 }, a0)
+	local function highlight(i)
+		for j, g in gates do
+			for _, d in g:GetDescendants() do
+				if d:IsA("BasePart") and (d.Name == "GateGlow" or d.Name == "GateTop") then
+					d.Color = j == i and Color3.fromRGB(120, 255, 170) or Color3.fromRGB(255, 140, 60)
+					d.LocalTransparencyModifier = (j == i) and 0 or 0.5
+				end
+			end
+		end
+		if gates[i] then tgtPart.CFrame = CFrame.new(gatePos(gates[i]) + Vector3.new(0, 4, 0)) end
+	end
+	-- отсчёт
+	local ws0 = hum.WalkSpeed
+	hum.WalkSpeed = 0
+	for n = info.countdown, 1, -1 do
+		big.Text = tostring(n)
+		K.pop(big)
+		playSfx("beep")
+		task.wait(1)
+	end
+	big.Text = "ВПЕРЁД!"
+	K.pop(big)
+	playSfx("go")
+	playSfx("whoosh", 0.8)
+	hum.WalkSpeed = ws0
+	task.delay(0.8, function() if big.Parent then big.Text = "" end end)
+	local nextGate, t0 = 1, os.clock()
+	local boostUntil, lastPad = 0, nil
+	highlight(1)
+	local finished = false
+	while running do
+		task.wait()
+		local t = os.clock() - t0
+		if t > G.Race.limit then break end
+		timeL.Text = ("%.1f"):format(t)
+		timeL.TextColor3 = t <= G.Race.gold and T.gold or (t <= G.Race.silver and Color3.fromRGB(210, 220, 235) or (t <= G.Race.bronze and Color3.fromRGB(225, 150, 95) or T.text))
+		gateL.Text = nextGate <= #gates and (nextGate == #gates and "Финиш у арки!" or ("Ворота %d из %d"):format(nextGate, #gates - 1)) or ""
+		local g = gates[nextGate]
+		if g then
+			local gp = gatePos(g)
+			local d = root.Position - gp
+			if Vector3.new(d.X, 0, d.Z).Magnitude < G.Race.gateRadius and math.abs(d.Y) < 14 then
+				nextGate += 1
+				playSfx("tap", 0.9 + nextGate * 0.04)
+				FX.burst(gp + Vector3.new(0, 4, 0), Color3.fromRGB(120, 255, 170), 30)
+				if nextGate > #gates then finished = true break end
+				highlight(nextGate)
+			end
+		end
+		-- ускорители
+		local now = os.clock()
+		for _, pad in pads do
+			local lp = pad.CFrame:PointToObjectSpace(root.Position)
+			if math.abs(lp.X) < pad.Size.X / 2 + 0.5 and math.abs(lp.Z) < pad.Size.Z / 2 + 0.5 and lp.Y > -1 and lp.Y < 6 and (pad ~= lastPad or now > boostUntil) then
+				lastPad = pad
+				boostUntil = now + G.Race.boostTime
+				hum.WalkSpeed = math.max(ws0, G.Race.boost)
+				playSfx("whoosh", 1.2)
+				FX.floatText(root.Position + Vector3.new(0, 4, 0), "УСКОРЕНИЕ!", T.orange, 20)
+			end
+		end
+		if now > boostUntil and hum.WalkSpeed ~= ws0 then hum.WalkSpeed = ws0 end
+	end
+	hum.WalkSpeed = ws0
+	local elapsed = os.clock() - t0
+	beam:Destroy()
+	a0:Destroy()
+	tgtPart:Destroy()
+	dust.Enabled = false
+	task.delay(2, function() dustA:Destroy() end)
+	TweenService:Create(storm, TweenInfo.new(1.5), { TintColor = Color3.new(1, 1, 1), Saturation = 0, Contrast = 0 }):Play()
+	task.delay(1.6, function() storm:Destroy() end)
+	for _, gg in gates do
+		for _, d in gg:GetDescendants() do
+			if d:IsA("BasePart") then d.LocalTransparencyModifier = 0 if d.Name == "GateGlow" or d.Name == "GateTop" then d.Color = Color3.fromRGB(255, 140, 60) end end
+		end
+	end
+	local okR, res = remotes.RaceFinish:InvokeServer(info.token, finished and #gates or -1)
+	if finished and okR and res then
+		local m = G.Medals[res.medal]
+		big.Text = ("%.1f с"):format(res.time)
+		big.TextColor3 = m.color
+		K.pop(big)
+		gateL.Text = m.name .. (res.newBest and " · новый рекорд!" or (" · рекорд %.1f с"):format(res.best))
+		if res.cooldown then toast(("Награда снова через %d с, время засчитано"):format(math.ceil(res.cooldown)), "info", 4) end
+		playSfx(res.medal == 1 and "legendary" or "unlock")
+	elseif finished then
+		toast(res or "Время не засчитано", "bad")
+	else
+		toast(elapsed > G.Race.limit and "Время вышло" or "Гонка прервана", "bad")
+	end
+	task.wait(finished and 3 or 0.5)
+	gui:Destroy()
+	FX.busy = false
 end
 
 -- Ио: рыбалка в лаве. Заброс, поклёвка (успей тапнуть), вываживание: держи палец, чтобы зелёная зона шла вверх

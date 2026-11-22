@@ -33,7 +33,7 @@ for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic", "RaceStart", "RaceFinish" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -58,7 +58,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1 }, bait = { n = 10, t = 0 },
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1 }, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 },
 	}
 end
 
@@ -146,7 +146,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {},
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {}, race = d.race,
 	}
 end
 local function push(plr, ...)
@@ -676,7 +676,7 @@ end
 
 ------------------------------------------------------------------ таблица лидеров
 -- в упорядоченных хранилищах только целые числа: богатство и редкость храним логарифмом
-local LB = { rich = {}, heavy = {}, rare = {}, at = 0 }
+local LB = { rich = {}, heavy = {}, rare = {}, race = {}, at = 0 }
 local nameCache = {}
 local function nameOf(uid)
 	if nameCache[uid] then return nameCache[uid] end
@@ -697,10 +697,10 @@ local function lbWrite(plr)
 		end
 	end)
 end
-local function lbTop(store, decode)
+local function lbTop(store, decode, ascending)
 	local out = {}
 	pcall(function()
-		local page = store:GetSortedAsync(false, 10):GetCurrentPage()
+		local page = store:GetSortedAsync(ascending == true, 10):GetCurrentPage()
 		for _, e in page do
 			local uid = tonumber(e.key)
 			table.insert(out, { id = uid, name = nameOf(uid), v = decode(e.value) })
@@ -719,6 +719,7 @@ local function lbRefresh()
 	LB.rich = lbTop(DataStoreService:GetOrderedDataStore("SG_Rich"), function(v) return 10 ^ (v / 1e6) end)
 	LB.rare = lbTop(DataStoreService:GetOrderedDataStore("SG_Rare"), function(v) return 10 ^ (-v / 1e6) end)
 	LB.heavy = lbTop(DataStoreService:GetOrderedDataStore("StarGreenhouse_Heavy_" .. weekKey()), function(v) return v / 100 end)
+	LB.race = lbTop(DataStoreService:GetOrderedDataStore("SG_MarsRace"), function(v) return v / 1000 end, true)
 	LB.at = now()
 	for _, b in Map.leaderBoards do
 		lbFill(b.rich, LB.rich, G.fmt)
@@ -735,7 +736,7 @@ local function serverList()
 	return out
 end
 RX.Top.OnServerInvoke = function(plr)
-	return { rich = LB.rich, heavy = LB.heavy, rare = LB.rare, server = serverList() }
+	return { rich = LB.rich, heavy = LB.heavy, rare = LB.rare, race = LB.race, server = serverList() }
 end
 -- строка в списке игроков Roblox
 local function updateLeaderstats(plr)
@@ -953,7 +954,7 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	elseif cmd == "mystic" then
 		ReplicatedStorage:SetAttribute("MysticForce", now() + G.Mystic.open)
 	elseif cmd == "resetcd" then
-		d.cd = { cannon = 0, chest = 0 }
+		d.cd = { cannon = 0, chest = 0, race = 0 }
 		d.bait = { n = G.Fishing.baitMax, t = now() }
 		push(plr, "cd", "bait")
 	elseif cmd == "tp" then
@@ -1139,6 +1140,53 @@ task.spawn(function()
 		task.wait(1)
 	end
 end)
+
+-- гонка на Марсе: время считает сервер, клиент сообщает пройденные ворота
+RX.RaceStart.OnServerInvoke = function(plr)
+	local d, s = D[plr], S[plr]
+	if not d then return false end
+	if not nearSpot(plr, "raceStart", G.Race.radius) then return false, "Подойди к старту гонки на Марсе" end
+	s.race = { t0 = os.clock() + 3, token = math.random(1, 1e9) }
+	return true, { token = s.race.token, countdown = 3 }
+end
+RX.RaceFinish.OnServerInvoke = function(plr, token, passed)
+	local d, s = D[plr], S[plr]
+	local r = s and s.race
+	if not d or not r or r.token ~= token then return false end
+	s.race = nil
+	if passed ~= #G.Race.gates then return false, "Гонка прервана" end
+	local el = os.clock() - r.t0
+	if el < G.Race.minTime or el > G.Race.limit + 5 then return false, "Время не засчитано" end
+	if not nearSpot(plr, "raceStart", G.Race.radius + 10) then return false, "Финиш у стартовой арки" end
+	el = math.floor(el * 10 + 0.5) / 10
+	local medal = G.raceMedal(el)
+	d.race.runs += 1
+	local newBest = d.race.best == 0 or el < d.race.best
+	if newBest then
+		d.race.best = el
+		if s.canSave then
+			task.spawn(function()
+				pcall(function() DataStoreService:GetOrderedDataStore("SG_MarsRace"):SetAsync(tostring(plr.UserId), math.floor(el * 1000)) end)
+			end)
+		end
+	end
+	local out = { time = el, medal = medal, best = d.race.best, newBest = newBest }
+	if now() >= (d.cd.race or 0) then
+		d.cd.race = now() + G.Race.cooldown
+		local res = G.raceReward(medal, math.max(1, unlockedPlanets(d)), Random.new())
+		addCoins(plr, res.coins)
+		d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty
+		if res.elixir then giveElixir(d) end
+		out.reward = res
+		local m = G.Medals[medal]
+		rewardReveal(plr, ("%s: %.1f с!"):format(string.upper(m.name), el), res.id,
+			("+%s монет · семян: %d%s%s"):format(G.fmt(res.coins), res.qty, res.elixir and " · эликсир удачи" or "", newBest and " · НОВЫЙ РЕКОРД" or ""), m.color, "unlock")
+	else
+		out.cooldown = d.cd.race - now()
+	end
+	push(plr, "race", "cd", "seeds", "potion")
+	return true, out
+end
 
 -- рыбалка: рыбу выбирает сервер при забросе, клиент только играет вываживание
 RX.FishCast.OnServerInvoke = function(plr)

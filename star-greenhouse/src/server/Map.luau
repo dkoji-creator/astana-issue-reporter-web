@@ -1125,6 +1125,88 @@ FEATURE[1] = function(pi, f)
 	Map.spots.alchemy = pot.Position
 end
 
+-- Марс: трасса гонки в пыльной буре: стартовая арка, 13 ворот и ускорители
+FEATURE[2] = function(pi, f)
+	local ctr = WT.Centers[pi]
+	local m = Instance.new("Folder")
+	m.Name = "RaceTrack"
+	m.Parent = f
+	local orange, sand = c(255, 140, 60), c(150, 80, 56)
+	local function at(deg, r)
+		local a = math.rad(deg)
+		local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
+		return V3(x, Map.surfaceY(x, z, pi), z)
+	end
+	local pts = {}
+	for i, g in Game.Race.gates do pts[i] = at(g[1], g[2]) end
+	local startP = at(Game.Race.start[1], Game.Race.start[2])
+	for i, p in pts do
+		local prev = i == 1 and startP or pts[i - 1]
+		local dir = (p - prev) * V3(1, 0, 1)
+		dir = dir.Magnitude > 0.1 and dir.Unit or V3(1, 0, 0)
+		local gcf = CFrame.lookAt(p, p + dir)
+		local g = Instance.new("Model")
+		g.Name = "RaceGate" .. i
+		g:SetAttribute("RaceGate", i)
+		g.Parent = m
+		if i == #pts then
+			-- старт и финиш: большая арка с шахматным баннером
+			for _, sx in { -9, 9 } do
+				part(g, "GatePillar", V3(1.6, 14, 1.6), gcf * CF(sx, 7, 0), c(40, 36, 40), Mat.Metal)
+				part(g, "GateGlow", V3(0.5, 13, 0.5), gcf * CF(sx, 7, -0.9), orange, Mat.Neon, { CanCollide = false })
+			end
+			for q = 0, 13 do
+				for row = 0, 1 do
+					part(g, "Checker", V3(1.4, 1.4, 0.6), gcf * CF(-9.1 + q * 1.4, 13.3 + row * 1.4, 0), (q + row) % 2 == 0 and c(20, 20, 24) or c(240, 240, 240), Mat.SmoothPlastic, { CanCollide = false })
+				end
+			end
+			local ban = part(g, "Banner", V3(14, 2.4, 0.3), gcf * CF(0, 10.6, 0), c(40, 20, 16), Mat.SmoothPlastic, { CanCollide = false })
+			surfaceText(ban, Enum.NormalId.Front, "ПЫЛЬНАЯ ГОНКА", orange, 30)
+			surfaceText(ban, Enum.NormalId.Back, "ПЫЛЬНАЯ ГОНКА", orange, 30)
+			deco(g, "StartLine", V3(18, 0.1, 1.2), gcf * CF(0, 0.08, 0), c(240, 240, 240), Mat.SmoothPlastic)
+			local trig = anchorPart(g, "RacePrompt", gcf * CF(-12, 2, 3), V3(4, 4, 4))
+			local pr = prompt(trig, "Начать гонку", "Пыльная гонка", 12, "Game_race")
+			pr:SetAttribute("Game", "race")
+			part(g, "RaceKiosk", V3(3, 3, 2), gcf * CF(-12, 1.5, 3), c(70, 40, 30), Mat.Metal)
+			ball(g, "RaceKioskLamp", (gcf * CF(-12, 3.4, 3)).Position, 0.8, orange, Mat.Neon)
+			local _, sub = holoSign(g, p + V3(0, 20, 0), "ПЫЛЬНАЯ ГОНКА", c(255, 170, 90), "13 ворот, успей за 55 с на золото")
+			sub.Parent:SetAttribute("RaceBest", true)
+			Map.spots.raceStart = p
+		else
+			for _, sx in { -6, 6 } do
+				part(g, "GatePillar", V3(1, 9, 1), gcf * CF(sx, 4.5, 0), c(60, 40, 36), Mat.Metal, { CanCollide = false })
+				part(g, "GateGlow", V3(0.4, 8.6, 0.4), gcf * CF(sx, 4.5, -0.6), orange, Mat.Neon, { CanCollide = false, Transparency = 0.35 })
+			end
+			part(g, "GateTop", V3(13, 0.8, 0.8), gcf * CF(0, 9.2, 0), orange, Mat.Neon, { CanCollide = false, Transparency = 0.35 })
+			local num = anchorPart(g, "GateNum", gcf * CF(0, 11.5, 0), V3(1, 1, 1))
+			local bb = Instance.new("BillboardGui")
+			bb.Size, bb.LightInfluence, bb.MaxDistance = UDim2.fromOffset(60, 40), 0, 260
+			bb.Parent = num
+			local t = Instance.new("TextLabel")
+			t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+			t.Text, t.TextColor3, t.TextStrokeTransparency = tostring(i), orange, 0.3
+			t.Parent = bb
+		end
+		-- опора модели: центр прохода на земле (после сборки, иначе Roblox пересчитает её по деталям)
+		g.WorldPivot = gcf
+	end
+	-- ускорители на длинных прямых
+	for _, leg in { 2, 3, 4, 6, 7, 8, 11, 12, 13 } do
+		local a, b = pts[leg - 1], pts[leg]
+		local mid = a:Lerp(b, 0.4)
+		local y = Map.surfaceY(mid.X, mid.Z, pi)
+		local dir = (b - a) * V3(1, 0, 1)
+		local pcf = CFrame.lookAt(V3(mid.X, y + 0.2, mid.Z), V3(mid.X, y + 0.2, mid.Z) + dir.Unit)
+		local pad = part(m, "BoostPad", V3(6, 0.3, 8), pcf, c(255, 170, 60), Mat.Neon, { CanCollide = false, Transparency = 0.15 })
+		pad:SetAttribute("Boost", true)
+		for q = 0, 2 do
+			deco(m, "BoostArrow", V3(3.2, 0.32, 0.5), pcf * CF(0, 0.05, 2.2 - q * 2.2) * A(0, PI / 4, 0), c(255, 240, 200), Mat.Neon)
+			deco(m, "BoostArrow", V3(3.2, 0.32, 0.5), pcf * CF(0, 0.05, 2.2 - q * 2.2) * A(0, -PI / 4, 0), c(255, 240, 200), Mat.Neon)
+		end
+	end
+	local _ = sand
+end
+
 -- Европа: метеорная пушка на краю ледяного острова
 FEATURE[3] = function(pi, f)
 	local base, out = featureSpot(pi, 225, 130)
