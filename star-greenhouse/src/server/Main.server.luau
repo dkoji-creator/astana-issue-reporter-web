@@ -58,7 +58,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 },
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 }, gardens = {}, bonusBeds = 0,
 	}
 end
 
@@ -115,6 +115,28 @@ local function unlockedPlanets(d)
 	return n
 end
 
+-- сводка огородов по планетам для окна полёта: грядок, посажено, созрело
+local function gardenSummary(d)
+	local out = {}
+	local t = now()
+	for pi = 1, #G.Planets do
+		local beds, count
+		if pi == (d.planet or 1) then
+			beds, count = d.beds, d.bedCount
+		else
+			local g = d.gardens[tostring(pi)]
+			beds, count = g and g.beds or {}, g and g.bedCount or 0
+		end
+		local planted, ripe = 0, 0
+		for _, b in beds do
+			planted += 1
+			if t >= b.ready then ripe += 1 end
+		end
+		out[pi] = { beds = count, planted = planted, ripe = ripe }
+	end
+	return out
+end
+
 local function snapshot(plr)
 	local d = D[plr]
 	local s = S[plr]
@@ -124,7 +146,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d),
 	}
 end
 local function push(plr, ...)
@@ -136,12 +158,10 @@ end
 
 ------------------------------------------------------------------ участки и грядки
 local plotOwner = {} -- id огорода ("планета_место") -> игрок
-local function refreshBed(plr, i)
-	local s, d = S[plr], D[plr]
-	local plot = s.plot and Map.plots[s.plot]
-	if not plot then return end
+local function paintBed(plotId, i, b, locked)
+	local plot = plotId and Map.plots[plotId]
+	if not plot or not plot.beds[i] then return end
 	local soil = plot.beds[i].soil
-	local b = d.beds[i]
 	if b then
 		soil:SetAttribute("Plant", b.id)
 		soil:SetAttribute("T0", b.t0)
@@ -154,41 +174,104 @@ local function refreshBed(plr, i)
 	else
 		for _, k in { "Plant", "T0", "Ready", "Wa", "Sp", "Muts", "Kg", "WaterAt" } do soil:SetAttribute(k, nil) end
 	end
-	Map.setBedLocked(s.plot, i, i > d.bedCount)
+	Map.setBedLocked(plotId, i, locked)
+end
+local function refreshBed(plr, i)
+	local s, d = S[plr], D[plr]
+	paintBed(s.plot, i, d.beds[i], i > d.bedCount)
 end
 local function refreshAllBeds(plr)
 	for i = 1, Map.MaxBeds do refreshBed(plr, i) end
 end
-
--- огород строится на той планете, где сейчас игрок (d.planet)
-local function claimPlot(plr)
+-- огород на другой планете (хозяин не здесь): данные лежат в d.gardens
+local function paintStash(plr, pi)
 	local s, d = S[plr], D[plr]
-	if s.plot then return true end
-	local pi = math.clamp(d.planet or 1, 1, #G.Planets)
+	local g = d.gardens[tostring(pi)]
+	local id = s.plots[pi]
+	if not g or not id then return end
+	for i = 1, Map.MaxBeds do paintBed(id, i, g.beds[tostring(i)], i > g.bedCount) end
+end
+
+-- у игрока свой огород на каждой планете; s.plots[планета] = id построенного участка, s.plot = огород там, где игрок сейчас
+local function buildPlotOn(plr, pi)
+	local s, d = S[plr], D[plr]
+	if s.plots[pi] then return s.plots[pi] end
 	for j = 1, Map.SlotsPerPlanet do
 		local key = pi .. "_" .. j
 		if not plotOwner[key] then
 			plotOwner[key] = plr
 			local plot = Map.buildPlot(pi, j)
-			s.plot = plot.id
+			s.plots[pi] = plot.id
 			plot.model:SetAttribute("OwnerId", plr.UserId)
 			Map.setPlotSign(plot.id, plr.DisplayName, G.PlanetColors[math.clamp(unlockedPlanets(d), 1, 6)])
 			for _, id in G.DecorOrder do
 				if d.decor[id] then Map.placeDecor(plot.id, id) end
 			end
-			refreshAllBeds(plr)
-			return true
+			return plot.id
 		end
 	end
-	return false
+	return nil
+end
+local function claimPlot(plr)
+	local s, d = S[plr], D[plr]
+	local pi = math.clamp(d.planet or 1, 1, #G.Planets)
+	s.plot = buildPlotOn(plr, pi)
+	if s.plot then refreshAllBeds(plr) end
+	return s.plot ~= nil
+end
+local function releaseOne(plr, pi)
+	local s = S[plr]
+	local id = s and s.plots[pi]
+	if not id then return end
+	plotOwner[id] = nil
+	Map.destroyPlot(id)
+	s.plots[pi] = nil
+	if s.plot == id then s.plot = nil end
 end
 local function releasePlot(plr)
 	local s = S[plr]
-	if not s or not s.plot then return end
-	local id = s.plot
-	plotOwner[id] = nil
-	Map.destroyPlot(id)
+	if not s then return end
+	for pi in table.clone(s.plots) do releaseOne(plr, pi) end
 	s.plot = nil
+end
+-- огороды на других планетах, где что-то растёт, видны всем
+local function buildStashPlots(plr)
+	local d = D[plr]
+	for key, g in d.gardens do
+		local pi = tonumber(key)
+		if pi and pi ~= d.planet and next(g.beds) then
+			if buildPlotOn(plr, pi) then paintStash(plr, pi) end
+		end
+	end
+end
+-- переезд: текущий огород уходит «на хранение» (там растёт медленнее), огород новой планеты становится активным
+local function switchGarden(plr, newPi)
+	local s, d = S[plr], D[plr]
+	local t = now()
+	local old = d.planet or 1
+	local stash = {}
+	for i, b in d.beds do
+		if b.ready > t then b.ready = t + (b.ready - t) / G.AwayGrowth end
+		stash[tostring(i)] = b
+	end
+	d.gardens[tostring(old)] = { beds = stash, bedCount = d.bedCount }
+	if next(stash) and s.plots[old] then
+		s.plot = nil
+		paintStash(plr, old)
+	else
+		releaseOne(plr, old)
+	end
+	s.plot = nil
+	local g = d.gardens[tostring(newPi)] or { beds = {}, bedCount = G.GardenStartBeds + (d.bonusBeds or 0) }
+	d.gardens[tostring(newPi)] = nil
+	local beds = {}
+	for k, b in g.beds do
+		if b.ready > t then b.ready = t + (b.ready - t) * G.AwayGrowth end
+		beds[tonumber(k)] = b
+	end
+	d.beds, d.bedCount = beds, g.bedCount
+	d.planet = newPi
+	claimPlot(plr)
 end
 local function teleportToPlot(plr)
 	local s = S[plr]
@@ -531,7 +614,7 @@ RX.Upgrade.OnServerInvoke = function(plr, key)
 	local u = G.Upgrades[key]
 	if not d or not u then return false end
 	local level = key == "beds" and d.bedCount or d.upg[key]
-	local cost = G.upgradeCost(key, level)
+	local cost = key == "beds" and G.bedCost(level, d.planet or 1) or G.upgradeCost(key, level)
 	if not cost then return false, "Максимум" end
 	if d.coins < cost then return false, "Не хватает монет" end
 	d.coins -= cost
@@ -591,18 +674,88 @@ RX.Redeem.OnServerInvoke = function(plr, code)
 	return true, info.text
 end
 
------------------------------------------------------------------- рекорд недели
-RX.Top.OnServerInvoke = function(plr)
+------------------------------------------------------------------ таблица лидеров
+-- в упорядоченных хранилищах только целые числа: богатство и редкость храним логарифмом
+local LB = { rich = {}, heavy = {}, rare = {}, at = 0 }
+local nameCache = {}
+local function nameOf(uid)
+	if nameCache[uid] then return nameCache[uid] end
+	local n = "Игрок"
+	pcall(function() n = Players:GetNameFromUserIdAsync(uid) end)
+	nameCache[uid] = n
+	return n
+end
+local function lbWrite(plr)
+	local d = D[plr]
+	if not d or not S[plr] or not S[plr].canSave then return end
+	pcall(function()
+		if d.earned > 0 then
+			DataStoreService:GetOrderedDataStore("SG_Rich"):SetAsync(tostring(plr.UserId), math.floor(math.log10(d.earned + 1) * 1e6))
+		end
+		if d.stats.bestChance < 1 then
+			DataStoreService:GetOrderedDataStore("SG_Rare"):SetAsync(tostring(plr.UserId), math.floor(-math.log10(d.stats.bestChance) * 1e6))
+		end
+	end)
+end
+local function lbTop(store, decode)
 	local out = {}
-	local ok = pcall(function()
-		local page = DataStoreService:GetOrderedDataStore("StarGreenhouse_Heavy_" .. weekKey()):GetSortedAsync(false, 10):GetCurrentPage()
+	pcall(function()
+		local page = store:GetSortedAsync(false, 10):GetCurrentPage()
 		for _, e in page do
-			local name = "Игрок"
-			pcall(function() name = Players:GetNameFromUserIdAsync(tonumber(e.key)) end)
-			table.insert(out, { name = name, kg = e.value / 100 })
+			local uid = tonumber(e.key)
+			table.insert(out, { id = uid, name = nameOf(uid), v = decode(e.value) })
 		end
 	end)
 	return out
+end
+local function lbBoardText(list, title, fmtv)
+	local lines = { "<b>" .. title .. "</b>" }
+	for i, e in list do
+		if i > 7 then break end
+		table.insert(lines, ("%d. %s  <font color='#FFD27A'>%s</font>"):format(i, e.name, fmtv(e.v)))
+	end
+	if #list == 0 then table.insert(lines, "пока пусто") end
+	return table.concat(lines, "\n")
+end
+local function lbRefresh()
+	LB.rich = lbTop(DataStoreService:GetOrderedDataStore("SG_Rich"), function(v) return 10 ^ (v / 1e6) end)
+	LB.rare = lbTop(DataStoreService:GetOrderedDataStore("SG_Rare"), function(v) return 10 ^ (-v / 1e6) end)
+	LB.heavy = lbTop(DataStoreService:GetOrderedDataStore("StarGreenhouse_Heavy_" .. weekKey()), function(v) return v / 100 end)
+	LB.at = now()
+	for _, b in Map.leaderBoards do
+		b.rich.Text = lbBoardText(LB.rich, "БОГАЧИ ВСЕЛЕННОЙ", G.fmt)
+		b.heavy.Text = lbBoardText(LB.heavy, "ТЯЖЕЛЕЙШИЙ ПЛОД НЕДЕЛИ", function(v) return ("%.1f кг"):format(v) end)
+		b.rare.Text = lbBoardText(LB.rare, "САМАЯ РЕДКАЯ МУТАЦИЯ", G.fmtOdds)
+	end
+end
+local function serverList()
+	local out = {}
+	for p, d in D do
+		table.insert(out, { id = p.UserId, name = p.DisplayName, v = d.earned, planet = d.planet or 1, best = d.stats.bestChance })
+	end
+	table.sort(out, function(a, b) return a.v > b.v end)
+	return out
+end
+RX.Top.OnServerInvoke = function(plr)
+	return { rich = LB.rich, heavy = LB.heavy, rare = LB.rare, server = serverList() }
+end
+-- строка в списке игроков Roblox
+local function updateLeaderstats(plr)
+	local d = D[plr]
+	if not d then return end
+	local ls = plr:FindFirstChild("leaderstats")
+	if not ls then
+		ls = Instance.new("Folder")
+		ls.Name = "leaderstats"
+		for _, n in { "Заработано", "Планета" } do
+			local v = Instance.new("StringValue")
+			v.Name = n
+			v.Parent = ls
+		end
+		ls.Parent = plr
+	end
+	ls["Заработано"].Value = G.fmt(d.earned)
+	ls["Планета"].Value = G.Planets[d.planet or 1].name
 end
 
 RX.ClaimQuest.OnServerInvoke = function(plr, i)
@@ -709,10 +862,8 @@ RX.Travel.OnServerInvoke = function(plr, pi)
 	if pi == (d.planet or 1) then return false, "Ты уже здесь" end
 	if s.traveling then return false end
 	s.traveling = true
-	releasePlot(plr)
-	d.planet = pi
-	claimPlot(plr)
-	push(plr, "plot", "planet")
+	switchGarden(plr, pi)
+	push(plr, "plot", "planet", "bedCount", "gsum")
 	task.delay(G.TravelTime, function()
 		s.traveling = false
 		local ch = plr.Character
@@ -972,6 +1123,8 @@ local function grant(plr, key)
 		push(plr, "cans")
 	elseif key == "beds" then
 		d.bedCount = math.min(Map.MaxBeds, d.bedCount + 4)
+		d.bonusBeds = (d.bonusBeds or 0) + 4
+		for _, g in d.gardens do g.bedCount = math.min(Map.MaxBeds, g.bedCount + 4) end
 		refreshAllBeds(plr)
 	end
 	push(plr, "perms", "potion", "bedCount")
@@ -1002,7 +1155,7 @@ end
 
 ------------------------------------------------------------------ игроки
 local function onJoin(plr)
-	S[plr] = { loaded = false, canSave = false, sel = nil }
+	S[plr] = { loaded = false, canSave = false, sel = nil, plots = {} }
 	local d, ok = load(plr.UserId)
 	if not plr.Parent then return end
 	D[plr] = d
@@ -1011,7 +1164,9 @@ local function onJoin(plr)
 	S[plr].sel = next(d.seeds)
 	ensureQuests(d)
 	d.planet = math.clamp(d.planet or 1, 1, math.max(1, unlockedPlanets(d)))
+	d.gardens[tostring(d.planet)] = nil
 	claimPlot(plr)
+	buildStashPlots(plr)
 	-- что выросло, пока игрока не было
 	local ripe = 0
 	for _, b in d.beds do
@@ -1041,10 +1196,30 @@ Players.PlayerAdded:Connect(function(plr)
 end)
 Players.PlayerRemoving:Connect(function(plr)
 	save(plr)
+	lbWrite(plr)
 	releasePlot(plr)
 	D[plr], S[plr] = nil, nil
 end)
 for _, plr in Players:GetPlayers() do task.spawn(onJoin, plr) end
+-- автосохранение раз в 2 минуты и таблица лидеров раз в 1.5 минуты
+task.spawn(function()
+	task.wait(5)
+	lbRefresh()
+	local last = now()
+	while true do
+		task.wait(2)
+		for plr in D do pcall(updateLeaderstats, plr) end
+		if now() - last >= 90 then
+			last = now()
+			for plr in D do
+				save(plr)
+				lbWrite(plr)
+				task.wait(0.5)
+			end
+			lbRefresh()
+		end
+	end
+end)
 game:BindToClose(function()
 	for _, plr in Players:GetPlayers() do save(plr) end
 end)

@@ -192,6 +192,16 @@ do
 	local bar, fill = K.bar(top, T.cold, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 42), Size = UDim2.fromOffset(200, 5) })
 	UI.planetFill = fill
 	UI.planetText = K.text(top, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 50), Size = UDim2.fromOffset(260, 15), MaxText = 12, TextColor3 = T.sub, Medium = true })
+	local tb = make("TextButton", { Name = "Leaders", AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0.5, 100, 0, 0), Size = UDim2.fromOffset(38, 38),
+		BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false }, top)
+	K.corner(tb, UDim.new(1, 0))
+	K.stroke(tb, T.gold, 1.2, false, 0.3)
+	K.icon(tb, "trophy", { Size = UDim2.fromOffset(26, 26), Position = UDim2.fromOffset(6, 6) })
+	tb.Activated:Connect(function()
+		K.bounce(tb)
+		playSfx("click")
+		if FX.openLeaders then FX.openLeaders() end
+	end)
 end
 
 -- плашка события и подсказка
@@ -447,7 +457,7 @@ end
 do
 	local f, body = mkWindow("market", "Рынок", "news", T.pink, 0.9, 0.84)
 	UI.marketTimer = K.text(body, "", { Size = UDim2.new(0.6, 0, 0, 24), TextXAlignment = Enum.TextXAlignment.Left, MaxText = 18, TextColor3 = T.gold })
-	local top = K.button(body, "Рекорд недели", T.gold, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(150, 28), MaxText = 15 })
+	local top = K.button(body, "Лидеры", T.gold, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.fromOffset(150, 28), MaxText = 15 })
 	local scroll = K.scroll(body, { Position = UDim2.fromOffset(0, 32), Size = UDim2.new(1, 0, 1, -32) })
 	listLayout(scroll, nil, 5)
 	local mode = "market"
@@ -463,13 +473,6 @@ do
 		local t = nowS()
 		local epoch = G.marketEpoch(t)
 		UI.marketTimer.Text = "Цены меняются через " .. G.fmtTime(G.marketTimeLeft(t))
-		if mode == "top" then
-			label(scroll, "Самые тяжёлые плоды этой недели", { Size = UDim2.new(1, 0, 0, 24), TextColor3 = T.gold, MaxText = 18, LayoutOrder = 0 })
-			local list = remotes.Top:InvokeServer() or {}
-			for i, e in list do row(scroll, i, e.name, "место " .. i, ("%.2f кг"):format(e.kg), T.text, i == 1) end
-			if #list == 0 then label(scroll, "Пока никто не собрал плоды на этой неделе", { Size = UDim2.new(1, 0, 0, 30), LayoutOrder = 1 }) end
-			return
-		end
 		local hot = G.hotPlants(epoch)
 		local rows = {}
 		for _, p in G.PlantList do
@@ -494,10 +497,7 @@ do
 			if k < 5 then k += 1 row(scroll, 30 + k, r.p.name, "базовая цена " .. G.fmt(r.p.sell), ("x%.2f"):format(r.m), T.sub, false) end
 		end
 	end
-	top.Activated:Connect(function()
-		mode = mode == "top" and "market" or "top"
-		hooks.market()
-	end)
+	top.Activated:Connect(function() openWindow("leaders") end)
 end
 
 ------------------------------------------------------------------ окно: мастерская
@@ -514,13 +514,14 @@ do
 		for i, key in G.UpgradeOrder do
 			local u = G.Upgrades[key]
 			local level = key == "beds" and ST.bedCount or ST.upg[key]
-			local cost = G.upgradeCost(key, level)
+			local cost = key == "beds" and G.bedCost(level, ST.planet or 1) or G.upgradeCost(key, level)
 			local r = K.panel(scroll, { Size = UDim2.new(1, -8, 0, 56), LayoutOrder = i, BackgroundColor3 = T.panel2 })
 			K.icon(r, u.icon, { Size = UDim2.fromOffset(44, 44), Position = UDim2.fromOffset(6, 6) })
 			K.text(r, u.name, { Position = UDim2.fromOffset(56, 3), Size = UDim2.new(0.45, 0, 0, 22), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Left })
 			local cur = G.upgradeValue(key, level)
 			local curText = (u.off and level <= u.min) and u.off or u.fmt:format(cur)
-			K.text(r, u.desc .. ". Сейчас: " .. curText, { Position = UDim2.fromOffset(56, 26), Size = UDim2.new(0.55, 0, 0, 26), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub })
+			local desc = key == "beds" and ("Грядки огорода на планете " .. G.Planets[ST.planet or 1].name) or u.desc
+			K.text(r, desc .. ". Сейчас: " .. curText, { Position = UDim2.fromOffset(56, 26), Size = UDim2.new(0.55, 0, 0, 26), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub })
 			local b, bl
 			if cost then
 				b, bl = K.button(r, G.fmt(cost), ST.coins >= cost and T.green or T.panel, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(120, 40), MaxText = 18 })
@@ -700,6 +701,66 @@ do
 	end)
 end
 
+------------------------------------------------------------------ окно: таблица лидеров
+do
+	local f, body = mkWindow("leaders", "Таблица лидеров", "trophy", T.gold, 0.9, 0.86)
+	local mode = "rich"
+	local ITEMS = {
+		{ key = "rich", text = "Богачи", color = T.gold },
+		{ key = "heavy", text = "Тяжесть", color = T.green },
+		{ key = "rare", text = "Редкость", color = T.purple },
+		{ key = "server", text = "Сервер", color = T.cold },
+	}
+	local scroll = K.scroll(body, { Position = UDim2.fromOffset(0, 40), Size = UDim2.new(1, 0, 1, -40) })
+	listLayout(scroll, nil, 5)
+	local data
+	local _, buttons = tabs(body, ITEMS, function(k)
+		mode = k
+		hooks.leaders()
+	end, 34)
+	local TITLES = {
+		rich = "Больше всех заработали за всё время",
+		heavy = "Самые тяжёлые плоды этой недели",
+		rare = "Самые редкие мутации в урожае",
+		server = "Игроки на этом сервере",
+	}
+	local function value(e)
+		if mode == "rich" or mode == "server" then return G.fmt(e.v) .. " монет" end
+		if mode == "heavy" then return ("%.2f кг"):format(e.v) end
+		return G.fmtOdds(e.v)
+	end
+	function hooks.leaders()
+		shade(buttons, mode, ITEMS)
+		clear(scroll)
+		if not data or os.clock() - (UI.leadersAt or 0) > 20 then
+			data = remotes.Top:InvokeServer() or {}
+			UI.leadersAt = os.clock()
+		end
+		if mode == "rich" and #(data.rich or {}) == 0 then
+			mode = "server"
+			shade(buttons, mode, ITEMS)
+		end
+		label(scroll, TITLES[mode], { Size = UDim2.new(1, 0, 0, 24), TextColor3 = T.sub, MaxText = 16, LayoutOrder = 0 })
+		local list = data[mode] or {}
+		local medal = { T.gold, Color3.fromRGB(200, 210, 225), Color3.fromRGB(220, 150, 90) }
+		for i, e in list do
+			local me = e.id == plr.UserId
+			local r = K.panel(scroll, { Size = UDim2.new(1, -8, 0, 44), LayoutOrder = i, BackgroundColor3 = me and Color3.fromRGB(40, 60, 90) or T.panel2 })
+			K.stroke(r, medal[i] or (me and T.cold) or T.line, 1, false, medal[i] and 0.2 or 0.6)
+			K.text(r, "#" .. i, { Position = UDim2.fromOffset(8, 0), Size = UDim2.fromOffset(44, 44), MaxText = 20, TextColor3 = medal[i] or T.sub })
+			local sub = mode == "server" and (G.Planets[e.planet or 1].name .. (e.best and e.best < 1 and (" · лучшая мутация " .. G.fmtOdds(e.best)) or "")) or (me and "это ты" or "")
+			K.text(r, e.name, { Position = UDim2.fromOffset(56, sub ~= "" and 2 or 10), Size = UDim2.new(0.5, 0, 0, 24), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = me and T.cold or T.text })
+			if sub ~= "" then K.text(r, sub, { Position = UDim2.fromOffset(56, 25), Size = UDim2.new(0.5, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true }) end
+			K.text(r, value(e), { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 6), Size = UDim2.new(0.4, 0, 0, 32), MaxText = 19, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = medal[i] or T.text })
+		end
+		if #list == 0 then label(scroll, "Пока пусто: таблица обновляется раз в полторы минуты", { Size = UDim2.new(1, 0, 0, 30), MaxText = 15, LayoutOrder = 1 }) end
+	end
+	function FX.openLeaders()
+		data = nil
+		openWindow("leaders")
+	end
+end
+
 ------------------------------------------------------------------ окно: подарок
 do
 	local f, body = mkWindow("daily", "Ежедневный подарок", "gift", T.orange, 0.62, 0.7)
@@ -737,8 +798,10 @@ do
 	local scroll = K.scroll(body, {})
 	listLayout(scroll, nil, 6)
 	function hooks.travel()
+		local fresh = remotes.State:InvokeServer()
+		if fresh and fresh.gsum then ST.gsum = fresh.gsum end
 		clear(scroll)
-		label(scroll, "Огород летит вместе с тобой. Растения своей планеты растут на ней на 25% быстрее", { Size = UDim2.new(1, -8, 0, 30), TextColor3 = T.sub, MaxText = 14, TextWrapped = true, LayoutOrder = 0 })
+		label(scroll, "На каждой планете свой огород: новый с 3 грядками. Пока тебя нет, там растёт вдвое медленнее. Растения своей планеты растут на 25% быстрее", { Size = UDim2.new(1, -8, 0, 34), TextColor3 = T.sub, MaxText = 13, TextWrapped = true, LayoutOrder = 0 })
 		for i, p in G.Planets do
 			local r = K.panel(scroll, { Size = UDim2.new(1, -8, 0, 48), LayoutOrder = i, BackgroundColor3 = T.panel2 })
 			local dot = make("Frame", { Size = UDim2.fromOffset(26, 26), Position = UDim2.fromOffset(10, 11), BackgroundColor3 = G.PlanetColors[i] }, r)
@@ -747,7 +810,12 @@ do
 			local here = (ST.planet or 1) == i
 			local open = i <= (ST.planets or 1)
 			local bonus = ("удача мутаций x%s"):format(tostring(G.PlanetLuck[i])) .. (G.PlanetFeature[i] ~= "" and (" · " .. G.PlanetFeature[i]) or "")
-			local sub = here and ("Ты здесь · " .. bonus) or (open and ("Открыта · " .. bonus) or ("Откроется после " .. G.fmt(G.PlanetUnlock[i]) .. " заработанных монет · " .. bonus))
+			local gs = ST.gsum and ST.gsum[i]
+			local gtext = ""
+			if gs and gs.beds > 0 then
+				gtext = gs.planted > 0 and (("огород: %d/%d растёт, %d созрело · "):format(gs.planted, gs.beds, gs.ripe)) or (("огород: %d грядок · "):format(gs.beds))
+			end
+			local sub = here and ("Ты здесь · " .. gtext .. bonus) or (open and (gtext .. bonus) or ("Откроется после " .. G.fmt(G.PlanetUnlock[i]) .. " заработанных монет · " .. bonus))
 			K.text(r, sub, { Position = UDim2.fromOffset(46, 26), Size = UDim2.new(0.62, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
 			if open and not here then
 				local b = K.button(r, "Лететь", T.pink, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(110, 34), MaxText = 16 })

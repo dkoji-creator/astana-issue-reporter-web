@@ -387,13 +387,37 @@ do
 	check(ok == true, "полёт не начался")
 	frames(90, 0.1)
 	snap = inv("State")
-	check(snap.planet == 2 and snap.plot == "2_1", "огород не переехал: " .. tostring(snap.plot))
-	check(workspace.World.Plots:FindFirstChild("Plot1_1") == nil and workspace.World.Plots:FindFirstChild("Plot2_1") ~= nil, "огород не перестроен")
+	check(snap.planet == 2 and snap.plot == "2_1", "огород на Марсе не выдан: " .. tostring(snap.plot))
+	check(workspace.World.Plots:FindFirstChild("Plot2_1") ~= nil, "огород на Марсе не построен")
+	check(snap.bedCount == G.GardenStartBeds, "новый огород: грядок " .. tostring(snap.bedCount))
+	local moonPlanted = snap.gsum[1].planted
+	check(moonPlanted == 0 or workspace.World.Plots:FindFirstChild("Plot1_1") ~= nil, "лунный огород с растениями должен остаться")
+	check(snap.gsum[2].planted == 0, "огород на Марсе должен быть пустым")
 	local root = plr.Character.HumanoidRootPart
 	check((root.Position - Vector3.new(1080, 260, 380)).Magnitude < 200, "игрок не на Марсе")
 	check(inv("Home") == true, "домой")
 	check(not inv("Travel", 2), "лететь туда, где уже есть, нельзя")
+	-- посадить на Марсе, улететь на Луну и проверить, что всё на месте
 	plot = workspace.World.Plots.Plot2_1
+	toBed(1)
+	fire("Select", "mars_01")
+	fire("Act", 1)
+	frames(3)
+	local marsReady = plot.Beds.Bed1.Soil:GetAttribute("Ready")
+	check(marsReady ~= nil, "посадка на Марсе")
+	check(not inv("Upgrade", "beds") or true, "грядка на Марсе")
+	check(inv("Travel", 1) == true, "полёт обратно на Луну")
+	frames(90, 0.1)
+	snap = inv("State")
+	check(snap.planet == 1 and snap.plot == "1_1", "лунный огород не вернулся: " .. tostring(snap.plot))
+	check(snap.gsum[2].planted == 1, "марсианская грядка пропала")
+	local mp = workspace.World.Plots:FindFirstChild("Plot2_1")
+	check(mp ~= nil and mp.Beds.Bed1.Soil:GetAttribute("Plant") == "mars_01", "марсианский огород должен остаться видимым")
+	if mp and marsReady then
+		check(mp.Beds.Bed1.Soil:GetAttribute("Ready") > marsReady, "без хозяина растёт медленнее")
+	end
+	check(snap.bedCount >= G.StartBeds, "лунные грядки сохранились")
+	plot = workspace.World.Plots.Plot1_1
 end
 
 stage("события")
@@ -521,6 +545,30 @@ do
 	check(inv("Admin", "resetcd"), "сброс перезарядок")
 	check(inv("Admin", "tp", "spiral"), "тп к паркуру")
 	frames(20, 0.2)
+end
+
+stage("таблица лидеров")
+do
+	local top = inv("Top")
+	check(type(top) == "table" and type(top.server) == "table" and #top.server == 1, "таблица лидеров: сервер")
+	check(top.server[1] and top.server[1].id == plr.UserId, "игрок в таблице сервера")
+	local ls = plr:FindFirstChild("leaderstats")
+	check(ls ~= nil and ls:FindFirstChild("Заработано") ~= nil and ls["Заработано"].Value ~= "", "leaderstats")
+	local board = workspace.World:FindFirstChild("LeaderBoard", true)
+	check(board ~= nil, "нет табло лидеров на площади")
+	if board then
+		local lbl = board:FindFirstChildOfClass("SurfaceGui"):FindFirstChildOfClass("TextLabel")
+		check(lbl.Text ~= "Загрузка…", "табло не обновилось")
+	end
+	local tb = hud:FindFirstChild("Leaders", true)
+	check(tb ~= nil, "нет кнопки лидеров")
+	if tb then
+		tb.Activated:Fire()
+		frames(5, 0.1)
+		for _, w in pg.SpiritWindows:GetDescendants() do
+			if w:IsA("TextButton") and w.Parent and w.Parent.Parent and w.Parent.Parent.Visible and w.Size.Y.Scale == 1 then w.Activated:Fire() frames(2, 0.1) end
+		end
+	end
 end
 
 stage("выход")

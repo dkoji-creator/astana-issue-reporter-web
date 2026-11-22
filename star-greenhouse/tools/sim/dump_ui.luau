@@ -233,6 +233,15 @@ for _, b in colFrame:GetChildren() do
 	end
 end
 -- новые сцены: алхимия, пушка, телескоп
+do
+	local tb = hud:FindFirstChild("Leaders", true)
+	tb.Activated:Fire()
+	frames(10, 0.3)
+	dumpState("leaders")
+	tb.Activated:Fire()
+	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
+	frames(3, 0.3)
+end
 local PPS = game:GetService("ProximityPromptService")
 local function findPrompt(attr, val)
 	for _, d in workspace.World:GetDescendants() do

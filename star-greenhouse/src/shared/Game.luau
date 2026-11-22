@@ -363,4 +363,13 @@ function G.questReward(kind: string, need: number, planets: number): number
 	return math.floor(G.Quests[kind].unit * need * mult * 1.5)
 end
 G.StartBeds = 6
+-- огород на каждой планете свой: новый начинается с 3 грядок, расширяется дороже на дальних планетах,
+-- а пока хозяина нет рядом, растения там растут вдвое медленнее
+G.GardenStartBeds = 3
+G.AwayGrowth = 0.5
+function G.bedCost(level: number, pi: number): number?
+	local base = G.upgradeCost("beds", level)
+	if not base then return nil end
+	return math.floor(base * G.Planets[math.clamp(pi, 1, #G.Planets)].mult ^ 0.85)
+end
 return G

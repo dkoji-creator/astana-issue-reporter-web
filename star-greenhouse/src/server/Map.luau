@@ -18,6 +18,7 @@ Map.BedCols, Map.BedStep = 6, 9.6
 Map.planets = {}
 Map.plots = {}
 Map.boardLabels = {}
+Map.leaderBoards = {}
 
 local V3, CF, A = Vector3.new, CFrame.new, CFrame.Angles
 local PI, sin, cos = math.pi, math.sin, math.cos
@@ -539,6 +540,37 @@ local function buildHub(pi, parent)
 		local t2 = part(m, "PromptPart", V3(5, 3, 3), kcf * CF(0, 2.2, 1.6), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
 		local p2 = prompt(t2, k.prompt, "", 12, "Open_" .. k.id)
 		p2:SetAttribute("Window", k.id)
+	end
+	-- табло лидеров: три колонки, обновляет сервер
+	do
+		local a = math.rad(45)
+		local pos = ctr + V3(cos(a) * 25, lift, sin(a) * 25)
+		local bcf = CFrame.lookAt(pos, V3(ctr.X, pos.Y, ctr.Z))
+		for _, sx in { -10.5, 10.5 } do
+			cyl(f, "BoardPole", bcf * CF(sx, 4.5, 0.4), 9, 0.7, COL.plate, Mat.Metal)
+		end
+		local board = part(f, "LeaderBoard", V3(22, 8.4, 0.5), bcf * CF(0, 8.6, 0), c(10, 12, 26), Mat.SmoothPlastic)
+		deco(f, "LeaderBoardRim", V3(22.6, 9, 0.3), bcf * CF(0, 8.6, 0.25), COL.gold, Mat.Neon, { Transparency = 0.3 })
+		local gui = Instance.new("SurfaceGui")
+		gui.Face = Enum.NormalId.Front
+		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+		gui.PixelsPerStud = 30
+		gui.LightInfluence = 0
+		gui.Parent = board
+		local cols = {}
+		for k, key in { "rich", "heavy", "rare" } do
+			local t = Instance.new("TextLabel")
+			t.Position, t.Size = UDim2.new((k - 1) / 3, 8, 0, 8), UDim2.new(1 / 3, -16, 1, -16)
+			t.BackgroundTransparency, t.Font, t.TextScaled, t.RichText = 1, Enum.Font.GothamBold, true, true
+			t.TextXAlignment, t.TextYAlignment = Enum.TextXAlignment.Left, Enum.TextYAlignment.Top
+			t.TextColor3, t.Text = c(235, 238, 255), "Загрузка…"
+			t.Parent = gui
+			cols[key] = t
+		end
+		table.insert(Map.leaderBoards, cols)
+		local trig = part(f, "LeaderPrompt", V3(8, 4, 3), bcf * CF(0, 2, -2), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
+		local pr = prompt(trig, "Таблица лидеров", "", 12, "Open_leaders")
+		pr:SetAttribute("Window", "leaders")
 	end
 	-- дорожки к огородам
 	for j = 1, Map.SlotsPerPlanet do
