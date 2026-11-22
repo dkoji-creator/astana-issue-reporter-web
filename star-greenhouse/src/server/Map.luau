@@ -1120,6 +1120,63 @@ FEATURE[3] = function(pi, f)
 	Map.spots.cannonDir = out
 end
 
+-- Ио: лавовое озеро с каменным причалом для рыбалки
+FEATURE[4] = function(pi, f)
+	local lakeC, out = featureSpot(pi, 180, 138)
+	local m = Instance.new("Model")
+	m.Name = "LavaLake"
+	m.Parent = f
+	local y = lakeC.Y + 0.3
+	local R = 15
+	local lava, crust, rock = c(255, 110, 30), c(70, 40, 34), c(52, 46, 50)
+	-- чаша: каменный бортик из глыб и тёмная корка по краю
+	local rng = Random.new(77)
+	for k = 0, 17 do
+		local a = k / 18 * PI * 2
+		local r = R + 1.6
+		local sz = rng:NextNumber(2.4, 4)
+		ell(m, "LakeRim", CF(lakeC.X + cos(a) * r, y + sz * 0.15, lakeC.Z + sin(a) * r) * A(0, rng:NextNumber(0, 6), 0), V3(sz * 1.5, sz * 0.8, sz * 1.2), rock, Mat.Basalt)
+	end
+	cyl(m, "LakeCrust", CF(lakeC.X, y - 0.2, lakeC.Z), 0.6, R * 2 + 2, crust, Mat.CrackedLava, { CanCollide = false })
+	local surf = cyl(m, "LakeLava", CF(lakeC.X, y + 0.05, lakeC.Z), 0.3, R * 2, lava, Mat.Neon, { CanCollide = false })
+	surf:SetAttribute("Pulse", 1)
+	for k = 1, 6 do
+		local a = rng:NextNumber(0, PI * 2)
+		local r = rng:NextNumber(2, R - 4)
+		ell(m, "LavaCrustIsle", CF(lakeC.X + cos(a) * r, y + 0.25, lakeC.Z + sin(a) * r) * A(0, a, 0), V3(rng:NextNumber(2, 4), 0.4, rng:NextNumber(1.5, 3)), crust, Mat.CrackedLava, { CanCollide = false })
+	end
+	local bub = anchorPart(m, "LakeBubbles", CF(lakeC.X, y + 0.5, lakeC.Z), V3(R * 1.6, 0.4, R * 1.6))
+	emitter(bub, { Color = ColorSequence.new(c(255, 200, 90), c(255, 80, 20)), Size = NumberSequence.new(0.6, 0), LightEmission = 1, Lifetime = NumberRange.new(0.8, 1.6),
+		Rate = 18, Speed = NumberRange.new(4, 9), SpreadAngle = Vector2.new(15, 15), Acceleration = V3(0, -14, 0), EmissionDirection = Enum.NormalId.Top })
+	emitter(bub, { Color = ColorSequence.new(c(80, 60, 60)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 7) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(3, 5), Rate = 3,
+		Speed = NumberRange.new(2, 4), EmissionDirection = Enum.NormalId.Top })
+	light(bub, c(255, 120, 40), 50, 2.5)
+	-- причал со стороны площади
+	local inward = -out
+	local pierStart = lakeC + inward * (R + 9)
+	local face = CFrame.lookAt(V3(pierStart.X, y + 1.2, pierStart.Z), V3(lakeC.X, y + 1.2, lakeC.Z))
+	part(m, "Pier", V3(6, 0.8, 16), face * CF(0, 0, -6), c(64, 56, 58), Mat.Slate)
+	for side = -1, 1, 2 do
+		for q = 0, 2 do
+			cyl(m, "PierPost", face * CF(side * 2.6, -1.2, -1 - q * 5.5), 3.2, 0.8, c(40, 34, 36), Mat.Basalt)
+			ball(m, "PierLamp", (face * CF(side * 2.6, 1.6, -1 - q * 5.5)).Position, 0.5, c(255, 170, 80), Mat.Neon)
+		end
+	end
+	-- удочка на стойке на конце причала
+	local tip = face * CF(1.4, 0.4, -12.5)
+	part(m, "RodStand", V3(0.6, 1.6, 0.6), tip * CF(0, 0.8, 0), c(40, 34, 36), Mat.Metal)
+	seg(m, "FishingRod", (tip * CF(0, 1.4, 0)).Position, (tip * CF(0, 6.5, -6)).Position, 0.25, c(120, 80, 50), Mat.Wood)
+	ball(m, "RodTip", (tip * CF(0, 6.5, -6)).Position, 0.35, c(255, 200, 90), Mat.Neon)
+	local trig = anchorPart(m, "FishPrompt", face * CF(0, 1.5, -10), V3(5, 3, 5))
+	local pr = prompt(trig, "Рыбачить", "Лавовое озеро", 12, "Game_fishing")
+	pr:SetAttribute("Game", "fishing")
+	local _, sub = holoSign(m, lakeC + V3(0, 16, 0), "ЛАВОВАЯ РЫБАЛКА", c(255, 160, 80), "лови огненных рыб и редкие семена")
+	Map.spots.fishing = (face * CF(0, 1.5, -10)).Position
+	Map.spots.fishLake = V3(lakeC.X, y, lakeC.Z)
+	Map.spots.fishRod = (tip * CF(0, 6.5, -6)).Position
+end
+
 -- Туманность: спутники над островом. По их спирали можно забраться к сундуку на орбитальной станции
 local function satellite(parent, cf, d, walk, tint)
 	local gold, panel = c(225, 190, 110), c(60, 90, 190)

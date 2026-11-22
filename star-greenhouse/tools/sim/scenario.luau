@@ -550,6 +550,52 @@ do
 	frames(20, 0.2)
 end
 
+stage("рыбалка на Ио")
+do
+	local PPS = game:GetService("ProximityPromptService")
+	local UIS = game:GetService("UserInputService")
+	check(not inv("FishCast"), "рыбалка издалека")
+	check(inv("Admin", "tp", "fishing"), "тп к рыбалке")
+	frames(3)
+	local b0 = inv("State").bait.n
+	-- серверная проверка: слишком ранний улов не засчитывается
+	local ok, info = inv("FishCast")
+	check(ok and info and info.token, "заброс: " .. tostring(info))
+	if ok then check(not inv("FishResult", info.token, true), "ранний улов засчитан") end
+	check(inv("State").bait.n == b0 - 1, "наживка не потратилась")
+	-- клиентская игра
+	local fp
+	for _, d in workspace.World:GetDescendants() do
+		if d:IsA("ProximityPrompt") and d:GetAttribute("Game") == "fishing" then fp = d end
+	end
+	check(fp ~= nil, "нет подсказки рыбалки")
+	if fp then PPS.PromptTriggered:Fire(fp, plr) end
+	frames(5, 0.1)
+	check(pg:FindFirstChild("Fishing") ~= nil, "рыбалка не открылась")
+	local touch = { UserInputType = Enum.UserInputType.Touch, Position = Vector3.new(400, 200, 0) }
+	UIS.InputBegan:Fire(touch, false) -- заброс
+	frames(3, 0.1)
+	UIS.InputEnded:Fire(touch, false)
+	frames(60, 0.1) -- ждём поклёвку (до 5.5 с)
+	for _ = 1, 9 do UIS.InputBegan:Fire(touch, false) frames(1, 0.1) UIS.InputEnded:Fire(touch, false) frames(1, 0.1) end
+	UIS.InputBegan:Fire(touch, false) -- держим
+	frames(120, 0.1)
+	UIS.InputEnded:Fire(touch, false)
+	frames(150, 0.1)
+	local g = pg:FindFirstChild("Fishing")
+	if g then
+		for _, b in g:GetDescendants() do
+			if b:IsA("TextButton") and b:FindFirstChildOfClass("TextLabel") and b:FindFirstChildOfClass("TextLabel").Text == "Выйти" then b.Activated:Fire() end
+		end
+		UIS.InputBegan:Fire(touch, false)
+		frames(30, 0.1)
+	end
+	check(pg:FindFirstChild("Fishing") == nil, "рыбалка не закрылась")
+	check(inv("State").bait.n <= b0 - 1, "наживка")
+	inv("Admin", "resetcd")
+	check(inv("State").bait.n == G.Fishing.baitMax, "сброс наживки")
+end
+
 stage("таблица лидеров")
 do
 	local top = inv("Top")

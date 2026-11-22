@@ -545,16 +545,41 @@ function PM.build(plantId: string, muts: { string }?): Model
 	return m
 end
 
-local function emitter(parent, color, tier, k)
+-- цвет свечения: насыщенный и не слишком яркий, чтобы блум не выжигал его в белое пятно
+local function glowOf(mt)
+	if mt.glow then return mt.glow end
+	local h, sat, v = mt.color:ToHSV()
+	return Color3.fromHSV(h, math.max(sat, 0.5), math.min(v, 0.88))
+end
+PM.glowOf = glowOf
+local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
+local function sparkles(parent, color, tier)
 	local e = Instance.new("ParticleEmitter")
 	e.Color = ColorSequence.new(color)
-	e.LightEmission = 1
-	e.Rate = 3 + tier * 4
+	e.LightEmission = 0.8
+	e.Rate = 2 + tier * 2
 	e.Lifetime = NumberRange.new(1.2, 2.2)
-	e.Speed = NumberRange.new(0.6, 1.8)
+	e.Speed = NumberRange.new(0.4, 1.4)
 	e.SpreadAngle = Vector2.new(180, 180)
-	e.Size = NumberSequence.new(0.18 + 0.05 * tier, 0)
-	e.Transparency = NumberSequence.new(0.1, 1)
+	e.Size = NumberSequence.new(0.14 + 0.04 * tier, 0)
+	e.Transparency = NumberSequence.new(0.15, 1)
+	e.Parent = parent
+	return e
+end
+-- мягкая цветная дымка вокруг растения вместо твёрдого шара-ореола
+local function aura(parent, color, height, tier)
+	local e = Instance.new("ParticleEmitter")
+	e.Texture = SMOKE
+	e.Color = ColorSequence.new(color)
+	e.LightEmission = 0.45
+	e.Rate = 1.5 + (tier - 4)
+	e.Lifetime = NumberRange.new(3, 4.5)
+	e.Speed = NumberRange.new(0.2, 0.6)
+	e.SpreadAngle = Vector2.new(180, 180)
+	e.Rotation = NumberRange.new(0, 360)
+	e.RotSpeed = NumberRange.new(-15, 15)
+	e.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, height * 0.35), NumberSequenceKeypoint.new(1, height * 0.7) })
+	e.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.35, 0.86), NumberSequenceKeypoint.new(1, 1) })
 	e.Parent = parent
 	return e
 end
@@ -563,63 +588,83 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 	local mt = G.Mut[rarest]
 	local tier = mt.tier
 	local col = mt.color
+	local glow = glowOf(mt)
 	local matName = mt.material
 	local mat = matName and MATS[matName]
+	local neonType = mat == Material.Neon
 	local isRainbow = table.find(muts, "rainbow") ~= nil
 	local isGold = table.find(muts, "golden") ~= nil
 	local isGhost = table.find(muts, "ghost") ~= nil
 	local isDark = table.find(muts, "blackhole") ~= nil
-	local i = 0
+	local isLava = table.find(muts, "lava") ~= nil
 	for _, p in m:GetChildren() do
 		if p:IsA("BasePart") and p.Name ~= "Root" then
 			local n = p.Name:sub(1, 1)
 			if n == "F" or n == "A" then
-				i += 1
 				local base = p.Color
 				if isRainbow then
-					p.Color = Color3.fromHSV((p.Position.Y * 0.18 + p.Position.X * 0.1) % 1, 0.7, 1)
+					p.Color = Color3.fromHSV((p.Position.Y * 0.18 + p.Position.X * 0.1) % 1, 0.65, 0.92)
 				elseif isDark then
-					p.Color = Color3.fromRGB(20, 8, 40)
+					p.Color = Color3.fromRGB(26, 12, 48)
 				elseif isGold then
-					p.Color = Color3.fromRGB(255, 200, 70)
+					p.Color = Color3.fromRGB(240, 190, 70)
 				else
-					p.Color = base:Lerp(col, tier <= 2 and 0.5 or 0.75)
+					p.Color = base:Lerp(glow, tier <= 2 and 0.45 or 0.7)
 				end
-				if mat and mat ~= Material.Neon then p.Material = mat elseif mat == Material.Neon and (tier >= 3 or i % 2 == 0) then p.Material = mat end
+				if n == "A" and (neonType or isLava) then
+					-- светятся только мелкие детали, и цветом, а не белым
+					p.Material = Material.Neon
+					p.Color = isRainbow and p.Color:Lerp(Color3.new(0, 0, 0), 0.15) or glow:Lerp(Color3.new(0, 0, 0), 0.12)
+				elseif neonType then
+					-- сам плод глянцевый и цветной, без пересвета
+					p.Material = Material.Glass
+					p.Reflectance = 0.12
+					p.Transparency = math.max(p.Transparency, 0.08)
+				elseif mat then
+					p.Material = mat
+					if isGold then p.Reflectance = 0.35 end
+				end
 				if isGhost then p.Transparency = math.max(p.Transparency, 0.55) end
 			elseif n == "G" and tier >= 3 then
-				p.Color = p.Color:Lerp(col, 0.6)
+				p.Color = p.Color:Lerp(glow, 0.6):Lerp(Color3.new(0, 0, 0), 0.1)
 			end
 		end
 	end
 	local root = m.PrimaryPart
 	local height = 3.5 * k
-	-- свет и частицы
 	local l = Instance.new("PointLight")
-	l.Color, l.Range, l.Brightness = col, 6 + tier * 3, 0.6 + tier * 0.35
+	l.Color, l.Range, l.Brightness = glow, 6 + tier * 2, 0.4 + tier * 0.15
 	l.Parent = root
 	local att = Instance.new("Attachment")
 	att.Position = V3(0, height * 0.55, 0)
 	att.Parent = root
-	emitter(att, col, tier, k)
-	-- ореол и кольца для высоких мутаций
-	if tier >= 4 then
-		local halo = ball(m, "H", V3(0, height * 0.55, 0), height * 1.15, col, Material.Neon, 0.88)
-		halo.CastShadow = false
-	end
+	sparkles(att, glow, tier)
+	if tier >= 4 then aura(att, glow, height, tier) end
+	-- маленькие кометы с хвостами вокруг растения
 	if tier >= 5 then
-		local n = tier == 5 and 4 or 6
+		local n = tier == 5 and 3 or 4
 		for j = 1, n do
-			local o = ball(m, "Orbit", V3(0, 0, 0), 0.22 * k, Color3.new(1, 1, 1):Lerp(col, 0.3), Material.Neon)
-			o:SetAttribute("R", (1.4 + (j % 2) * 0.3) * k)
-			o:SetAttribute("H", height * (0.3 + 0.12 * j))
-			o:SetAttribute("S", 1.2 + 0.2 * j)
+			local o = ball(m, "Orbit", V3(0, 0, 0), 0.18 * k, glow, Material.Neon)
+			o.CastShadow = false
+			o:SetAttribute("R", (1.3 + (j % 2) * 0.35) * k)
+			o:SetAttribute("H", height * (0.3 + 0.14 * j))
+			o:SetAttribute("S", 1.1 + 0.25 * j)
 			o:SetAttribute("P", j * 6.283 / n)
+			local a0 = Instance.new("Attachment")
+			a0.Position = V3(0, 0.07 * k, 0)
+			a0.Parent = o
+			local a1 = Instance.new("Attachment")
+			a1.Position = V3(0, -0.07 * k, 0)
+			a1.Parent = o
+			local tr = Instance.new("Trail")
+			tr.Attachment0, tr.Attachment1 = a0, a1
+			tr.Color = ColorSequence.new(glow)
+			tr.LightEmission = 0.8
+			tr.Lifetime = 0.55
+			tr.Transparency = NumberSequence.new(0.35, 1)
+			tr.FaceCamera = true
+			tr.Parent = o
 		end
-	end
-	if tier >= 6 then
-		local beam = ball(m, "H", V3(0, height * 0.55, 0), height * 1.8, col, Material.Neon, 0.94)
-		beam.CastShadow = false
 	end
 end
 

@@ -293,6 +293,42 @@ frames(3)
 PPS.PromptTriggered:Fire(findPrompt("Game", "telescope"), plr)
 frames(20, 0.1)
 dumpState("telescope")
+do
+	local tg = pg:FindFirstChild("Telescope")
+	if tg then
+		for _, b in tg:GetDescendants() do
+			if b:IsA("TextButton") and b:FindFirstChildOfClass("TextLabel") and b:FindFirstChildOfClass("TextLabel").Text == "Выйти" then b.Activated:Fire() end
+		end
+		frames(10, 0.1)
+	end
+	for _, g in pg:GetChildren() do if g.Name == "Reveal" then g:Destroy() end end
+	local UIS = game:GetService("UserInputService")
+	local PPS2 = game:GetService("ProximityPromptService")
+	inv("Admin", "tp", "fishing")
+	frames(3)
+	for _, d in workspace.World:GetDescendants() do
+		if d:IsA("ProximityPrompt") and d:GetAttribute("Game") == "fishing" then PPS2.PromptTriggered:Fire(d, plr) end
+	end
+	frames(5, 0.1)
+	local touch = { UserInputType = Enum.UserInputType.Touch, Position = Vector3.new(400, 200, 0) }
+	UIS.InputBegan:Fire(touch, false)
+	frames(2, 0.1)
+	UIS.InputEnded:Fire(touch, false)
+	for _ = 1, 70 do
+		frames(1, 0.1)
+		UIS.InputBegan:Fire(touch, false)
+		frames(1, 0.1)
+		UIS.InputEnded:Fire(touch, false)
+		local g = pg:FindFirstChild("Fishing")
+		local reel = false
+		if g then for _, d in g:GetDescendants() do if d:IsA("Frame") and d.Size.X.Offset == 46 and d.Visible then reel = true end end end
+		if reel then break end
+	end
+	UIS.InputBegan:Fire(touch, false)
+	frames(8, 0.1)
+	dumpState("fishing")
+	UIS.InputEnded:Fire(touch, false)
+end
 -- превью табло лидеров (SurfaceGui переносится в ScreenGui для рендера)
 do
 	local board = workspace.World:FindFirstChild("LeaderBoard", true)

@@ -273,7 +273,7 @@ local function pickSeed(rank, planets, rng)
 end
 G.pickSeed = pickSeed
 
-G.PlanetFeature = { "Алхимия", "", "Метеорная пушка", "", "Паркур к сундуку", "Телескоп и прыжок в бездну" }
+G.PlanetFeature = { "Алхимия", "", "Метеорная пушка", "Рыбалка в лаве", "Паркур к сундуку", "Телескоп и прыжок в бездну" }
 -- Луна: алхимия. Три плода в котёл, на выходе семя (часто реже исходных) и иногда эликсир удачи
 G.Alchemy = { radius = 40, slots = 3 }
 G.Elixir = { luck = 25, uses = 3 }
@@ -312,6 +312,45 @@ function G.cannonReward(hits: number, planets: number, rng)
 	else rank = hits >= 3 and 2 or 1 end
 	local id = pickSeed(rank, planets, rng)
 	return { id = id, qty = hits >= 25 and 2 or 1, coins = hits * G.starReward(planets, false) * 2 }
+end
+
+-- Ио: рыбалка в лавовом озере. Наживка копится сама (1 штука в 45 с, максимум 10)
+G.Fishing = { radius = 30, baitMax = 10, baitEvery = 45 }
+G.Fish = {
+	{ id = "stone", name = "Остывший камень", weight = 14, diff = 0, color = rgb(110, 96, 96), kind = "coins", mult = 4 },
+	{ id = "ember", name = "Угольная рыбка", weight = 40, diff = 1, color = rgb(255, 140, 60), kind = "coins", mult = 15 },
+	{ id = "eel", name = "Огненный угорь", weight = 25, diff = 2, color = rgb(255, 90, 40), kind = "coins", mult = 40 },
+	{ id = "carp", name = "Магмовый карп", weight = 13, diff = 3, color = rgb(255, 180, 60), kind = "seed", rank = 4 },
+	{ id = "ray", name = "Обсидиановый скат", weight = 6, diff = 4, color = rgb(150, 80, 200), kind = "seed", rank = 5 },
+	{ id = "phoenix", name = "Феникс-рыба", weight = 2, diff = 5, color = rgb(255, 215, 110), kind = "seed", rank = 6, elixir = true },
+}
+function G.pickFish(rng): number
+	local total = 0
+	for _, f in G.Fish do total += f.weight end
+	local r = rng:NextNumber() * total
+	for i, f in G.Fish do
+		r -= f.weight
+		if r <= 0 then return i end
+	end
+	return 1
+end
+function G.fishReward(i: number, planets: number, rng)
+	local f = G.Fish[i]
+	if f.kind == "coins" then
+		return { coins = math.floor(G.starReward(planets, false) * f.mult) }
+	end
+	local id = pickSeed(f.rank, planets, rng)
+	return { id = id, qty = 1, coins = G.starReward(planets, false) * 10, elixir = f.elixir == true }
+end
+function G.baitNow(b, t: number)
+	local n, t0 = b.n, b.t
+	if n >= G.Fishing.baitMax then return n, t end
+	local add = math.floor((t - t0) / G.Fishing.baitEvery)
+	if add > 0 then
+		n = math.min(G.Fishing.baitMax, n + add)
+		t0 = n >= G.Fishing.baitMax and t or t0 + add * G.Fishing.baitEvery
+	end
+	return n, t0
 end
 
 -- Туманность: сундук на вершине спутниковой спирали

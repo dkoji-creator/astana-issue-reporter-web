@@ -919,6 +919,7 @@ if plr.UserId == ADMIN_ID then
 	btn("ТП: паркур (Туманность)", T.pink, cmd("tp", "spiral"))
 	btn("ТП: сундук на орбите", T.gold, cmd("tp", "chest"))
 	btn("ТП: телескоп (Ядро)", T.orange, cmd("tp", "telescope"))
+	btn("ТП: рыбалка (Ио)", T.red, cmd("tp", "fishing"))
 	local mi = 1
 	local mb
 	mb = btn("Мутация: " .. G.Mut[G.MutOrder[1]].name, T.purple, function()
@@ -1423,13 +1424,13 @@ local function farGlow(soil)
 		return
 	end
 	local prog = progressOf(soil)
-	local size = math.max(1.5, 3.2 * plant.scale * wscale * (0.3 + 0.7 * prog))
+	local size = math.clamp(1.2 * plant.scale * wscale * (0.3 + 0.7 * prog), 1.2, 7)
 	if not f then
 		f = make("Part", { Name = "FarGlow", Shape = Enum.PartType.Ball, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
-			Material = Enum.Material.Neon, Transparency = 0.15 }, fxFolder)
+			Material = Enum.Material.Neon, Transparency = 0.1 }, fxFolder)
 		far[soil] = f
 	end
-	f.Color = rar and G.Mut[rar].color or plant.c2
+	f.Color = rar and PM.glowOf(G.Mut[rar]) or plant.c2:Lerp(Color3.new(0, 0, 0), 0.15)
 	f.Size = Vector3.new(size, size, size)
 	f.CFrame = CFrame.new(soil.Position + Vector3.new(0, size * 0.7, 0))
 end
@@ -1452,13 +1453,17 @@ loop(0.4, function()
 		local center = plot:GetAttribute("Center")
 		if beds and center then
 			local dist = (center - cp).Magnitude
-			local near = dist < SHOW_DIST + 40
+			-- рядом: настоящие модели (до 170); огоньки только у далёких огородов, рядом с игроком пятен нет
+			local near = dist < 220
 			for _, bed in beds:GetChildren() do
 				local soil = bed:FindFirstChild("Soil")
 				if soil then
-					if near and (soil.Position - cp).Magnitude < SHOW_DIST then
+					if near and (soil.Position - cp).Magnitude < 170 then
 						dropFar(soil)
 						refreshEntry(soil)
+					elseif near then
+						dropEntry(soil)
+						dropFar(soil)
 					else
 						dropEntry(soil)
 						if dist < 4000 then farGlow(soil) else dropFar(soil) end
@@ -1550,6 +1555,7 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr)
 	local gm = pr:GetAttribute("Game")
 	if gm == "cannon" and FX.cannon then task.spawn(FX.cannon) end
 	if gm == "telescope" and FX.telescope then task.spawn(FX.telescope) end
+	if gm == "fishing" and FX.fishing then task.spawn(FX.fishing) end
 end)
 
 ------------------------------------------------------------------ сбор: частицы и тост
@@ -2366,6 +2372,203 @@ function FX.cannon()
 	FX.busy = false
 	local ok2, err = remotes.CannonEnd:InvokeServer(hits)
 	if not ok2 then toast(err or "Раунд не засчитан", "bad") end
+end
+
+-- Ио: рыбалка в лаве. Заброс, поклёвка (успей тапнуть), вываживание: держи палец, чтобы зелёная зона шла вверх
+function FX.fishing()
+	if FX.busy then return end
+	local lakeP = world:FindFirstChild("LakeLava", true)
+	local rodP = world:FindFirstChild("RodTip", true)
+	if not lakeP or not rodP then return end
+	FX.busy = true
+	local gui, cam, close = FX.scene("Fishing")
+	local lake, rod = lakeP.Position, rodP.Position
+	local back = (rod - lake) * Vector3.new(1, 0, 1)
+	back = back.Magnitude > 0.1 and back.Unit or Vector3.new(0, 0, 1)
+	local camPos = rod + back * 9 + Vector3.new(0, 4, 0)
+	cam.FieldOfView = 60
+	cam.CFrame = CFrame.lookAt(camPos, lake + Vector3.new(0, 1, 0))
+	local title = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 14), Size = UDim2.fromOffset(520, 36), MaxText = 28 })
+	local sub = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(520, 22), MaxText = 16, TextColor3 = T.sub, Medium = true })
+	local exitB = K.button(gui, "Выйти", T.panel2, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(110, 40), MaxText = 18 })
+	-- полоска вываживания
+	local barF = make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -40, 0.55, 0), Size = UDim2.fromOffset(46, 250), BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Visible = false }, gui)
+	K.corner(barF, UDim.new(0, 12))
+	K.stroke(barF, T.orange, 1.5, false, 0.2)
+	local zone = make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 4, 1, -4), Size = UDim2.new(1, -8, 0.3, 0), BackgroundColor3 = T.green, BackgroundTransparency = 0.25 }, barF)
+	K.corner(zone, UDim.new(0, 8))
+	local fishDot = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromOffset(30, 18), BackgroundColor3 = T.orange }, barF)
+	K.corner(fishDot, UDim.new(1, 0))
+	local progBg = make("Frame", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -96, 0.55, 0), Size = UDim2.fromOffset(12, 250), BackgroundColor3 = T.panel, Visible = false }, gui)
+	K.corner(progBg, UDim.new(1, 0))
+	local progFill = make("Frame", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0.3), BackgroundColor3 = T.gold }, progBg)
+	K.corner(progFill, UDim.new(1, 0))
+	local running, holding, tapped = true, 0, false
+	exitB.Activated:Connect(function() running = false end)
+	local c1 = UIS.InputBegan:Connect(function(input, gp)
+		if gp then return end
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			holding += 1
+			tapped = true
+		end
+	end)
+	local c2 = UIS.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then holding = math.max(0, holding - 1) end
+	end)
+	local bobber = make("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(0.9, 0.9, 0.9), Anchored = true, CanCollide = false, CanQuery = false, Material = Enum.Material.Neon,
+		Color = Color3.fromRGB(120, 230, 255), Transparency = 1, CFrame = CFrame.new(rod) }, fxFolder)
+	make("PointLight", { Color = Color3.fromRGB(120, 230, 255), Range = 8, Brightness = 1.2 }, bobber)
+	local line = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, Material = Enum.Material.Neon, Color = Color3.fromRGB(230, 230, 240), Transparency = 1, Size = Vector3.new(0.06, 0.06, 1) }, fxFolder)
+	local function drawLine(at)
+		local len = (at - rod).Magnitude
+		line.Size = Vector3.new(0.06, 0.06, len)
+		line.CFrame = CFrame.lookAt((rod + at) / 2, at)
+		line.Transparency = 0.3
+	end
+	local function waitFor(sec)
+		local t0 = os.clock()
+		while running and os.clock() - t0 < sec do task.wait() end
+		return running
+	end
+	local function flyFish(fish)
+		local body = make("Part", { Size = Vector3.new(1, 1, 1), Anchored = true, CanCollide = false, CanQuery = false, Material = Enum.Material.Neon, Color = fish.color }, fxFolder)
+		make("SpecialMesh", { MeshType = Enum.MeshType.Sphere, Scale = Vector3.new(1.4, 1.1, 3) }, body)
+		local tail = make("Part", { Size = Vector3.new(0.3, 1.6, 1.4), Anchored = true, CanCollide = false, CanQuery = false, Material = Enum.Material.Neon, Color = fish.color:Lerp(Color3.new(1, 1, 1), 0.25) }, fxFolder)
+		local from = bobber.Position
+		local to = camPos + (lake - camPos).Unit * 7 + Vector3.new(0, 0.5, 0)
+		FX.splash(from, Color3.fromRGB(255, 140, 50), 40, 20)
+		playSfx("whoosh", 0.9)
+		local t0 = os.clock()
+		while os.clock() - t0 < 1.1 do
+			local k = (os.clock() - t0) / 1.1
+			local e = 1 - (1 - k) ^ 3
+			local p = from:Lerp(to, e) + Vector3.new(0, math.sin(k * math.pi) * 6, 0)
+			local cf = CFrame.new(p) * CFrame.Angles(0, os.clock() * 6, math.sin(os.clock() * 14) * 0.4)
+			body.CFrame = cf
+			tail.CFrame = cf * CFrame.new(0, 0, 1.9)
+			task.wait()
+		end
+		FX.burst(to, fish.color, 40)
+		task.delay(1.2, function() body:Destroy() tail:Destroy() end)
+	end
+	local function refreshTitle(bait)
+		title.Text = "Тапни, чтобы забросить"
+		sub.Text = ("Наживка: %d из %d"):format(bait or (ST.bait and ST.bait.n) or 0, G.Fishing.baitMax)
+	end
+	refreshTitle()
+	while running do
+		tapped = false
+		while running and not tapped do task.wait() end
+		if not running then break end
+		local ok, info = remotes.FishCast:InvokeServer()
+		if not ok then
+			toast(info or "Не получилось", "bad")
+			if not waitFor(1) then break end
+			continue
+		end
+		local fish = G.Fish[info.fish]
+		-- заброс
+		title.Text = "Ждём поклёвку…"
+		sub.Text = ("Наживка: %d из %d"):format(info.bait, G.Fishing.baitMax)
+		playSfx("whoosh", 1.1)
+		local landAt = lake + Vector3.new(math.random(-6, 6), 0.5, math.random(-6, 6))
+		bobber.Transparency = 0
+		local t0 = os.clock()
+		while os.clock() - t0 < 0.6 do
+			local k = (os.clock() - t0) / 0.6
+			local p = rod:Lerp(landAt, k) + Vector3.new(0, math.sin(k * math.pi) * 5, 0)
+			bobber.CFrame = CFrame.new(p)
+			drawLine(p)
+			task.wait()
+		end
+		FX.splash(landAt, Color3.fromRGB(255, 150, 60), 14, 8)
+		playSfx("water", 0.8)
+		-- ожидание: поплавок покачивается
+		local w0 = os.clock()
+		while running and os.clock() - w0 < info.bite - 0.6 do
+			local p = landAt + Vector3.new(0, math.sin(os.clock() * 3) * 0.12, 0)
+			bobber.CFrame = CFrame.new(p)
+			drawLine(p)
+			task.wait()
+		end
+		if not running then remotes.FishResult:InvokeServer(info.token, false) break end
+		-- поклёвка: успей тапнуть
+		title.Text = "КЛЮЁТ! ТАПНИ!"
+		title.TextColor3 = T.orange
+		K.pop(title)
+		playSfx("beep", 1.3)
+		FX.splash(landAt, Color3.fromRGB(255, 120, 40), 24, 14)
+		tapped = false
+		local b0 = os.clock()
+		local hooked = false
+		while running and os.clock() - b0 < 0.9 do
+			bobber.CFrame = CFrame.new(landAt - Vector3.new(0, 0.5 + math.sin(os.clock() * 30) * 0.15, 0))
+			if tapped then hooked = true break end
+			task.wait()
+		end
+		title.TextColor3 = T.text
+		local caught = false
+		if hooked then
+			-- вываживание
+			title.Text = "Держи палец: зелёная зона вверх, отпусти: вниз"
+			barF.Visible, progBg.Visible = true, true
+			local zp, zv, fp, ftarget, nextT = 0.1, 0, 0.5, 0.5, 0
+			local zsize = math.max(0.16, 0.3 - fish.diff * 0.025)
+			local prog = 0.3
+			local r0 = os.clock()
+			local last = os.clock()
+			while running and os.clock() - r0 < 25 do
+				local now = os.clock()
+				local dt = math.min(0.05, now - last)
+				last = now
+				zv += (holding > 0 and 2.8 or -2.4) * dt
+				zv = math.clamp(zv, -1.4, 1.4)
+				zp += zv * dt
+				if zp < 0 then zp, zv = 0, 0 end
+				if zp > 1 - zsize then zp, zv = 1 - zsize, 0 end
+				if now >= nextT then
+					ftarget = math.random() * 0.9 + 0.05
+					nextT = now + (math.random() * 0.8 + 0.4) / (1 + fish.diff * 0.3)
+				end
+				fp += (ftarget - fp) * math.min(1, dt * (1.2 + fish.diff * 0.7))
+				local inside = fp >= zp and fp <= zp + zsize
+				prog += (inside and (0.32 - fish.diff * 0.025) or -0.22) * dt
+				zone.Position = UDim2.new(0, 4, 1 - zp, -4)
+				zone.Size = UDim2.new(1, -8, zsize, 0)
+				zone.BackgroundColor3 = inside and T.green or T.cold
+				fishDot.Position = UDim2.fromScale(0.5, 1 - fp)
+				progFill.Size = UDim2.fromScale(1, math.clamp(prog, 0, 1))
+				local p = landAt + Vector3.new(math.sin(now * 5) * 1.2, -0.3, math.cos(now * 4) * 1.2)
+				bobber.CFrame = CFrame.new(p)
+				drawLine(p)
+				if inside and math.random() < 0.08 then playSfx("tap", 0.9 + prog * 0.6) end
+				if prog >= 1 then caught = true break end
+				if prog <= 0 then break end
+				task.wait()
+			end
+			barF.Visible, progBg.Visible = false, false
+		end
+		local okR, res = remotes.FishResult:InvokeServer(info.token, caught)
+		if caught and okR then
+			flyFish(fish)
+			if res and res.coins and not res.id then
+				toast(("Поймано: %s! +%s монет"):format(fish.name, G.fmt(res.coins)), "rare", 3)
+				playSfx("coins")
+			end
+		else
+			toast(hooked and "Рыба сорвалась…" or "Не успел: рыба ушла", "bad", 2)
+		end
+		bobber.Transparency = 1
+		line.Transparency = 1
+		if not waitFor(1.2) then break end
+		refreshTitle(info.bait)
+	end
+	c1:Disconnect()
+	c2:Disconnect()
+	bobber:Destroy()
+	line:Destroy()
+	close()
+	FX.busy = false
 end
 
 -- Ядро: телескоп. Камера смотрит на нижние планеты с сильным приближением

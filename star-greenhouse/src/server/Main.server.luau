@@ -33,7 +33,7 @@ for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -58,7 +58,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1 },
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1 }, bait = { n = 10, t = 0 },
 	}
 end
 
@@ -146,7 +146,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait,
 	}
 end
 local function push(plr, ...)
@@ -947,7 +947,8 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		d.earned = math.max(d.earned, G.PlanetUnlock[6])
 	elseif cmd == "resetcd" then
 		d.cd = { cannon = 0, chest = 0 }
-		push(plr, "cd")
+		d.bait = { n = G.Fishing.baitMax, t = now() }
+		push(plr, "cd", "bait")
 	elseif cmd == "tp" then
 		local pos = Map.spots[arg == "spiral" and "spiralStart" or arg]
 		local root = ch and ch:FindFirstChild("HumanoidRootPart")
@@ -1091,6 +1092,44 @@ RX.CannonEnd.OnServerInvoke = function(plr, hits)
 	local plant = G.Plants[res.id]
 	rewardReveal(plr, hits >= 20 and "МЕТКИЙ СТРЕЛОК!" or "МЕТЕОРИТЫ СБИТЫ!", res.id,
 		("Сбито: %d · +%s монет · семян: %d"):format(hits, G.fmt(res.coins), res.qty), G.Rarity[plant.rarity].color)
+	return true, res
+end
+
+-- рыбалка: рыбу выбирает сервер при забросе, клиент только играет вываживание
+RX.FishCast.OnServerInvoke = function(plr)
+	local d, s = D[plr], S[plr]
+	if not d then return false end
+	if not nearSpot(plr, "fishing", G.Fishing.radius) then return false, "Подойди к лавовому озеру на Ио" end
+	local n, t0 = G.baitNow(d.bait, now())
+	if n <= 0 then
+		return false, ("Наживка кончилась: новая через %d с"):format(math.ceil(t0 + G.Fishing.baitEvery - now()))
+	end
+	if n >= G.Fishing.baitMax then t0 = now() end
+	d.bait = { n = n - 1, t = t0 }
+	local rng = Random.new()
+	local fi = G.pickFish(rng)
+	local bite = rng:NextNumber(2, 5.5)
+	s.fish = { fi = fi, t0 = os.clock(), bite = bite, token = rng:NextInteger(1, 1e9) }
+	push(plr, "bait")
+	return true, { fish = fi, diff = G.Fish[fi].diff, bite = bite, token = s.fish.token, bait = d.bait.n }
+end
+RX.FishResult.OnServerInvoke = function(plr, token, ok)
+	local d, s = D[plr], S[plr]
+	local f = s and s.fish
+	if not d or not f or f.token ~= token then return false end
+	s.fish = nil
+	local el = os.clock() - f.t0
+	if not ok or el < f.bite + 1.5 or el > 90 then return false end
+	local fish = G.Fish[f.fi]
+	local res = G.fishReward(f.fi, math.max(1, unlockedPlanets(d)), Random.new())
+	d.stats.fish = (d.stats.fish or 0) + 1
+	if res.coins then addCoins(plr, res.coins) end
+	if res.id then
+		d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty
+		if res.elixir then giveElixir(d) end
+		rewardReveal(plr, "УЛОВ: " .. string.upper(fish.name) .. "!", res.id, ("+%s монет%s"):format(G.fmt(res.coins or 0), res.elixir and " · эликсир удачи x25" or ""), fish.color, "chest")
+	end
+	push(plr, "seeds", "potion", "stats")
 	return true, res
 end
 
