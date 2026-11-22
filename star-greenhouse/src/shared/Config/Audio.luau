@@ -1,33 +1,39 @@
--- Звуки: музыка и эффекты (tools/make_music.py, tools/make_sfx.py; загружено tools/upload_audio.py).
--- Всё рассчитано на динамик телефона: энергия в полосе 200-4000 Гц.
+-- Звуки игры из официальной библиотеки Roblox (авторы Roblox и APMOfficial). Такие звуки разрешены
+-- во всех играх без настройки доступа. Свои синтезированные звуки (art/audio, tools/make_sfx.py)
+-- лежат в Custom: они заработают, только если в Creator Hub выдать игре доступ к каждому звуку.
 return {
 	Music = {
-		main = "rbxassetid://120589657844865", -- рояль в духе «Лунной сонаты» Бетховена (tools/make_moonlight.py)
-		space = "rbxassetid://72330274258040", -- космический лоу-фай (tools/make_music.py)
+		main = "rbxassetid://1848056295", -- Бетховен, «Лунная соната», 1-я часть (рояль, APM)
+		space = "rbxassetid://9042041852", -- Calm Space (APM)
 	},
 	Sfx = {
-		reveal = "rbxassetid://100157981617213",
-		harvest = "rbxassetid://102534001054246",
-		harvestRare = "rbxassetid://110239565971216",
-		coins = "rbxassetid://101427970723523",
-		legendary = "rbxassetid://75359215555869",
-		click = "rbxassetid://107783657279748",
-		plant = "rbxassetid://121966993760007",
-		water = "rbxassetid://105423213904051",
-		star = "rbxassetid://110239565971216",
-		meteor = "rbxassetid://84551988309085",
-		rocket = "rbxassetid://102468406645880",
-		unlock = "rbxassetid://111062903514582",
-		tap = "rbxassetid://81595784443621",
-		mutation = "rbxassetid://100157981617213",
-		pop = "rbxassetid://93129945719694",
-		error = "rbxassetid://105235372776332",
-		boom = "rbxassetid://136755148629815",
-		laser = "rbxassetid://112227420600585",
-		beep = "rbxassetid://100393096024989",
-		go = "rbxassetid://117064057745649",
-		whoosh = "rbxassetid://120525277327011",
-		chest = "rbxassetid://95559825382191",
-		brew = "rbxassetid://97658366378389",
+		click = "rbxassetid://15675032796", -- Roblox_UI_Small_Click
+		pop = "rbxassetid://15675055424", -- Roblox_UI_Cute_Pop
+		tap = "rbxassetid://15675059323", -- Roblox_UI_Bright_Click
+		error = "rbxassetid://15675075163", -- Roblox_UI_Delete
+		coins = "rbxassetid://127645268874265", -- CoinTransfer_01
+		plant = "rbxassetid://12222124", -- Short spring sound
+		water = "rbxassetid://17208204604", -- Roblox GUI - Bubble
+		harvest = "rbxassetid://15675043410", -- Roblox_UI_Tonal_Stinger
+		harvestRare = "rbxassetid://1839901334", -- Space Chimes
+		star = "rbxassetid://1839901334", -- Space Chimes
+		meteor = "rbxassetid://12222095", -- Rocket whoosh 01
+		boom = "rbxassetid://12222030", -- HalloweenThunder
+		laser = "rbxassetid://1841352043", -- Fierce Energy Blast 2
+		rocket = "rbxassetid://12222095", -- Rocket whoosh 01
+		go = "rbxassetid://12222065", -- Launching rocket
+		beep = "rbxassetid://15675085146", -- Roblox_UI_Indicator
+		whoosh = "rbxassetid://15675024286", -- Roblox_UI_Whoosh_01
+		unlock = "rbxassetid://12222253", -- victory
+		reveal = "rbxassetid://1839901345", -- Powered Up Chimes
+		mutation = "rbxassetid://1839901345", -- Powered Up Chimes
+		legendary = "rbxassetid://1836789962", -- Feeling Like A Winner (sting)
+		chest = "rbxassetid://12222253", -- victory
+		brew = "rbxassetid://108306323478967", -- Whoosh Magic Spell
+	},
+	-- громкость отдельных звуков (по умолчанию 1)
+	Gain = { boom = 0.7, laser = 0.6, rocket = 0.9, legendary = 0.8, brew = 0.8, star = 0.7, harvestRare = 0.8 },
+	Custom = {
+		music = "rbxassetid://120589657844865", space = "rbxassetid://72330274258040",
 	},
 }

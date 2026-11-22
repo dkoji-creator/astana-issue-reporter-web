@@ -359,7 +359,7 @@ local function newInstance(className)
 	end
 	if className == "Humanoid" then p.Health, p.WalkSpeed, p.MaxHealth = 100, 16, 100 end
 	if className == "Camera" then p.ViewportSize, p.CFrame, p.FieldOfView = Vector2.new(844, 390), CFrame.new(0, 10, 20), 70 end
-	if className == "Sound" then p.IsLoaded, p.Volume, p.Playing = true, 0.5, false end
+	if className == "Sound" then p.IsLoaded, p.Volume, p.Playing, p.TimeLength, p.IsPlaying = true, 0.5, false, 1, false end
 	if className == "UIStroke" then p.Transparency, p.Thickness, p.Color = 0, 1, Color3.new() end
 	if className == "UIScale" then p.Scale = 1 end
 	if className == "PointLight" or className == "SpotLight" then p.Brightness, p.Range, p.Enabled, p.Color = 1, 8, true, Color3.new(1, 1, 1) end

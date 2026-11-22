@@ -40,7 +40,7 @@ do
 		if id ~= "rbxassetid://" then
 			local pool = {}
 			for i = 1, MANY[k] or 2 do
-				pool[i] = make("Sound", { Name = k .. i, SoundId = id, SoundGroup = sfxGroup, Volume = 1 }, SoundService)
+				pool[i] = make("Sound", { Name = k .. i, SoundId = id, SoundGroup = sfxGroup, Volume = (Audio.Gain and Audio.Gain[k]) or 1 }, SoundService)
 				table.insert(all, pool[i])
 			end
 			sfx[k] = { pool = pool, i = 0 }
@@ -50,6 +50,24 @@ do
 	local music2 = make("Sound", { Name = "MusicSpace", SoundId = Audio.Music.space or Audio.Music.main, Looped = true, SoundGroup = musicGroup, Volume = 1 }, SoundService)
 	table.insert(all, music)
 	table.insert(all, music2)
+	-- проверка: сколько звуков реально загрузилось (видно в настройках)
+	function FX.audioStatus()
+		local ok, total = 0, 0
+		for _, snd in all do
+			total += 1
+			if snd.IsLoaded and snd.TimeLength > 0 then ok += 1 end
+		end
+		return ok, total, music.IsLoaded and music.TimeLength > 0
+	end
+	-- встроенный звук клиента Roblox: играет всегда, если звук на устройстве вообще работает
+	local builtin = make("Sound", { Name = "BuiltinPing", SoundId = "rbxasset://sounds/electronicpingshort.wav", Volume = 1 }, SoundService)
+	function FX.testSound()
+		builtin:Play()
+		task.delay(0.6, function()
+			local e = sfx.coins
+			if e then e.pool[1].TimePosition = 0 e.pool[1]:Play() end
+		end)
+	end
 	function FX.setTrack(tk)
 		local on, off = music, music2
 		if tk == 2 then on, off = music2, music end
@@ -1075,16 +1093,16 @@ end
 ------------------------------------------------------------------ окно: настройки (громкость, подсказки)
 do
 	local f, body = mkWindow("settings", "Настройки", "settings", T.green, 0.7, 0.86)
-	listLayout(body, nil, 10)
+	listLayout(body, nil, 5)
 	local rows = {}
 	local function send()
 		remotes.Settings:FireServer(AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t)
 	end
 	local function stepper(order, title, key, onChange)
-		local r = K.panel(body, { Size = UDim2.new(1, 0, 0, 58), LayoutOrder = order, BackgroundColor3 = T.panel2 })
+		local r = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = order, BackgroundColor3 = T.panel2 })
 		K.text(r, title, { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.3, 0, 1, 0), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Left })
-		local minus = K.button(r, "−", T.panel, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.32, 0, 0.5, 0), Size = UDim2.fromOffset(46, 42), MaxText = 26 })
-		local plus = K.button(r, "+", T.panel, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(46, 42), MaxText = 26 })
+		local minus = K.button(r, "−", T.panel, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.32, 0, 0.5, 0), Size = UDim2.fromOffset(44, 38), MaxText = 26 })
+		local plus = K.button(r, "+", T.panel, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(44, 38), MaxText = 26 })
 		local barBg = make("Frame", { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0.32, 54, 0.5, 0), Size = UDim2.new(0.68, -120, 0, 14), BackgroundColor3 = T.panel }, r)
 		K.corner(barBg, UDim.new(1, 0))
 		local fill = make("Frame", { Size = UDim2.fromScale(0.5, 1), BackgroundColor3 = T.green }, barBg)
@@ -1108,9 +1126,9 @@ do
 	end
 	stepper(1, "Музыка", "m")
 	stepper(2, "Звуки", "s", function() playSfx("coins") end)
-	local hr = K.panel(body, { Size = UDim2.new(1, 0, 0, 58), LayoutOrder = 3, BackgroundColor3 = T.panel2 })
+	local hr = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 3, BackgroundColor3 = T.panel2 })
 	K.text(hr, "Подсказки сверху", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.6, 0, 1, 0), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Left })
-	local hb, hl = K.button(hr, "", T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(120, 42), MaxText = 18 })
+	local hb, hl = K.button(hr, "", T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(120, 38), MaxText = 18 })
 	local function showH()
 		hl.Text = AUDIO.h == 1 and "Вкл" or "Выкл"
 		K.recolor(hb, AUDIO.h == 1 and T.green or T.panel)
@@ -1122,9 +1140,9 @@ do
 	end)
 	rows.h = showH
 	showH()
-	local tr = K.panel(body, { Size = UDim2.new(1, 0, 0, 58), LayoutOrder = 4, BackgroundColor3 = T.panel2 })
+	local tr = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 4, BackgroundColor3 = T.panel2 })
 	K.text(tr, "Мелодия", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.4, 0, 1, 0), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Left })
-	local tb, tl = K.button(tr, "", T.purple, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(220, 42), MaxText = 17 })
+	local tb, tl = K.button(tr, "", T.purple, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(220, 38), MaxText = 17 })
 	local function showT() tl.Text = AUDIO.t == 2 and "Космос" or "Лунная соната" end
 	tb.Activated:Connect(function()
 		AUDIO.t = AUDIO.t == 2 and 1 or 2
@@ -1134,6 +1152,21 @@ do
 	end)
 	rows.t = showT
 	showT()
+	local dr = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 5, BackgroundColor3 = T.panel2 })
+	local dl = K.text(dr, "Проверка звука…", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(1, -150, 1, 0), MaxText = 14, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true, TextColor3 = T.sub })
+	local db = K.button(dr, "Проверить", T.cold, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(130, 38), MaxText = 17 })
+	db.Activated:Connect(function() FX.testSound() end)
+	local function showD()
+		local ok, total, mus = FX.audioStatus()
+		dl.Text = ("Звуки загружены: %d из %d · музыка: %s"):format(ok, total, mus and "есть" or "нет")
+	end
+	rows.d = showD
+	task.spawn(function()
+		while true do
+			task.wait(2)
+			if windows.settings and windows.settings.Visible then pcall(showD) end
+		end
+	end)
 	function hooks.settings()
 		for _, fn in rows do fn() end
 	end
