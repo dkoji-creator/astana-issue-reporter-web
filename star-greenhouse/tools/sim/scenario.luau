@@ -576,10 +576,10 @@ do
 end
 
 stage("настройки звука")
-fire("Settings", 3, 5, 0)
+fire("Settings", 3, 5, 0, 2)
 frames(3)
 snap = inv("State")
-check(snap.settings and snap.settings.m == 3 and snap.settings.s == 5 and snap.settings.h == 0, "настройки не сохранились")
+check(snap.settings and snap.settings.m == 3 and snap.settings.s == 5 and snap.settings.h == 0 and snap.settings.t == 2, "настройки не сохранились")
 fire("Settings", 99, -4, "x")
 frames(3)
 snap = inv("State")

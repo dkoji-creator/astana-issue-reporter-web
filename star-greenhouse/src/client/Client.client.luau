@@ -23,8 +23,9 @@ local SoundService = game:GetService("SoundService")
 local Audio = require(Shared:WaitForChild("Config"):WaitForChild("Audio"))
 
 -- звуки: музыка и эффекты (если ассет недоступен, игра просто молчит)
+local FX = {} -- эффекты (заполняются ниже, вызываются раньше)
 local sfx = {}
-local AUDIO = { m = 6, s = 8, h = 1 } -- громкость музыки и звуков (0-10), подсказки вкл/выкл; приходят с сервера
+local AUDIO = { m = 6, s = 8, h = 1, t = 1 } -- t: 1 = классика, 2 = космос -- громкость музыки и звуков (0-10), подсказки вкл/выкл; приходят с сервера
 local sfxGroup = make("SoundGroup", { Name = "Sfx", Volume = 0.8 }, SoundService)
 local musicGroup = make("SoundGroup", { Name = "Music", Volume = 0.36 }, SoundService)
 local function applyAudio()
@@ -46,14 +47,22 @@ do
 		end
 	end
 	local music = make("Sound", { Name = "MusicMain", SoundId = Audio.Music.main, Looped = true, SoundGroup = musicGroup, Volume = 1 }, SoundService)
+	local music2 = make("Sound", { Name = "MusicSpace", SoundId = Audio.Music.space or Audio.Music.main, Looped = true, SoundGroup = musicGroup, Volume = 1 }, SoundService)
 	table.insert(all, music)
+	table.insert(all, music2)
+	function FX.setTrack(tk)
+		local on, off = music, music2
+		if tk == 2 then on, off = music2, music end
+		if off.IsPlaying then off:Stop() end
+		if not on.IsPlaying then on:Play() end
+	end
 	applyAudio()
 	task.spawn(function()
 		pcall(function() game:GetService("ContentProvider"):PreloadAsync(all) end)
 	end)
 	task.spawn(function()
 		task.wait(1)
-		music:Play()
+		FX.setTrack(AUDIO.t)
 	end)
 end
 local function playSfx(name, pitch)
@@ -68,7 +77,6 @@ end
 K.onClick(function() playSfx("click") end)
 
 local function nowS() return workspace:GetServerTimeNow() end
-local FX = {} -- эффекты (заполняются ниже, вызываются раньше)
 -- фоновый цикл: ошибка в одной итерации не убивает цикл
 local function loop(dt, fn)
 	task.spawn(function()
@@ -1066,11 +1074,11 @@ end
 
 ------------------------------------------------------------------ окно: настройки (громкость, подсказки)
 do
-	local f, body = mkWindow("settings", "Настройки", "settings", T.green, 0.7, 0.74)
+	local f, body = mkWindow("settings", "Настройки", "settings", T.green, 0.7, 0.86)
 	listLayout(body, nil, 10)
 	local rows = {}
 	local function send()
-		remotes.Settings:FireServer(AUDIO.m, AUDIO.s, AUDIO.h)
+		remotes.Settings:FireServer(AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t)
 	end
 	local function stepper(order, title, key, onChange)
 		local r = K.panel(body, { Size = UDim2.new(1, 0, 0, 58), LayoutOrder = order, BackgroundColor3 = T.panel2 })
@@ -1114,6 +1122,18 @@ do
 	end)
 	rows.h = showH
 	showH()
+	local tr = K.panel(body, { Size = UDim2.new(1, 0, 0, 58), LayoutOrder = 4, BackgroundColor3 = T.panel2 })
+	K.text(tr, "Мелодия", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.4, 0, 1, 0), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Left })
+	local tb, tl = K.button(tr, "", T.purple, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(220, 42), MaxText = 17 })
+	local function showT() tl.Text = AUDIO.t == 2 and "Космос" or "Лунная соната" end
+	tb.Activated:Connect(function()
+		AUDIO.t = AUDIO.t == 2 and 1 or 2
+		showT()
+		FX.setTrack(AUDIO.t)
+		send()
+	end)
+	rows.t = showT
+	showT()
 	function hooks.settings()
 		for _, fn in rows do fn() end
 	end
@@ -1194,8 +1214,10 @@ loop(0.5, function()
 		if UI.dailyBadge2 then UI.dailyBadge2.Visible = ST.daily.can end
 		-- обновления окон
 		if dirty.settings and ST.settings then
-			AUDIO.m, AUDIO.s, AUDIO.h = ST.settings.m or 6, ST.settings.s or 8, ST.settings.h or 1
+			local oldT = AUDIO.t
+			AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t = ST.settings.m or 6, ST.settings.s or 8, ST.settings.h or 1, ST.settings.t or 1
 			applyAudio()
+			if oldT ~= AUDIO.t and FX.setTrack then FX.setTrack(AUDIO.t) end
 			if windows.settings.Visible then hooks.settings() end
 		end
 		if dirty.seeds or dirty.sel then hooks.seedbar() end

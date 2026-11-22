@@ -2,7 +2,8 @@
 -- Всё рассчитано на динамик телефона: энергия в полосе 200-4000 Гц.
 return {
 	Music = {
-		main = "rbxassetid://72330274258040",
+		main = "rbxassetid://120589657844865", -- рояль в духе «Лунной сонаты» Бетховена (tools/make_moonlight.py)
+		space = "rbxassetid://72330274258040", -- космический лоу-фай (tools/make_music.py)
 	},
 	Sfx = {
 		reveal = "rbxassetid://100157981617213",
