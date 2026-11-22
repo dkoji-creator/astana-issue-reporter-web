@@ -33,7 +33,7 @@ for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -57,8 +57,8 @@ local function newProfile()
 		decor = {}, idx = {}, mutSeen = {}, perms = {},
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
-		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 },
+		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 },
 	}
 end
 
@@ -69,6 +69,8 @@ local function mergeDefaults(d)
 	end
 	for k, v in base.upg do if d.upg[k] == nil then d.upg[k] = v end end
 	for k, v in base.stats do if d.stats[k] == nil then d.stats[k] = v end end
+	for k, v in base.cans do if d.cans[k] == nil then d.cans[k] = v end end
+	for k, v in base.cd do if d.cd[k] == nil then d.cd[k] = v end end
 	return d
 end
 
@@ -122,7 +124,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd,
 	}
 end
 local function push(plr, ...)
@@ -788,6 +790,16 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		addCoins(plr, 1000000000)
 	elseif cmd == "planets" then
 		d.earned = math.max(d.earned, G.PlanetUnlock[6])
+	elseif cmd == "resetcd" then
+		d.cd = { cannon = 0, chest = 0 }
+		push(plr, "cd")
+	elseif cmd == "tp" then
+		local pos = Map.spots[arg == "spiral" and "spiralStart" or arg]
+		local root = ch and ch:FindFirstChild("HumanoidRootPart")
+		if not pos or not root then return false end
+		local off = arg == "chest" and Vector3.new(0, 4, 5) or Vector3.new(0, 4, 9)
+		if arg == "spiral" then off = Vector3.new(0, 3, 0) end
+		root.CFrame = CFrame.new(pos + off)
 	elseif cmd == "seeds" then
 		for _, p in G.PlantList do d.seeds[p.id] = (d.seeds[p.id] or 0) + 10 end
 		s.sel = s.sel or "moon_01"
@@ -853,6 +865,98 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	push(plr, "coins", "earned", "seeds", "sel", "planets", "upg", "bedCount", "potion")
 	return true
 end
+
+------------------------------------------------------------------ алхимия, метеорная пушка, звёздный сундук
+local function nearSpot(plr, key, radius)
+	local pos = Map.spots[key]
+	local ch = plr.Character
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+	return pos ~= nil and root ~= nil and (root.Position - pos).Magnitude <= radius
+end
+local function giveElixir(d)
+	local e = G.Elixir
+	if d.potion.luck == e.luck then d.potion.uses += e.uses else d.potion = { luck = e.luck, uses = e.uses } end
+end
+local function rewardReveal(plr, head, id, sub, color)
+	RX.Reveal:FireClient(plr, { id = id, m = {}, w = G.Plants[id].kg, head = head, sub = sub, color = color })
+end
+
+RX.Brew.OnServerInvoke = function(plr, uids)
+	local d = D[plr]
+	if not d or type(uids) ~= "table" or #uids ~= G.Alchemy.slots then return false, "Нужно 3 плода" end
+	if not nearSpot(plr, "alchemy", G.Alchemy.radius) then return false, "Подойди к котлу на Луне" end
+	local want, picked = {}, {}
+	for _, u in uids do
+		if type(u) ~= "number" or want[u] then return false, "Плоды должны быть разными" end
+		want[u] = true
+	end
+	local keep = {}
+	for _, f in d.fruits do
+		if want[f.uid] then
+			if f.fav then return false, "Избранные плоды не варятся" end
+			table.insert(picked, f)
+		else
+			table.insert(keep, f)
+		end
+	end
+	if #picked ~= G.Alchemy.slots then return false, "Плодов нет в сумке" end
+	d.fruits = keep
+	local res = G.brew(picked, math.max(1, unlockedPlanets(d)), Random.new())
+	d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty
+	if res.elixir then giveElixir(d) end
+	d.stats.brews += 1
+	push(plr, "fruits", "seeds", "potion", "stats")
+	local plant = G.Plants[res.id]
+	local sub = ("%s · семян: %d%s"):format(G.Rarity[plant.rarity].name, res.qty, res.elixir and " · + эликсир удачи x25" or "")
+	rewardReveal(plr, res.up and "АЛХИМИЯ: РЕДЧЕ!" or "АЛХИМИЯ!", res.id, sub, G.Rarity[plant.rarity].color)
+	return true, res
+end
+
+RX.CannonStart.OnServerInvoke = function(plr)
+	local d, s = D[plr], S[plr]
+	if not d then return false end
+	local left = (d.cd.cannon or 0) - now()
+	if left > 0 then return false, ("Пушка перезаряжается: %d:%02d"):format(left // 60, left % 60) end
+	if not nearSpot(plr, "cannon", G.Cannon.radius) then return false, "Подойди к пушке на Европе" end
+	s.cannon = os.clock()
+	return true, G.Cannon.duration
+end
+RX.CannonEnd.OnServerInvoke = function(plr, hits)
+	local d, s = D[plr], S[plr]
+	if not d or not s.cannon then return false end
+	local elapsed = os.clock() - s.cannon
+	s.cannon = nil
+	hits = math.clamp(math.floor(tonumber(hits) or 0), 0, math.min(G.Cannon.maxHits, math.floor(elapsed * 2.2)))
+	d.cd.cannon = now() + G.Cannon.cooldown
+	d.stats.meteors += hits
+	local res = G.cannonReward(hits, math.max(1, unlockedPlanets(d)), Random.new())
+	d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty
+	addCoins(plr, res.coins)
+	push(plr, "seeds", "cd", "stats")
+	local plant = G.Plants[res.id]
+	rewardReveal(plr, hits >= 20 and "МЕТКИЙ СТРЕЛОК!" or "МЕТЕОРИТЫ СБИТЫ!", res.id,
+		("Сбито: %d · +%s монет · семян: %d"):format(hits, G.fmt(res.coins), res.qty), G.Rarity[plant.rarity].color)
+	return true, res
+end
+
+game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr, plr)
+	if pr:GetAttribute("Action") ~= "chest" then return end
+	local d = D[plr]
+	if not d or not nearSpot(plr, "chest", 16) then return end
+	local left = (d.cd.chest or 0) - now()
+	if left > 0 then
+		notify(plr, ("Сундук снова наполнится через %d:%02d"):format(left // 60, left % 60), "bad")
+		return
+	end
+	d.cd.chest = now() + G.Chest.cooldown
+	d.stats.chests += 1
+	local res = G.chestReward(math.max(1, unlockedPlanets(d)), Random.new())
+	d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty
+	if res.elixir then giveElixir(d) end
+	addCoins(plr, res.coins)
+	push(plr, "seeds", "cd", "potion", "stats")
+	rewardReveal(plr, "ЗВЁЗДНЫЙ СУНДУК!", res.id, ("+%s монет%s"):format(G.fmt(res.coins), res.elixir and " · эликсир удачи x25" or ""), Color3.fromRGB(255, 215, 120))
+end)
 
 ------------------------------------------------------------------ покупки за Robux
 local function grant(plr, key)

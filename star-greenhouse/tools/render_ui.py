@@ -239,7 +239,7 @@ def render(guis, path):
         bg.line([(0, y), (W * SS, y)], fill=(int(20 + 30 * t), int(18 + 20 * t), int(40 + 25 * t), 255))
     guis = sorted(guis, key=lambda g: g.get("DisplayOrder", 0))
     for g in guis:
-        if not g.get("Visible", True):
+        if not g.get("Visible", True) or not g.get("Enabled", True):
             continue
         sc = first(g, "UIScale")
         s = sc.get("Scale", 1) if sc else 1

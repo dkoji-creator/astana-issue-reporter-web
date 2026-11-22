@@ -242,6 +242,74 @@ G.Products = {
 G.Products.cans5 = { id = 3734777270, price = 49, name = "Лейки сверхновой x10", desc = "10 лучших леек: каждая сокращает рост на 90%" }
 G.ProductOrder = { "cans5", "small", "big", "growth2x", "auto", "beds" }
 
+------------------------------------------------------------------ места, ради которых стоит вернуться на старые планеты
+-- семена заданной редкости с открытых планет
+function G.seedPool(rank: number, planets: number): { string }
+	local pool = {}
+	for _, p in G.PlantList do
+		if G.Rarity[p.rarity].rank == rank and (G.PlanetIndex[p.planet] or 99) <= planets then table.insert(pool, p.id) end
+	end
+	return pool
+end
+local function pickSeed(rank, planets, rng)
+	rank = math.clamp(rank, 1, 6)
+	local pool = G.seedPool(rank, planets)
+	while #pool == 0 and rank > 1 do
+		rank -= 1
+		pool = G.seedPool(rank, planets)
+	end
+	return pool[rng:NextInteger(1, #pool)], rank
+end
+G.pickSeed = pickSeed
+
+G.PlanetFeature = { "Алхимия", "", "Метеорная пушка", "", "Паркур к сундуку", "Телескоп и прыжок в бездну" }
+-- Луна: алхимия. Три плода в котёл, на выходе семя (часто реже исходных) и иногда эликсир удачи
+G.Alchemy = { radius = 40, slots = 3 }
+G.Elixir = { luck = 25, uses = 3 }
+function G.brewChance(fruits): number
+	local muts, same = 0, #fruits > 0
+	for _, f in fruits do
+		muts += #f.m
+		if f.id ~= fruits[1].id then same = false end
+	end
+	return math.min(0.9, 0.25 + 0.06 * muts + (same and #fruits == 3 and 0.35 or 0))
+end
+function G.brew(fruits, planets: number, rng)
+	local maxRank, muts = 1, 0
+	for _, f in fruits do
+		maxRank = math.max(maxRank, G.Rarity[G.Plants[f.id].rarity].rank)
+		muts += #f.m
+	end
+	local up = rng:NextNumber() < G.brewChance(fruits)
+	local id, rank = pickSeed(maxRank + (up and 1 or 0), planets, rng)
+	return {
+		id = id,
+		qty = rng:NextNumber() < 0.3 and 2 or 1,
+		up = rank > maxRank,
+		elixir = rng:NextNumber() < math.min(0.6, 0.15 + 0.05 * muts),
+	}
+end
+
+-- Европа: пушка по метеоритам. Чем больше сбил за раунд, тем реже семя
+G.Cannon = { radius = 30, duration = 30, cooldown = 180, maxHits = 60 }
+function G.cannonReward(hits: number, planets: number, rng)
+	local roll = rng:NextNumber()
+	local rank
+	if hits >= 32 then rank = roll < 0.25 and 5 or 4
+	elseif hits >= 20 then rank = roll < 0.25 and 4 or 3
+	elseif hits >= 10 then rank = roll < 0.3 and 3 or 2
+	else rank = hits >= 3 and 2 or 1 end
+	local id = pickSeed(rank, planets, rng)
+	return { id = id, qty = hits >= 25 and 2 or 1, coins = hits * G.starReward(planets, false) * 2 }
+end
+
+-- Туманность: сундук на вершине спутниковой спирали
+G.Chest = { cooldown = 600 }
+function G.chestReward(planets: number, rng)
+	local id = pickSeed(rng:NextNumber() < 0.2 and 5 or 4, planets, rng)
+	return { id = id, qty = 1, coins = G.starReward(planets, true) * 25, elixir = rng:NextNumber() < 0.35 }
+end
+
 ------------------------------------------------------------------ поливки: расходуются, срабатывают сразу (без ожидания), чем выше ранг — тем сильнее
 G.Cans = {
 	{ name = "Лейка новичка", pct = 0.25, price = 150, color = Color3.fromRGB(150, 200, 255) },

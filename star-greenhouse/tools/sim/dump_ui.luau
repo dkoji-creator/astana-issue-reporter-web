@@ -172,7 +172,7 @@ frames(30, 0.2)
 local PROPS = { "Size", "Position", "AnchorPoint", "Visible", "BackgroundColor3", "BackgroundTransparency", "ZIndex", "LayoutOrder", "Text", "TextColor3",
 	"TextTransparency", "TextXAlignment", "TextYAlignment", "TextScaled", "TextSize", "TextWrapped", "Font", "Image", "ImageTransparency", "AutomaticSize",
 	"FillDirection", "Padding", "HorizontalAlignment", "VerticalAlignment", "CellSize", "CellPadding", "PaddingTop", "PaddingBottom", "PaddingLeft",
-	"PaddingRight", "CornerRadius", "Color", "Thickness", "Transparency", "Scale", "MaxTextSize", "MinTextSize", "MaxSize", "DisplayOrder", "ApplyStrokeMode", "Rotation", "CanvasPosition" }
+	"PaddingRight", "CornerRadius", "Color", "Thickness", "Transparency", "Scale", "MaxTextSize", "MinTextSize", "MaxSize", "DisplayOrder", "ApplyStrokeMode", "Rotation", "CanvasPosition", "Enabled" }
 local function enc(v)
 	local t = type(v)
 	if t == "number" then return (v ~= v or v == math.huge or v == -math.huge) and "0" or ("%.4f"):format(v) end
@@ -232,4 +232,45 @@ for _, b in colFrame:GetChildren() do
 		frames(3, 0.3)
 	end
 end
+-- новые сцены: алхимия, пушка, телескоп
+local PPS = game:GetService("ProximityPromptService")
+local function findPrompt(attr, val)
+	for _, d in workspace.World:GetDescendants() do
+		if d:IsA("ProximityPrompt") and d:GetAttribute(attr) == val then return d end
+	end
+end
+inv("Admin", "showcase")
+frames(10, 0.2)
+for i = 1, 6 do toBed(i) fire("Act", i) frames(3, 0.1) end
+inv("Admin", "tp", "alchemy")
+frames(3)
+PPS.PromptTriggered:Fire(findPrompt("Window", "alchemy"), plr)
+frames(10, 0.3)
+local function clickAlch(n)
+	for _, w in pg.SpiritWindows:GetDescendants() do
+		if w:IsA("ScrollingFrame") and w.Parent and w.Parent.Parent and w.Parent.Parent.Visible then
+			for _, b in w:GetChildren() do
+				if b:IsA("TextButton") and b.LayoutOrder == n then b.Activated:Fire() frames(2, 0.1) return end
+			end
+		end
+	end
+end
+clickAlch(1)
+clickAlch(3)
+frames(5, 0.2)
+dumpState("alchemy")
+inv("Admin", "tp", "cannon")
+frames(3)
+PPS.PromptTriggered:Fire(findPrompt("Game", "cannon"), plr)
+frames(80, 0.1)
+dumpState("cannon")
+frames(300, 0.1)
+frames(20, 0.1)
+for _, g in pg:GetChildren() do if g.Name == "Reveal" then dumpState("reveal") break end end
+frames(200, 0.1)
+inv("Admin", "tp", "telescope")
+frames(3)
+PPS.PromptTriggered:Fire(findPrompt("Game", "telescope"), plr)
+frames(20, 0.1)
+dumpState("telescope")
 return SIM

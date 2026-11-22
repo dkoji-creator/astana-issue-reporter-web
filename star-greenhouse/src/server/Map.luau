@@ -734,6 +734,7 @@ LANDMARK[3] = function(pi, f)
 	for k = 1, 22 do
 		local deg = (k - 1) * 360 / 22 + rng:NextNumber(-6, 6)
 		local p = spot(pi, deg, rng:NextNumber(132, 150))
+		if math.abs(deg - 225) < 16 then continue end
 		local h = rng:NextNumber(8, 22)
 		ell(f, "IceSpike", CF(p + V3(0, h * 0.42, 0)) * A(rng:NextNumber(-0.25, 0.25), rng:NextNumber(0, 6), rng:NextNumber(-0.25, 0.25)), V3(h * 0.22, h, h * 0.22),
 			c(170, 220, 250), Mat.Glass, { Transparency = 0.2, CanCollide = false })
@@ -870,6 +871,293 @@ LANDMARK[6] = function(pi, f)
 	end
 end
 
+------------------------------------------------------------------ места, ради которых возвращаются на старые планеты
+Map.spots = {}
+local FEATURE = {}
+local function featureSpot(pi, deg, r)
+	local ctr = WT.Centers[pi]
+	local a = math.rad(deg)
+	local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
+	return V3(x, Map.surfaceY(x, z, pi), z), V3(cos(a), 0, sin(a))
+end
+-- голографическая вывеска, видна издалека
+local function holoSign(parent, pos, text, color, sub)
+	local p = anchorPart(parent, "HoloSign", CF(pos), V3(1, 1, 1))
+	local bb = Instance.new("BillboardGui")
+	bb.Size, bb.AlwaysOnTop, bb.LightInfluence, bb.MaxDistance = UDim2.fromOffset(260, 70), false, 0, 420
+	bb.Parent = p
+	local t = Instance.new("TextLabel")
+	t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.new(1, 0, 0.62, 0), 1, true, Enum.Font.GothamBlack
+	t.Text, t.TextColor3, t.TextStrokeTransparency, t.TextStrokeColor3 = text, color, 0.4, c(10, 10, 30)
+	t.Parent = bb
+	local t2 = Instance.new("TextLabel")
+	t2.Name = "Sub"
+	t2.Position, t2.Size, t2.BackgroundTransparency, t2.TextScaled, t2.Font = UDim2.fromScale(0, 0.62), UDim2.fromScale(1, 0.38), 1, true, Enum.Font.GothamBold
+	t2.Text, t2.TextColor3, t2.TextStrokeTransparency = sub or "", c(235, 235, 255), 0.5
+	t2.Parent = bb
+	return p, t2
+end
+
+-- Луна: алхимическая лаборатория под стеклянным куполом с котлом
+FEATURE[1] = function(pi, f)
+	local base, out = featureSpot(pi, 0, 128)
+	local m = Instance.new("Model")
+	m.Name = "AlchemyLab"
+	m.Parent = f
+	local face = CFrame.lookAt(base, base - out)
+	local purple, green = c(170, 100, 255), c(120, 255, 170)
+	cyl(m, "Floor", face * CF(0, 0.6, 0), 1.6, 30, c(58, 54, 78), Mat.Slate)
+	dcyl(m, "FloorGlow", face * CF(0, 1.42, 0), 0.06, 28.6, purple, Mat.Neon, { Transparency = 0.55 })
+	dcyl(m, "FloorInner", face * CF(0, 1.44, 0), 0.06, 27.8, c(48, 44, 66), Mat.Slate)
+	-- кристаллические колонны и парящий купол
+	for k = 0, 7 do
+		local a = k / 8 * PI * 2 + PI / 8
+		local p0 = (face * CF(cos(a) * 13, 1.4, sin(a) * 13)).Position
+		if k ~= 6 and k ~= 5 then
+			part(m, "Pillar", V3(1.4, 12, 1.4), CF(p0 + V3(0, 6, 0)) * A(0, a, 0), c(80, 76, 110), Mat.Marble)
+			ball(m, "PillarGem", p0 + V3(0, 12.6, 0), 1.3, k % 2 == 0 and purple or green, Mat.Neon)
+		end
+	end
+	ell(m, "Dome", face * CF(0, 13, 0), V3(29, 14, 29), c(170, 140, 255), Mat.Glass, { Transparency = 0.78, CanCollide = false, CastShadow = false })
+	ring(m, "DomeRing", face.Position, 13.8, 13.4, 0.8, 0.5, purple, Mat.Neon, 24)
+	-- котёл
+	local pot = face * CF(0, 1.4, 0)
+	for k = 0, 2 do
+		local a = k / 3 * PI * 2
+		seg(m, "PotLeg", (pot * CF(cos(a) * 2.2, 2.2, sin(a) * 2.2)).Position, (pot * CF(cos(a) * 3.4, 0, sin(a) * 3.4)).Position, 0.5, c(40, 38, 50), Mat.Metal)
+	end
+	cyl(m, "Cauldron", pot * CF(0, 3.2, 0), 3.6, 7, c(36, 34, 46), Mat.Metal)
+	ell(m, "CauldronBelly", pot * CF(0, 2.6, 0), V3(8, 4, 8), c(32, 30, 42), Mat.Metal)
+	ring(m, "CauldronRim", pot.Position, 3.55, 5.05, 0.6, 0.5, c(200, 170, 90), Mat.Metal, 16)
+	local brew = dcyl(m, "Brew", pot * CF(0, 4.9, 0), 0.2, 6.6, green, Mat.Neon)
+	brew:SetAttribute("Pulse", 1)
+	local bub = anchorPart(m, "Bubbles", pot * CF(0, 5.2, 0), V3(5, 0.4, 5))
+	emitter(bub, { Color = ColorSequence.new(green, purple), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1.2) }), LightEmission = 1,
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(1.2, 2.2), Rate = 26,
+		Speed = NumberRange.new(2, 5), SpreadAngle = Vector2.new(20, 20), EmissionDirection = Enum.NormalId.Top })
+	emitter(bub, { Color = ColorSequence.new(c(200, 170, 255)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 6) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(3, 5), Rate = 5,
+		Speed = NumberRange.new(2, 4), EmissionDirection = Enum.NormalId.Top })
+	light(bub, green, 30, 2.2)
+	-- полки с колбами
+	local rng = Random.new(11)
+	for side = -1, 1, 2 do
+		local shelf = face * CF(side * 9, 1.4, -6) * A(0, side * 0.6, 0)
+		part(m, "Shelf", V3(6, 0.4, 2), shelf * CF(0, 2.4, 0), COL.wood, Mat.Wood)
+		part(m, "Shelf", V3(6, 0.4, 2), shelf * CF(0, 4.6, 0), COL.wood, Mat.Wood)
+		part(m, "ShelfSide", V3(0.4, 5, 2), shelf * CF(-3, 2.5, 0), COL.wood2, Mat.Wood)
+		part(m, "ShelfSide", V3(0.4, 5, 2), shelf * CF(3, 2.5, 0), COL.wood2, Mat.Wood)
+		for row = 0, 1 do
+			for q = 0, 3 do
+				local col = ({ purple, green, c(255, 140, 90), c(110, 200, 255) })[rng:NextInteger(1, 4)]
+				local pp = (shelf * CF(-2.1 + q * 1.4, 3.1 + row * 2.2, 0)).Position
+				ball(m, "Flask", pp, 0.9, col, Mat.Neon, { Transparency = 0.15 })
+				seg(m, "FlaskNeck", pp + V3(0, 0.3, 0), pp + V3(0, 0.95, 0), 0.32, c(220, 230, 255), Mat.Glass, { Transparency = 0.4 })
+			end
+		end
+	end
+	-- руны на полу вокруг котла
+	ring(m, "Runes", pot.Position, 6.5, 0.08, 0.35, 0.08, purple, Mat.Neon, 18, function(a) return math.floor(a * 3) % 2 == 0 end)
+	local trig = anchorPart(m, "PromptPart", pot * CF(0, 3, 0), V3(8, 6, 8))
+	local pr = prompt(trig, "Сварить из 3 плодов", "Алхимия", 12, "Open_alchemy")
+	pr:SetAttribute("Window", "alchemy")
+	holoSign(m, base + V3(0, 22, 0), "АЛХИМИЯ", c(200, 150, 255), "3 плода = редкое семя")
+	Map.spots.alchemy = pot.Position
+end
+
+-- Европа: метеорная пушка на краю ледяного острова
+FEATURE[3] = function(pi, f)
+	local base, out = featureSpot(pi, 225, 130)
+	local m = Instance.new("Model")
+	m.Name = "MeteorCannon"
+	m.Parent = f
+	local face = CFrame.lookAt(base, base + out)
+	local ice, steel, cyan = c(170, 215, 240), c(70, 82, 110), c(90, 220, 255)
+	cyl(m, "Base", face * CF(0, 0.7, 0), 1.8, 26, c(60, 72, 96), Mat.DiamondPlate)
+	dcyl(m, "BaseGlow", face * CF(0, 1.62, 0), 0.06, 25.4, cyan, Mat.Neon, { Transparency = 0.45 })
+	dcyl(m, "BaseInner", face * CF(0, 1.64, 0), 0.06, 24.6, c(60, 72, 96), Mat.DiamondPlate)
+	cyl(m, "Turret", face * CF(0, 3.6, 0), 4.2, 12, steel, Mat.Metal)
+	dcyl(m, "TurretRing", face * CF(0, 5.6, 0), 0.5, 12.4, cyan, Mat.Neon)
+	for side = -1, 1, 2 do
+		part(m, "Yoke", V3(1.2, 5, 3), face * CF(side * 3.6, 7.6, 0), steel:Lerp(c(0, 0, 0), 0.15), Mat.Metal)
+	end
+	-- ствол смотрит наружу, в космос, под углом вверх
+	local pivot = face * CF(0, 8.4, 0)
+	local barrel = Instance.new("Model")
+	barrel.Name = "Barrel"
+	barrel.Parent = m
+	local bcf = pivot * A(math.rad(35), 0, 0)
+	local tube = part(barrel, "Tube", V3(18, 4, 4), bcf * CF(0, 0, -7) * A(0, PI / 2, 0), steel, Mat.Metal, { Shape = Enum.PartType.Cylinder })
+	for q = 0, 2 do
+		dcyl(barrel, "TubeRing", bcf * CF(0, 0, -3 - q * 4.8) * A(PI / 2, 0, 0), 0.6, 4.7, cyan, Mat.Neon)
+	end
+	dcyl(barrel, "MuzzleRim", bcf * CF(0, 0, -16) * A(PI / 2, 0, 0), 1.2, 5.2, steel:Lerp(c(255, 255, 255), 0.2), Mat.Metal)
+	ball(barrel, "Muzzle", (bcf * CF(0, 0, -16.4)).Position, 3.6, cyan, Mat.Neon, { Transparency = 0.2 })
+	ell(barrel, "Breech", bcf * CF(0, 0, 2.2), V3(5.6, 5.6, 7), steel:Lerp(c(0, 0, 0), 0.2), Mat.Metal)
+	barrel.PrimaryPart = tube
+	barrel:SetAttribute("Pivot", pivot)
+	-- ящики со снарядами и ледяные кристаллы
+	for side = -1, 1, 2 do
+		part(m, "AmmoBox", V3(3, 2, 2.2), face * CF(side * 8.5, 2.6, 4) * A(0, side * 0.3, 0), c(60, 70, 90), Mat.DiamondPlate)
+		ball(m, "AmmoGlow", (face * CF(side * 8.5, 3.8, 4)).Position, 1, cyan, Mat.Neon)
+		ell(m, "IceCrystal", face * CF(side * 11.5, 3, -4) * A(0.2 * side, 0, 0.3), V3(1.8, 7, 1.8), ice, Mat.Glass, { Transparency = 0.25, CanCollide = false })
+	end
+	local trig = anchorPart(m, "PromptPart", face * CF(0, 3, 7), V3(6, 4, 6))
+	local pr = prompt(trig, "Сбивать метеориты", "Метеорная пушка", 12, "Game_cannon")
+	pr:SetAttribute("Game", "cannon")
+	local _, sub = holoSign(m, base + V3(0, 24, 0), "МЕТЕОРНАЯ ПУШКА", c(120, 220, 255), "сбивай метеориты = редкие семена")
+	sub.Parent:SetAttribute("Cooldown", "cannon")
+	Map.spots.cannon = (face * CF(0, 3, 0)).Position
+	Map.spots.cannonDir = out
+end
+
+-- Туманность: спутники над островом. По их спирали можно забраться к сундуку на орбитальной станции
+local function satellite(parent, cf, d, walk, tint)
+	local gold, panel = c(225, 190, 110), c(60, 90, 190)
+	local top = cyl(parent, walk and "SatDeck" or "SatBody", cf, 1, d, c(205, 210, 225), Mat.Metal, walk and {} or { CanCollide = false })
+	dcyl(parent, "SatDeckGlow", cf * CF(0, 0.52, 0), 0.04, d - 0.6, tint, Mat.Neon, { Transparency = 0.5 })
+	dcyl(parent, "SatHull", cf * CF(0, -1.6, 0), 2.4, d * 0.55, gold, Mat.Foil)
+	ell(parent, "SatDish", cf * CF(0, -3.2, 0) * A(PI, 0, 0), V3(d * 0.5, 0.8, d * 0.5), c(235, 238, 245), Mat.Metal, { CanCollide = false })
+	for side = -1, 1, 2 do
+		part(parent, walk and "SatWing" or "SatWingDeco", V3(d * 0.75, 0.3, d * 0.4), cf * CF(side * d * 0.85, -0.1, 0), panel, Mat.Glass,
+			walk and { Reflectance = 0.2 } or { CanCollide = false, Reflectance = 0.2 })
+		deco(parent, "SatWingEdge", V3(d * 0.75, 0.32, 0.18), cf * CF(side * d * 0.85, -0.1, d * 0.2), tint, Mat.Neon)
+	end
+	local blink = ball(parent, "SatBlink", (cf * CF(0, -3.6, 0)).Position, 0.6, tint, Mat.Neon)
+	blink:SetAttribute("Blink", 1)
+	return top
+end
+FEATURE[5] = function(pi, f)
+	local ctr = WT.Centers[pi]
+	local gy = Map.surfaceY(ctr.X, ctr.Z, pi)
+	local m = Instance.new("Folder")
+	m.Name = "SatelliteSpiral"
+	m.Parent = f
+	local tints = { c(120, 220, 255), c(220, 130, 255), c(255, 150, 200) }
+	local R, steps, step, rise = 46, 32, 0.27, 3.6
+	local a0 = math.rad(200)
+	local lastY = gy
+	for k = 1, steps do
+		local a = a0 + k * step
+		local x, z = ctr.X + cos(a) * R, ctr.Z + sin(a) * R
+		local y = gy + 3.2 + (k - 1) * rise
+		if k == 1 then y = math.max(y, Map.surfaceY(x, z, pi) + 3) end
+		if k == 1 then Map.spots.spiralStart = V3(x, y, z) end
+		local rest = k % 11 == 0
+		local cf = CFrame.lookAt(V3(x, y, z), V3(ctr.X, y, ctr.Z))
+		satellite(m, cf * A(0, PI / 2, 0), rest and 11 or 7.5, true, tints[(k // 11) % 3 + 1])
+		if rest then
+			ring(m, "Checkpoint", V3(x, y, z), 5.2, 2.6, 0.4, 0.4, c(140, 255, 200), Mat.Neon, 14, nil, { Transparency = 0.3 })
+		end
+		lastY = y
+	end
+	-- орбитальная станция с сундуком
+	local aS = a0 + (steps + 1.6) * step
+	local sp = V3(ctr.X + cos(aS) * (R - 6), lastY + 4.2, ctr.Z + sin(aS) * (R - 6))
+	local scf = CFrame.lookAt(sp, V3(ctr.X, sp.Y, ctr.Z))
+	cyl(m, "Station", scf, 1.2, 22, c(210, 214, 230), Mat.Metal)
+	dcyl(m, "StationGlow", scf * CF(0, 0.62, 0), 0.05, 21.4, c(255, 210, 120), Mat.Neon, { Transparency = 0.4 })
+	dcyl(m, "StationInner", scf * CF(0, 0.64, 0), 0.05, 20.4, c(200, 204, 222), Mat.Metal)
+	dcyl(m, "StationHull", scf * CF(0, -2.5, 0), 4, 12, c(225, 190, 110), Mat.Foil)
+	ring(m, "StationRing", sp - V3(0, 2.5, 0), 14, 0, 1.2, 1.2, c(180, 140, 255), Mat.Neon, 28, nil, { Transparency = 0.2 })
+	for side = -1, 1, 2 do
+		deco(m, "StationPanel", V3(18, 0.3, 6), scf * CF(side * 22, -2.5, 0), c(60, 90, 190), Mat.Glass, { Reflectance = 0.2 })
+	end
+	-- сундук
+	local chest = Instance.new("Model")
+	chest.Name = "StarChest"
+	chest.Parent = m
+	local ccf = scf * CF(0, 0.6, 0)
+	part(chest, "ChestBase", V3(4.4, 2.4, 3), ccf * CF(0, 1.2, 0), c(90, 60, 140), Mat.Wood)
+	part(chest, "ChestLid", V3(4.6, 1, 3.2), ccf * CF(0, 2.9, 0), c(110, 70, 170), Mat.Wood)
+	for sx = -1, 1, 2 do part(chest, "ChestBand", V3(0.4, 3.6, 3.3), ccf * CF(sx * 1.5, 1.8, 0), c(240, 200, 100), Mat.Metal) end
+	local glow = ball(chest, "ChestGem", (ccf * CF(0, 2.2, -1.65)).Position, 0.9, c(255, 220, 120), Mat.Neon)
+	light(glow, c(255, 210, 120), 26, 2)
+	local cs = anchorPart(chest, "ChestSparks", ccf * CF(0, 3.5, 0), V3(4, 1, 3))
+	emitter(cs, { Color = ColorSequence.new(c(255, 230, 150)), Size = NumberSequence.new(0.5, 0), LightEmission = 1, Lifetime = NumberRange.new(1, 2), Rate = 14,
+		Speed = NumberRange.new(2, 5), SpreadAngle = Vector2.new(60, 60), EmissionDirection = Enum.NormalId.Top })
+	local pr = prompt(chest.ChestBase, "Открыть", "Звёздный сундук", 10, "Chest")
+	pr:SetAttribute("Action", "chest")
+	local _, sub = holoSign(m, sp + V3(0, 9, 0), "ЗВЁЗДНЫЙ СУНДУК", c(255, 215, 120), "забирайся по спутникам")
+	sub.Parent:SetAttribute("Cooldown", "chest")
+	holoSign(m, V3(ctr.X + cos(a0 + step) * R, gy + 9, ctr.Z + sin(a0 + step) * R), "ПАРКУР", c(150, 230, 255), "к сундуку на орбите")
+	Map.spots.chest = ccf.Position
+	-- спутники, которые кружат над островом (двигает клиент)
+	local rng = Random.new(5)
+	for k = 1, 7 do
+		local sm = Instance.new("Model")
+		sm.Name = "OrbitSat"
+		local cf = CF(ctr + V3(0, 90, 0))
+		local top = satellite(sm, cf, rng:NextNumber(5, 9), false, tints[k % 3 + 1])
+		sm.PrimaryPart = top
+		sm:SetAttribute("OrbitR", rng:NextNumber(110, 175))
+		sm:SetAttribute("OrbitY", rng:NextNumber(70, 140))
+		sm:SetAttribute("OrbitSpeed", rng:NextNumber(0.04, 0.09) * (k % 2 == 0 and -1 or 1))
+		sm:SetAttribute("OrbitPhase", k / 7 * PI * 2)
+		sm:SetAttribute("OrbitCenter", ctr)
+		sm.Parent = m
+	end
+end
+
+-- Ядро: смотровая площадка над бездной с телескопом и трамплином
+FEATURE[6] = function(pi, f)
+	local base, out = featureSpot(pi, 270, 126)
+	local m = Instance.new("Model")
+	m.Name = "Overlook"
+	m.Parent = f
+	local y = base.Y + 0.4
+	local face = CFrame.lookAt(V3(base.X, y, base.Z), V3(base.X, y, base.Z) + out)
+	local gold, marble, glow = c(236, 196, 100), c(240, 230, 210), c(255, 220, 140)
+	local L = 74
+	-- проход сквозь холмы на краю: мост виден и с площади
+	local t = workspace:FindFirstChildOfClass("Terrain")
+	if t then t:FillBlock(face * CF(0, 22, -26), V3(18, 44, 56), Mat.Air) end
+	part(m, "Bridge", V3(12, 1, L), face * CF(0, -0.5, -L / 2), marble, Mat.Marble)
+	part(m, "BridgeGlass", V3(6, 1.02, L - 6), face * CF(0, -0.49, -L / 2 - 2), c(255, 230, 170), Mat.Glass, { Transparency = 0.45 })
+	for side = -1, 1, 2 do
+		deco(m, "BridgeEdge", V3(0.3, 0.3, L), face * CF(side * 6, 0.1, -L / 2), glow, Mat.Neon)
+		for q = 0, 6 do
+			local zz = -6 - q * 10
+			part(m, "RailPost", V3(0.5, 1.6, 0.5), face * CF(side * 5.6, 0.8, zz), gold, Mat.Metal)
+			ball(m, "RailLamp", (face * CF(side * 5.6, 1.8, zz)).Position, 0.6, glow, Mat.Neon)
+		end
+		part(m, "Rail", V3(0.3, 0.3, L - 8), face * CF(side * 5.6, 1.4, -L / 2 - 2), gold, Mat.Metal)
+		-- подпорки уходят вниз под край острова
+		seg(m, "Strut", (face * CF(side * 5, -1, -L + 8)).Position, (face * CF(side * 3, -26, -8)).Position, 1.2, gold, Mat.Metal)
+	end
+	-- круглая площадка на конце
+	local endCF = face * CF(0, 0, -L - 6)
+	cyl(m, "Deck", endCF * CF(0, -0.5, 0), 1, 20, marble, Mat.Marble)
+	dcyl(m, "DeckGlow", endCF * CF(0, 0.02, 0), 0.05, 19.4, glow, Mat.Neon, { Transparency = 0.35 })
+	dcyl(m, "DeckInner", endCF * CF(0, 0.04, 0), 0.05, 18.6, marble, Mat.Marble)
+	ell(m, "DeckUnder", endCF * CF(0, -4, 0), V3(16, 8, 16), gold, Mat.Metal)
+	local ul = anchorPart(m, "DeckLight", endCF * CF(0, -8, 0), V3(2, 1, 2))
+	light(ul, glow, 40, 2)
+	-- телескоп сбоку от трамплина
+	local tcf = endCF * CF(-5.5, 0, 1) * A(0, PI * 0.15, 0)
+	for k = 0, 2 do
+		local a = k / 3 * PI * 2
+		seg(m, "TripodLeg", (tcf * CF(0, 4.2, 0)).Position, (tcf * CF(cos(a) * 1.8, 0, sin(a) * 1.8)).Position, 0.25, c(80, 60, 40), Mat.Metal)
+	end
+	local tube = tcf * CF(0, 4.6, 0) * A(math.rad(-18), 0, 0)
+	part(m, "TelescopeTube", V3(6, 1.4, 1.4), tube * CF(0, 0, -1) * A(0, PI / 2, 0), gold, Mat.Metal, { Shape = Enum.PartType.Cylinder, CanCollide = false })
+	part(m, "TelescopeLens", V3(0.3, 1.7, 1.7), tube * CF(0, 0, -4) * A(0, PI / 2, 0), c(150, 200, 255), Mat.Glass, { Shape = Enum.PartType.Cylinder, CanCollide = false, Transparency = 0.2 })
+	part(m, "TelescopeEye", V3(1, 0.6, 0.6), tube * CF(0, 0, 2.3) * A(0, PI / 2, 0), c(60, 50, 40), Mat.Metal, { Shape = Enum.PartType.Cylinder, CanCollide = false })
+	local trig = anchorPart(m, "TelescopePrompt", tcf * CF(0, 3, 0), V3(3, 4, 3))
+	local pr = prompt(trig, "Посмотреть на планеты", "Телескоп", 10, "Game_telescope")
+	pr:SetAttribute("Game", "telescope")
+	Map.spots.telescope = (tube * CF(0, 0.4, 2.6)).Position
+	-- трамплин: короткий мостик и площадка-катапульта
+	local board = endCF * CF(3, 0, -10)
+	part(m, "DiveBoard", V3(4, 0.6, 9), board * CF(0, -0.3, 0), gold, Mat.Metal)
+	local pad = part(m, "LaunchPad", V3(4, 0.3, 3), board * CF(0, 0.1, -3.2), c(255, 140, 80), Mat.Neon)
+	pad:SetAttribute("Launch", out * 70 + V3(0, 110, 0))
+	local sign = part(m, "DiveSign", V3(5, 1.6, 0.3), board * CF(-3.2, 2.2, 2) * A(0, PI, 0), c(30, 24, 40), Mat.SmoothPlastic, { CanCollide = false })
+	surfaceText(sign, Enum.NormalId.Front, "ПРЫЖОК В БЕЗДНУ", glow, 30)
+	surfaceText(sign, Enum.NormalId.Back, "ПРЫЖОК В БЕЗДНУ", glow, 30)
+	holoSign(m, endCF.Position + V3(0, 16, 0), "СМОТРОВАЯ", c(255, 220, 140), "телескоп и прыжок вниз")
+end
+
 ------------------------------------------------------------------ фон
 local function billboard(parent, name, image, pos, size)
 	-- картинка планеты на невидимой плоскости, повёрнутой к центру станции (SurfaceGui не зависит от прозрачности детали)
@@ -973,6 +1261,7 @@ function Map.build()
 		lm.Name = "Landmark"
 		lm.Parent = pf
 		if LANDMARK[pi] then LANDMARK[pi](pi, lm) end
+		if FEATURE[pi] then FEATURE[pi](pi, lm) end
 		for j = 1, Map.SlotsPerPlanet do
 			P.markers[j] = slotMarker(pi, j, slots)
 		end

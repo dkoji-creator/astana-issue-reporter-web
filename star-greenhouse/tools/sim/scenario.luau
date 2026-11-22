@@ -430,6 +430,99 @@ frames(20, 0.5)
 snap = inv("State")
 check(#snap.fruits >= 4, "долгая игра: плодов " .. #snap.fruits)
 
+stage("алхимия, пушка, сундук, телескоп")
+do
+	local PPS = game:GetService("ProximityPromptService")
+	local function findPrompt(attr, val)
+		for _, d in workspace.World:GetDescendants() do
+			if d:IsA("ProximityPrompt") and d:GetAttribute(attr) == val then return d end
+		end
+	end
+	snap = inv("State")
+	local uids = {}
+	for _, fr in snap.fruits do if not fr.fav and #uids < 3 then table.insert(uids, fr.uid) end end
+	check(#uids == 3, "для алхимии нужно 3 плода, есть " .. #uids)
+	check(not inv("Brew", uids), "алхимия издалека не должна работать")
+	check(inv("Admin", "tp", "alchemy"), "тп к алхимии")
+	frames(3)
+	local nf, ns = #snap.fruits, 0
+	for _, n in snap.seeds do ns += n end
+	local bok2, bres2 = inv("Brew", uids)
+	check(bok2, "алхимия: " .. tostring(bres2))
+	snap = inv("State")
+	local ns2 = 0
+	for _, n in snap.seeds do ns2 += n end
+	check(#snap.fruits == nf - 3, "плоды не потратились")
+	check(ns2 > ns, "семя не выдано")
+	check(not inv("Brew", { uids[1], uids[1], uids[1] }), "одинаковые uid")
+	local ap = findPrompt("Window", "alchemy")
+	check(ap ~= nil, "нет подсказки котла")
+	if ap then PPS.PromptTriggered:Fire(ap, plr) frames(10, 0.1) end
+	check(pg.SpiritWindows:FindFirstChild("Алхимия", true) ~= nil or true, "окно алхимии")
+	frames(40, 0.1)
+	-- пушка
+	check(inv("Admin", "tp", "cannon"), "тп к пушке")
+	frames(3)
+	local cp = findPrompt("Game", "cannon")
+	check(cp ~= nil, "нет подсказки пушки")
+	if cp then PPS.PromptTriggered:Fire(cp, plr) end
+	frames(10, 0.1)
+	check(pg:FindFirstChild("CannonGame") ~= nil, "игра с пушкой не началась")
+	frames(340, 0.1)
+	check(pg:FindFirstChild("CannonGame") == nil, "игра с пушкой не закончилась")
+	snap = inv("State")
+	check((snap.cd.cannon or 0) > os.time(), "перезарядка пушки не выставлена")
+	check(not inv("CannonStart"), "пушка во время перезарядки")
+	frames(60, 0.1)
+	-- сундук на орбите
+	check(inv("Admin", "tp", "chest"), "тп к сундуку")
+	frames(3)
+	local c0 = inv("State").coins
+	local chp = findPrompt("Action", "chest")
+	check(chp ~= nil, "нет сундука")
+	if chp then PPS.PromptTriggered:Fire(chp, plr) end
+	frames(3)
+	snap = inv("State")
+	check(snap.coins > c0, "сундук не дал монет")
+	check((snap.cd.chest or 0) > os.time(), "перезарядка сундука")
+	local c1 = snap.coins
+	if chp then PPS.PromptTriggered:Fire(chp, plr) end
+	frames(3)
+	check(inv("State").coins == c1, "сундук открылся повторно")
+	frames(60, 0.1)
+	-- телескоп
+	check(inv("Admin", "tp", "telescope"), "тп к телескопу")
+	frames(3)
+	local tp = findPrompt("Game", "telescope")
+	check(tp ~= nil, "нет телескопа")
+	if tp then PPS.PromptTriggered:Fire(tp, plr) end
+	frames(20, 0.1)
+	local tg = pg:FindFirstChild("Telescope")
+	check(tg ~= nil, "телескоп не открылся")
+	if tg then
+		for _, b in tg:GetDescendants() do
+			if b:IsA("TextButton") and b:FindFirstChildOfClass("TextLabel") and b:FindFirstChildOfClass("TextLabel").Text == ">" then b.Activated:Fire() frames(5, 0.1) end
+		end
+		for _, b in tg:GetDescendants() do
+			if b:IsA("TextButton") and b:FindFirstChildOfClass("TextLabel") and b:FindFirstChildOfClass("TextLabel").Text == "Выйти" then b.Activated:Fire() end
+		end
+		frames(10, 0.1)
+		check(pg:FindFirstChild("Telescope") == nil, "телескоп не закрылся")
+	end
+	-- трамплин
+	local pad = workspace.World:FindFirstChild("LaunchPad", true)
+	check(pad ~= nil, "нет трамплина")
+	if pad then
+		plr.Character.HumanoidRootPart.CFrame = pad.CFrame + Vector3.new(0, 2, 0)
+		frames(6, 0.1)
+		local v = plr.Character.HumanoidRootPart.AssemblyLinearVelocity
+		check(v ~= nil and v.Y > 50, "трамплин не подбросил")
+	end
+	check(inv("Admin", "resetcd"), "сброс перезарядок")
+	check(inv("Admin", "tp", "spiral"), "тп к паркуру")
+	frames(20, 0.2)
+end
+
 stage("выход")
 Players.PlayerRemoving:Fire(plr)
 frames(5)

@@ -624,6 +624,82 @@ do
 	end
 end
 
+------------------------------------------------------------------ окно: алхимия (котёл на Луне)
+do
+	local f, body = mkWindow("alchemy", "Алхимия", "potion", T.purple, 0.92, 0.86)
+	local left = K.scroll(body, { Size = UDim2.new(0.56, -6, 1, 0) })
+	make("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 46), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, left)
+	local right = K.panel(body, { Position = UDim2.new(0.56, 4, 0, 0), Size = UDim2.new(0.44, -4, 1, 0), BackgroundColor3 = T.panel2 })
+	K.text(right, "Котёл: выбери 3 плода", { Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 22), MaxText = 17, TextColor3 = T.purple })
+	local slotL = {}
+	for i = 1, G.Alchemy.slots do
+		local sl = make("Frame", { Position = UDim2.new((i - 1) / 3, 5, 0, 30), Size = UDim2.new(1 / 3, -10, 0, 70), BackgroundColor3 = T.panel }, right)
+		K.corner(sl, UDim.new(0, 10))
+		slotL[i] = { stroke = K.stroke(sl, T.purple, 1, false, 0.4), lbl = K.text(sl, "пусто", { Position = UDim2.fromOffset(4, 4), Size = UDim2.new(1, -8, 1, -8), MaxText = 12, TextWrapped = true, Medium = true, TextColor3 = T.sub }) }
+	end
+	local chanceL = K.text(right, "", { Position = UDim2.new(0, 8, 0, 106), Size = UDim2.new(1, -16, 0, 20), MaxText = 15, TextColor3 = T.gold })
+	K.text(right, "Чем реже плоды, тем реже семя. 3 одинаковых: +35% к шансу. Каждая мутация: +6%. Иногда выпадает эликсир удачи x25", { Position = UDim2.new(0, 8, 0, 128), Size = UDim2.new(1, -16, 1, -186), MaxText = 12, TextWrapped = true, Medium = true, TextColor3 = T.sub, TextYAlignment = Enum.TextYAlignment.Top })
+	local brewBtn = K.button(right, "Сварить", T.purple, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, -8), Size = UDim2.new(1, -16, 0, 44), MaxText = 22 })
+	local picked = {}
+	local function byUid(u)
+		for _, fr in ST.fruits do if fr.uid == u then return fr end end
+	end
+	local function fruitTitle(fr)
+		return plantName(fr.id) .. (#fr.m > 0 and ("\nмутаций: " .. #fr.m) or "")
+	end
+	function hooks.alchemy()
+		for i = #picked, 1, -1 do if not byUid(picked[i]) then table.remove(picked, i) end end
+		clear(left)
+		local list = {}
+		for _, fr in ST.fruits do if not fr.fav then table.insert(list, fr) end end
+		table.sort(list, function(a, b)
+			local ra, rb = G.Rarity[G.Plants[a.id].rarity].rank, G.Rarity[G.Plants[b.id].rarity].rank
+			if ra ~= rb then return ra > rb end
+			if #a.m ~= #b.m then return #a.m > #b.m end
+			return a.id < b.id
+		end)
+		for i, fr in list do
+			if i > 90 then break end
+			local on = table.find(picked, fr.uid) ~= nil
+			local b = make("TextButton", { BackgroundColor3 = on and T.purple or T.panel2, Text = "", AutoButtonColor = false, LayoutOrder = i }, left)
+			K.corner(b, UDim.new(0, 10))
+			K.stroke(b, rarityColor(fr.id), 1, false, 0.35)
+			K.text(b, plantName(fr.id), { Position = UDim2.fromOffset(8, 2), Size = UDim2.new(1, -14, 0, 24), MaxText = 15, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarityColor(fr.id) })
+			K.text(b, G.Rarity[G.Plants[fr.id].rarity].name .. (#fr.m > 0 and (" · мутаций: " .. #fr.m) or ""), { Position = UDim2.fromOffset(8, 24), Size = UDim2.new(1, -14, 0, 16), MaxText = 12,
+				TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = #fr.m > 0 and G.Mut[G.rarestMut(fr.m)].color or T.sub, Medium = true })
+			b.Activated:Connect(function()
+				local k = table.find(picked, fr.uid)
+				if k then table.remove(picked, k) elseif #picked < G.Alchemy.slots then table.insert(picked, fr.uid) playSfx("tap", 0.9 + #picked * 0.15) end
+				hooks.alchemy()
+			end)
+		end
+		if #list == 0 then label(left, "Сумка пуста: собери урожай и возвращайся", { Size = UDim2.new(1, 0, 0, 40), MaxText = 16 }) end
+		local pf = {}
+		for i = 1, G.Alchemy.slots do
+			local fr = picked[i] and byUid(picked[i])
+			slotL[i].lbl.Text = fr and fruitTitle(fr) or "пусто"
+			slotL[i].lbl.TextColor3 = fr and rarityColor(fr.id) or T.sub
+			slotL[i].stroke.Color = fr and rarityColor(fr.id) or T.purple
+			if fr then table.insert(pf, fr) end
+		end
+		chanceL.Text = #pf == 3 and ("Шанс редкости выше: %d%%"):format(math.floor(G.brewChance(pf) * 100)) or ("Выбрано %d из 3"):format(#pf)
+	end
+	brewBtn.Activated:Connect(function()
+		if #picked < G.Alchemy.slots then toast("Нужно 3 плода", "bad") return end
+		local ok, res = remotes.Brew:InvokeServer(picked)
+		if not ok then toast(res or "Не вышло", "bad") return end
+		picked = {}
+		playSfx("mutation")
+		local lab = world:FindFirstChild("AlchemyLab", true)
+		local brew = lab and lab:FindFirstChild("Brew")
+		if brew then
+			FX.burst(brew.Position + Vector3.new(0, 1, 0), Color3.fromRGB(150, 255, 190), 60)
+			FX.splash(brew.Position + Vector3.new(0, 1, 0), Color3.fromRGB(190, 130, 255), 40, 20)
+		end
+		hooks.alchemy()
+	end)
+end
+
 ------------------------------------------------------------------ окно: подарок
 do
 	local f, body = mkWindow("daily", "Ежедневный подарок", "gift", T.orange, 0.62, 0.7)
@@ -670,7 +746,7 @@ do
 			K.text(r, p.name, { Position = UDim2.fromOffset(46, 5), Size = UDim2.new(0.5, 0, 0, 20), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = G.PlanetColors[i] })
 			local here = (ST.planet or 1) == i
 			local open = i <= (ST.planets or 1)
-			local bonus = ("удача мутаций x%s"):format(tostring(G.PlanetLuck[i]))
+			local bonus = ("удача мутаций x%s"):format(tostring(G.PlanetLuck[i])) .. (G.PlanetFeature[i] ~= "" and (" · " .. G.PlanetFeature[i]) or "")
 			local sub = here and ("Ты здесь · " .. bonus) or (open and ("Открыта · " .. bonus) or ("Откроется после " .. G.fmt(G.PlanetUnlock[i]) .. " заработанных монет · " .. bonus))
 			K.text(r, sub, { Position = UDim2.fromOffset(46, 26), Size = UDim2.new(0.62, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
 			if open and not here then
@@ -721,6 +797,12 @@ if plr.UserId == ADMIN_ID then
 	btn("Быстрый бег вкл/выкл", T.blue, cmd("speed"))
 	btn("Опыление сейчас", T.green, cmd("pollen", nil, "Пыльца скоро прилетит"))
 	btn("Витрина для ТикТока", T.gold, cmd("showcase", nil, "Огород заполнен гигантами"))
+	btn("Сброс перезарядок", T.cold, cmd("resetcd", nil, "Пушка и сундук готовы"))
+	btn("ТП: алхимия (Луна)", T.purple, cmd("tp", "alchemy"))
+	btn("ТП: пушка (Европа)", T.cold, cmd("tp", "cannon"))
+	btn("ТП: паркур (Туманность)", T.pink, cmd("tp", "spiral"))
+	btn("ТП: сундук на орбите", T.gold, cmd("tp", "chest"))
+	btn("ТП: телескоп (Ядро)", T.orange, cmd("tp", "telescope"))
 	local mi = 1
 	local mb
 	mb = btn("Мутация: " .. G.Mut[G.MutOrder[1]].name, T.purple, function()
@@ -956,6 +1038,7 @@ loop(0.5, function()
 		if dirty.seeds or dirty.sel then hooks.seedbar() end
 		if dirty.can or dirty.cans or not UI.canInit then UI.canInit = true hooks.canpick() end
 		if windows.store.Visible and (dirty.coins or dirty.cans or dirty.perms) then hooks.store() end
+		if windows.alchemy.Visible and dirty.fruits then hooks.alchemy() end
 		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
 		if windows.bag.Visible and (dirty.fruits or dirty.coins) then hooks.bag() end
 		if windows.shop.Visible and (dirty.sold or dirty.bought or dirty.planets) then hooks.shop() end
@@ -1246,6 +1329,9 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr)
 	local w = pr:GetAttribute("Window")
 	if w == "sell" then w = "bag" end
 	if w and windows[w] and not windows[w].Visible then openWindow(w) end
+	local gm = pr:GetAttribute("Game")
+	if gm == "cannon" and FX.cannon then task.spawn(FX.cannon) end
+	if gm == "telescope" and FX.telescope then task.spawn(FX.telescope) end
 end)
 
 ------------------------------------------------------------------ сбор: частицы и тост
@@ -1762,9 +1848,9 @@ end)
 local revealQueue, revealing = {}, false
 local function playReveal(info)
 	local rarest = G.rarestMut(info.m)
-	local mt = G.Mut[rarest]
-	local col = mt.color
-	playSfx(mt.tier >= 5 and "legendary" or "reveal")
+	local mt = rarest and G.Mut[rarest]
+	local col = info.color or (mt and mt.color) or T.gold
+	playSfx((info.head or (mt and mt.tier >= 5)) and "legendary" or "reveal")
 	local gui = make("ScreenGui", { Name = "Reveal", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 50 }, pg)
 	local back = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 1 }, gui)
 	TweenService:Create(back, TweenInfo.new(0.5), { BackgroundTransparency = 0.12 }):Play()
@@ -1777,10 +1863,10 @@ local function playReveal(info)
 	local holder = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(0.1, 0.1), BackgroundTransparency = 1 }, back)
 	local vp, setAngle = modelView(holder, info.id, info.m, false)
 	TweenService:Create(holder, TweenInfo.new(0.9, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromScale(0.5, 0.58) }):Play()
-	local head = K.text(back, "МУТАЦИЯ!", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.04), Size = UDim2.fromOffset(500, 56), MaxText = 52, TextColor3 = col })
+	local head = K.text(back, info.head or "МУТАЦИЯ!", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.04), Size = UDim2.fromOffset(500, 56), MaxText = 52, TextColor3 = col })
 	local title = G.mutTitle(info.m)
-	K.text(back, title .. " " .. plantName(info.id), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.74), Size = UDim2.fromOffset(640, 40), MaxText = 34, TextColor3 = T.text })
-	K.text(back, "Шанс " .. G.fmtOdds(info.chance) .. ", вес " .. ("%.2f"):format(info.w) .. " кг", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.82), Size = UDim2.fromOffset(560, 30), MaxText = 24, TextColor3 = T.gold })
+	K.text(back, (title ~= "" and (title .. " ") or "") .. plantName(info.id) .. (info.head and " (семя)" or ""), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.74), Size = UDim2.fromOffset(640, 40), MaxText = 34, TextColor3 = T.text })
+	K.text(back, info.sub or ("Шанс " .. G.fmtOdds(info.chance) .. ", вес " .. ("%.2f"):format(info.w) .. " кг"), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.82), Size = UDim2.fromOffset(560, 30), MaxText = 24, TextColor3 = T.gold })
 	local flash = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0 }, back)
 	TweenService:Create(flash, TweenInfo.new(0.7), { BackgroundTransparency = 1 }):Play()
 	local ok = K.button(back, "Круто!", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(200, 48), MaxText = 24 })
@@ -1870,13 +1956,267 @@ task.spawn(function()
 	end
 end)
 
+------------------------------------------------------------------ сцены со своей камерой: пушка и телескоп
+local UIS = game:GetService("UserInputService")
+function FX.scene(name)
+	local hidden = {}
+	for _, g in pg:GetChildren() do
+		if g:IsA("ScreenGui") and g.Enabled and g.Name ~= name then
+			g.Enabled = false
+			table.insert(hidden, g)
+		end
+	end
+	local gui = make("ScreenGui", { Name = name, ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 70 }, pg)
+	local cam = workspace.CurrentCamera
+	local fov0 = cam.FieldOfView
+	cam.CameraType = Enum.CameraType.Scriptable
+	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	local ws0 = hum and hum.WalkSpeed
+	if hum then hum.WalkSpeed = 0 end
+	local function close()
+		if not gui.Parent then return end
+		gui:Destroy()
+		for _, g in hidden do g.Enabled = true end
+		cam.FieldOfView = fov0
+		cam.CameraType = Enum.CameraType.Custom
+		if hum then
+			hum.WalkSpeed = ws0
+			cam.CameraSubject = hum
+		end
+	end
+	return gui, cam, close
+end
+
+-- Европа: метеорная пушка. Тапай по метеоритам, золотые стоят 3 очка
+function FX.cannon()
+	if FX.busy then return end
+	local ok, dur = remotes.CannonStart:InvokeServer()
+	if not ok then toast(dur or "Пушка недоступна", "bad") return end
+	FX.busy = true
+	local lab = world:FindFirstChild("MeteorCannon", true)
+	local barrel = lab and lab:FindFirstChild("Barrel")
+	local pivot = barrel and barrel:GetAttribute("Pivot")
+	if not pivot then
+		local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		pivot = CFrame.new(root and root.Position or Vector3.zero)
+	end
+	local barrel0 = barrel and barrel:GetPivot()
+	local rel = barrel and (pivot * CFrame.Angles(math.rad(35), 0, 0)):ToObjectSpace(barrel0)
+	local origin, out, right = pivot.Position, pivot.LookVector, pivot.RightVector
+	local up = Vector3.yAxis
+	local gui, cam, close = FX.scene("CannonGame")
+	cam.FieldOfView = 70
+	local camPos = origin - out * 22 + up * 6
+	cam.CFrame = CFrame.lookAt(camPos, origin + out * 80 + up * 42)
+	local timeL = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Size = UDim2.fromOffset(220, 40), MaxText = 34, TextColor3 = T.text })
+	local hitL = K.text(gui, "Сбито: 0", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 52), Size = UDim2.fromOffset(260, 30), MaxText = 24, TextColor3 = T.gold })
+	local hint = K.text(gui, "Тапай по метеоритам! Золотые = 3 очка", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -20), Size = UDim2.fromOffset(520, 30), MaxText = 22, TextColor3 = T.cold })
+	task.delay(3, function() if hint.Parent then TweenService:Create(hint, TweenInfo.new(1), { TextTransparency = 1 }):Play() end end)
+	local exitB = K.button(gui, "Выйти", T.panel2, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(110, 40), MaxText = 18 })
+	local meteors, hits, combo, lastHit = {}, 0, 0, 0
+	local running = true
+	exitB.Activated:Connect(function() running = false end)
+	local function spawnMeteor(t)
+		local gold = math.random() < 0.12
+		local d = gold and 3.4 or math.random(38, 60) / 10
+		local pos = origin + out * math.random(170, 240) + right * math.random(-110, 110) + up * math.random(70, 130)
+		local target = origin + out * math.random(20, 60) + right * math.random(-50, 50) + up * math.random(-25, 5)
+		local speed = (gold and 1.4 or 1) * math.min(80, 38 + t * 1.3)
+		local col = gold and Color3.fromRGB(255, 220, 90) or Color3.fromRGB(255, 120, 50)
+		local p = make("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(d, d, d), Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false,
+			Material = Enum.Material.Neon, Color = col, CFrame = CFrame.new(pos) }, fxFolder)
+		make("Part", { Name = "Rock", Shape = Enum.PartType.Ball, Size = Vector3.new(d * 0.8, d * 0.8, d * 0.8), Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false,
+			Material = Enum.Material.Basalt, Color = Color3.fromRGB(60, 45, 40), CFrame = CFrame.new(pos) }, p)
+		local a = make("Attachment", {}, p)
+		make("ParticleEmitter", { Color = ColorSequence.new(col, Color3.fromRGB(255, 60, 20)), LightEmission = 1, Rate = 60, Lifetime = NumberRange.new(0.5, 0.9),
+			Speed = NumberRange.new(1, 3), Size = NumberSequence.new(d * 0.7, 0), Transparency = NumberSequence.new(0.1, 1), LockedToPart = false }, a)
+		table.insert(meteors, { p = p, v = (target - pos).Unit * speed, gold = gold, life = 0, d = d })
+	end
+	local function boom(m, hit)
+		local pos = m.p.Position
+		FX.burst(pos, m.gold and Color3.fromRGB(255, 230, 120) or Color3.fromRGB(255, 150, 70), hit and 40 or 14)
+		if hit then
+			local fl = make("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(2, 2, 2), Anchored = true, CanCollide = false, CanQuery = false, Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(255, 240, 200), CFrame = CFrame.new(pos) }, fxFolder)
+			TweenService:Create(fl, TweenInfo.new(0.35), { Size = Vector3.new(m.d * 4, m.d * 4, m.d * 4), Transparency = 1 }):Play()
+			task.delay(0.4, function() fl:Destroy() end)
+			-- лазер из ствола
+			local muzzle = barrel and barrel:FindFirstChild("Muzzle")
+			local from = muzzle and muzzle.Position or origin
+			local len = (pos - from).Magnitude
+			local beam = make("Part", { Size = Vector3.new(0.7, 0.7, len), Anchored = true, CanCollide = false, CanQuery = false, Material = Enum.Material.Neon,
+				Color = Color3.fromRGB(120, 230, 255), CFrame = CFrame.lookAt((from + pos) / 2, pos) }, fxFolder)
+			TweenService:Create(beam, TweenInfo.new(0.18), { Transparency = 1, Size = Vector3.new(0.1, 0.1, len) }):Play()
+			task.delay(0.2, function() beam:Destroy() end)
+			if barrel then barrel:PivotTo(CFrame.lookAt(origin, pos) * rel) end
+		end
+		m.p:Destroy()
+	end
+	local inputConn = UIS.InputBegan:Connect(function(input)
+		if not running then return end
+		if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+		local best, bestD
+		for _, m in meteors do
+			local sp, onScreen = cam:WorldToScreenPoint(m.p.Position)
+			if onScreen and sp.Z > 0 then
+				local dd = (Vector2.new(sp.X, sp.Y) - Vector2.new(input.Position.X, input.Position.Y)).Magnitude
+				local rad = math.max(48, m.d * 700 / sp.Z)
+				if dd < rad and (not bestD or dd < bestD) then best, bestD = m, dd end
+			end
+		end
+		if best then
+			table.remove(meteors, table.find(meteors, best))
+			local now = os.clock()
+			combo = (now - lastHit < 1.2) and combo + 1 or 1
+			lastHit = now
+			hits += best.gold and 3 or 1
+			hitL.Text = "Сбито: " .. hits .. (combo >= 3 and ("  · комбо x" .. combo) or "")
+			K.pop(hitL)
+			playSfx("meteor", 1 + math.min(combo, 10) * 0.05)
+			playSfx("tap", 1 + math.min(combo, 10) * 0.08)
+			FX.floatText(best.p.Position, best.gold and "+3" or "+1", best.gold and T.gold or T.text, 26)
+			boom(best, true)
+		else
+			playSfx("click", 0.7)
+		end
+	end)
+	local t0, nextSpawn = os.clock(), 0
+	while running do
+		local dt = task.wait()
+		local t = os.clock() - t0
+		if t >= dur then break end
+		timeL.Text = ("0:%02d"):format(math.ceil(dur - t))
+		if t >= nextSpawn then
+			spawnMeteor(t)
+			if t > 8 and math.random() < 0.35 then spawnMeteor(t) end
+			nextSpawn = t + math.max(0.32, 1.05 - t * 0.025)
+		end
+		for i = #meteors, 1, -1 do
+			local m = meteors[i]
+			m.life += dt
+			local pos = m.p.Position + m.v * dt
+			m.p.CFrame = CFrame.new(pos)
+			local rock = m.p:FindFirstChild("Rock")
+			if rock then rock.CFrame = CFrame.new(pos) * CFrame.Angles(m.life * 3, m.life * 2, 0) end
+			if m.life > 6 or (pos - origin):Dot(out) < 15 then
+				table.remove(meteors, i)
+				boom(m, false)
+			end
+		end
+		cam.CFrame = CFrame.lookAt(camPos, origin + out * 80 + up * 42) * CFrame.new(math.sin(t * 40) * 0.05 * math.max(0, 1 - (os.clock() - lastHit) * 4), 0, 0)
+	end
+	running = false
+	inputConn:Disconnect()
+	for _, m in meteors do m.p:Destroy() end
+	if barrel and barrel0 then barrel:PivotTo(barrel0) end
+	close()
+	FX.busy = false
+	local ok2, err = remotes.CannonEnd:InvokeServer(hits)
+	if not ok2 then toast(err or "Раунд не засчитан", "bad") end
+end
+
+-- Ядро: телескоп. Камера смотрит на нижние планеты с сильным приближением
+function FX.telescope()
+	if FX.busy then return end
+	local eyeP = world:FindFirstChild("TelescopePrompt", true)
+	if not eyeP then return end
+	FX.busy = true
+	local gui, cam, close = FX.scene("Telescope")
+	local eye = eyeP.Position + Vector3.new(0, 2.5, 0)
+	local hole = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.95, 0.95), BackgroundTransparency = 1 }, gui)
+	make("UIAspectRatioConstraint", { AspectRatio = 1 }, hole)
+	K.corner(hole, UDim.new(0.5, 0))
+	make("UIStroke", { Thickness = 900, Color = Color3.new(0, 0, 0), Transparency = 0.02 }, hole)
+	local ringF = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1 }, hole)
+	K.corner(ringF, UDim.new(0.5, 0))
+	make("UIStroke", { Thickness = 3, Color = Color3.fromRGB(236, 196, 100), Transparency = 0.2 }, ringF)
+	local nameL = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 10), Size = UDim2.fromOffset(420, 40), MaxText = 32 })
+	local subL = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 48), Size = UDim2.fromOffset(460, 24), MaxText = 16, TextColor3 = T.sub, Medium = true })
+	local prevB = K.button(gui, "<", T.panel2, { AnchorPoint = Vector2.new(0, 0.5), Position = UDim2.new(0, 16, 0.5, 0), Size = UDim2.fromOffset(64, 64), MaxText = 30 })
+	local nextB = K.button(gui, ">", T.panel2, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -16, 0.5, 0), Size = UDim2.fromOffset(64, 64), MaxText = 30 })
+	local exitB = K.button(gui, "Выйти", T.panel2, { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -12, 0, 12), Size = UDim2.fromOffset(110, 40), MaxText = 18 })
+	local idx = math.clamp(ST.planet or 1, 1, 5)
+	local look = (cam.CFrame.LookVector)
+	local fov = 40
+	local function target(pi)
+		local pf = world:FindFirstChild("Planet" .. pi)
+		local hub = pf and pf:FindFirstChild("Hub")
+		local base = hub and hub:FindFirstChild("PlazaBase")
+		return base and base.Position or eye
+	end
+	local function show()
+		local p = G.Planets[idx]
+		nameL.Text = string.upper(p.name)
+		nameL.TextColor3 = G.PlanetColors[idx]
+		local n = 0
+		for _, pl in plotsFolder:GetChildren() do
+			if string.sub(pl.Name, 1, 5) == ("Plot" .. idx) and string.sub(pl.Name, 6, 6) == "_" then n += 1 end
+		end
+		subL.Text = ("огородов: %d · удача x%s%s"):format(n, tostring(G.PlanetLuck[idx]), G.PlanetFeature[idx] ~= "" and (" · " .. G.PlanetFeature[idx]) or "")
+		playSfx("click", 0.8 + idx * 0.08)
+	end
+	show()
+	prevB.Activated:Connect(function() idx = (idx - 2) % 5 + 1 show() end)
+	nextB.Activated:Connect(function() idx = idx % 5 + 1 show() end)
+	local running = true
+	exitB.Activated:Connect(function() running = false end)
+	local t0 = os.clock()
+	while running and gui.Parent do
+		local dt = task.wait()
+		local tp = target(idx)
+		local dist = (tp - eye).Magnitude
+		local want = (tp - eye).Unit
+		local k = math.min(1, dt * 3)
+		look = (look:Lerp(want, k)).Unit
+		fov += (math.clamp(math.deg(2 * math.atan(230 / math.max(dist, 1))), 4, 50) - fov) * k
+		local t = os.clock() - t0
+		cam.FieldOfView = fov
+		cam.CFrame = CFrame.lookAt(eye, eye + look + Vector3.new(math.sin(t * 0.7), math.cos(t * 0.5), 0) * 0.0015)
+	end
+	close()
+	FX.busy = false
+end
+
+-- трамплин «Прыжок в бездну» и таблички с перезарядкой
+do
+	local pads, cdSigns = {}, {}
+	for _, d in world:GetDescendants() do
+		if d:IsA("BasePart") and d:GetAttribute("Launch") then table.insert(pads, d) end
+		if d:IsA("BillboardGui") and d:GetAttribute("Cooldown") then
+			local sub = d:FindFirstChild("Sub")
+			if sub then table.insert(cdSigns, { key = d:GetAttribute("Cooldown"), lbl = sub, def = sub.Text }) end
+		end
+	end
+	local lastLaunch = 0
+	loop(0.08, function()
+		local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		if not root or os.clock() - lastLaunch < 1.5 then return end
+		for _, pad in pads do
+			local lp = pad.CFrame:PointToObjectSpace(root.Position)
+			if math.abs(lp.X) < pad.Size.X / 2 + 0.5 and math.abs(lp.Z) < pad.Size.Z / 2 + 0.5 and lp.Y > 0 and lp.Y < 5 then
+				lastLaunch = os.clock()
+				root.AssemblyLinearVelocity = pad:GetAttribute("Launch")
+				playSfx("rocket", 1.5)
+				FX.burst(pad.Position, Color3.fromRGB(255, 160, 90), 50)
+				toast("Прыжок в бездну!", "rare", 3)
+			end
+		end
+	end)
+	loop(1, function()
+		for _, c in cdSigns do
+			local left = math.ceil(((ST.cd or {})[c.key] or 0) - nowS())
+			c.lbl.Text = left > 0 and ("перезарядка %d:%02d"):format(left // 60, left % 60) or c.def
+		end
+	end)
+end
+
 ------------------------------------------------------------------ анимации мира
 local animated = {}
 local function rescan()
 	table.clear(animated)
 	for _, d in world:GetDescendants() do
-		if d:IsA("Model") and (d:GetAttribute("Spin") or d:GetAttribute("Drift")) then table.insert(animated, d) end
-		if d:IsA("BasePart") and d:GetAttribute("Blink") then table.insert(animated, d) end
+		if d:IsA("Model") and (d:GetAttribute("Spin") or d:GetAttribute("Drift") or d:GetAttribute("OrbitR")) then table.insert(animated, d) end
+		if d:IsA("BasePart") and (d:GetAttribute("Blink") or d:GetAttribute("Pulse")) then table.insert(animated, d) end
 	end
 end
 rescan()
@@ -1894,11 +2234,21 @@ RunService.RenderStepped:Connect(function(dt)
 		if o:IsA("Model") then
 			local spin = o:GetAttribute("Spin")
 			local pivot = o:GetAttribute("Pivot")
-			if spin and pivot and (pivot - cp).Magnitude < 150 then
+			local orbitR = o:GetAttribute("OrbitR")
+			if orbitR then
+				local oc = o:GetAttribute("OrbitCenter")
+				if oc and (oc - cp).Magnitude < 1200 then
+					local a = o:GetAttribute("OrbitPhase") + t * o:GetAttribute("OrbitSpeed")
+					local pos = oc + Vector3.new(math.cos(a) * orbitR, o:GetAttribute("OrbitY") + math.sin(t * 0.4 + a) * 4, math.sin(a) * orbitR)
+					o:PivotTo(CFrame.new(pos) * CFrame.Angles(0.25, -a, 0.15) * CFrame.Angles(0, 0, math.pi / 2))
+				end
+			elseif spin and pivot and (pivot - cp).Magnitude < 150 then
 				o:PivotTo(CFrame.new(pivot) * CFrame.Angles(0, spin * dt, 0) * CFrame.new(-pivot) * o:GetPivot())
 			elseif o:GetAttribute("Drift") and (o:GetPivot().Position - cp).Magnitude < 700 then
 				o:PivotTo(o:GetPivot() * CFrame.Angles(0, o:GetAttribute("Drift") * dt, 0))
 			end
+		elseif o:GetAttribute("Pulse") then
+			o.Transparency = 0.05 + 0.3 * (math.sin(t * 3 + o.Position.X) + 1) / 2
 		else
 			local b = o:GetAttribute("Blink")
 			o.Transparency = (t % b) < b * 0.5 and 0 or 0.75
