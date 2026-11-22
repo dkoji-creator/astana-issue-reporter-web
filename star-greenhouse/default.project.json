@@ -3,22 +3,39 @@
   "tree": {
     "$className": "DataModel",
     "ReplicatedStorage": {
-      "Shared": { "$path": "src/shared" }
+      "Shared": {
+        "$path": "src/shared"
+      }
     },
     "ServerScriptService": {
-      "Server": { "$path": "src/server" }
+      "Server": {
+        "$path": "src/server"
+      }
     },
     "StarterPlayer": {
       "StarterPlayerScripts": {
-        "Client": { "$path": "src/client" }
+        "Client": {
+          "$path": "src/client"
+        }
+      },
+      "$properties": {
+        "CharacterWalkSpeed": 22
       }
     },
     "Lighting": {
       "$properties": {
         "ClockTime": 0,
         "Brightness": 1.2,
-        "Ambient": [0.25, 0.22, 0.4],
-        "OutdoorAmbient": [0.3, 0.27, 0.45]
+        "Ambient": [
+          0.25,
+          0.22,
+          0.4
+        ],
+        "OutdoorAmbient": [
+          0.3,
+          0.27,
+          0.45
+        ]
       }
     }
   }

@@ -24,6 +24,7 @@ local Audio = require(Shared:WaitForChild("Config"):WaitForChild("Audio"))
 
 -- звуки: музыка и эффекты (если ассет недоступен, игра просто молчит)
 local FX = {} -- эффекты (заполняются ниже, вызываются раньше)
+-- игрок у киоска своей планеты (продажа и покупка семян только там)
 local sfx = {}
 local AUDIO = { m = 6, s = 8, h = 1, t = 1 } -- t: 1 = классика, 2 = космос -- громкость музыки и звуков (0-10), подсказки вкл/выкл; приходят с сервера
 local sfxGroup = make("SoundGroup", { Name = "Sfx", Volume = 0.8 }, SoundService)
@@ -203,7 +204,7 @@ end
 fitScale()
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
 
-local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 110), Size = UDim2.fromOffset(400, 200), ZIndex = 20 }, hud)
+local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Size = UDim2.fromOffset(400, 200), ZIndex = 20 }, hud)
 listLayout(toastHolder, nil, 4, Enum.HorizontalAlignment.Center)
 local function toast(text, kind, dur)
 	local col = kind == "ok" and T.green or kind == "bad" and T.red or kind == "rare" and T.gold or T.sub
@@ -231,14 +232,29 @@ remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
 
 -- монеты и прогресс планет
 do
-	local top = make("Frame", { Name = "Top", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(260, 70) }, hud)
+	local top = make("Frame", { Name = "Top", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(320, 108) }, hud)
 	local pill, lbl = K.pill(top, "coin", T.gold, 190)
 	pill.AnchorPoint = Vector2.new(0.5, 0)
 	pill.Position = UDim2.new(0.5, 0, 0, 0)
 	UI.coins = lbl
-	local bar, fill = K.bar(top, T.cold, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 42), Size = UDim2.fromOffset(200, 5) })
+	local bar, fill = K.bar(top, T.cold, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 82), Size = UDim2.fromOffset(200, 5) })
 	UI.planetFill = fill
-	UI.planetText = K.text(top, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 50), Size = UDim2.fromOffset(260, 15), MaxText = 12, TextColor3 = T.sub, Medium = true })
+	UI.planetText = K.text(top, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 89), Size = UDim2.fromOffset(260, 15), MaxText = 12, TextColor3 = T.sub, Medium = true })
+	-- быстрый телепорт сверху: к огороду и к киоскам площади
+	local tpRow = make("Frame", { Name = "Teleports", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 43), Size = UDim2.fromOffset(312, 32) }, top)
+	listLayout(tpRow, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
+	for i, d in { { "home", "home", "Огород", T.gold }, { "shop", "seed", "Семена", T.green }, { "sell", "coin", "Продажа", T.gold } } do
+		local b = make("TextButton", { Name = "Tp_" .. d[1], Size = UDim2.fromOffset(100, 32), BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, tpRow)
+		K.corner(b, UDim.new(1, 0))
+		K.stroke(b, d[4], 1.2, false, 0.3)
+		K.icon(b, d[2], { Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(8, 5) })
+		K.text(b, d[3], { Position = UDim2.fromOffset(32, 0), Size = UDim2.new(1, -38, 1, 0), MaxText = 14, TextXAlignment = Enum.TextXAlignment.Left })
+		b.Activated:Connect(function()
+			K.bounce(b)
+			local ok = d[1] == "home" and remotes.Home:InvokeServer() or (d[1] ~= "home" and remotes.TpTo:InvokeServer(d[1]))
+			if ok then playSfx("whoosh", 1.1) else toast("Сейчас нельзя", "bad") end
+		end)
+	end
 	local tb = make("TextButton", { Name = "Leaders", AnchorPoint = Vector2.new(0, 0), Position = UDim2.new(0.5, 100, 0, 0), Size = UDim2.fromOffset(38, 38),
 		BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false }, top)
 	K.corner(tb, UDim.new(1, 0))
@@ -257,11 +273,19 @@ do
 	UI.eventFrame = f
 	UI.eventTitle = K.text(f, "", { Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 4), MaxText = 15 })
 	UI.eventSub = K.text(f, "", { Size = UDim2.new(1, -16, 0, 16), Position = UDim2.fromOffset(8, 25), MaxText = 12, TextColor3 = T.sub, Medium = true })
-	local hint = K.panel(hud, { Name = "Hint", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(380, 26) })
+	local hint = K.panel(hud, { Name = "Hint", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 116), Size = UDim2.fromOffset(380, 26) })
 	K.stroke(hint, T.gold, 1, false, 0.4)
 	UI.hintFrame = hint
 	UI.hint = K.text(hint, "", { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), MaxText = 15, TextColor3 = T.gold, Medium = true })
 end
+
+local function nearKiosk(id)
+	local pf = world:FindFirstChild("Planet" .. (ST.planet or 1))
+	local k = pf and pf:FindFirstChild("Hub") and pf.Hub:FindFirstChild("Kiosk_" .. id)
+	local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+	return k ~= nil and root ~= nil and (k:GetPivot().Position - root.Position).Magnitude <= 14
+end
+FX.nearKiosk = nearKiosk
 
 ------------------------------------------------------------------ окна: общий каркас
 local windows = {}
@@ -344,6 +368,8 @@ do
 		clear(grid)
 		local tab = UI.shopTab
 		local unlocked = tab <= ST.planets
+		local nearShop = nearKiosk("shop")
+		UI.shopTimer.Text = (nearShop and "" or "Купить можно у зелёного киоска «Семена» на площади (кнопка «Семена» сверху) · ") .. "обновление через " .. G.fmtTime(G.shopTimeLeft(nowS()))
 		local n = 0
 		for i, p in G.PlantList do
 			if G.PlanetIndex[p.planet] == tab and stock[p.id] then
@@ -359,9 +385,13 @@ do
 				K.text(card, G.Rarity[p.rarity].name .. "  ·  " .. G.fmtTime(p.grow), { Position = UDim2.fromOffset(88, 25), Size = UDim2.new(1, -94, 0, 14), MaxText = 12, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Left, Medium = true })
 				local lim = G.Rarity[p.rarity].limit - ((ST.bought or {})[p.id] or 0)
 				K.text(card, ("есть %d  ·  лимит %d"):format(math.max(0, left), math.max(0, lim)), { Position = UDim2.fromOffset(88, 40), Size = UDim2.new(1, -94, 0, 13), MaxText = 11, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Left, Medium = true })
-				local can = unlocked and left > 0 and lim > 0
+				local can = unlocked and left > 0 and lim > 0 and nearShop
 				local btn = coinButton(card, p.seed, can, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -8, 1, -7), Size = UDim2.new(1, -96, 0, 28), MaxText = 15 })
 				btn.Activated:Connect(function()
+					if not nearKiosk("shop") then
+						if remotes.TpTo:InvokeServer("shop") then playSfx("whoosh", 1.1) toast("Ты у киоска «Семена»: теперь можно покупать", "ok") hooks.shop() end
+						return
+					end
 					local ok, res = remotes.Buy:InvokeServer(p.id, 1)
 					if ok then toast("Куплено: " .. p.name, "ok") playSfx("coins") else toast(res or "Не получилось", "bad") end
 				end)
@@ -491,7 +521,13 @@ do
 			if ca ~= cb then return ca < cb end
 			return a.w > b.w
 		end)
-		UI.bagInfo.Text = ("Сумка: %d из %d. Избранное не продаётся кнопкой «Продать всё»"):format(#ST.fruits, ST.bagCap)
+		local near = nearKiosk("sell")
+		UI.bagInfo.Text = near and ("Сумка: %d из %d. Избранное не продаётся кнопкой «Продать всё»"):format(#ST.fruits, ST.bagCap)
+			or ("Сумка: %d из %d. Продавать можно только у золотого киоска «Продажа» на площади"):format(#ST.fruits, ST.bagCap)
+		local la = sellAll:FindFirstChildOfClass("TextLabel")
+		if la then la.Text = near and "Продать всё" or "Телепорт к киоску «Продажа»" end
+		local lo = sellOne:FindFirstChildOfClass("TextLabel")
+		if lo then lo.Text = near and "Продать этот" or "К продаже" end
 		for i, fr in list do
 			if i > 80 then break end
 			local row = make("TextButton", { Size = UDim2.new(1, -6, 0, 42), BackgroundColor3 = fr.uid == selUid and T.blue or T.panel2, Text = "", AutoButtonColor = false, LayoutOrder = i }, left)
@@ -514,7 +550,15 @@ do
 		for _, fr in list do if fr.uid == selUid then cur = fr end end
 		if not cur and selUid then select(nil) end
 	end
+	local function goSell()
+		if remotes.TpTo:InvokeServer("sell") then
+			playSfx("whoosh", 1.1)
+			toast("Ты у киоска «Продажа»: теперь можно продавать", "ok")
+			hooks.bag()
+		end
+	end
 	sellOne.Activated:Connect(function()
+		if not nearKiosk("sell") then goSell() return end
 		if not selUid then toast("Выбери плод", "bad") return end
 		local ok, total = remotes.Sell:InvokeServer("one", selUid)
 		if ok then toast("+" .. G.fmtInt(total) .. " монет", "ok") playSfx("coins") selUid = nil select(nil) end
@@ -523,6 +567,7 @@ do
 		if selUid then remotes.Fav:InvokeServer(selUid) end
 	end)
 	sellAll.Activated:Connect(function()
+		if not nearKiosk("sell") then goSell() return end
 		local ok, total, count = remotes.Sell:InvokeServer("all")
 		if ok then toast(("Продано %d шт.: +%s монет"):format(count, G.fmtInt(total)), "ok") playSfx("coins") else toast(total or "Нечего продавать", "bad") end
 	end)
@@ -1015,7 +1060,7 @@ do
 	listLayout(col, nil, 4)
 	local defs = {
 		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "upgrades", "upgrade", "Улучшить", T.cold },
-		{ "travel", "rocket", "Ракета", T.pink }, { "home", "home", "Домой", T.gold }, { "store", "coin", "Магазин", T.gold }, { "menu", "settings", "Ещё", T.purple },
+		{ "travel", "rocket", "Ракета", T.pink }, { "store", "coin", "Магазин", T.gold }, { "menu", "settings", "Ещё", T.purple },
 	}
 	UI.buttons = {}
 	for i, d in defs do
@@ -1306,7 +1351,11 @@ loop(0.5, function()
 		end
 		UI.hint.Text = h
 		UI.hintFrame.Visible = h ~= ""
-		UI.shopTimer.Text = "Обновление ассортимента через " .. G.fmtTime(G.shopTimeLeft(t))
+		local nearShop, nearSell = nearKiosk("shop"), nearKiosk("sell")
+		UI.shopTimer.Text = (nearShop and "" or "Купить можно у зелёного киоска «Семена» на площади (кнопка «Семена» сверху) · ") .. "обновление через " .. G.fmtTime(G.shopTimeLeft(t))
+		if windows.shop.Visible and nearShop ~= UI.wasNearShop then hooks.shop() end
+		if windows.bag.Visible and nearSell ~= UI.wasNearSell then hooks.bag() end
+		UI.wasNearShop, UI.wasNearSell = nearShop, nearSell
 		UI.buttons.menu:FindFirstChild("Badge").Visible = ST.daily.can
 		if UI.dailyBadge2 then UI.dailyBadge2.Visible = ST.daily.can end
 		-- обновления окон
@@ -2889,7 +2938,7 @@ local animated = {}
 local function rescan()
 	table.clear(animated)
 	for _, d in world:GetDescendants() do
-		if d:IsA("Model") and (d:GetAttribute("Spin") or d:GetAttribute("Drift") or d:GetAttribute("OrbitR")) then table.insert(animated, d) end
+		if d:IsA("Model") and (d:GetAttribute("Spin") or d:GetAttribute("Drift") or d:GetAttribute("OrbitR") or d:GetAttribute("SpinZ")) then table.insert(animated, d) end
 		if d:IsA("BasePart") and (d:GetAttribute("Blink") or d:GetAttribute("Pulse")) then table.insert(animated, d) end
 	end
 end
@@ -2909,7 +2958,11 @@ RunService.RenderStepped:Connect(function(dt)
 			local spin = o:GetAttribute("Spin")
 			local pivot = o:GetAttribute("Pivot")
 			local orbitR = o:GetAttribute("OrbitR")
-			if orbitR then
+			local spinZ = o:GetAttribute("SpinZ")
+			if spinZ then
+				local pcf = o:GetAttribute("PivotCF")
+				if pcf and (pcf.Position - cp).Magnitude < 160 then o:PivotTo(pcf * CFrame.Angles(0, 0, t * spinZ)) end
+			elseif orbitR then
 				local oc = o:GetAttribute("OrbitCenter")
 				if oc and (oc - cp).Magnitude < 1200 then
 					local a = o:GetAttribute("OrbitPhase") + t * o:GetAttribute("OrbitSpeed")

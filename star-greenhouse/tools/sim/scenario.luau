@@ -227,6 +227,9 @@ frames(60)
 check(pg:FindFirstChild("Reveal") ~= nil, "кинематика не показана")
 
 stage("продажа")
+check(not inv("Sell", "all"), "продажа издалека должна быть запрещена")
+check(inv("TpTo", "sell"), "телепорт к продаже")
+frames(2)
 local ok, total, count = inv("Sell", "all")
 check(ok and total > 0, "продажа не сработала")
 snap = inv("State")
@@ -241,6 +244,9 @@ for _, p in G.PlantList do
 	if stock[p.id] and p.planet == "moon" then buyId = p.id break end
 end
 check(buyId ~= nil, "в магазине нет лунных семян")
+check(not inv("Buy", buyId, 1), "покупка издалека должна быть запрещена")
+check(inv("TpTo", "shop"), "телепорт к семенам")
+frames(2)
 local bok, bres = inv("Buy", buyId, 1)
 check(bok, "покупка семени: " .. tostring(bres))
 local bad = inv("Buy", "core_20", 1)
@@ -361,7 +367,7 @@ do
 	end
 	-- меню «Ещё»
 	local menuBtn
-	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then menuBtn = b end end
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 6 then menuBtn = b end end
 	check(menuBtn ~= nil, "нет кнопки Ещё")
 	if menuBtn then
 		menuBtn.Activated:Fire()

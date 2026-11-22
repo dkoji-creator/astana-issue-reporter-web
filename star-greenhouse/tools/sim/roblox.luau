@@ -288,12 +288,21 @@ local DateTime = { now = function() return { UnixTimestamp = os.time(), UnixTime
 local Random = {}
 local RND = {}
 RND.__index = RND
-function Random.new(seed) return setmetatable({ s = seed or 1 }, RND) end
+-- как в Roblox: одно и то же зерно даёт одну и ту же последовательность
+function Random.new(seed)
+	local s0 = seed and math.floor(math.abs(seed)) % 2147483647 or math.random(1, 2147483646)
+	if s0 == 0 then s0 = 1 end
+	return setmetatable({ s = s0 }, RND)
+end
+local function rstep(r)
+	r.s = (r.s * 16807) % 2147483647
+	return r.s / 2147483647
+end
 function RND.NextNumber(r, a, b)
 	a, b = a or 0, b or 1
-	return a + math.random() * (b - a)
+	return a + rstep(r) * (b - a)
 end
-function RND.NextInteger(r, a, b) return math.random(a, b) end
+function RND.NextInteger(r, a, b) return a + math.floor(rstep(r) * (b - a + 1)) end
 
 -- Enum.Тип.Имя → один и тот же объект
 local enumCache = {}

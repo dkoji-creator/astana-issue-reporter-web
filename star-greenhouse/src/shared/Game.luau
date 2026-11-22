@@ -317,8 +317,8 @@ end
 -- Марс: гонка в пыльной буре. Ворота по порядку (угол от площади, расстояние), финиш у старта
 G.Race = {
 	gates = { { 45, 62 }, { 45, 154 }, { 90, 154 }, { 90, 62 }, { 135, 62 }, { 135, 154 }, { 180, 154 }, { 180, 62 }, { 225, 62 }, { 270, 62 }, { 270, 154 }, { 315, 154 }, { 315, 62 }, { 0, 60 } },
-	start = { 0, 60 }, gold = 55, silver = 68, bronze = 85, limit = 150, minTime = 30, cooldown = 90, radius = 25, gateRadius = 9,
-	boost = 30, boostTime = 2.5,
+	start = { 0, 60 }, gold = 45, silver = 56, bronze = 70, limit = 150, minTime = 24, cooldown = 90, radius = 25, gateRadius = 9,
+	boost = 40, boostTime = 2.5,
 }
 G.Medals = {
 	{ id = "gold", name = "Золото", color = rgb(255, 205, 70) },

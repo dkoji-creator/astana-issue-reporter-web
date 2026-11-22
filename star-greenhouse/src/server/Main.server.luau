@@ -33,7 +33,7 @@ for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic", "RaceStart", "RaceFinish" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic", "RaceStart", "RaceFinish", "TpTo" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -528,9 +528,29 @@ local function addCoins(plr, amount)
 	end
 end
 
+-- продажа и покупка семян только у киосков на площади своей планеты
+local KIOSK_RADIUS = 14
+local function nearKiosk(plr, id)
+	local d = D[plr]
+	local pos = d and Map.spots[id .. (d.planet or 1)]
+	local ch = plr.Character
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+	return pos ~= nil and root ~= nil and (root.Position - pos).Magnitude <= KIOSK_RADIUS
+end
+RX.TpTo.OnServerInvoke = function(plr, id)
+	local d, s = D[plr], S[plr]
+	if not d or s.traveling or (id ~= "shop" and id ~= "sell" and id ~= "market" and id ~= "upgrades") then return false end
+	local pos = Map.spots[id .. (d.planet or 1)]
+	local front = Map.spots[id .. "Front" .. (d.planet or 1)]
+	local ch = plr.Character
+	if not pos or not front or not ch then return false end
+	ch:PivotTo(CFrame.lookAt(front + Vector3.new(0, 3, 0), pos + Vector3.new(0, 3, 0)))
+	return true
+end
 RX.Sell.OnServerInvoke = function(plr, mode, uid)
 	local d = D[plr]
 	if not d then return false end
+	if not nearKiosk(plr, "sell") then return false, "Продавать можно у золотого киоска «Продажа» на площади" end
 	local total, count, keep = 0, 0, {}
 	if mode == "all" then
 		for _, f in d.fruits do
@@ -585,6 +605,7 @@ RX.Buy.OnServerInvoke = function(plr, id, qty)
 	local d, s = D[plr], S[plr]
 	local plant = type(id) == "string" and G.Plants[id]
 	if not d or not plant then return false, "Нет такого семени" end
+	if not nearKiosk(plr, "shop") then return false, "Семена покупают у зелёного киоска «Семена» на площади" end
 	qty = math.clamp(math.floor(tonumber(qty) or 1), 1, 50)
 	local e = G.shopEpoch(now())
 	local sold = currentSold()
@@ -997,7 +1018,7 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		end
 		refreshAllBeds(plr)
 	elseif cmd == "speed" then
-		if hum then hum.WalkSpeed = hum.WalkSpeed > 20 and 16 or 48 end
+		if hum then hum.WalkSpeed = hum.WalkSpeed > 30 and 22 or 48 end
 		return true
 	elseif cmd == "potion" then
 		d.potion = { luck = 10, uses = 20 }

@@ -8,6 +8,7 @@ local Game = require(Shared:WaitForChild("Game"))
 local PM = require(Shared:WaitForChild("PlantModels"))
 local PlanetImg = require(Shared:WaitForChild("Config"):WaitForChild("Planets"))
 local SkyImg = require(Shared:WaitForChild("Config"):WaitForChild("Sky"))
+local Icons = require(Shared:WaitForChild("Config"):WaitForChild("Icons"))
 local WT = require(script.Parent:WaitForChild("WorldTerrain"))
 
 local Map = {}
@@ -231,15 +232,23 @@ function Map.buildPlot(pi, j)
 	local id = ("%d_%d"):format(pi, j)
 	if Map.plots[id] then return Map.plots[id] end
 	local cf, ang = slotCF(pi, j)
-	-- поднимаем огород над самой высокой точкой рельефа под ним
-	local top = -math.huge
+	-- выравниваем землю под огородом: уровень по медиане рельефа, холмы срезаются, ямы засыпаются
+	local hs = {}
 	for _, sx in { -28, 0, 28 } do
 		for _, sz in { -24, 0, 24 } do
 			local wp = cf:PointToWorldSpace(V3(sx, 0, sz))
-			top = math.max(top, Map.surfaceY(wp.X, wp.Z, pi))
+			table.insert(hs, Map.surfaceY(wp.X, wp.Z, pi))
 		end
 	end
-	cf = cf + V3(0, (top + 0.6) - cf.Y, 0)
+	table.sort(hs)
+	local level = hs[5]
+	local flat = CFrame.new(cf.X, level, cf.Z) * (cf - cf.Position)
+	local terr = workspace:FindFirstChildOfClass("Terrain")
+	if terr then
+		terr:FillBlock(flat * CF(0, 22, 4), V3(74, 44, 70), Mat.Air)
+		terr:FillBlock(flat * CF(0, -7, 4), V3(74, 14, 70), WT.Themes[pi].base)
+	end
+	cf = cf + V3(0, (level + 0.6) - cf.Y, 0)
 	local P = Map.planets[pi]
 	if P.markers[j] then P.markers[j].Parent = nil end
 	local pm = Instance.new("Model")
@@ -497,10 +506,10 @@ end
 
 ------------------------------------------------------------------ площадь планеты: ракета, киоски, дорожки
 local KIOSKS = {
-	{ id = "shop", ang = 0, col = COL.green, title = "СЕМЕНА", prompt = "Магазин семян" },
-	{ id = "sell", ang = 90, col = COL.gold, title = "ПРОДАЖА", prompt = "Продать урожай" },
-	{ id = "market", ang = 180, col = COL.mag, title = "РЫНОК", prompt = "Рынок и спрос" },
-	{ id = "upgrades", ang = 270, col = COL.cyan, title = "МАСТЕРСКАЯ", prompt = "Улучшения" },
+	{ id = "shop", ang = 0, col = COL.green, title = "СЕМЕНА", prompt = "Купить семена", icon = "seed" },
+	{ id = "sell", ang = 90, col = COL.gold, title = "ПРОДАЖА", prompt = "Продать урожай", icon = "coin" },
+	{ id = "market", ang = 180, col = COL.mag, title = "РЫНОК", prompt = "Рынок и спрос", icon = "news" },
+	{ id = "upgrades", ang = 270, col = COL.cyan, title = "МАСТЕРСКАЯ", prompt = "Улучшения", icon = "upgrade" },
 }
 local function emitter(parent, props)
 	local e = Instance.new("ParticleEmitter")
@@ -529,6 +538,146 @@ local function holoSign(parent, pos, text, color, sub)
 	return p, t2
 end
 
+-- киоски площади: у каждого своя узнаваемая постройка и большая вывеска с иконкой. Перед киоска (-Z) смотрит в центр
+local function kioskSign(m, kcf, color, title, iconKey, y)
+	local board = part(m, "Sign", V3(12.5, 3.6, 0.5), kcf * CF(0, y, 2.4), c(14, 16, 30), Mat.SmoothPlastic, { CanCollide = false })
+	deco(m, "SignRim", V3(13.1, 4.2, 0.3), kcf * CF(0, y, 2.6), color, Mat.Neon, { Transparency = 0.25 })
+	for _, face in { Enum.NormalId.Front, Enum.NormalId.Back } do
+		local gui = Instance.new("SurfaceGui")
+		gui.Face, gui.SizingMode, gui.PixelsPerStud, gui.LightInfluence = face, Enum.SurfaceGuiSizingMode.PixelsPerStud, 40, 0
+		gui.Parent = board
+		local img = Instance.new("ImageLabel")
+		img.BackgroundTransparency, img.Image, img.ImageColor3 = 1, Icons[iconKey] or "", color
+		img.Position, img.Size = UDim2.new(0, 14, 0.5, -54), UDim2.fromOffset(108, 108)
+		img.Parent = gui
+		local t = Instance.new("TextLabel")
+		t.BackgroundTransparency, t.TextScaled, t.Font, t.Text, t.TextColor3 = 1, true, Enum.Font.GothamBlack, title, color
+		t.Position, t.Size = UDim2.new(0, 132, 0.12, 0), UDim2.new(1, -146, 0.76, 0)
+		t.Parent = gui
+	end
+	for _, sx in { -5.6, 5.6 } do
+		part(m, "SignPost", V3(0.5, y, 0.5), kcf * CF(sx, y / 2, 2.4), c(70, 76, 96), Mat.Metal, { CanCollide = false })
+	end
+end
+local function kioskBase(m, kcf, color)
+	cyl(m, "Base", kcf * CF(0, 0.45, 0), 0.9, 13, COL.hull2, Mat.Metal)
+	dcyl(m, "BaseGlow", kcf * CF(0, 0.92, 0), 0.05, 12.6, color, Mat.Neon, { Transparency = 0.3 })
+	dcyl(m, "BaseInner", kcf * CF(0, 0.94, 0), 0.05, 12, COL.hull2, Mat.Metal)
+end
+local KIOSK_BUILD = {}
+-- семена: маленькая оранжерея со стеклянным куполом, прилавок, горшки и мешки
+KIOSK_BUILD.shop = function(m, kcf, color)
+	local wood, green = c(124, 88, 62), c(90, 200, 120)
+	ell(m, "Dome", kcf * CF(0, 4.6, 1), V3(12, 10, 9.5), c(200, 255, 220), Mat.Glass, { Transparency = 0.6, CanCollide = false, CastShadow = false })
+	ring(m, "DomeTrim", (kcf * CF(0, 1, 1)).Position, 6, 0, 0.4, 0.4, c(220, 190, 110), Mat.Metal, 16)
+	for q = -1, 1 do
+		local p0 = (kcf * CF(q * 3.2, 1, 1)).Position
+		seg(m, "DomeRib", p0, (kcf * CF(q * 1.2, 9.4, 1)).Position, 0.25, c(220, 190, 110), Mat.Metal)
+	end
+	part(m, "Counter", V3(8.4, 2.6, 2), kcf * CF(0, 2.2, -2.6), wood, Mat.Wood)
+	part(m, "CounterTop", V3(8.8, 0.3, 2.4), kcf * CF(0, 3.6, -2.6), green:Lerp(c(40, 60, 40), 0.4), Mat.SmoothPlastic)
+	part(m, "Shelf", V3(8, 0.4, 1.6), kcf * CF(0, 3.4, 2), wood, Mat.Wood)
+	for q = 0, 4 do
+		local x = -3.2 + q * 1.6
+		cyl(m, "Pot", kcf * CF(x, 4.2, 2), 1.2, 1.1, c(170, 90, 60), Mat.SmoothPlastic)
+		ball(m, "PotLeaves", (kcf * CF(x, 5.3, 2)).Position, 1.4, green:Lerp(c(30, 90, 50), q % 2 * 0.4), Mat.Grass)
+		if q % 2 == 0 then ball(m, "PotFlower", (kcf * CF(x, 6, 2)).Position, 0.55, ({ c(255, 120, 170), c(255, 210, 90), c(150, 140, 255) })[q / 2 + 1], Mat.Neon) end
+	end
+	for _, sx in { -5.2, 5.2 } do
+		ell(m, "SeedSack", kcf * CF(sx, 1.9, -3.4), V3(1.8, 2, 1.6), c(196, 170, 120), Mat.SmoothPlastic)
+		ball(m, "Seeds", (kcf * CF(sx, 2.9, -3.4)).Position, 1.1, c(120, 80, 50), Mat.Sand)
+	end
+end
+-- продажа: рыночный прилавок с полосатым навесом, весами, монетами и ящиками фруктов
+KIOSK_BUILD.sell = function(m, kcf, color)
+	local wood, gold = c(124, 88, 62), c(240, 196, 80)
+	for _, sx in { -4.6, 4.6 } do
+		for _, sz in { -3.4, 2.6 } do part(m, "Post", V3(0.6, 7.4, 0.6), kcf * CF(sx, 4.6, sz), wood, Mat.Wood) end
+	end
+	for q = 0, 5 do
+		part(m, "Awning", V3(1.7, 0.25, 7.4), kcf * CF(-4.25 + q * 1.7, 8.2, -0.4) * A(0.18, 0, 0), q % 2 == 0 and gold or c(250, 246, 236), Mat.SmoothPlastic, { CanCollide = false })
+	end
+	part(m, "Counter", V3(9, 2.6, 2), kcf * CF(0, 2.2, -2.8), wood, Mat.Wood)
+	part(m, "CounterTop", V3(9.4, 0.3, 2.4), kcf * CF(0, 3.6, -2.8), c(90, 60, 40), Mat.Wood)
+	-- весы
+	cyl(m, "ScaleBase", kcf * CF(0, 3.9, -2.8), 0.3, 1.4, gold, Mat.Metal)
+	part(m, "ScalePole", V3(0.25, 2.4, 0.25), kcf * CF(0, 5.1, -2.8), gold, Mat.Metal)
+	part(m, "ScaleBeam", V3(3.6, 0.2, 0.2), kcf * CF(0, 6.3, -2.8), gold, Mat.Metal)
+	for _, sx in { -1.7, 1.7 } do
+		seg(m, "ScaleChain", (kcf * CF(sx, 6.3, -2.8)).Position, (kcf * CF(sx, 5.2, -2.8)).Position, 0.06, gold, Mat.Metal)
+		cyl(m, "ScalePan", kcf * CF(sx, 5.1, -2.8), 0.15, 1.3, gold, Mat.Metal)
+	end
+	ball(m, "ScaleFruit", (kcf * CF(-1.7, 5.5, -2.8)).Position, 0.7, c(255, 120, 90), Mat.SmoothPlastic)
+	-- монеты стопками
+	for q, h in { 3, 5, 4 } do
+		for k = 1, h do cyl(m, "Coin", kcf * CF(2.6 + q * 0.6, 3.75 + k * 0.18, -3.2 + (q % 2) * 0.5), 0.16, 0.6, gold, Mat.Metal) end
+	end
+	-- ящики с фруктами
+	local cols = { c(255, 110, 90), c(255, 200, 80), c(140, 220, 110), c(190, 120, 255) }
+	for i, sx in { -3.2, 3.2 } do
+		part(m, "Crate", V3(2.4, 1.6, 1.8), kcf * CF(sx, 1.7, 1.8), wood, Mat.WoodPlanks)
+		for k = 0, 3 do ball(m, "CrateFruit", (kcf * CF(sx - 0.6 + (k % 2) * 1.2, 2.8, 1.5 + math.floor(k / 2) * 0.7)).Position, 0.8, cols[(k + i) % 4 + 1], Mat.SmoothPlastic) end
+	end
+end
+-- рынок: большое табло цен на стойке и голографический глобус
+KIOSK_BUILD.market = function(m, kcf, color)
+	for _, sx in { -5.9, 5.9 } do
+		part(m, "BoardPillar", V3(0.8, 9.6, 0.8), kcf * CF(sx, 5.2, 1.4), c(60, 50, 80), Mat.Metal)
+		part(m, "BoardPillarGlow", V3(0.25, 9, 0.25), kcf * CF(sx, 5.2, 0.95), color, Mat.Neon, { CanCollide = false })
+	end
+	part(m, "BoardFrame", V3(11.8, 7, 0.5), kcf * CF(0, 5.6, 1.6), c(30, 26, 44), Mat.Metal)
+	part(m, "Desk", V3(5, 2.4, 1.8), kcf * CF(0, 2.1, -2.8), c(50, 40, 70), Mat.Metal)
+	cyl(m, "GlobeStand", kcf * CF(0, 3.7, -2.8), 0.8, 0.7, c(200, 180, 120), Mat.Metal)
+	ball(m, "Globe", (kcf * CF(0, 4.9, -2.8)).Position, 1.8, c(170, 120, 230), Mat.Glass, { Transparency = 0.3 })
+	ring(m, "GlobeRing", (kcf * CF(0, 4.9, -2.8)).Position, 1.3, 0, 0.12, 0.12, color, Mat.Neon, 14)
+	for q = 0, 5 do
+		ball(m, "TickerLamp", (kcf * CF(-5 + q * 2, 9.4, 1.3)).Position, 0.4, q % 2 == 0 and color or c(255, 230, 150), Mat.Neon)
+	end
+end
+-- мастерская: стена с инструментами, верстак с чертежом, наковальня и вращающаяся шестерня
+KIOSK_BUILD.upgrades = function(m, kcf, color)
+	local metal, dark = c(90, 100, 120), c(40, 46, 60)
+	part(m, "Wall", V3(11, 7.4, 0.6), kcf * CF(0, 4.6, 2.6), dark, Mat.DiamondPlate)
+	for q = 0, 4 do
+		local x = -4 + q * 2
+		part(m, "ToolHandle", V3(0.25, 2.4, 0.25), kcf * CF(x, 5.6, 2.2) * A(0, 0, 0.1 * (q - 2)), c(160, 90, 50), Mat.Wood, { CanCollide = false })
+		part(m, "ToolHead", V3(0.9, 0.45, 0.3), kcf * CF(x, 6.9, 2.2), metal, Mat.Metal, { CanCollide = false })
+	end
+	cyl(m, "Saw", kcf * CF(3.6, 3.6, 2.2) * A(PI / 2, 0, 0), 0.1, 2, c(200, 205, 215), Mat.Metal, { CanCollide = false })
+	part(m, "Bench", V3(7.6, 0.5, 2.6), kcf * CF(0, 3, -1.8), c(124, 88, 62), Mat.Wood)
+	for _, sx in { -3.4, 3.4 } do part(m, "BenchLeg", V3(0.5, 2.6, 2.2), kcf * CF(sx, 1.7, -1.8), dark, Mat.Metal) end
+	part(m, "Blueprint", V3(3.4, 0.06, 1.8), kcf * CF(-1.2, 3.28, -1.8) * A(0, 0.15, 0), c(80, 170, 255), Mat.Neon, { Transparency = 0.2, CanCollide = false })
+	part(m, "Vise", V3(0.9, 0.9, 0.9), kcf * CF(2.6, 3.7, -1.8), metal, Mat.Metal)
+	-- наковальня
+	part(m, "AnvilBase", V3(1.4, 1.6, 1.2), kcf * CF(-5, 1.7, -3.6), dark, Mat.Metal)
+	part(m, "AnvilTop", V3(2.6, 0.7, 1.2), kcf * CF(-5, 2.85, -3.6), metal, Mat.Metal)
+	-- шестерня на стене крутится (анимация клиента)
+	local gear = Instance.new("Model")
+	gear.Name = "Gear"
+	gear.Parent = m
+	local gcf = kcf * CF(0, 6.4, 2.1)
+	cyl(gear, "GearHub", gcf * A(PI / 2, 0, 0), 0.5, 1.2, color, Mat.Neon, { CanCollide = false })
+	local teeth = 10
+	for q = 0, teeth - 1 do
+		local a = q / teeth * PI * 2
+		part(gear, "GearTooth", V3(0.7, 0.9, 0.4), gcf * CF(cos(a) * 1.9, sin(a) * 1.9, 0) * A(0, 0, a), metal, Mat.Metal, { CanCollide = false })
+	end
+	cyl(gear, "GearDisc", gcf * A(PI / 2, 0, 0), 0.35, 3.5, metal, Mat.Metal, { CanCollide = false })
+	gear.WorldPivot = gcf
+	gear:SetAttribute("SpinZ", 0.8)
+	gear:SetAttribute("PivotCF", gcf)
+end
+local function buildKiosk(parent, k, kcf)
+	local m = Instance.new("Model")
+	m.Name = "Kiosk_" .. k.id
+	m.Parent = parent
+	kioskBase(m, kcf, k.col)
+	KIOSK_BUILD[k.id](m, kcf, k.col)
+	kioskSign(m, kcf, k.col, k.title, k.icon, k.id == "market" and 11.4 or 10.6)
+	m.WorldPivot = kcf
+	return m
+end
+
 local function buildHub(pi, parent)
 	local ctr = WT.Centers[pi]
 	local name = Game.Planets[pi].name
@@ -540,6 +689,22 @@ local function buildHub(pi, parent)
 	cyl(f, "Plaza", CF(ctr + V3(0, lift + 0.2, 0)), 0.5, 58, PLAZA[pi], Mat.Concrete)
 	dcyl(f, "PlazaRing", CF(ctr + V3(0, 0.46, 0)), 0.06, 58.4, COL.trim, Mat.Metal)
 	dcyl(f, "PlazaInner", CF(ctr + V3(0, 0.47, 0)), 0.06, 57.6, PLAZA[pi], Mat.Concrete)
+	-- узор площади: два светящихся кольца в цвет планеты и скамейки с фонарями
+	local pc = Game.PlanetColors[pi]
+	ring(f, "PlazaLine", ctr + V3(0, lift, 0), 12.5, 0.5, 0.35, 0.06, pc, Mat.Neon, 40, nil, { Transparency = 0.35 })
+	ring(f, "PlazaLine", ctr + V3(0, lift, 0), 26.8, 0.5, 0.35, 0.06, pc, Mat.Neon, 64, nil, { Transparency = 0.35 })
+	for _, deg in { 225, 315 } do
+		local a = math.rad(deg)
+		local bp = ctr + V3(cos(a) * 25, lift + 0.45, sin(a) * 25)
+		local bcf = CFrame.lookAt(bp, V3(ctr.X, bp.Y, ctr.Z))
+		part(f, "BenchSeat", V3(6, 0.4, 1.6), bcf * CF(0, 1.4, 0), COL.wood, Mat.Wood)
+		part(f, "BenchBack", V3(6, 1.6, 0.3), bcf * CF(0, 2.4, 0.75) * A(-0.15, 0, 0), COL.wood, Mat.Wood)
+		for _, sx in { -2.6, 2.6 } do part(f, "BenchLeg", V3(0.3, 1.2, 1.4), bcf * CF(sx, 0.7, 0), COL.plate, Mat.Metal) end
+		local lpos = (bcf * CF(4, 0, 0.4)).Position
+		seg(f, "LampPost", lpos, lpos + V3(0, 6, 0), 0.3, COL.plate, Mat.Metal)
+		local bulb = ball(f, "LampBulb", lpos + V3(0, 6.3, 0), 0.9, COL.warm, Mat.Neon)
+		light(bulb, COL.warm, 20, 0.9)
+	end
 	-- ракета в центре: на ней летают между планетами
 	local pad = Instance.new("Model")
 	pad.Name = "RocketPad"
@@ -556,16 +721,18 @@ local function buildHub(pi, parent)
 		local a = math.rad(k.ang)
 		local pos = ctr + V3(cos(a) * 19, 0.45, sin(a) * 19)
 		local kcf = CFrame.lookAt(pos, ctr + V3(0, 0.45, 0))
-		local m = kiosk(f, "Kiosk_" .. k.id, kcf, k.col, k.title)
+		local m = buildKiosk(f, k, kcf)
+		Map.spots[k.id .. pi] = pos
+		Map.spots[k.id .. "Front" .. pi] = (kcf * CF(0, 0, -7)).Position
 		if k.id == "market" then
-			local scr = part(m, "Screen", V3(9, 5.2, 0.4), kcf * CF(0, 4.2, 2.8), c(8, 10, 20), Mat.SmoothPlastic, { CanCollide = false })
+			local scr = part(m, "Screen", V3(10.8, 6.2, 0.4), kcf * CF(0, 5.6, 1.3), c(8, 10, 20), Mat.SmoothPlastic, { CanCollide = false })
 			local lbl = surfaceText(scr, Enum.NormalId.Front, "Рынок загружается", COL.mag, 30)
 			lbl.TextScaled = false
 			lbl.TextSize = 22
 			lbl.RichText = true
 			table.insert(Map.boardLabels, lbl)
 		end
-		local t2 = part(m, "PromptPart", V3(5, 3, 3), kcf * CF(0, 2.2, 1.6), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
+		local t2 = part(m, "PromptPart", V3(6, 3, 3), kcf * CF(0, 2.2, -4.5), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
 		local p2 = prompt(t2, k.prompt, "", 12, "Open_" .. k.id)
 		p2:SetAttribute("Window", k.id)
 	end
@@ -657,40 +824,62 @@ local function buildHub(pi, parent)
 		local m = Instance.new("Model")
 		m.Name = "MysticStall"
 		local violet, deep, gold = c(170, 100, 255), c(40, 20, 70), c(240, 200, 110)
-		cyl(m, "StallBase", scf * CF(0, 0.3, 0), 0.6, 11, c(36, 26, 56), Mat.Slate)
-		dcyl(m, "StallRune", scf * CF(0, 0.62, 0), 0.04, 10.4, violet, Mat.Neon, { Transparency = 0.4 })
-		for _, sx in { -4, 4 } do
-			for _, sz in { -2.5, 2.5 } do
-				cyl(m, "StallPole", scf * CF(sx, 3.6, sz), 6.4, 0.4, gold, Mat.Metal)
+		cyl(m, "StallBase", scf * CF(0, 0.3, 0), 0.6, 12, c(34, 26, 52), Mat.Marble)
+		dcyl(m, "StallRune", scf * CF(0, 0.62, 0), 0.04, 11.4, violet, Mat.Neon, { Transparency = 0.35 })
+		dcyl(m, "StallRuneIn", scf * CF(0, 0.64, 0), 0.04, 10.8, c(34, 26, 52), Mat.Marble)
+		-- шатёр: четыре золотые стойки и ступенчатая крыша-пагода
+		for _, sx in { -4.2, 4.2 } do
+			for _, sz in { -2.8, 2.8 } do
+				cyl(m, "StallPole", scf * CF(sx, 3.7, sz), 6.6, 0.35, gold, Mat.Metal)
 			end
 		end
-		part(m, "StallRoof", V3(9.6, 0.4, 6.6), scf * CF(0, 6.9, 0), deep, Mat.Fabric)
-		part(m, "StallRoofTop", V3(7, 1.2, 4.6), scf * CF(0, 7.6, 0), c(70, 36, 120), Mat.Fabric)
-		ball(m, "StallRoofGem", (scf * CF(0, 8.6, 0)).Position, 0.9, violet, Mat.Neon)
-		for q = -1, 1 do
-			deco(m, "StallFringe", V3(3, 0.6, 0.1), scf * CF(q * 3.1, 6.4, -3.3), q == 0 and violet or deep, Mat.Fabric)
+		local roofCol = c(74, 40, 130)
+		for q, sz in { { 10.4, 7.4 }, { 8, 5.6 }, { 5.4, 3.8 }, { 2.8, 2 } } do
+			local y = 7 + (q - 1) * 0.75
+			part(m, "StallRoof", V3(sz[1], 0.5, sz[2]), scf * CF(0, y, 0), roofCol:Lerp(c(40, 20, 80), q * 0.12), Mat.SmoothPlastic)
+			deco(m, "StallRoofTrim", V3(sz[1] + 0.2, 0.12, sz[2] + 0.2), scf * CF(0, y - 0.26, 0), gold, Mat.Metal)
 		end
-		part(m, "StallCounter", V3(7, 2.2, 1.6), scf * CF(0, 1.7, -1.6), c(60, 36, 30), Mat.Wood)
-		deco(m, "StallCloth", V3(7.2, 0.15, 1.8), scf * CF(0, 2.85, -1.6), violet:Lerp(deep, 0.3), Mat.Fabric)
-		-- хрустальный шар и флаконы на прилавке
-		cyl(m, "OrbStand", scf * CF(0, 3.15, -1.6), 0.5, 0.9, gold, Mat.Metal)
-		local orb = ball(m, "CrystalOrb", (scf * CF(0, 3.9, -1.6)).Position, 1.3, c(200, 160, 255), Mat.Glass, { Transparency = 0.25 })
-		ball(m, "OrbCore", (scf * CF(0, 3.9, -1.6)).Position, 0.55, violet, Mat.Neon)
-		light(orb, violet, 18, 1.4)
+		ball(m, "StallRoofGem", (scf * CF(0, 10.2, 0)).Position, 0.9, violet, Mat.Neon)
+		light(m.StallRoofGem, violet, 14, 1)
+		-- прилавок с бархатом
+		part(m, "StallCounter", V3(7.4, 2.2, 1.6), scf * CF(0, 1.7, -1.8), c(58, 34, 28), Mat.Wood)
+		deco(m, "StallCloth", V3(7.6, 0.12, 1.9), scf * CF(0, 2.86, -1.8), c(96, 40, 140), Mat.SmoothPlastic)
+		deco(m, "StallClothFront", V3(7.6, 1.2, 0.1), scf * CF(0, 2.3, -2.76), c(96, 40, 140), Mat.SmoothPlastic)
+		deco(m, "StallClothTrim", V3(7.6, 0.12, 0.12), scf * CF(0, 1.7, -2.8), gold, Mat.Metal)
+		cyl(m, "OrbStand", scf * CF(0, 3.15, -1.8), 0.5, 0.9, gold, Mat.Metal)
+		local orb = ball(m, "CrystalOrb", (scf * CF(0, 3.95, -1.8)).Position, 1.4, c(210, 180, 255), Mat.Glass, { Transparency = 0.35 })
+		ball(m, "OrbCore", (scf * CF(0, 3.95, -1.8)).Position, 0.5, violet, Mat.Neon)
+		light(orb, violet, 16, 1.2)
 		for q, col in { c(120, 255, 190), c(255, 140, 200), c(120, 200, 255) } do
-			ball(m, "Potion", (scf * CF(-3 + q * 0.7, 3.25, -1.4)).Position, 0.5, col, Mat.Neon, { Transparency = 0.1 })
+			local pp = (scf * CF(-3.1 + q * 0.75, 3.2, -1.6)).Position
+			ball(m, "Potion", pp, 0.5, col:Lerp(c(0, 0, 0), 0.1), Mat.Glass, { Transparency = 0.15 })
+			seg(m, "PotionNeck", pp + V3(0, 0.2, 0), pp + V3(0, 0.6, 0), 0.18, c(230, 230, 240), Mat.Glass)
 		end
-		-- торговец в капюшоне
-		ell(m, "MerchantRobe", scf * CF(0, 2.6, 0.6), V3(2.4, 4.6, 2), c(46, 26, 80), Mat.Fabric, { CanCollide = false })
-		ell(m, "MerchantHood", scf * CF(0, 5.1, 0.6), V3(1.8, 1.9, 1.8), c(56, 30, 96), Mat.Fabric, { CanCollide = false })
-		for _, ex in { -0.32, 0.32 } do
-			ball(m, "MerchantEye", (scf * CF(ex, 5.05, -0.25)).Position, 0.22, c(255, 220, 120), Mat.Neon)
+		-- торговец: длинная мантия, капюшон с тенью вместо лица, светящиеся глаза, посох с кристаллом
+		local robe = c(52, 28, 92)
+		ell(m, "MerchantRobe", scf * CF(0, 2.5, 0.8), V3(2.6, 4.6, 2.2), robe, Mat.SmoothPlastic, { CanCollide = false })
+		ell(m, "MerchantCape", scf * CF(0, 3.2, 1.2), V3(3, 4, 1.4), robe:Lerp(c(20, 10, 40), 0.3), Mat.SmoothPlastic, { CanCollide = false })
+		deco(m, "MerchantBelt", V3(2.3, 0.25, 1.9), scf * CF(0, 2.9, 0.8), gold, Mat.Metal)
+		ell(m, "MerchantHood", scf * CF(0, 5.2, 0.8), V3(1.9, 2, 1.9), robe:Lerp(c(90, 50, 150), 0.2), Mat.SmoothPlastic, { CanCollide = false })
+		ell(m, "MerchantFace", scf * CF(0, 5.05, 0.25), V3(1.1, 1.1, 0.6), c(8, 6, 14), Mat.SmoothPlastic, { CanCollide = false })
+		for _, ex in { -0.26, 0.26 } do
+			ball(m, "MerchantEye", (scf * CF(ex, 5.1, -0.05)).Position, 0.18, c(255, 225, 130), Mat.Neon)
 		end
-		-- портал за спиной
-		ring(m, "Portal", (scf * CF(0, 4.2, 3.2)).Position, 3, 0, 0.5, 0.5, violet, Mat.Neon, 20, nil, { Transparency = 0.15 })
-		local pa = anchorPart(m, "PortalFx", scf * CF(0, 4.2, 3.2), V3(4, 4, 0.5))
-		emitter(pa, { Color = ColorSequence.new(violet, c(120, 220, 255)), Size = NumberSequence.new(0.4, 0), LightEmission = 1, Lifetime = NumberRange.new(1.5, 3), Rate = 22,
-			Speed = NumberRange.new(0.5, 2), SpreadAngle = Vector2.new(180, 180) })
+		local staffB, staffT = (scf * CF(1.7, 0.7, 0.2)).Position, (scf * CF(1.7, 6.6, 0.2)).Position
+		seg(m, "MerchantStaff", staffB, staffT, 0.22, c(90, 60, 40), Mat.Wood)
+		ell(m, "StaffCrystal", CF(staffT + V3(0, 0.6, 0)), V3(0.5, 1.1, 0.5), c(170, 120, 255), Mat.Neon)
+		-- портал за спиной: тонкое кольцо и переливающаяся плёнка
+		local pcf = scf * CF(0, 4.4, 3.4)
+		for q = 0, 23 do
+			local a0, a1 = q / 24 * PI * 2, (q + 1) / 24 * PI * 2
+			local p0 = (pcf * CF(cos(a0) * 3, sin(a0) * 3, 0)).Position
+			local p1 = (pcf * CF(cos(a1) * 3, sin(a1) * 3, 0)).Position
+			seg(m, "Portal", p0, p1, 0.3, violet, Mat.Neon)
+		end
+		cyl(m, "PortalFilm", pcf * A(PI / 2, 0, 0), 0.05, 5.8, c(150, 110, 255), Mat.ForceField, { CanCollide = false, Transparency = 0.2 })
+		local pa = anchorPart(m, "PortalFx", pcf, V3(4, 4, 0.5))
+		emitter(pa, { Color = ColorSequence.new(violet, c(120, 220, 255)), Size = NumberSequence.new(0.3, 0), LightEmission = 1, Lifetime = NumberRange.new(1.5, 3), Rate = 16,
+			Speed = NumberRange.new(0.4, 1.5), SpreadAngle = Vector2.new(180, 180) })
 		local trig = part(m, "MysticPrompt", V3(6, 4, 3), scf * CF(0, 2, -3.2), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
 		local pr = prompt(trig, "Редкие травы", "Мистический торговец", 12, "Open_mystic")
 		pr:SetAttribute("Window", "mystic")
@@ -739,8 +928,30 @@ local function bigPlant(parent, id, pos, s, yaw)
 end
 
 
+-- трасса гонки на Марсе должна быть свободна от камней и деревьев
+local function onRacePath(pi, x, z)
+	if pi ~= 2 then return false end
+	local ctr = WT.Centers[pi]
+	local function pt(g)
+		local a = math.rad(g[1])
+		return ctr.X + cos(a) * g[2], ctr.Z + sin(a) * g[2]
+	end
+	local px, pz = pt(Game.Race.start)
+	for _, g in Game.Race.gates do
+		local qx, qz = pt(g)
+		local dx, dz = qx - px, qz - pz
+		local len2 = dx * dx + dz * dz
+		local t = len2 > 0 and math.clamp(((x - px) * dx + (z - pz) * dz) / len2, 0, 1) or 0
+		local ex, ez = px + dx * t - x, pz + dz * t - z
+		if ex * ex + ez * ez < 12 * 12 then return true end
+		px, pz = qx, qz
+	end
+	return false
+end
+Map.onRacePath = onRacePath
 local function free(pi, x, z)
 	local ctr = WT.Centers[pi]
+	if onRacePath(pi, x, z) then return false end
 	local dx, dz = x - ctr.X, z - ctr.Z
 	local r = math.sqrt(dx * dx + dz * dz)
 	if r < 34 or r > WT.PlayRadius - 4 then return false end
@@ -849,7 +1060,7 @@ end
 
 -- Марс: каменные арки, марсоход и пыльные смерчи
 LANDMARK[2] = function(pi, f)
-	for k, deg in { 45, 180, 290 } do
+	for k, deg in { 45, 180, 250 } do
 		local base = spot(pi, deg, 140)
 		local dir = A(0, math.rad(deg) + PI / 2, 0)
 		local span, hgt = 14 + k * 3, 12 + k * 3
@@ -1058,9 +1269,18 @@ local function featureSpot(pi, deg, r)
 	local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
 	return V3(x, Map.surfaceY(x, z, pi), z), V3(cos(a), 0, sin(a))
 end
+-- ровная площадка под постройкой: над уровнем пусто, под ним земля
+local function clearPad(pi, pos, radius, height)
+	local t = workspace:FindFirstChildOfClass("Terrain")
+	if not t then return end
+	t:FillCylinder(CF(pos + V3(0, height / 2 + 0.05, 0)), height, radius, Mat.Air)
+	t:FillCylinder(CF(pos - V3(0, 5, 0)), 10, radius, WT.Themes[pi].base)
+end
+
 -- Луна: алхимическая лаборатория под стеклянным куполом с котлом
 FEATURE[1] = function(pi, f)
 	local base, out = featureSpot(pi, 0, 128)
+	clearPad(pi, base, 18, 28)
 	local m = Instance.new("Model")
 	m.Name = "AlchemyLab"
 	m.Parent = f
@@ -1169,7 +1389,7 @@ FEATURE[2] = function(pi, f)
 			pr:SetAttribute("Game", "race")
 			part(g, "RaceKiosk", V3(3, 3, 2), gcf * CF(-12, 1.5, 3), c(70, 40, 30), Mat.Metal)
 			ball(g, "RaceKioskLamp", (gcf * CF(-12, 3.4, 3)).Position, 0.8, orange, Mat.Neon)
-			local _, sub = holoSign(g, p + V3(0, 20, 0), "ПЫЛЬНАЯ ГОНКА", c(255, 170, 90), "13 ворот, успей за 55 с на золото")
+			local _, sub = holoSign(g, p + V3(0, 20, 0), "ПЫЛЬНАЯ ГОНКА", c(255, 170, 90), "13 ворот, золото до 45 с")
 			sub.Parent:SetAttribute("RaceBest", true)
 			Map.spots.raceStart = p
 		else
@@ -1197,12 +1417,28 @@ FEATURE[2] = function(pi, f)
 		local y = Map.surfaceY(mid.X, mid.Z, pi)
 		local dir = (b - a) * V3(1, 0, 1)
 		local pcf = CFrame.lookAt(V3(mid.X, y + 0.2, mid.Z), V3(mid.X, y + 0.2, mid.Z) + dir.Unit)
-		local pad = part(m, "BoostPad", V3(6, 0.3, 8), pcf, c(255, 170, 60), Mat.Neon, { CanCollide = false, Transparency = 0.15 })
+		local cyan = c(80, 230, 255)
+		part(m, "BoostBase", V3(9, 0.3, 11), pcf * CF(0, -0.05, 0), c(20, 40, 60), Mat.Metal, { CanCollide = false })
+		local pad = part(m, "BoostPad", V3(8, 0.3, 10), pcf, cyan, Mat.Neon, { CanCollide = false, Transparency = 0.25 })
 		pad:SetAttribute("Boost", true)
 		for q = 0, 2 do
-			deco(m, "BoostArrow", V3(3.2, 0.32, 0.5), pcf * CF(0, 0.05, 2.2 - q * 2.2) * A(0, PI / 4, 0), c(255, 240, 200), Mat.Neon)
-			deco(m, "BoostArrow", V3(3.2, 0.32, 0.5), pcf * CF(0, 0.05, 2.2 - q * 2.2) * A(0, -PI / 4, 0), c(255, 240, 200), Mat.Neon)
+			deco(m, "BoostArrow", V3(4, 0.36, 0.7), pcf * CF(-1.4, 0.06, 3 - q * 3) * A(0, PI / 4, 0), c(240, 255, 255), Mat.Neon)
+			deco(m, "BoostArrow", V3(4, 0.36, 0.7), pcf * CF(1.4, 0.06, 3 - q * 3) * A(0, -PI / 4, 0), c(240, 255, 255), Mat.Neon)
 		end
+		-- стоячие стрелки по бокам: видно издалека на бегу
+		for _, sx in { -5.2, 5.2 } do
+			part(m, "BoostPost", V3(0.4, 5, 0.4), pcf * CF(sx, 2.5, 0), c(40, 60, 80), Mat.Metal, { CanCollide = false })
+			deco(m, "BoostFlag", V3(0.2, 1.6, 2.6), pcf * CF(sx, 4.6, 0), cyan, Mat.Neon)
+		end
+		local lp = anchorPart(m, "BoostLight", pcf * CF(0, 2, 0), V3(1, 1, 1))
+		light(lp, cyan, 22, 1.6)
+		local bb = Instance.new("BillboardGui")
+		bb.Size, bb.StudsOffset, bb.LightInfluence, bb.MaxDistance = UDim2.fromOffset(140, 34), V3(0, 4, 0), 0, 180
+		bb.Parent = lp
+		local bt = Instance.new("TextLabel")
+		bt.Size, bt.BackgroundTransparency, bt.TextScaled, bt.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+		bt.Text, bt.TextColor3, bt.TextStrokeTransparency = ">> УСКОРЕНИЕ >>", cyan, 0.3
+		bt.Parent = bb
 	end
 	local _ = sand
 end
@@ -1210,6 +1446,7 @@ end
 -- Европа: метеорная пушка на краю ледяного острова
 FEATURE[3] = function(pi, f)
 	local base, out = featureSpot(pi, 225, 130)
+	clearPad(pi, base, 16, 30)
 	local m = Instance.new("Model")
 	m.Name = "MeteorCannon"
 	m.Parent = f
@@ -1256,6 +1493,7 @@ end
 -- Ио: лавовое озеро с каменным причалом для рыбалки
 FEATURE[4] = function(pi, f)
 	local lakeC, out = featureSpot(pi, 180, 138)
+	clearPad(pi, lakeC, 30, 34)
 	local m = Instance.new("Model")
 	m.Name = "LavaLake"
 	m.Parent = f
