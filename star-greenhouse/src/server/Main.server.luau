@@ -27,13 +27,13 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -228,7 +228,9 @@ end
 
 ------------------------------------------------------------------ события по часам
 local activeEvent = nil
+local forcedEvent = nil -- { ev, untilTime } — включает админ
 local function eventNow()
+	if forcedEvent and now() < forcedEvent[2] then return forcedEvent[1], forcedEvent[2] - now() end
 	local ev, left, active = G.eventAt(now())
 	if active then return ev, left end
 	return nil, 0
@@ -263,7 +265,15 @@ local function newBed(plr, d, plantId, regrow)
 		d.firstPlant = true
 	end
 	local muts = G.rollMutations(luck, rng, forced)
+	if S[plr].forceAll then
+		muts = table.clone(G.MutOrder)
+		S[plr].forceAll = nil
+	end
 	local bed = { id = plantId, t0 = t, ready = ready, m = muts, w = G.rollWeight(plant, rng, muts) }
+	if S[plr].forceGiant then
+		bed.w = math.floor(plant.kg * 300 * 100) / 100
+		S[plr].forceGiant = nil
+	end
 	local sp = d.upg.sprinkler
 	if sp > 0 then
 		local pct = math.min(0.6, (G.upgradeValue("water", d.upg.water) + 5 * sp) / 100)
@@ -685,27 +695,108 @@ RX.Home.OnServerInvoke = function(plr)
 	return false
 end
 
+------------------------------------------------------------------ мини-игра «Опыление»
+local POLLEN_MUTS = { "frost", "lava", "neon", "electric" }
+RX.PollenDone.OnServerInvoke = function(plr, token)
+	local d, s = D[plr], S[plr]
+	local pl = s and s.pollen
+	if not d or not pl or pl.token ~= token or now() > pl.expires then return false end
+	s.pollen = nil
+	local b = d.beds[pl.bed]
+	local t = now()
+	if not b or t >= b.ready then return false end
+	b.ready = t + (b.ready - t) * 0.65
+	local added
+	if math.random() < 0.15 then
+		local mid = POLLEN_MUTS[math.random(1, #POLLEN_MUTS)]
+		if not table.find(b.m, mid) then
+			table.insert(b.m, mid)
+			added = mid
+			b.w = G.rollWeight(G.Plants[b.id], Random.new(), b.m)
+		end
+	end
+	refreshBed(plr, pl.bed)
+	return true, added
+end
+local function pollenTick(t)
+	for plr, d in D do
+		local s = S[plr]
+		local plot = s.plot and Map.plots[s.plot]
+		local ch = plr.Character
+		local root = ch and ch:FindFirstChild("HumanoidRootPart")
+		if plot and root and (root.Position - plot.center).Magnitude < 75 then
+			s.nextPollen = s.nextPollen or (t + 25)
+			if t >= s.nextPollen and not (s.pollen and t < s.pollen.expires) then
+				local growing = {}
+				for i, b in d.beds do
+					if t < b.ready then table.insert(growing, i) end
+				end
+				if #growing > 0 then
+					local i = growing[math.random(1, #growing)]
+					s.pollen = { token = math.random(1, 1e9), bed = i, expires = t + 16 }
+					RX.Pollen:FireClient(plr, i, s.pollen.token)
+				end
+				s.nextPollen = t + math.random(40, 70)
+			end
+		end
+	end
+end
+
 RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if plr.UserId ~= ADMIN_ID then return false end
 	local d, s = D[plr], S[plr]
+	local ch = plr.Character
+	local hum = ch and ch:FindFirstChildOfClass("Humanoid")
 	if cmd == "coins" then
 		addCoins(plr, 1000000)
+	elseif cmd == "coinsB" then
+		addCoins(plr, 1000000000)
 	elseif cmd == "planets" then
-		d.earned = G.PlanetUnlock[6]
+		d.earned = math.max(d.earned, G.PlanetUnlock[6])
 	elseif cmd == "seeds" then
-		for _, p in G.PlantList do d.seeds[p.id] = (d.seeds[p.id] or 0) + 3 end
+		for _, p in G.PlantList do d.seeds[p.id] = (d.seeds[p.id] or 0) + 10 end
 		s.sel = s.sel or "moon_01"
 	elseif cmd == "mut" then
 		if G.Mut[arg] then s.forceMut = arg end
+	elseif cmd == "allmut" then
+		s.forceAll = true
+	elseif cmd == "giant" then
+		s.forceGiant = true
 	elseif cmd == "ripe" then
 		for _, b in d.beds do b.ready = now() end
 		refreshAllBeds(plr)
 	elseif cmd == "event" then
+		for _, ev in G.Events do
+			if ev.id == arg then
+				forcedEvent = { ev, now() + G.EventLength }
+				RX.Event:FireAllClients(ev.id, G.EventLength)
+				if ev.grow then
+					for p2, d2 in D do
+						for _, b in d2.beds do b.ready = now() + flareRemaining(b.ready - now(), G.EventLength) end
+						if S[p2].plot then refreshAllBeds(p2) end
+					end
+				end
+			end
+		end
+	elseif cmd == "stopEvent" then
+		forcedEvent = { G.Events[1], 0 }
+	elseif cmd == "maxup" then
+		for k, u in G.Upgrades do
+			if k == "beds" then d.bedCount = u.max else d.upg[k] = u.max end
+		end
+		refreshAllBeds(plr)
+	elseif cmd == "speed" then
+		if hum then hum.WalkSpeed = hum.WalkSpeed > 20 and 16 or 48 end
+		return true
+	elseif cmd == "potion" then
+		d.potion = { luck = 10, uses = 20 }
+	elseif cmd == "pollen" then
+		s.nextPollen = 0
 		return true
 	else
 		return false
 	end
-	push(plr, "coins", "earned", "seeds", "sel", "planets")
+	push(plr, "coins", "earned", "seeds", "sel", "planets", "upg", "bedCount", "potion")
 	return true
 end
 
@@ -858,6 +949,7 @@ task.spawn(function()
 				if pos then RX.Strike:FireAllClients(pos, added, plr.DisplayName) end
 			end
 		end
+		pollenTick(t)
 		-- авто-сбор
 		for plr, d in D do
 			if d.perms.auto then

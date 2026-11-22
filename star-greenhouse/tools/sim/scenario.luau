@@ -307,6 +307,28 @@ local anyOpen = false
 for _, w in (wl2 and wl2:GetChildren() or {}) do if w.Visible then anyOpen = true end end
 check(anyOpen, "киоск не открыл окно")
 
+stage("админ-читы и опыление")
+do
+	for _, c in { "coinsB", "maxup", "giant", "allmut", "potion", "speed" } do check(inv("Admin", c) == true, "админ " .. c) end
+	check(inv("Admin", "event", "meteor") == true, "событие")
+	frames(30, 0.2)
+	check(RS:GetAttribute("EventId") == "meteor", "метеоритный дождь не включился")
+	inv("Admin", "stopEvent")
+	inv("Admin", "pollen")
+	frames(30, 0.2)
+	local tap = pg:FindFirstChild("PollenTap")
+	if tap then
+		local b = tap:FindFirstChildOfClass("TextButton")
+		for _ = 1, 5 do b.Activated:Fire() frames(2, 0.1) end
+		frames(20, 0.1)
+	end
+	-- меню «Ещё»
+	local menuBtn
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 6 then menuBtn = b end end
+	check(menuBtn ~= nil, "нет кнопки Ещё")
+	if menuBtn then menuBtn.Activated:Fire() frames(5, 0.2) end
+end
+
 stage("полёт на Марс и домой")
 do
 	inv("Admin", "planets")

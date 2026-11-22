@@ -220,7 +220,7 @@ local function dumpState(name)
 end
 dumpState("hud")
 local colFrame = hud:FindFirstChild("Buttons")
-local names = { "shop", "bag", "index", "market", "upgrades", "daily", "admin" }
+local names = { "shop", "bag", "upgrades", "travel", "home", "menu" }
 local i = 0
 for _, b in colFrame:GetChildren() do
 	if b:IsA("TextButton") then

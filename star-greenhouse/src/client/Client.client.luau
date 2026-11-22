@@ -641,23 +641,43 @@ end
 
 ------------------------------------------------------------------ админ-панель (только владелец)
 if plr.UserId == ADMIN_ID then
-	local f, body = mkWindow("admin", "Админ", "admin", T.red, 0.5, 0.7)
-	listLayout(body, nil, 6)
-	local function btn(text, fn)
-		local b = K.button(body, text, T.blue, { Size = UDim2.new(1, 0, 0, 36), MaxText = 18 })
+	local f, body = mkWindow("admin", "Админ", "admin", T.red, 0.7, 0.8)
+	local scroll = K.scroll(body, {})
+	make("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 38), CellPadding = UDim2.fromOffset(8, 6), SortOrder = Enum.SortOrder.LayoutOrder }, scroll)
+	local order = 0
+	local function btn(text, color, fn)
+		order += 1
+		local b = K.button(scroll, text, color or T.blue, { MaxText = 15, LayoutOrder = order })
 		b.Activated:Connect(fn)
+		return b
 	end
-	btn("+1 000 000 монет", function() remotes.Admin:InvokeServer("coins") end)
-	btn("Открыть все планеты", function() remotes.Admin:InvokeServer("planets") end)
-	btn("Все семена x3", function() remotes.Admin:InvokeServer("seeds") end)
-	btn("Все растения созрели", function() remotes.Admin:InvokeServer("ripe") end)
+	local function cmd(c, arg, msg) return function()
+		local ok = remotes.Admin:InvokeServer(c, arg)
+		toast(ok and (msg or "Готово") or "Не вышло", ok and "ok" or "bad")
+	end end
+	btn("+1M монет", T.gold, cmd("coins"))
+	btn("+1B монет", T.gold, cmd("coinsB"))
+	btn("Открыть все планеты", T.pink, cmd("planets"))
+	btn("Все семена x10", T.green, cmd("seeds"))
+	btn("Всё созрело", T.green, cmd("ripe"))
+	btn("Макс. улучшения", T.cold, cmd("maxup"))
+	btn("Гигант: след. посадка 900 кг", T.orange, cmd("giant", nil, "Следующая посадка вырастет гигантом"))
+	btn("Все мутации: след. посадка", T.purple, cmd("allmut", nil, "Следующая посадка со всеми мутациями"))
+	btn("Метеоритный дождь", T.orange, cmd("event", "meteor"))
+	btn("Солнечная вспышка", T.gold, cmd("event", "flare"))
+	btn("Туманность", T.purple, cmd("event", "nebula"))
+	btn("Остановить событие", T.panel2, cmd("stopEvent"))
+	btn("Зелье x10 на 20 посадок", T.pink, cmd("potion"))
+	btn("Быстрый бег вкл/выкл", T.blue, cmd("speed"))
+	btn("Опыление сейчас", T.green, cmd("pollen", nil, "Пыльца скоро прилетит"))
 	local mi = 1
 	local mb
-	mb = K.button(body, "Мутация на след. посадку: " .. G.Mut[G.MutOrder[1]].name, T.purple, { Size = UDim2.new(1, 0, 0, 36), MaxText = 16 })
-	mb.Activated:Connect(function()
+	mb = btn("Мутация: " .. G.Mut[G.MutOrder[1]].name, T.purple, function()
 		remotes.Admin:InvokeServer("mut", G.MutOrder[mi])
 		toast("След. посадка: " .. G.Mut[G.MutOrder[mi]].name, "ok")
 		mi = mi % #G.MutOrder + 1
+		local l = mb:FindFirstChildOfClass("TextLabel")
+		if l then l.Text = "Мутация: " .. G.Mut[G.MutOrder[mi]].name end
 	end)
 end
 
@@ -666,14 +686,12 @@ do
 	local col = make("Frame", { Name = "Buttons", BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 56), Size = UDim2.fromOffset(50, 440) }, hud)
 	listLayout(col, nil, 4)
 	local defs = {
-		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "index", "atlas", "Атлас", T.purple },
-		{ "market", "news", "Рынок", T.pink }, { "upgrades", "upgrade", "Мастерская", T.cold }, { "travel", "rocket", "Ракета", T.pink },
-		{ "home", "home", "Домой", T.gold }, { "daily", "gift", "Подарок", T.orange },
+		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "upgrades", "upgrade", "Улучшить", T.cold },
+		{ "travel", "rocket", "Ракета", T.pink }, { "home", "home", "Домой", T.gold }, { "menu", "settings", "Ещё", T.purple },
 	}
-	if plr.UserId == ADMIN_ID then table.insert(defs, { "admin", "admin", "Админ", T.red }) end
 	UI.buttons = {}
 	for i, d in defs do
-		local b = K.iconButton(col, d[2], d[3], d[4], 42)
+		local b = K.iconButton(col, d[2], d[3], d[4], 50)
 		b.LayoutOrder = i
 		b.Activated:Connect(function()
 			if d[1] == "home" then
@@ -763,6 +781,31 @@ do
 	end
 end
 
+------------------------------------------------------------------ окно «Ещё»: всё второстепенное в одном месте
+do
+	local f, body = mkWindow("menu", "Ещё", "settings", T.purple, 0.6, 0.7)
+	make("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 64), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, body)
+	local items = { { "index", "atlas", "Атлас растений", T.purple }, { "market", "news", "Рынок", T.pink }, { "daily", "gift", "Подарок дня", T.orange } }
+	if plr.UserId == ADMIN_ID then table.insert(items, { "admin", "admin", "Админ", T.red }) end
+	for i, it in items do
+		local b = make("TextButton", { BackgroundColor3 = T.panel2, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, body)
+		K.corner(b, UDim.new(0, 12))
+		K.stroke(b, it[4], 1.2, false, 0.35)
+		K.icon(b, it[2], { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(12, 12) })
+		K.text(b, it[3], { Position = UDim2.fromOffset(62, 0), Size = UDim2.new(1, -70, 1, 0), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left })
+		if it[1] == "daily" then
+			local badge = make("Frame", { Name = "Badge", Size = UDim2.fromOffset(12, 12), Position = UDim2.new(1, -16, 0, 6), BackgroundColor3 = T.gold, Visible = false }, b)
+			K.corner(badge, UDim.new(1, 0))
+			UI.dailyBadge2 = badge
+		end
+		b.Activated:Connect(function()
+			K.bounce(b)
+			playSfx("click")
+			openWindow(it[1])
+		end)
+	end
+end
+
 ------------------------------------------------------------------ обновление HUD
 local function nextPlanetInfo()
 	local n = ST.planets
@@ -802,6 +845,12 @@ loop(0.5, function()
 		UI.planetText.Text = txt
 		local t = nowS()
 		local ev, left, active = G.eventAt(t)
+		local forcedId = ReplicatedStorage:GetAttribute("EventId") or ""
+		if forcedId ~= "" then
+			for _, e in G.Events do
+				if e.id == forcedId then ev, left, active = e, (ReplicatedStorage:GetAttribute("EventEnd") or t) - t, true end
+			end
+		end
 		if active then
 			UI.eventTitle.Text = ev.name
 			UI.eventTitle.TextColor3 = ev.color
@@ -815,7 +864,8 @@ loop(0.5, function()
 		UI.hint.Text = h
 		UI.hintFrame.Visible = h ~= ""
 		UI.shopTimer.Text = "Обновление ассортимента через " .. G.fmtTime(G.shopTimeLeft(t))
-		UI.buttons.daily:FindFirstChild("Badge").Visible = ST.daily.can
+		UI.buttons.menu:FindFirstChild("Badge").Visible = ST.daily.can
+		if UI.dailyBadge2 then UI.dailyBadge2.Visible = ST.daily.can end
 		-- обновления окон
 		if dirty.seeds or dirty.sel then hooks.seedbar() end
 		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
@@ -887,6 +937,9 @@ local function refreshEntry(soil)
 		local m
 		if kind == "sprout" then m = PM.sproutModel(plant) else m = PM.build(id, mutList(soil:GetAttribute("Muts"))) end
 		local yaw = (soil:GetAttribute("Idx") or 1) * 1.7
+		if kind == "plant" and prog < 0.3 and soil:GetAttribute("Plot") == ST.plot and FX.burst then
+			FX.burst(soil.Position + Vector3.new(0, 1.5, 0), plant.c2, 16)
+		end
 		m:PivotTo(CFrame.new(soil.Position + Vector3.new(0, soil.Size.Y / 2, 0)) * CFrame.Angles(0, yaw, 0))
 		m.Parent = fxFolder
 		e = { model = m, key = key, kind = kind, yaw = yaw, ready = false }
@@ -1135,7 +1188,7 @@ local function splash(pos, color, n, speed)
 	task.delay(1.2, function() att:Destroy() end)
 end
 
-FX.splash, FX.floatText = splash, floatText
+FX.splash, FX.floatText, FX.burst = splash, floatText, burst
 
 remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts, kg)
 	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
@@ -1147,7 +1200,20 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 		local top = bed.Soil.Position + Vector3.new(0, 3, 0)
 		burst(top, col, 24 + (rar and 20 or 0))
 		flyToPlayer(top, G.Plants[id].c1, 1.2)
-		floatText(top + Vector3.new(0, 2, 0), ("+%.2f кг"):format(kg or 0), col, 24)
+		local ws = ((kg or 1) / G.Plants[id].kg) ^ (1 / 3)
+		if ws >= 1.8 then
+			floatText(top + Vector3.new(0, 4, 0), ("ГИГАНТ! %.1f кг"):format(kg), T.gold, 34)
+			burst(top, T.gold, 70)
+			local cam = workspace.CurrentCamera
+			task.spawn(function()
+				for i = 1, 12 do
+					if cam then cam.CFrame = cam.CFrame * CFrame.new((math.random() - 0.5) * 0.6, (math.random() - 0.5) * 0.6, 0) end
+					task.wait(0.03)
+				end
+			end)
+		else
+			floatText(top + Vector3.new(0, 2, 0), ("+%.2f кг"):format(kg or 0), col, 24)
+		end
 	end
 	local name = plantName(id)
 	local title = G.mutTitle(muts or {})
@@ -1322,6 +1388,7 @@ do
 		end
 		if best ~= current then
 			current = best
+			if FX.setWeather then FX.setWeather(best) end
 			local cc = Lighting:FindFirstChildOfClass("ColorCorrectionEffect")
 			if cc then
 				TweenService:Create(cc, TweenInfo.new(2), { TintColor = Color3.new(1, 1, 1):Lerp(G.PlanetColors[best], 0.12) }):Play()
@@ -1361,6 +1428,91 @@ remotes:WaitForChild("Strike").OnClientEvent:Connect(function(pos, mut, who)
 			end
 		end
 	end)
+end)
+
+------------------------------------------------------------------ атмосфера планет: пыль, снег, искры, светлячки вокруг игрока
+do
+	local holder = make("Part", { Name = "Weather", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Transparency = 1, Size = Vector3.new(90, 1, 90) }, fxFolder)
+	local em = make("ParticleEmitter", { Rate = 0, LightEmission = 0.6, EmissionDirection = Enum.NormalId.Bottom, SpreadAngle = Vector2.new(25, 25) }, holder)
+	local W = {
+		{ col = Color3.fromRGB(200, 200, 215), rate = 18, speed = { 0.3, 1 }, size = { 0.12, 0.05 }, life = { 6, 9 }, acc = Vector3.new(0.4, -0.2, 0), light = 0.2 }, -- лунная пыль
+		{ col = Color3.fromRGB(220, 120, 80), rate = 45, speed = { 6, 12 }, size = { 0.25, 0.1 }, life = { 3, 5 }, acc = Vector3.new(14, -1, 4), light = 0.1 }, -- пыльный ветер Марса
+		{ col = Color3.fromRGB(240, 246, 255), rate = 60, speed = { 3, 5 }, size = { 0.22, 0.18 }, life = { 6, 9 }, acc = Vector3.new(1, -2, 0.5), light = 0.3 }, -- снег Европы
+		{ col = Color3.fromRGB(255, 140, 50), rate = 30, speed = { 2, 5 }, size = { 0.18, 0 }, life = { 3, 5 }, acc = Vector3.new(0, 7, 0), light = 1 }, -- искры Ио
+		{ col = Color3.fromRGB(150, 255, 210), rate = 22, speed = { 0.5, 1.5 }, size = { 0.2, 0 }, life = { 4, 7 }, acc = Vector3.new(0, 0.6, 0), light = 1 }, -- светлячки Туманности
+		{ col = Color3.fromRGB(255, 220, 130), rate = 26, speed = { 0.5, 2 }, size = { 0.16, 0 }, life = { 4, 6 }, acc = Vector3.new(0, 1, 0), light = 1 }, -- золотые искры Ядра
+	}
+	function FX.setWeather(pi)
+		local w = W[pi] or W[1]
+		em.Color = ColorSequence.new(w.col)
+		em.Rate = w.rate
+		em.Speed = NumberRange.new(w.speed[1], w.speed[2])
+		em.Size = NumberSequence.new(w.size[1], w.size[2])
+		em.Lifetime = NumberRange.new(w.life[1], w.life[2])
+		em.Acceleration = w.acc
+		em.LightEmission = w.light
+		em.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.15, 0.2), NumberSequenceKeypoint.new(1, 1) })
+	end
+	FX.setWeather(1)
+	RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		if cam then holder.CFrame = CFrame.new(cam.CFrame.Position + Vector3.new(0, 18, 0)) end
+	end)
+end
+
+------------------------------------------------------------------ мини-игра «Опыление»: поймай рой пыльцы 5 раз
+remotes:WaitForChild("Pollen").OnClientEvent:Connect(function(bedIdx, token)
+	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
+	local bedsF = plot and plot:FindFirstChild("Beds")
+	local bed = bedsF and bedsF:FindFirstChild("Bed" .. tostring(bedIdx))
+	local soil = bed and bed:FindFirstChild("Soil")
+	if not soil then return end
+	local center = soil.Position + Vector3.new(0, 4, 0)
+	local swarm = make("Part", { Name = "Pollen", Shape = Enum.PartType.Ball, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+		Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 230, 120), Size = Vector3.new(1.3, 1.3, 1.3), CFrame = CFrame.new(center) }, fxFolder)
+	make("PointLight", { Color = Color3.fromRGB(255, 220, 120), Range = 14, Brightness = 2 }, swarm)
+	local att = make("Attachment", {}, swarm)
+	make("ParticleEmitter", { Color = ColorSequence.new(Color3.fromRGB(255, 240, 150)), LightEmission = 1, Rate = 30, Lifetime = NumberRange.new(0.4, 0.8), Speed = NumberRange.new(1, 3),
+		SpreadAngle = Vector2.new(180, 180), Size = NumberSequence.new(0.25, 0), Transparency = NumberSequence.new(0, 1) }, att)
+	local bb = make("BillboardGui", { Name = "PollenTap", Adornee = swarm, Size = UDim2.fromOffset(96, 96), AlwaysOnTop = true, Active = true, LightInfluence = 0, ResetOnSpawn = false, MaxDistance = 120 }, pg)
+	local btn = make("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "" }, bb)
+	local ringF = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), Size = UDim2.fromScale(0.8, 0.8), BackgroundTransparency = 1 }, btn)
+	K.corner(ringF, UDim.new(1, 0))
+	K.stroke(ringF, T.gold, 3, false, 0)
+	local cnt = K.text(btn, "0/5", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 22), MaxText = 18, TextColor3 = T.gold })
+	toast("Пыльца над грядкой! Тапни по рою 5 раз", "rare", 4)
+	playSfx("reveal")
+	local taps, done, t0, angle = 0, false, os.clock(), 0
+	local conn = RunService.RenderStepped:Connect(function(dt)
+		angle += dt * (1.6 + taps * 0.5)
+		local r = 3 + math.sin(os.clock() * 2) * 0.8
+		swarm.CFrame = CFrame.new(center + Vector3.new(math.cos(angle) * r, math.sin(os.clock() * 3) * 1.2, math.sin(angle) * r))
+		local k = 1 + math.sin(os.clock() * 8) * 0.08
+		ringF.Size = UDim2.fromScale(0.8 * k, 0.8 * k)
+	end)
+	btn.Activated:Connect(function()
+		if done then return end
+		taps += 1
+		cnt.Text = taps .. "/5"
+		playSfx("click")
+		burst(swarm.Position, Color3.fromRGB(255, 236, 140), 14)
+		K.pop(btn)
+		angle += math.pi * (0.6 + math.random())
+		if taps >= 5 then
+			done = true
+			local ok, mut = remotes.PollenDone:InvokeServer(token)
+			if ok then
+				burst(soil.Position + Vector3.new(0, 3, 0), Color3.fromRGB(255, 236, 140), 50)
+				FX.floatText(soil.Position + Vector3.new(0, 6, 0), mut and ("Опыление! " .. G.Mut[mut].name) or "Опыление! рост +35%", mut and G.Mut[mut].color or T.gold, 24)
+				playSfx(mut and "harvestRare" or "coins")
+			end
+		end
+	end)
+	while not done and os.clock() - t0 < 13 do task.wait(0.1) end
+	conn:Disconnect()
+	bb:Destroy()
+	TweenService:Create(swarm, TweenInfo.new(0.4), { Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2) }):Play()
+	task.delay(0.5, function() swarm:Destroy() end)
 end)
 
 ------------------------------------------------------------------ показ редких мутаций (кинематика)
