@@ -27,7 +27,7 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
@@ -58,7 +58,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 }, gardens = {}, bonusBeds = 0,
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1 },
 	}
 end
 
@@ -146,7 +146,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d),
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings,
 	}
 end
 local function push(plr, ...)
@@ -708,14 +708,12 @@ local function lbTop(store, decode)
 	end)
 	return out
 end
-local function lbBoardText(list, title, fmtv)
-	local lines = { "<b>" .. title .. "</b>" }
-	for i, e in list do
-		if i > 7 then break end
-		table.insert(lines, ("%d. %s  <font color='#FFD27A'>%s</font>"):format(i, e.name, fmtv(e.v)))
+local function lbFill(rows, list, fmtv)
+	for i, row in rows do
+		local e = list[i]
+		row.name.Text = e and e.name or (i == 1 and "пока пусто" or "")
+		row.val.Text = e and fmtv(e.v) or ""
 	end
-	if #list == 0 then table.insert(lines, "пока пусто") end
-	return table.concat(lines, "\n")
 end
 local function lbRefresh()
 	LB.rich = lbTop(DataStoreService:GetOrderedDataStore("SG_Rich"), function(v) return 10 ^ (v / 1e6) end)
@@ -723,9 +721,9 @@ local function lbRefresh()
 	LB.heavy = lbTop(DataStoreService:GetOrderedDataStore("StarGreenhouse_Heavy_" .. weekKey()), function(v) return v / 100 end)
 	LB.at = now()
 	for _, b in Map.leaderBoards do
-		b.rich.Text = lbBoardText(LB.rich, "БОГАЧИ ВСЕЛЕННОЙ", G.fmt)
-		b.heavy.Text = lbBoardText(LB.heavy, "ТЯЖЕЛЕЙШИЙ ПЛОД НЕДЕЛИ", function(v) return ("%.1f кг"):format(v) end)
-		b.rare.Text = lbBoardText(LB.rare, "САМАЯ РЕДКАЯ МУТАЦИЯ", G.fmtOdds)
+		lbFill(b.rich, LB.rich, G.fmt)
+		lbFill(b.heavy, LB.heavy, function(v) return ("%.1f кг"):format(v) end)
+		lbFill(b.rare, LB.rare, G.fmtOdds)
 	end
 end
 local function serverList()
@@ -838,6 +836,12 @@ RX.SelectCan.OnServerEvent:Connect(function(plr, tier)
 		s.can = tier
 		push(plr, "can")
 	end
+end)
+RX.Settings.OnServerEvent:Connect(function(plr, m, sv, h)
+	local d = D[plr]
+	if not d then return end
+	local function n(v, def) return math.clamp(math.floor(tonumber(v) or def), 0, 10) end
+	d.settings = { m = n(m, 6), s = n(sv, 8), h = (h == 0) and 0 or 1 }
 end)
 RX.BuyCan.OnServerInvoke = function(plr, tier, qty)
 	local d = D[plr]
@@ -1028,8 +1032,8 @@ local function giveElixir(d)
 	local e = G.Elixir
 	if d.potion.luck == e.luck then d.potion.uses += e.uses else d.potion = { luck = e.luck, uses = e.uses } end
 end
-local function rewardReveal(plr, head, id, sub, color)
-	RX.Reveal:FireClient(plr, { id = id, m = {}, w = G.Plants[id].kg, head = head, sub = sub, color = color })
+local function rewardReveal(plr, head, id, sub, color, snd)
+	RX.Reveal:FireClient(plr, { id = id, m = {}, w = G.Plants[id].kg, head = head, sub = sub, color = color, sfx = snd })
 end
 
 RX.Brew.OnServerInvoke = function(plr, uids)
@@ -1059,7 +1063,7 @@ RX.Brew.OnServerInvoke = function(plr, uids)
 	push(plr, "fruits", "seeds", "potion", "stats")
 	local plant = G.Plants[res.id]
 	local sub = ("%s · семян: %d%s"):format(G.Rarity[plant.rarity].name, res.qty, res.elixir and " · + эликсир удачи x25" or "")
-	rewardReveal(plr, res.up and "АЛХИМИЯ: РЕДЧЕ!" or "АЛХИМИЯ!", res.id, sub, G.Rarity[plant.rarity].color)
+	rewardReveal(plr, res.up and "АЛХИМИЯ: РЕДЧЕ!" or "АЛХИМИЯ!", res.id, sub, G.Rarity[plant.rarity].color, "brew")
 	return true, res
 end
 
@@ -1106,7 +1110,7 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr, p
 	if res.elixir then giveElixir(d) end
 	addCoins(plr, res.coins)
 	push(plr, "seeds", "cd", "potion", "stats")
-	rewardReveal(plr, "ЗВЁЗДНЫЙ СУНДУК!", res.id, ("+%s монет%s"):format(G.fmt(res.coins), res.elixir and " · эликсир удачи x25" or ""), Color3.fromRGB(255, 215, 120))
+	rewardReveal(plr, "ЗВЁЗДНЫЙ СУНДУК!", res.id, ("+%s монет%s"):format(G.fmt(res.coins), res.elixir and " · эликсир удачи x25" or ""), Color3.fromRGB(255, 215, 120), "chest")
 end)
 
 ------------------------------------------------------------------ покупки за Robux

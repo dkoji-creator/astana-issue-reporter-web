@@ -541,31 +541,80 @@ local function buildHub(pi, parent)
 		local p2 = prompt(t2, k.prompt, "", 12, "Open_" .. k.id)
 		p2:SetAttribute("Window", k.id)
 	end
-	-- табло лидеров: три колонки, обновляет сервер
+	-- табло лидеров: три колонки (заголовок, 7 строк с медалями), строки заполняет сервер
 	do
 		local a = math.rad(45)
 		local pos = ctr + V3(cos(a) * 25, lift, sin(a) * 25)
 		local bcf = CFrame.lookAt(pos, V3(ctr.X, pos.Y, ctr.Z))
-		for _, sx in { -10.5, 10.5 } do
-			cyl(f, "BoardPole", bcf * CF(sx, 4.5, 0.4), 9, 0.7, COL.plate, Mat.Metal)
+		local W, H = 25, 10.5
+		for _, sx in { -W / 2 + 0.8, W / 2 - 0.8 } do
+			cyl(f, "BoardPole", bcf * CF(sx, 3.2, 0.5), 6.4, 0.8, COL.plate, Mat.Metal)
 		end
-		local board = part(f, "LeaderBoard", V3(22, 8.4, 0.5), bcf * CF(0, 8.6, 0), c(10, 12, 26), Mat.SmoothPlastic)
-		deco(f, "LeaderBoardRim", V3(22.6, 9, 0.3), bcf * CF(0, 8.6, 0.25), COL.gold, Mat.Neon, { Transparency = 0.3 })
+		local board = part(f, "LeaderBoard", V3(W, H, 0.5), bcf * CF(0, 6.4 + H / 2, 0), c(12, 14, 30), Mat.SmoothPlastic)
+		deco(f, "LeaderBoardRim", V3(W + 0.6, H + 0.6, 0.3), bcf * CF(0, 6.4 + H / 2, 0.25), COL.gold, Mat.Neon, { Transparency = 0.35 })
+		deco(f, "LeaderCrown", V3(4, 1.4, 0.3), bcf * CF(0, 6.4 + H + 0.9, 0), COL.gold, Mat.Neon)
 		local gui = Instance.new("SurfaceGui")
 		gui.Face = Enum.NormalId.Front
 		gui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
-		gui.PixelsPerStud = 30
+		gui.PixelsPerStud = 32
 		gui.LightInfluence = 0
 		gui.Parent = board
-		local cols = {}
-		for k, key in { "rich", "heavy", "rare" } do
+		local function lbl(parent, text, props)
 			local t = Instance.new("TextLabel")
-			t.Position, t.Size = UDim2.new((k - 1) / 3, 8, 0, 8), UDim2.new(1 / 3, -16, 1, -16)
-			t.BackgroundTransparency, t.Font, t.TextScaled, t.RichText = 1, Enum.Font.GothamBold, true, true
-			t.TextXAlignment, t.TextYAlignment = Enum.TextXAlignment.Left, Enum.TextYAlignment.Top
-			t.TextColor3, t.Text = c(235, 238, 255), "Загрузка…"
-			t.Parent = gui
-			cols[key] = t
+			t.BackgroundTransparency, t.Font, t.TextScaled, t.Text = 1, Enum.Font.GothamBold, true, text
+			t.TextColor3 = c(235, 238, 255)
+			for k, v in props do
+				if k ~= "Max" then t[k] = v end
+			end
+			t.Parent = parent
+			local lim = Instance.new("UITextSizeConstraint")
+			lim.MaxTextSize = props.Max or 22
+			lim.Parent = t
+			return t
+		end
+		local DEFS = {
+			{ key = "rich", title = "БОГАЧИ", sub = "заработано за всё время", col = c(255, 205, 90) },
+			{ key = "heavy", title = "ТЯЖЕЛОВЕСЫ", sub = "самый тяжёлый плод недели", col = c(120, 230, 150) },
+			{ key = "rare", title = "РЕДКОСТЬ", sub = "самая редкая мутация", col = c(200, 140, 255) },
+		}
+		local MEDAL = { c(255, 205, 90), c(210, 220, 235), c(225, 150, 95) }
+		local cols = {}
+		for k, def in DEFS do
+			local col = Instance.new("Frame")
+			col.Position, col.Size = UDim2.new((k - 1) / 3, 8, 0, 8), UDim2.new(1 / 3, -16, 1, -16)
+			col.BackgroundColor3, col.BackgroundTransparency, col.BorderSizePixel = c(24, 28, 54), 0.15, 0
+			col.Parent = gui
+			local cr = Instance.new("UICorner")
+			cr.CornerRadius = UDim.new(0, 14)
+			cr.Parent = col
+			local head = Instance.new("Frame")
+			head.Size, head.BackgroundColor3, head.BorderSizePixel = UDim2.new(1, 0, 0, 58), def.col, 0
+			head.BackgroundTransparency = 0.75
+			head.Parent = col
+			local hc = cr:Clone()
+			hc.Parent = head
+			lbl(head, def.title, { Position = UDim2.new(0, 10, 0, 4), Size = UDim2.new(1, -20, 0, 32), TextColor3 = def.col, Font = Enum.Font.GothamBlack, Max = 30 })
+			lbl(head, def.sub, { Position = UDim2.new(0, 10, 0, 36), Size = UDim2.new(1, -20, 0, 18), TextColor3 = c(190, 195, 220), Max = 16 })
+			local rows = {}
+			for i = 1, 7 do
+				local r = Instance.new("Frame")
+				r.Position, r.Size = UDim2.new(0, 6, 0, 64 + (i - 1) * 37), UDim2.new(1, -12, 0, 33)
+				r.BackgroundColor3, r.BackgroundTransparency, r.BorderSizePixel = c(255, 255, 255), i % 2 == 1 and 0.93 or 0.97, 0
+				r.Parent = col
+				local rc = Instance.new("UICorner")
+				rc.CornerRadius = UDim.new(0, 8)
+				rc.Parent = r
+				local rank = lbl(r, tostring(i), { Position = UDim2.new(0, 4, 0, 3), Size = UDim2.new(0, 30, 1, -6), TextColor3 = MEDAL[i] or c(150, 155, 185), Font = Enum.Font.GothamBlack, Max = 22 })
+				rank.TextXAlignment = Enum.TextXAlignment.Center
+				local name = lbl(r, i == 1 and "пока пусто" or "", { Position = UDim2.new(0, 38, 0, 5), Size = UDim2.new(0.55, -38, 1, -10), TextColor3 = i <= 3 and c(255, 255, 255) or c(215, 220, 240), Max = 20 })
+				name.TextXAlignment = Enum.TextXAlignment.Left
+				name.TextScaled, name.TextSize = false, 19
+				name.TextTruncate = Enum.TextTruncate.AtEnd
+				local val = lbl(r, "", { Position = UDim2.new(0.55, 0, 0, 5), Size = UDim2.new(0.45, -8, 1, -10), TextColor3 = MEDAL[i] or def.col, Max = 20 })
+				val.TextXAlignment = Enum.TextXAlignment.Right
+				rows[i] = { name = name, val = val }
+			end
+			cols[def.key] = rows
 		end
 		table.insert(Map.leaderBoards, cols)
 		local trig = part(f, "LeaderPrompt", V3(8, 4, 3), bcf * CF(0, 2, -2), COL.dark, Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false })
@@ -793,15 +842,42 @@ end
 
 -- Ио: действующий вулкан с лавовым фонтаном и реками лавы
 LANDMARK[4] = function(pi, f)
-	local base = spot(pi, 0, 128)
-	local layers = { { 62, 11 }, { 50, 11 }, { 39, 10 }, { 29, 9 }, { 20, 8 } }
-	local y = 0
-	for i, L in layers do
-		ell(f, "Volcano", CF(base + V3(0, y + L[2] * 0.5, 0)) * A(0, i, 0), V3(L[1], L[2] * 1.6, L[1]), c(46 + i * 4, 38, 40), Mat.Basalt)
-		y += L[2] * 0.8
+	-- конус из ландшафта: вогнутый профиль, рёбра-гребни, кратер с лавовым озером (на краю острова, чтобы не задеть огороды)
+	local base = spot(pi, 0, 146)
+	local t = workspace:FindFirstChildOfClass("Terrain")
+	local H, R0, R1 = 40, 25, 8
+	local function radiusAt(y) return R1 + (R0 - R1) * (1 - y / H) ^ 1.6 end
+	local rng = Random.new(44)
+	if t then
+		for y = 0, H, 2 do
+			t:FillCylinder(CF(base + V3(0, y + 1, 0)), 2.2, radiusAt(y), Mat.Basalt)
+		end
+		-- гребни по склонам
+		for k = 0, 8 do
+			local a = k / 9 * PI * 2 + rng:NextNumber(-0.2, 0.2)
+			for q = 0, 8 do
+				local y = H * (1 - q / 10) - 2
+				local r = radiusAt(math.max(0, y)) - 1.5
+				t:FillBall(base + V3(cos(a) * r, y, sin(a) * r), 2 + q * 0.3, k % 3 == 0 and Mat.Asphalt or Mat.Basalt)
+			end
+		end
+		-- кратер и лава в нём
+		t:FillBall(base + V3(0, H + 6, 0), R1 + 3.5, Mat.Air)
+		t:FillCylinder(CF(base + V3(0, H - 1.5, 0)), 2, R1 + 1, Mat.CrackedLava)
+		-- застывшие лавовые потоки
+		for k = 0, 3 do
+			local a = k * PI / 2 + 0.4
+			for q = 1, 9 do
+				local tq = q / 9
+				local y = H * (1 - tq) - 0.5
+				local r = radiusAt(math.max(0, y)) + 0.2
+				t:FillBall(base + V3(cos(a + tq * 0.5) * r, y, sin(a + tq * 0.5) * r), 1.8 + tq, Mat.CrackedLava)
+			end
+		end
 	end
-	local top = base + V3(0, y + 1, 0)
-	ell(f, "LavaPool", CF(top), V3(15, 1.6, 15), c(255, 110, 30), Mat.Neon)
+	local y = H
+	local top = base + V3(0, y, 0)
+	ell(f, "LavaPool", CF(top - V3(0, 0.6, 0)), V3(R1 * 2 + 1, 1.2, R1 * 2 + 1), c(255, 110, 30), Mat.Neon, { CanCollide = false })
 	local lp = anchorPart(f, "LavaFountain", CF(top + V3(0, 0.5, 0)), V3(4, 1, 4))
 	emitter(lp, { Color = ColorSequence.new(c(255, 200, 80), c(255, 70, 20)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 0.2) }),
 		LightEmission = 1, Lifetime = NumberRange.new(1.5, 2.5), Rate = 70, Speed = NumberRange.new(25, 40), SpreadAngle = Vector2.new(25, 25), Acceleration = V3(0, -30, 0),
@@ -810,15 +886,16 @@ LANDMARK[4] = function(pi, f)
 		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(5, 8), Rate = 6,
 		Speed = NumberRange.new(6, 10), SpreadAngle = Vector2.new(15, 15), EmissionDirection = Enum.NormalId.Top, Acceleration = V3(2, 1, 0) })
 	light(lp, c(255, 120, 40), 60, 3)
-	-- реки лавы по склонам
+	-- светящиеся ручьи лавы поверх застывших потоков
 	for k = 0, 3 do
 		local a = k * PI / 2 + 0.4
-		local prev = top
-		for q = 1, 8 do
-			local t = q / 8
-			local r = t * 34
-			local p = base + V3(cos(a + t * 0.4) * r, (1 - t) * y, sin(a + t * 0.4) * r) + V3(0, 1.3, 0)
-			seg(f, "LavaRiver", prev, p, 1.6 - t * 0.6, c(255, 100 + t * 40, 30), Mat.Neon)
+		local prev
+		for q = 1, 9 do
+			local tq = q / 9
+			local yy = H * (1 - tq)
+			local r = radiusAt(math.max(0, yy)) + 0.9
+			local p = base + V3(cos(a + tq * 0.5) * r, yy + 0.4, sin(a + tq * 0.5) * r)
+			if prev then seg(f, "LavaRiver", prev, p, 1.1 - tq * 0.4, c(255, 110 + tq * 40, 30), Mat.Neon) end
 			prev = p
 		end
 	end

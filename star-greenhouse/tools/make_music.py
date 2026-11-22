@@ -1,171 +1,219 @@
-"""Спокойный космический эмбиент для «Звёздной оранжереи»: пэды, колокольчики с эхом, глубокий бас, реверберация.
-Петля без шва (рендерим два прохода и берём второй, чтобы хвост реверба перешёл в начало).
-python3 tools/make_music.py -> art/audio/ambient.ogg"""
+"""Фоновая музыка «Звёздной оранжереи»: python3 tools/make_music.py -> art/audio/music_main.ogg
+
+Спокойный мелодичный «космический лоу-фай»: пэд, арпеджио колокольчиков, мелодия, мягкие барабаны.
+Слышно на телефоне: основная энергия в полосе 200-4000 Гц, бас дан гармониками.
+Бесшовная петля: хвост реверберации переносится в начало.
+"""
 import os, subprocess
 import numpy as np
 
-SR = 32000
+SR = 44100
 OUT = os.path.join(os.path.dirname(__file__), "..", "art", "audio")
-os.makedirs(OUT, exist_ok=True)
-rng = np.random.default_rng(7)
+rng = np.random.default_rng(11)
+BPM = 76
+BEAT = 60 / BPM
+BAR = BEAT * 4
+BARS = 16
+LOOP = BARS * BAR
+TAIL = 4.0
+N = int((LOOP + TAIL) * SR)
+L = np.zeros(N)
+R = np.zeros(N)
 
 
-def midi(n):
-    return 440.0 * 2 ** ((n - 69) / 12)
+def midi(m):
+    return 440 * 2 ** ((m - 69) / 12)
 
 
-# аккорды (миди-ноты): D лидийский, мягкая прогрессия
+def t_(d):
+    return np.arange(int(d * SR)) / SR
+
+
+def filt(x, lo=None, hi=None, order=4):
+    X = np.fft.rfft(x)
+    f = np.fft.rfftfreq(len(x), 1 / SR)
+    g = np.ones_like(f)
+    if hi:
+        g *= 1 / (1 + (f / hi) ** order)
+    if lo:
+        g *= 1 - 1 / (1 + (f / lo) ** order)
+    return np.fft.irfft(X * g, len(x))
+
+
+def put(x, at, pan=0.0, gain=1.0):
+    o = int(at * SR)
+    if o >= N:
+        return
+    x = x[:N - o] * gain
+    L[o:o + len(x)] += x * np.sqrt(0.5 * (1 - pan))
+    R[o:o + len(x)] += x * np.sqrt(0.5 * (1 + pan))
+
+
+def adsr(n, a, d, s, r):
+    e = np.ones(n) * s
+    na, nd, nr = int(a * SR), int(d * SR), int(r * SR)
+    na = min(na, n)
+    e[:na] = np.linspace(0, 1, na)
+    if na + nd < n:
+        e[na:na + nd] = np.linspace(1, s, nd)
+    if nr > 0 and nr < n:
+        e[-nr:] *= np.linspace(1, 0, nr)
+    return e
+
+
+def saw(f, d, harm=10, detune=0.0):
+    t = t_(d)
+    out = np.zeros(len(t))
+    for k in range(1, harm + 1):
+        out += np.sin(2 * np.pi * f * (1 + detune) * k * t + k * 0.7) / k
+    return out
+
+
+def bell(f, d, decay=2.5):
+    t = t_(d)
+    mod = np.sin(2 * np.pi * f * 3.5 * t) * 1.4 * np.exp(-t * 5)
+    s = np.sin(2 * np.pi * f * t + mod) * np.exp(-t * decay)
+    s += 0.25 * np.sin(2 * np.pi * f * 2 * t) * np.exp(-t * decay * 1.5)
+    return s * np.minimum(1, t / 0.003)
+
+
+def lead(f, d):
+    t = t_(d)
+    vib = np.sin(2 * np.pi * 5.2 * t) * 0.004 * np.minimum(1, t / 0.4)
+    ph = 2 * np.pi * f * np.cumsum(1 + vib) / SR
+    s = np.sin(ph) + 0.35 * np.sin(2 * ph) + 0.18 * np.sin(3 * ph) + 0.08 * np.sin(4 * ph)
+    return s * adsr(len(t), 0.06, 0.2, 0.75, min(0.35, d * 0.5))
+
+
+# аккорды: Fmaj7 | Em7 | Am9 | G6, мелодия в до мажоре / ля миноре
 CHORDS = [
-    [50, 57, 62, 66, 69, 76],   # Dmaj9
-    [47, 54, 59, 62, 66, 73],   # Bm11
-    [43, 50, 55, 59, 62, 73],   # Gmaj7#11
-    [45, 52, 57, 61, 64, 71],   # A(add9)
-    [50, 57, 62, 64, 69, 74],   # Dadd9
-    [42, 49, 54, 57, 61, 68],   # F#m7
-    [43, 50, 55, 59, 66, 71],   # Gmaj7
-    [45, 52, 57, 59, 64, 69],   # Asus
+    ([53, 57, 60, 64], 41),   # F A C E, бас F
+    ([52, 55, 59, 62], 40),   # E G B D, бас E
+    ([57, 60, 64, 67, 71], 45),  # A C E G B, бас A
+    ([55, 59, 62, 64], 43),   # G B D E, бас G
 ]
-BAR = 8.0  # секунд на аккорд
-LOOP = BAR * len(CHORDS)
+
+# пэд
+for b in range(BARS):
+    notes, _ = CHORDS[b % 4]
+    d = BAR + 0.6
+    for i, m in enumerate(notes):
+        for det, pan in ((-0.0025, -0.5), (0.0025, 0.5)):
+            v = filt(saw(midi(m), d, 12, det), None, 1800, 2) * adsr(int(d * SR), 0.7, 0.4, 0.8, 0.7)
+            put(v, b * BAR, pan, 0.045)
+
+# бас: корень, половинные ноты, с гармониками (чтобы было слышно на телефоне)
+for b in range(BARS):
+    _, root = CHORDS[b % 4]
+    for h in range(2):
+        d = BAR / 2 * 0.95
+        t = t_(d)
+        f = midi(root + 12)
+        x = np.tanh(2.2 * np.sin(2 * np.pi * f * t)) + 0.3 * np.sin(2 * np.pi * f * 2 * t)
+        put(x * adsr(len(t), 0.01, 0.3, 0.6, 0.15), b * BAR + h * BAR / 2, 0, 0.11 if b >= 2 else 0.0)
+
+# арпеджио колокольчиков восьмыми с эхом
+pattern = [0, 1, 2, 3, 2, 1, 2, 3]
+for b in range(BARS):
+    notes, _ = CHORDS[b % 4]
+    up = [m + 12 for m in notes[:4]]
+    for k in range(8):
+        if b < 1 and k % 2 == 1:
+            continue
+        m = up[pattern[k] % len(up)] + (12 if (b % 4 == 3 and k >= 6) else 0)
+        at = b * BAR + k * BEAT / 2 + (0.03 if k % 2 == 1 else 0)  # лёгкий свинг
+        x = bell(midi(m), 1.4)
+        pan = -0.35 if k % 2 == 0 else 0.35
+        put(x, at, pan, 0.07)
+        put(filt(x, 400, 5000), at + BEAT * 0.75, -pan, 0.03)  # эхо
+        put(filt(x, 500, 4000), at + BEAT * 1.5, pan, 0.014)
+
+# мелодия (с 5-го такта): простой запоминающийся мотив
+MEL = [
+    [(0, 76, 1.5), (1.5, 74, 0.5), (2, 72, 1), (3, 69, 1)],
+    [(0, 71, 2), (2, 67, 1), (3, 69, 1)],
+    [(0, 72, 1.5), (1.5, 76, 0.5), (2, 79, 1.5), (3.5, 77, 0.5)],
+    [(0, 76, 3), (3, 74, 1)],
+    [(0, 76, 1.5), (1.5, 74, 0.5), (2, 72, 1), (3, 74, 1)],
+    [(0, 71, 1.5), (1.5, 72, 0.5), (2, 74, 2)],
+    [(0, 81, 1.5), (1.5, 79, 0.5), (2, 76, 1), (3, 72, 1)],
+    [(0, 74, 2.5), (2.5, 71, 1.5)],
+]
+for b in range(4, BARS):
+    phrase = MEL[(b - 4) % len(MEL)]
+    for beat, m, dur in phrase:
+        d = dur * BEAT
+        x = lead(midi(m), d + 0.25)
+        put(filt(x, 250, 4500), b * BAR + beat * BEAT, 0.1, 0.06)
+        put(filt(x, 400, 3500), b * BAR + beat * BEAT + BEAT * 0.75, -0.4, 0.018)
+
+# барабаны: мягкая бочка со щелчком, хлопок на 2 и 4, шейкер
+def kick():
+    d = 0.35
+    t = t_(d)
+    f = 150 * np.exp(-t * 18) + 55
+    body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 9)
+    click = filt(rng.standard_normal(len(t)), 1500, 6000) * np.exp(-t * 120) * 0.5
+    return np.tanh(body * 1.6) * 0.8 + click
 
 
-def env(n, a, r, sus=1.0):
-    t = np.arange(n) / SR
-    e = np.minimum(1, t / a) * sus
-    rel = np.clip((n / SR - t) / r, 0, 1)
-    return e * rel
+def snap():
+    d = 0.25
+    t = t_(d)
+    return filt(rng.standard_normal(len(t)), 900, 5000) * np.exp(-t * 22) + np.sin(2 * np.pi * 330 * t) * np.exp(-t * 30) * 0.4
 
 
-def lowpass(x, cutoff):
-    a = np.exp(-2 * np.pi * cutoff / SR)
-    y = np.zeros_like(x)
-    acc = 0.0
-    # однополюсный фильтр, два прохода для крутизны
-    for _ in range(2):
-        out = np.empty_like(x)
-        acc = 0.0
-        for i in range(0, len(x), 4096):
-            seg = x[i:i + 4096]
-            o = np.empty_like(seg)
-            for j, v in enumerate(seg):
-                acc = (1 - a) * v + a * acc
-                o[j] = acc
-            out[i:i + 4096] = o
-        x = out
-    return x
+def shaker():
+    d = 0.08
+    t = t_(d)
+    return filt(rng.standard_normal(len(t)), 5000, 11000) * np.minimum(1, t / 0.01) * np.exp(-t * 50)
 
 
-def pad_voice(freq, dur, detune):
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    sig = np.zeros(n)
-    for k, dt in enumerate((-detune, 0, detune)):
-        f = freq * (1 + dt)
-        ph = rng.uniform(0, 6.28)
-        # мягкая «пила» из нескольких гармоник
-        for h in range(1, 7):
-            sig += np.sin(2 * np.pi * f * h * t + ph * h) / (h ** 1.6)
-    lfo = 0.75 + 0.25 * np.sin(2 * np.pi * 0.07 * t + rng.uniform(0, 6))
-    return sig * lfo / 3
+K, S = kick(), snap()
+for b in range(2, BARS):
+    for q in range(4):
+        at = b * BAR + q * BEAT
+        if q in (0, 2):
+            put(K, at, 0, 0.16)
+        if q in (1, 3):
+            put(S, at, 0.05, 0.05)
+    for e in range(8):
+        put(shaker(), b * BAR + e * BEAT / 2 + (0.035 if e % 2 else 0), 0.3 if e % 2 else -0.3, 0.025 if e % 2 else 0.04)
+
+# переходный «взмах» каждые 4 такта
+for b in (3, 7, 11, 15):
+    d = BAR * 0.5
+    x = filt(rng.standard_normal(int(d * SR)), 2000, 9000) * np.linspace(0, 1, int(d * SR)) ** 2
+    put(x, b * BAR + BAR * 0.5, 0, 0.03)
 
 
-def bell(freq, dur):
-    n = int(dur * SR)
-    t = np.arange(n) / SR
-    mod = np.sin(2 * np.pi * freq * 3.5 * t) * 2.2 * np.exp(-t * 2.5)
-    s = np.sin(2 * np.pi * freq * t + mod) * np.exp(-t * 1.6)
-    s += 0.3 * np.sin(2 * np.pi * freq * 2 * t) * np.exp(-t * 3)
-    return s * np.minimum(1, t / 0.004)
-
-
-def render_pass():
-    total = int(LOOP * 2 * SR)
-    L = np.zeros(total)
-    R = np.zeros(total)
-    for rep in range(2):
-        for ci, chord in enumerate(CHORDS):
-            t0 = (rep * len(CHORDS) + ci) * BAR
-            i0 = int(t0 * SR)
-            dur = BAR + 3.0
-            n = int(dur * SR)
-            e = env(n, 2.5, 3.5)
-            for k, note in enumerate(chord[1:]):
-                v = pad_voice(midi(note), dur, 0.003 + 0.001 * k) * e * 0.05
-                pan = 0.5 + 0.35 * np.sin(k * 1.7)
-                end = min(total, i0 + n)
-                L[i0:end] += v[:end - i0] * (1 - pan)
-                R[i0:end] += v[:end - i0] * pan
-            # бас
-            tb = np.arange(n) / SR
-            bass = np.sin(2 * np.pi * midi(chord[0] - 12) * tb) * e * 0.16
-            end = min(total, i0 + n)
-            L[i0:end] += bass[:end - i0]
-            R[i0:end] += bass[:end - i0]
-            # колокольчики: неспешный узор из нот аккорда
-            pattern = [3, 4, 5, 4, 2, 5, 3, 4]
-            for s in range(8):
-                if rng.random() < 0.72:
-                    note = chord[pattern[(s + ci) % 8]] + 12
-                    bt = t0 + s * (BAR / 8) + rng.uniform(-0.02, 0.02)
-                    b = bell(midi(note), 3.0) * (0.07 + 0.03 * rng.random())
-                    bi = max(0, int(bt * SR))
-                    if bi >= total:
-                        continue
-                    end = min(total, bi + len(b))
-                    pan = rng.uniform(0.25, 0.75)
-                    L[bi:end] += b[:end - bi] * (1 - pan)
-                    R[bi:end] += b[:end - bi] * pan
-            # редкие «звёздные» искры
-            for s in range(3):
-                if rng.random() < 0.5:
-                    note = chord[rng.integers(2, 6)] + 24
-                    b = bell(midi(note), 2.0) * 0.025
-                    bi = int((t0 + rng.uniform(0, BAR)) * SR)
-                    if bi >= total:
-                        continue
-                    end = min(total, bi + len(b))
-                    L[bi:end] += b[:end - bi] * 0.7
-                    R[bi:end] += b[:end - bi] * 0.3
-    return L, R
-
-
-def reverb(x, seconds=4.0, seed=1):
-    n = int(seconds * SR)
-    r = np.random.default_rng(seed)
-    ir = r.standard_normal(n) * np.exp(-np.arange(n) / SR * 3.2 / seconds * 2.2)
-    ir[:int(0.015 * SR)] *= np.linspace(0, 1, int(0.015 * SR))
+# реверберация (общая шина)
+def reverb(x, sec=2.6, wet=0.28):
+    n = int(sec * SR)
+    ir = rng.standard_normal(n) * np.exp(-np.arange(n) / SR * 5 / sec)
+    ir = filt(ir, 300, 6000)
     ir /= np.sqrt((ir ** 2).sum())
-    m = len(x) + n
-    size = 1 << int(np.ceil(np.log2(m)))
+    size = 1 << int(np.ceil(np.log2(len(x) + n)))
     y = np.fft.irfft(np.fft.rfft(x, size) * np.fft.rfft(ir, size), size)[:len(x)]
-    return y
+    return x * (1 - wet) + y * wet
 
 
-def echo(x, delay, fb, mix):
-    d = int(delay * SR)
-    y = x.copy()
-    for k in range(1, 6):
-        y[d * k:] += x[:-d * k] * (fb ** k) * mix
-    return y
-
-
-if __name__ == "__main__":
-    L, R = render_pass()
-    L = echo(L, 0.48, 0.45, 0.6)
-    R = echo(R, 0.36, 0.45, 0.6)
-    wetL, wetR = reverb(L, 4.5, 1), reverb(R, 4.5, 2)
-    L = L * 0.55 + wetL * 0.9
-    R = R * 0.55 + wetR * 0.9
-    # тёплый фильтр сверху: убираем резкость
-    k = int(LOOP * SR)
-    L, R = L[k:2 * k], R[k:2 * k]
-    peak = max(np.abs(L).max(), np.abs(R).max())
-    L, R = L / peak * 0.8, R / peak * 0.8
-    st = np.stack([L, R], 1)
-    raw = os.path.join(OUT, "ambient.raw")
-    (st * 32767).astype("<i2").tofile(raw)
-    out = os.path.join(OUT, "ambient.ogg")
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", str(SR), "-ac", "2", "-i", raw,
-                    "-af", "lowpass=f=7000,highpass=f=35", "-c:a", "libvorbis", "-q:a", "5", out], check=True)
-    os.remove(raw)
-    print("ok", out, round(LOOP, 1), "s", os.path.getsize(out) // 1024, "KB")
+L = reverb(L)
+R = reverb(R)
+# бесшовная петля: хвост после конца петли добавляется в начало
+nl = int(LOOP * SR)
+for ch in (L, R):
+    ch[:N - nl] += ch[nl:]
+L, R = L[:nl], R[:nl]
+st = np.stack([L, R], 1)
+st = filt(st[:, 0], 90, None, 2), filt(st[:, 1], 90, None, 2)
+st = np.stack(st, 1)
+rms = np.sqrt((st ** 2).mean())
+st = st * (10 ** (-16 / 20) / rms)
+st = np.tanh(st * 1.1) / np.tanh(1.1) * 0.95
+raw = os.path.join(OUT, "music_main.raw")
+(np.clip(st, -1, 1) * 32767).astype("<i2").tofile(raw)
+out = os.path.join(OUT, "music_main.ogg")
+subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "s16le", "-ar", str(SR), "-ac", "2", "-i", raw, "-c:a", "libvorbis", "-q:a", "5", out], check=True)
+os.remove(raw)
+print("ok music_main", round(LOOP, 2), "s")

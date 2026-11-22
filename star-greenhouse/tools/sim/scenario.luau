@@ -103,6 +103,9 @@ local r = Random.new(1)
 local kg = G.rollWeight(G.Plants.moon_01, r, {})
 check(kg > 0, "вес")
 check(G.fmtOdds(1 / 1000000000) == "1 к 1 000 000 000", "fmtOdds " .. G.fmtOdds(1 / 1000000000))
+check(G.fmtOdds(1e-60) == "1 к 1×10⁶⁰", "fmtOdds огромный: " .. G.fmtOdds(1e-60))
+check(G.fmtOdds(2e-13) == "1 к 5 трлн", "fmtOdds трлн: " .. G.fmtOdds(2e-13))
+check(not G.fmtOdds(1e-19):find("-"), "fmtOdds без переполнения")
 check(G.fmt(1234567) == "1.23M", "fmt " .. G.fmt(1234567))
 local st = G.shopStock(5, 100)
 local cnt = 0
@@ -557,8 +560,9 @@ do
 	local board = workspace.World:FindFirstChild("LeaderBoard", true)
 	check(board ~= nil, "нет табло лидеров на площади")
 	if board then
-		local lbl = board:FindFirstChildOfClass("SurfaceGui"):FindFirstChildOfClass("TextLabel")
-		check(lbl.Text ~= "Загрузка…", "табло не обновилось")
+		local n = 0
+		for _, d in board:GetDescendants() do if d:IsA("TextLabel") then n += 1 end end
+		check(n >= 3 * (2 + 7 * 3), "табло: мало строк " .. n)
 	end
 	local tb = hud:FindFirstChild("Leaders", true)
 	check(tb ~= nil, "нет кнопки лидеров")
@@ -570,6 +574,16 @@ do
 		end
 	end
 end
+
+stage("настройки звука")
+fire("Settings", 3, 5, 0)
+frames(3)
+snap = inv("State")
+check(snap.settings and snap.settings.m == 3 and snap.settings.s == 5 and snap.settings.h == 0, "настройки не сохранились")
+fire("Settings", 99, -4, "x")
+frames(3)
+snap = inv("State")
+check(snap.settings.m == 10 and snap.settings.s == 0 and snap.settings.h == 1, "настройки: проверка границ")
 
 stage("выход")
 Players.PlayerRemoving:Fire(plr)

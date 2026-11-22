@@ -234,6 +234,17 @@ for _, b in colFrame:GetChildren() do
 end
 -- новые сцены: алхимия, пушка, телескоп
 do
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then b.Activated:Fire() end end
+	frames(5, 0.2)
+	for _, d in pg.SpiritWindows:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "Настройки" and d.Parent:IsA("TextButton") then d.Parent.Activated:Fire() break end
+	end
+	frames(8, 0.2)
+	dumpState("settings")
+	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
+	frames(3, 0.2)
+end
+do
 	local tb = hud:FindFirstChild("Leaders", true)
 	tb.Activated:Fire()
 	frames(10, 0.3)
@@ -282,4 +293,38 @@ frames(3)
 PPS.PromptTriggered:Fire(findPrompt("Game", "telescope"), plr)
 frames(20, 0.1)
 dumpState("telescope")
+-- превью табло лидеров (SurfaceGui переносится в ScreenGui для рендера)
+do
+	local board = workspace.World:FindFirstChild("LeaderBoard", true)
+	local sg = board:FindFirstChildOfClass("SurfaceGui")
+	local names = { "Damirchekke", "SuperFarmer2014", "Лиза", "xX_StarBoy_Xx", "Маша_Космос", "Den", "VeryLongNicknameHere123" }
+	local vals = { { "1.34Dd", "3.4Td", "912Qa", "45.1B", "3.2M", "120K", "9.9K" }, { "2160.0 кг", "1519.2 кг", "935.0 кг", "120.5 кг", "44.0 кг", "12.3 кг", "3.1 кг" },
+		{ G.fmtOdds(1e-60), G.fmtOdds(2e-13), G.fmtOdds(1e-9), G.fmtOdds(1e-6), G.fmtOdds(1e-4), G.fmtOdds(1e-3), G.fmtOdds(0.01) } }
+	local ci = 0
+	for _, col in sg:GetChildren() do
+		if col:IsA("Frame") then
+			ci += 1
+			local ri = 0
+			for _, r in col:GetChildren() do
+				if r:IsA("Frame") and r.Size.Y.Offset == 33 then
+					ri += 1
+					local labels = {}
+					for _, l in r:GetChildren() do if l:IsA("TextLabel") then table.insert(labels, l) end end
+					labels[2].Text = names[ri]
+					labels[3].Text = vals[ci][ri]
+				end
+			end
+		end
+	end
+	for _, g in pg:GetChildren() do if g:IsA("ScreenGui") then g.Enabled = false end end
+	local prev = Instance.new("ScreenGui")
+	prev.Name = "BoardPreview"
+	prev.Parent = pg
+	local holder = Instance.new("Frame")
+	holder.Size = UDim2.fromOffset(800, 336)
+	holder.BackgroundColor3 = Color3.fromRGB(12, 14, 30)
+	holder.Parent = prev
+	for _, ch in sg:GetChildren() do ch.Parent = holder end
+	dumpState("board")
+end
 return SIM

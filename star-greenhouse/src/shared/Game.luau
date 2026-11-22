@@ -61,8 +61,19 @@ function G.fmtInt(n: number): string -- 12 345 678
 	local out = s:reverse():gsub("(%d%d%d)", "%1 "):reverse()
 	return (out:gsub("^ ", ""))
 end
+-- шанс: до триллиона цифрами, потом «трлн», совсем редкое — степенью десяти (без переполнения)
+local SUP = { ["0"] = "⁰", ["1"] = "¹", ["2"] = "²", ["3"] = "³", ["4"] = "⁴", ["5"] = "⁵", ["6"] = "⁶", ["7"] = "⁷", ["8"] = "⁸", ["9"] = "⁹" }
 function G.fmtOdds(chance: number): string
-	return "1 к " .. G.fmtInt(1 / chance)
+	if not chance or chance <= 0 or chance ~= chance then return "1 к ∞" end
+	local n = 1 / chance
+	if n < 1e12 then return "1 к " .. G.fmtInt(n) end
+	if n < 1e15 then
+		local v = n / 1e12
+		return ("1 к %s трлн"):format(v >= 100 and ("%d"):format(math.floor(v + 0.5)) or (("%.1f"):format(v):gsub("%.0$", "")))
+	end
+	local e = math.floor(math.log10(n))
+	local mant = n / 10 ^ e
+	return ("1 к %s×10%s"):format(("%.1f"):format(mant):gsub("%.0$", ""), (tostring(e):gsub("%d", SUP)))
 end
 function G.fmtTime(sec: number): string
 	sec = math.max(0, math.ceil(sec))
