@@ -37,9 +37,10 @@ do
 		music:Play()
 	end)
 end
-local function playSfx(name)
+local function playSfx(name, pitch)
 	local s = sfx[name]
 	if s then
+		s.PlaybackSpeed = pitch or 1
 		s.TimePosition = 0
 		s:Play()
 	end
@@ -156,7 +157,7 @@ end
 fitScale()
 if workspace.CurrentCamera then workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(fitScale) end
 
-local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 104), Size = UDim2.fromOffset(400, 200), ZIndex = 20 }, hud)
+local toastHolder = make("Frame", { Name = "Toasts", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 110), Size = UDim2.fromOffset(400, 200), ZIndex = 20 }, hud)
 listLayout(toastHolder, nil, 4, Enum.HorizontalAlignment.Center)
 local function toast(text, kind, dur)
 	local col = kind == "ok" and T.green or kind == "bad" and T.red or kind == "rare" and T.gold or T.sub
@@ -199,7 +200,7 @@ do
 	UI.eventFrame = f
 	UI.eventTitle = K.text(f, "", { Size = UDim2.new(1, -16, 0, 20), Position = UDim2.fromOffset(8, 4), MaxText = 15 })
 	UI.eventSub = K.text(f, "", { Size = UDim2.new(1, -16, 0, 16), Position = UDim2.fromOffset(8, 25), MaxText = 12, TextColor3 = T.sub, Medium = true })
-	local hint = K.panel(hud, { Name = "Hint", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 70), Size = UDim2.fromOffset(400, 28) })
+	local hint = K.panel(hud, { Name = "Hint", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 78), Size = UDim2.fromOffset(380, 26) })
 	K.stroke(hint, T.gold, 1, false, 0.4)
 	UI.hintFrame = hint
 	UI.hint = K.text(hint, "", { Size = UDim2.new(1, -16, 1, -8), Position = UDim2.fromOffset(8, 4), MaxText = 15, TextColor3 = T.gold, Medium = true })
@@ -871,6 +872,21 @@ loop(0.5, function()
 		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
 		if windows.bag.Visible and (dirty.fruits or dirty.coins) then hooks.bag() end
 		if windows.shop.Visible and (dirty.sold or dirty.bought or dirty.planets) then hooks.shop() end
+		-- открыта новая планета: праздник
+		if UI.lastPlanets and (ST.planets or 1) > UI.lastPlanets then
+			local pl = G.Planets[ST.planets]
+			playSfx("unlock")
+			local banner = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.36), Size = UDim2.fromOffset(560, 90), BackgroundTransparency = 1 }, hud)
+			K.text(banner, "НОВАЯ ПЛАНЕТА", { Size = UDim2.new(1, 0, 0.45, 0), MaxText = 30, TextColor3 = T.gold })
+			K.text(banner, pl.name .. " · лети на ракете", { Position = UDim2.fromScale(0, 0.5), Size = UDim2.new(1, 0, 0.4, 0), MaxText = 24, TextColor3 = G.PlanetColors[ST.planets] })
+			K.pop(banner)
+			task.delay(4, function() banner:Destroy() end)
+			local ch = plr.Character
+			if ch and ch.PrimaryPart and FX.burst then
+				for i = 1, 3 do task.delay(i * 0.25, function() FX.burst(ch.PrimaryPart.Position + Vector3.new(0, 3, 0), G.PlanetColors[ST.planets], 40) end) end
+			end
+		end
+		UI.lastPlanets = ST.planets or 1
 		if windows.index.Visible and (dirty.idx or dirty.mutSeen) then hooks.index() end
 		if windows.upgrades.Visible and (dirty.coins or dirty.upg or dirty.decor or dirty.bedCount or dirty.perms) then hooks.upgrades() end
 		if windows.daily.Visible and dirty.daily then hooks.daily() end
@@ -1084,12 +1100,12 @@ local function ensurePrompts()
 					if ST.sel then
 						FX.splash(top, Color3.fromRGB(110, 80, 60), 18, 14)
 						FX.floatText(top + Vector3.new(0, 2, 0), "Посажено!", T.green, 18)
-						playSfx("click")
+						playSfx("plant", 0.9 + math.random() * 0.2)
 					end
 				elseif nowS() < (soil:GetAttribute("Ready") or 0) and nowS() >= (soil:GetAttribute("WaterAt") or 0) then
 					FX.splash(top + Vector3.new(0, 4, 0), Color3.fromRGB(120, 190, 255), 30, 10)
 					FX.floatText(top + Vector3.new(0, 2.5, 0), "Полито: быстрее", T.cold, 18)
-					playSfx("click")
+					playSfx("water", 0.9 + math.random() * 0.2)
 				end
 				remotes.Act:FireServer(idx)
 			end)
@@ -1229,7 +1245,7 @@ remotes:WaitForChild("Collected").OnClientEvent:Connect(function(coins, seed, po
 	local text = (meteor and "Метеорит! +" or "Звезда: +") .. G.fmt(coins) .. " монет"
 	if seed then text ..= ", семя «" .. plantName(seed) .. "»" end
 	toast(text, (meteor or seed) and "rare" or "ok", 3)
-	playSfx(meteor and "harvestRare" or "coins")
+	playSfx(meteor and "mutation" or "star", 0.95 + math.random() * 0.1)
 	if typeof(pos) == "Vector3" then burst(pos, meteor and Color3.fromRGB(255, 170, 90) or Color3.fromRGB(255, 232, 160), meteor and 40 or 18) end
 end)
 -- звезда летит с неба (ярко, со шлейфом), после падения светится и постепенно гаснет
@@ -1312,7 +1328,7 @@ function playLaunch(target)
 	local gui = make("ScreenGui", { Name = "Launch", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 60 }, pg)
 	local fade = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 248, 235), BackgroundTransparency = 1 }, gui)
 	local title = K.text(gui, "Полёт на планету " .. G.Planets[target].name, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.82), Size = UDim2.fromOffset(600, 40), MaxText = 30, TextColor3 = G.PlanetColors[target], TextTransparency = 1 })
-	playSfx("legendary")
+	playSfx("rocket")
 	cam.CameraType = Enum.CameraType.Scriptable
 	local t0 = os.clock()
 	local start = rk:GetPivot()
@@ -1339,6 +1355,7 @@ function playLaunch(target)
 	task.wait(1.2)
 	gui:Destroy()
 	toast("Добро пожаловать на планету " .. G.Planets[target].name .. "!", "rare", 4)
+	playSfx("unlock")
 end
 
 -- столб света над своим огородом: его видно издалека, легко вернуться
@@ -1346,8 +1363,8 @@ do
 	local beacon = make("Part", { Name = "HomeBeacon", Shape = Enum.PartType.Cylinder, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
 		Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 214, 120), Transparency = 0.82, Size = Vector3.new(260, 1.2, 1.2) }, fxFolder)
 	local tagPart = make("Part", { Name = "HomeTag", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Transparency = 1, Size = Vector3.new(1, 1, 1) }, fxFolder)
-	local bb = make("BillboardGui", { Size = UDim2.fromOffset(160, 40), AlwaysOnTop = true, LightInfluence = 0, MaxDistance = 2500 }, tagPart)
-	local tag = K.text(bb, "ТВОЙ ОГОРОД", { MaxText = 16, TextColor3 = T.gold })
+	local bb = make("BillboardGui", { Size = UDim2.fromOffset(130, 28), AlwaysOnTop = false, LightInfluence = 0, MaxDistance = 2500 }, tagPart)
+	local tag = K.text(bb, "ТВОЙ ОГОРОД", { MaxText = 13, TextColor3 = T.gold })
 	loop(0.5, function()
 		local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
 		local center = plot and plot:GetAttribute("Center")
@@ -1356,7 +1373,7 @@ do
 			return
 		end
 		beacon.CFrame = CFrame.new(center + Vector3.new(0, 130, 0)) * CFrame.Angles(0, 0, math.pi / 2)
-		tagPart.CFrame = CFrame.new(center + Vector3.new(0, 14, 0))
+		tagPart.CFrame = CFrame.new(center + Vector3.new(0, 24, 0))
 		local ch = plr.Character
 		local root = ch and ch:FindFirstChild("HumanoidRootPart")
 		local d = root and (root.Position - center).Magnitude or 0
@@ -1409,6 +1426,7 @@ remotes:WaitForChild("Strike").OnClientEvent:Connect(function(pos, mut, who)
 		Transparency = NumberSequence.new(0, 1), WidthScale = NumberSequence.new(1, 0) }, m)
 	make("PointLight", { Color = Color3.fromRGB(255, 170, 90), Range = 30, Brightness = 3 }, m)
 	local t0 = os.clock()
+	playSfx("meteor")
 	local conn
 	conn = RunService.RenderStepped:Connect(function()
 		local k = math.clamp((os.clock() - t0) / 0.8, 0, 1)
@@ -1422,8 +1440,8 @@ remotes:WaitForChild("Strike").OnClientEvent:Connect(function(pos, mut, who)
 			local l = make("PointLight", { Color = Color3.fromRGB(255, 200, 140), Range = 40, Brightness = 8 }, flash)
 			TweenService:Create(l, TweenInfo.new(0.8), { Brightness = 0 }):Play()
 			task.delay(0.9, function() flash:Destroy() end)
-			playSfx(mut and "harvestRare" or "harvest")
 			if mut then
+				playSfx("mutation")
 				floatText(pos + Vector3.new(0, 5, 0), "Метеорит! " .. G.Mut[mut].name, G.Mut[mut].color, 26)
 			end
 		end
@@ -1481,7 +1499,7 @@ remotes:WaitForChild("Pollen").OnClientEvent:Connect(function(bedIdx, token)
 	K.stroke(ringF, T.gold, 3, false, 0)
 	local cnt = K.text(btn, "0/5", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 1, -6), Size = UDim2.fromOffset(80, 22), MaxText = 18, TextColor3 = T.gold })
 	toast("Пыльца над грядкой! Тапни по рою 5 раз", "rare", 4)
-	playSfx("reveal")
+	playSfx("tap", 0.8)
 	local taps, done, t0, angle = 0, false, os.clock(), 0
 	local conn = RunService.RenderStepped:Connect(function(dt)
 		angle += dt * (1.6 + taps * 0.5)
@@ -1494,7 +1512,7 @@ remotes:WaitForChild("Pollen").OnClientEvent:Connect(function(bedIdx, token)
 		if done then return end
 		taps += 1
 		cnt.Text = taps .. "/5"
-		playSfx("click")
+		playSfx("tap", 1 + taps * 0.12)
 		burst(swarm.Position, Color3.fromRGB(255, 236, 140), 14)
 		K.pop(btn)
 		angle += math.pi * (0.6 + math.random())

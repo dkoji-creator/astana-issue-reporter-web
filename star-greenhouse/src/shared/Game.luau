@@ -40,8 +40,9 @@ function G.hash01(a: number, b: number): number
 end
 
 ------------------------------------------------------------------ форматирование
-local SUFFIX = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc" }
+local SUFFIX = { "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", "Dc", "Ud", "Dd", "Td" }
 function G.fmt(n: number): string
+	if n ~= n then return "0" end
 	n = math.floor(n + 0.5)
 	if n < 1000 then return tostring(n) end
 	local i = 1
@@ -50,6 +51,7 @@ function G.fmt(n: number): string
 		v /= 1000
 		i += 1
 	end
+	if v >= 1000 then return ("%.2e"):format(n) end
 	local s = v >= 100 and ("%d"):format(math.floor(v)) or v >= 10 and ("%.1f"):format(v) or ("%.2f"):format(v)
 	s = s:gsub("%.?0+$", "")
 	return s .. SUFFIX[i]
