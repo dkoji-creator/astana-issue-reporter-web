@@ -548,8 +548,7 @@ do
 				end)
 			end
 		end
-		header("Особые предложения", 40, T.pink)
-		for i, key in G.ProductOrder do
+		for i, key in {} do
 			local pr = G.Products[key]
 			if pr.id ~= 0 then
 				local owned = pr.permanent and ST.perms[key]
@@ -573,6 +572,55 @@ do
 			local good, text = remotes.Redeem:InvokeServer(box.Text)
 			toast(text or "Ошибка", good and "ok" or "bad")
 		end)
+	end
+end
+
+------------------------------------------------------------------ окно: магазин (поливки и донаты)
+do
+	local f, body = mkWindow("store", "Магазин", "coin", T.gold, 0.9, 0.84)
+	local scroll = K.scroll(body, {})
+	listLayout(scroll, nil, 6)
+	function hooks.store()
+		clear(scroll)
+		label(scroll, "Поливки: сразу ускоряют рост грядки. Выбери лейку кнопкой у панели семян", { Size = UDim2.new(1, -8, 0, 22), TextColor3 = T.sub, MaxText = 14, LayoutOrder = 0 })
+		for tier, can in G.Cans do
+			local r = K.panel(scroll, { Size = UDim2.new(1, -8, 0, 52), LayoutOrder = tier, BackgroundColor3 = T.panel2 })
+			K.stroke(r, can.color, 1.2, false, 0.3)
+			K.icon(r, "water", { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(8, 6), ImageColor3 = can.color })
+			K.text(r, ("%s  ·  ранг %d"):format(can.name, tier), { Position = UDim2.fromOffset(56, 4), Size = UDim2.new(0.5, 0, 0, 20), MaxText = 16, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = can.color })
+			local have = (ST.cans and ST.cans["c" .. tier]) or 0
+			K.text(r, ("рост быстрее на %d%%  ·  есть: %d"):format(math.floor(can.pct * 100), have), { Position = UDim2.fromOffset(56, 26), Size = UDim2.new(0.55, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
+			if can.robux then
+				local pr = G.Products[can.robux]
+				local b = K.button(r, pr.price .. " R$ за 10", T.pink, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(130, 36), MaxText = 15 })
+				b.Activated:Connect(function() MarketplaceService:PromptProductPurchase(plr, pr.id) end)
+			else
+				local price = G.canPrice(tier, ST.planets or 1)
+				for qi, qty in { 1, 10 } do
+					local b = coinButton(r, price * qty, ST.coins >= price * qty, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8 - (2 - qi) * 116, 0.5, 0), Size = UDim2.fromOffset(110, 34), MaxText = 14 })
+					b.Activated:Connect(function()
+						local ok, err = remotes.BuyCan:InvokeServer(tier, qty)
+						if ok then toast(("Куплено: %s x%d"):format(can.name, qty), "ok") playSfx("coins") else toast(err or "Не вышло", "bad") end
+					end)
+				end
+			end
+		end
+		label(scroll, "Особые предложения", { Size = UDim2.new(1, -8, 0, 24), TextColor3 = T.pink, MaxText = 18, LayoutOrder = 20 })
+		for i, key in G.ProductOrder do
+			local pr = G.Products[key]
+			if pr.id ~= 0 and key ~= "cans5" then
+				local owned = pr.permanent and ST.perms[key]
+				local r = K.panel(scroll, { Size = UDim2.new(1, -8, 0, 48), LayoutOrder = 20 + i, BackgroundColor3 = T.panel2 })
+				K.text(r, pr.name, { Position = UDim2.fromOffset(10, 2), Size = UDim2.new(0.5, 0, 0, 22), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left })
+				K.text(r, pr.desc, { Position = UDim2.fromOffset(10, 24), Size = UDim2.new(0.6, 0, 0, 20), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
+				if owned then
+					K.text(r, "АКТИВНО", { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(110, 28), MaxText = 16, TextColor3 = T.green })
+				else
+					local b = K.button(r, pr.price .. " R$", T.pink, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(110, 36), MaxText = 16 })
+					b.Activated:Connect(function() MarketplaceService:PromptProductPurchase(plr, pr.id) end)
+				end
+			end
+		end
 	end
 end
 
@@ -690,11 +738,11 @@ do
 	listLayout(col, nil, 4)
 	local defs = {
 		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "upgrades", "upgrade", "Улучшить", T.cold },
-		{ "travel", "rocket", "Ракета", T.pink }, { "home", "home", "Домой", T.gold }, { "menu", "settings", "Ещё", T.purple },
+		{ "travel", "rocket", "Ракета", T.pink }, { "home", "home", "Домой", T.gold }, { "store", "coin", "Магазин", T.gold }, { "menu", "settings", "Ещё", T.purple },
 	}
 	UI.buttons = {}
 	for i, d in defs do
-		local b = K.iconButton(col, d[2], d[3], d[4], 50)
+		local b = K.iconButton(col, d[2], d[3], d[4], 46)
 		b.LayoutOrder = i
 		b.Activated:Connect(function()
 			if d[1] == "home" then
@@ -711,6 +759,35 @@ do
 		ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 4 }, bar)
 	listLayout(scroll, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
 	UI.seedBar = scroll
+	local canBtn = make("TextButton", { Name = "CanPick", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(0.5, -244, 1, -10), Size = UDim2.fromOffset(78, 74),
+		BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false }, hud)
+	K.corner(canBtn, UDim.new(0, 12))
+	local canStroke = K.stroke(canBtn, T.cold, 1.2, false, 0.3)
+	local canIcon = K.icon(canBtn, "water", { Size = UDim2.fromOffset(38, 38), Position = UDim2.new(0.5, -19, 0, 4) })
+	local canLbl = K.text(canBtn, "Полив", { Position = UDim2.new(0, 3, 1, -30), Size = UDim2.new(1, -6, 0, 26), MaxText = 11, TextWrapped = true, Medium = true })
+	function hooks.canpick()
+		local tier = ST.can or 0
+		local can = G.Cans[tier]
+		canIcon.ImageColor3 = can and can.color or Color3.new(1, 1, 1)
+		canStroke.Color = can and can.color or T.cold
+		canLbl.Text = can and (("Ранг %d · x%d"):format(tier, ST.cans["c" .. tier] or 0)) or "Обычный полив"
+	end
+	canBtn.Activated:Connect(function()
+		K.bounce(canBtn)
+		playSfx("click")
+		local cur = ST.can or 0
+		for step = 1, 6 do
+			local nxt = (cur + step) % 6
+			if nxt == 0 or ((ST.cans or {})["c" .. nxt] or 0) > 0 then
+				ST.can = nxt
+				remotes.SelectCan:FireServer(nxt)
+				hooks.canpick()
+				local can = G.Cans[nxt]
+				toast(can and (can.name .. ": рост быстрее на " .. math.floor(can.pct * 100) .. "% сразу") or "Обычный полив: раз в 20 с", "info", 2)
+				break
+			end
+		end
+	end)
 	function hooks.seedbar()
 		clear(scroll)
 		local ids = {}
@@ -877,6 +954,8 @@ loop(0.5, function()
 		if UI.dailyBadge2 then UI.dailyBadge2.Visible = ST.daily.can end
 		-- обновления окон
 		if dirty.seeds or dirty.sel then hooks.seedbar() end
+		if dirty.can or dirty.cans or not UI.canInit then UI.canInit = true hooks.canpick() end
+		if windows.store.Visible and (dirty.coins or dirty.cans or dirty.perms) then hooks.store() end
 		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
 		if windows.bag.Visible and (dirty.fruits or dirty.coins) then hooks.bag() end
 		if windows.shop.Visible and (dirty.sold or dirty.bought or dirty.planets) then hooks.shop() end
@@ -1110,6 +1189,11 @@ local function ensurePrompts()
 						FX.floatText(top + Vector3.new(0, 2, 0), "Посажено!", T.green, 18)
 						playSfx("plant", 0.9 + math.random() * 0.2)
 					end
+				elseif nowS() < (soil:GetAttribute("Ready") or 0) and G.Cans[ST.can or 0] and ((ST.cans or {})["c" .. ST.can] or 0) > 0 then
+					local can = G.Cans[ST.can]
+					FX.splash(top + Vector3.new(0, 4, 0), can.color, 50, 14)
+					FX.floatText(top + Vector3.new(0, 3, 0), ("%s −%d%%"):format(can.name, math.floor(can.pct * 100)), can.color, 22)
+					playSfx("water", 1.2)
 				elseif nowS() < (soil:GetAttribute("Ready") or 0) and nowS() >= (soil:GetAttribute("WaterAt") or 0) then
 					FX.splash(top + Vector3.new(0, 4, 0), Color3.fromRGB(120, 190, 255), 30, 10)
 					FX.floatText(top + Vector3.new(0, 2.5, 0), "Полито: быстрее", T.cold, 18)
@@ -1144,7 +1228,10 @@ loop(0.4, function()
 					pr.Enabled = true
 					local waitW = (soil:GetAttribute("WaterAt") or 0) - nowS()
 					local left = G.fmtTime((soil:GetAttribute("Ready") or 0) - nowS())
-					if waitW > 0 then
+					local can = G.Cans[ST.can or 0]
+					if can and ((ST.cans or {})["c" .. ST.can] or 0) > 0 then
+						pr.ActionText = ("%s: −%d%% · %s"):format(can.name, math.floor(can.pct * 100), left)
+					elseif waitW > 0 then
 						pr.ActionText = ("Растёт %s · полив через %d с"):format(left, math.ceil(waitW))
 					else
 						pr.ActionText = ("Полить (быстрее) · %s"):format(left)

@@ -27,13 +27,13 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -58,7 +58,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1,
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 },
 	}
 end
 
@@ -122,7 +122,7 @@ local function snapshot(plr)
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0,
 	}
 end
 local function push(plr, ...)
@@ -307,6 +307,18 @@ local function waterBed(plr, i)
 	local d = D[plr]
 	local b = d.beds[i]
 	local t = now()
+	local s = S[plr]
+	local tier = s.can or 0
+	if tier > 0 and (d.cans["c" .. tier] or 0) > 0 then
+		d.cans["c" .. tier] -= 1
+		local cpct = G.Cans[tier].pct
+		b.ready = t + (b.ready - t) * (1 - cpct)
+		refreshBed(plr, i)
+		if d.cans["c" .. tier] <= 0 then s.can = 0 end
+		push(plr, "cans", "can")
+		questProgress(plr, "water", 1)
+		return
+	end
 	if b.wt and t - b.wt < G.WaterCooldown then
 		notify(plr, ("Полить снова можно через %d с"):format(G.WaterCooldown - (t - b.wt)), "info")
 		return
@@ -662,6 +674,29 @@ RX.State.OnServerInvoke = function(plr)
 end
 
 ------------------------------------------------------------------ админ (для съёмок и проверки)
+------------------------------------------------------------------ поливки
+RX.SelectCan.OnServerEvent:Connect(function(plr, tier)
+	local d, s = D[plr], S[plr]
+	if not d or type(tier) ~= "number" then return end
+	tier = math.floor(tier)
+	if tier == 0 or (G.Cans[tier] and (d.cans["c" .. tier] or 0) > 0) then
+		s.can = tier
+		push(plr, "can")
+	end
+end)
+RX.BuyCan.OnServerInvoke = function(plr, tier, qty)
+	local d = D[plr]
+	local can = type(tier) == "number" and G.Cans[tier]
+	if not d or not can or can.robux then return false end
+	qty = math.clamp(math.floor(tonumber(qty) or 1), 1, 10)
+	local price = G.canPrice(tier, math.max(1, unlockedPlanets(d))) * qty
+	if d.coins < price then return false, "Не хватает монет" end
+	d.coins -= price
+	d.cans["c" .. tier] = (d.cans["c" .. tier] or 0) + qty
+	push(plr, "coins", "cans")
+	return true
+end
+
 ------------------------------------------------------------------ полёт на ракете и путь домой
 RX.Travel.OnServerInvoke = function(plr, pi)
 	local d, s = D[plr], S[plr]
@@ -828,6 +863,9 @@ local function grant(plr, key)
 		if d.potion.luck == po.luck then d.potion.uses += po.uses else d.potion = { luck = po.luck, uses = po.uses } end
 	elseif key == "growth2x" or key == "auto" then
 		d.perms[key] = true
+	elseif key == "cans5" then
+		d.cans.c5 = (d.cans.c5 or 0) + 10
+		push(plr, "cans")
 	elseif key == "beds" then
 		d.bedCount = math.min(Map.MaxBeds, d.bedCount + 4)
 		refreshAllBeds(plr)

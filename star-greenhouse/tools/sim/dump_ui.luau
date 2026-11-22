@@ -158,7 +158,7 @@ local function fire(name, ...) remotes:FindFirstChild(name):FireServer(...) end
 local snap = inv("State")
 check(snap and snap.plot == 1, "участок не выдан")
 check(snap.seeds.moon_01 == 3, "стартовые семена")
-local plot = workspace.World.Plots.Plot1
+local plot = workspace.World.Plots.Plot1_1
 local function toBed(i)
 	local root = plr.Character.HumanoidRootPart
 	root.CFrame = CFrame.new(plot.Beds["Bed" .. i].Soil.Position + Vector3.new(0, 3, 4))
@@ -220,7 +220,7 @@ local function dumpState(name)
 end
 dumpState("hud")
 local colFrame = hud:FindFirstChild("Buttons")
-local names = { "shop", "bag", "upgrades", "travel", "home", "menu" }
+local names = { "shop", "bag", "upgrades", "travel", "home", "store", "menu" }
 local i = 0
 for _, b in colFrame:GetChildren() do
 	if b:IsA("TextButton") then

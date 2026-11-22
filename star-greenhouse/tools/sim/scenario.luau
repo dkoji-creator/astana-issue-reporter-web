@@ -294,6 +294,39 @@ for _, b in colFrame:GetChildren() do
 	end
 end
 
+stage("лейки")
+do
+	inv("Admin", "coinsB")
+	frames(2)
+	local cok, cerr = inv("BuyCan", 2, 3) check(cok, "покупка лейки: " .. tostring(cerr) .. " coins=" .. tostring(inv("State").coins))
+	check(not inv("BuyCan", 5, 1), "лейка за робуксы не продаётся за монеты")
+	snap = inv("State")
+	check(snap.cans.c2 == 3, "леек: " .. tostring(snap.cans.c2))
+	-- кнопка выбора лейки в HUD
+	local cp = hud:FindFirstChild("CanPick", true)
+	check(cp ~= nil, "нет кнопки лейки")
+	if cp then cp.Activated:Fire() frames(3) end
+	snap = inv("State")
+	check(snap.can == 1, "выбор лейки: " .. tostring(snap.can))
+	fire("SelectCan", 2)
+	frames(2)
+	toBed(3)
+	fire("Select", "moon_01")
+	fire("Act", 3)
+	frames(5)
+	local s3 = plot.Beds.Bed3.Soil
+	local r0 = s3:GetAttribute("Ready") or 0
+	fire("Act", 3)
+	frames(3)
+	local r1 = s3:GetAttribute("Ready") or 0
+	check(r1 < r0, "лейка не ускорила рост: " .. tostring(r0) .. " -> " .. tostring(r1))
+	check(inv("State").cans.c2 == 2, "лейка не потратилась")
+	inv("Admin", "ripe")
+	frames(3)
+	fire("Act", 3)
+	frames(5)
+end
+
 stage("киоск через подсказку")
 for _, d in workspace.World:GetDescendants() do
 	if d:IsA("ProximityPrompt") and d:GetAttribute("Window") == "market" then
@@ -324,7 +357,7 @@ do
 	end
 	-- меню «Ещё»
 	local menuBtn
-	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 6 then menuBtn = b end end
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then menuBtn = b end end
 	check(menuBtn ~= nil, "нет кнопки Ещё")
 	if menuBtn then
 		menuBtn.Activated:Fire()

@@ -239,7 +239,22 @@ G.Products = {
 	auto = { id = 3734146140, price = 99, name = "Авто-сбор", desc = "Спелые плоды собираются сами", permanent = true },
 	beds = { id = 3734146141, price = 79, name = "+4 грядки", desc = "Четыре дополнительные грядки навсегда" },
 }
-G.ProductOrder = { "small", "big", "growth2x", "auto", "beds" }
+G.Products.cans5 = { id = 3734777270, price = 49, name = "Лейки сверхновой x10", desc = "10 лучших леек: каждая сокращает рост на 90%" }
+G.ProductOrder = { "cans5", "small", "big", "growth2x", "auto", "beds" }
+
+------------------------------------------------------------------ поливки: расходуются, срабатывают сразу (без ожидания), чем выше ранг — тем сильнее
+G.Cans = {
+	{ name = "Лейка новичка", pct = 0.25, price = 150, color = Color3.fromRGB(150, 200, 255) },
+	{ name = "Медная лейка", pct = 0.40, price = 900, color = Color3.fromRGB(230, 150, 90) },
+	{ name = "Звёздная лейка", pct = 0.55, price = 6000, color = Color3.fromRGB(255, 220, 120) },
+	{ name = "Кометная лейка", pct = 0.70, price = 40000, color = Color3.fromRGB(150, 230, 255) },
+	{ name = "Лейка сверхновой", pct = 0.90, price = 0, robux = "cans5", color = Color3.fromRGB(255, 140, 220) },
+}
+-- цена лейки растёт с открытыми планетами
+function G.canPrice(tier: number, planets: number): number
+	local mult = G.Planets[math.clamp(planets, 1, #G.Planets)].mult
+	return math.floor(G.Cans[tier].price * mult ^ 0.85)
+end
 
 ------------------------------------------------------------------ рост
 -- оставшееся время роста в секундах при данных множителях скорости
