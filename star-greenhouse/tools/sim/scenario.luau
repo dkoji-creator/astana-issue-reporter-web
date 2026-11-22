@@ -309,7 +309,7 @@ check(anyOpen, "киоск не открыл окно")
 
 stage("админ-читы и опыление")
 do
-	for _, c in { "coinsB", "maxup", "giant", "allmut", "potion", "speed" } do check(inv("Admin", c) == true, "админ " .. c) end
+	for _, c in { "coinsB", "maxup", "giant", "allmut", "potion", "speed", "showcase" } do check(inv("Admin", c) == true, "админ " .. c) end
 	check(inv("Admin", "event", "meteor") == true, "событие")
 	frames(30, 0.2)
 	check(RS:GetAttribute("EventId") == "meteor", "метеоритный дождь не включился")
@@ -326,7 +326,24 @@ do
 	local menuBtn
 	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 6 then menuBtn = b end end
 	check(menuBtn ~= nil, "нет кнопки Ещё")
-	if menuBtn then menuBtn.Activated:Fire() frames(5, 0.2) end
+	if menuBtn then
+		menuBtn.Activated:Fire()
+		frames(5, 0.2)
+		-- фото-режим из меню «Ещё»
+		local photoBtn
+		for _, d in pg.SpiritWindows:GetDescendants() do
+			if d:IsA("TextButton") and d.LayoutOrder == 4 and d.Parent and d.Parent.Parent and d.Parent.Parent.Visible then photoBtn = d end
+		end
+		check(photoBtn ~= nil, "нет кнопки фото-режима")
+		if photoBtn then
+			photoBtn.Activated:Fire()
+			frames(10, 0.1)
+			local ph = pg:FindFirstChild("Photo")
+			check(ph ~= nil, "фото-режим не включился")
+			if ph then ph:FindFirstChildOfClass("TextButton").Activated:Fire() frames(3, 0.1) end
+			check(hud.Enabled, "интерфейс не вернулся после фото-режима")
+		end
+	end
 end
 
 stage("полёт на Марс и домой")
@@ -360,7 +377,7 @@ RS:SetAttribute("EventId", "meteor")
 frames(40, 0.2)
 RS:SetAttribute("EventId", "")
 frames(10, 0.2)
-remotes.Announce:FireAllClients("Тест", "Квантовая роза", "Сингулярность", 1e-9)
+remotes.Announce:FireAllClients("Тест", "Квантовая роза", "Сингулярность", 1e-9, Vector3.new(0, 5, 0))
 frames(5)
 
 stage("долгая игра: 10 минут")

@@ -251,7 +251,7 @@ local function newBed(plr, d, plantId, regrow)
 	local ready = t + math.max(3, base / speed)
 	local ev, left = eventNow()
 	if ev and ev.grow then ready = t + flareRemaining(ready - t, left) end
-	local luck = G.upgradeValue("luck", d.upg.luck)
+	local luck = G.upgradeValue("luck", d.upg.luck) * (G.PlanetLuck[d.planet or 1] or 1)
 	if d.potion.uses > 0 then
 		luck *= d.potion.luck
 		d.potion.uses -= 1
@@ -368,7 +368,8 @@ local function harvestBed(plr, i, silent)
 		end
 	end
 	if chance <= 1 / 50000 then
-		RX.Announce:FireAllClients(plr.DisplayName, plant.name, G.mutTitle(b.m), chance)
+		local pl = s.plot and Map.plots[s.plot]
+		RX.Announce:FireAllClients(plr.DisplayName, plant.name, G.mutTitle(b.m), chance, pl and pl.beds[i] and pl.beds[i].pos)
 	end
 	push(plr, "fruits", "idx", "mutSeen", "stats")
 	questProgress(plr, "harvest", 1)
@@ -790,6 +791,25 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		return true
 	elseif cmd == "potion" then
 		d.potion = { luck = 10, uses = 20 }
+	elseif cmd == "showcase" then
+		-- витрина для роликов: огромные созревшие растения с редчайшими мутациями
+		local pool = {}
+		for _, p in G.PlantList do
+			if p.rarity == "mythic" or p.rarity == "legendary" or p.rarity == "epic" then table.insert(pool, p.id) end
+		end
+		local rare = { "rainbow", "golden", "starry", "plasma", "galactic", "blackhole", "supernova", "singularity", "neon", "crystal" }
+		d.bedCount = math.max(d.bedCount, 12)
+		for i = 1, 12 do
+			local id = pool[math.random(1, #pool)]
+			local m = {}
+			for _ = 1, math.random(2, 4) do
+				local mid = rare[math.random(1, #rare)]
+				if not table.find(m, mid) then table.insert(m, mid) end
+			end
+			local pl = G.Plants[id]
+			d.beds[i] = { id = id, t0 = now() - 60, ready = now() - 1, m = m, w = math.floor(pl.kg * math.random(20, 300) * 100) / 100 }
+		end
+		refreshAllBeds(plr)
 	elseif cmd == "pollen" then
 		s.nextPollen = 0
 		return true

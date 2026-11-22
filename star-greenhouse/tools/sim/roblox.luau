@@ -365,6 +365,7 @@ local function newInstance(className)
 	if className == "PointLight" or className == "SpotLight" then p.Brightness, p.Range, p.Enabled, p.Color = 1, 8, true, Color3.new(1, 1, 1) end
 	if className == "ParticleEmitter" or className == "Trail" or className == "Beam" then p.Enabled = true end
 	if className == "Model" then p.PrimaryPart = nil end
+	if className == "ScreenGui" or className == "BillboardGui" or className == "SurfaceGui" then p.Enabled = true end
 	return self
 end
 SIM.newInstance = newInstance

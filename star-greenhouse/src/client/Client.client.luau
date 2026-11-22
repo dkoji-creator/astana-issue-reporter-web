@@ -622,7 +622,8 @@ do
 			K.text(r, p.name, { Position = UDim2.fromOffset(46, 5), Size = UDim2.new(0.5, 0, 0, 20), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = G.PlanetColors[i] })
 			local here = (ST.planet or 1) == i
 			local open = i <= (ST.planets or 1)
-			local sub = here and "Ты здесь" or (open and "Открыта" or ("Откроется после " .. G.fmt(G.PlanetUnlock[i]) .. " заработанных монет"))
+			local bonus = ("удача мутаций x%s"):format(tostring(G.PlanetLuck[i]))
+			local sub = here and ("Ты здесь · " .. bonus) or (open and ("Открыта · " .. bonus) or ("Откроется после " .. G.fmt(G.PlanetUnlock[i]) .. " заработанных монет · " .. bonus))
 			K.text(r, sub, { Position = UDim2.fromOffset(46, 26), Size = UDim2.new(0.62, 0, 0, 16), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
 			if open and not here then
 				local b = K.button(r, "Лететь", T.pink, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(110, 34), MaxText = 16 })
@@ -671,6 +672,7 @@ if plr.UserId == ADMIN_ID then
 	btn("Зелье x10 на 20 посадок", T.pink, cmd("potion"))
 	btn("Быстрый бег вкл/выкл", T.blue, cmd("speed"))
 	btn("Опыление сейчас", T.green, cmd("pollen", nil, "Пыльца скоро прилетит"))
+	btn("Витрина для ТикТока", T.gold, cmd("showcase", nil, "Огород заполнен гигантами"))
 	local mi = 1
 	local mb
 	mb = btn("Мутация: " .. G.Mut[G.MutOrder[1]].name, T.purple, function()
@@ -786,7 +788,8 @@ end
 do
 	local f, body = mkWindow("menu", "Ещё", "settings", T.purple, 0.6, 0.7)
 	make("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 64), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, body)
-	local items = { { "index", "atlas", "Атлас растений", T.purple }, { "market", "news", "Рынок", T.pink }, { "daily", "gift", "Подарок дня", T.orange } }
+	local items = { { "index", "atlas", "Атлас растений", T.purple }, { "market", "news", "Рынок", T.pink }, { "daily", "gift", "Подарок дня", T.orange },
+		{ "photo", "luck", "Фото-режим", T.cold } }
 	if plr.UserId == ADMIN_ID then table.insert(items, { "admin", "admin", "Админ", T.red }) end
 	for i, it in items do
 		local b = make("TextButton", { BackgroundColor3 = T.panel2, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, body)
@@ -802,7 +805,12 @@ do
 		b.Activated:Connect(function()
 			K.bounce(b)
 			playSfx("click")
-			openWindow(it[1])
+			if it[1] == "photo" then
+				K.close(f)
+				if FX.photoMode then FX.photoMode() end
+			else
+				openWindow(it[1])
+			end
 		end)
 	end
 end
@@ -1236,8 +1244,25 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 	toast(("%s%s, %.2f кг"):format(title ~= "" and (title .. " ") or "", name, kg or 0), title ~= "" and "rare" or "ok")
 	playSfx(title ~= "" and "harvestRare" or "harvest")
 end)
-remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance)
+remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance, pos)
 	toast(("%s нашёл «%s %s» (%s)!"):format(who, title, plant, G.fmtOdds(chance)), "rare", 7)
+	-- сверхредкая находка: столб света виден со всех планет, вспышка и баннер
+	if typeof(pos) == "Vector3" and chance <= 1 / 1000000 then
+		playSfx("legendary")
+		local col = Color3.fromRGB(255, 230, 150)
+		local beam = make("Part", { Name = "LegendBeam", Shape = Enum.PartType.Cylinder, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+			Material = Enum.Material.Neon, Color = col, Transparency = 0.3, Size = Vector3.new(3000, 8, 8), CFrame = CFrame.new(pos + Vector3.new(0, 1500, 0)) * CFrame.Angles(0, 0, math.pi / 2) }, fxFolder)
+		make("PointLight", { Color = col, Range = 60, Brightness = 5 }, beam)
+		TweenService:Create(beam, TweenInfo.new(20), { Transparency = 1, Size = Vector3.new(3000, 2, 2) }):Play()
+		task.delay(20, function() beam:Destroy() end)
+		local gui = make("ScreenGui", { Name = "Legend", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 55 }, pg)
+		local flash = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.1 }, gui)
+		TweenService:Create(flash, TweenInfo.new(1.2), { BackgroundTransparency = 1 }):Play()
+		local b = K.text(gui, title .. "!", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(700, 60), MaxText = 48, TextColor3 = T.gold })
+		K.text(gui, who .. " · " .. plant .. " · " .. G.fmtOdds(chance), { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.38), Size = UDim2.fromOffset(700, 30), MaxText = 22 })
+		K.pop(b)
+		task.delay(6, function() gui:Destroy() end)
+	end
 end)
 
 ------------------------------------------------------------------ падающие звёзды: покачивание и сбор
@@ -1532,6 +1557,45 @@ remotes:WaitForChild("Pollen").OnClientEvent:Connect(function(bedIdx, token)
 	TweenService:Create(swarm, TweenInfo.new(0.4), { Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2) }):Play()
 	task.delay(0.5, function() swarm:Destroy() end)
 end)
+
+------------------------------------------------------------------ фото-режим: без интерфейса, камера медленно облетает огород
+function FX.photoMode()
+	local cam = workspace.CurrentCamera
+	local ch = plr.Character
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+	if not cam or not root then return end
+	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
+	local center = (plot and plot:GetAttribute("Center")) or root.Position
+	if (center - root.Position).Magnitude > 60 then center = root.Position end
+	local hidden = {}
+	for _, g in pg:GetChildren() do
+		if g:IsA("ScreenGui") and g.Enabled and g.Name ~= "Photo" then
+			g.Enabled = false
+			table.insert(hidden, g)
+		end
+	end
+	pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+	local gui = make("ScreenGui", { Name = "Photo", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 80 }, pg)
+	local exit = make("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "" }, gui)
+	local hintL = K.text(gui, "Коснись экрана, чтобы выйти", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(360, 22), MaxText = 15, TextColor3 = T.sub })
+	task.delay(2.5, function() if hintL.Parent then TweenService:Create(hintL, TweenInfo.new(1), { TextTransparency = 1 }):Play() end end)
+	cam.CameraType = Enum.CameraType.Scriptable
+	local t0 = os.clock()
+	local conn = RunService.RenderStepped:Connect(function()
+		local t = os.clock() - t0
+		local a = t * 0.12
+		local r = 46 + math.sin(t * 0.2) * 8
+		cam.CFrame = CFrame.lookAt(center + Vector3.new(math.cos(a) * r, 16 + math.sin(t * 0.3) * 6, math.sin(a) * r), center + Vector3.new(0, 4, 0))
+	end)
+	exit.Activated:Connect(function()
+		conn:Disconnect()
+		gui:Destroy()
+		for _, g in hidden do g.Enabled = true end
+		pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
+		cam.CameraType = Enum.CameraType.Custom
+		if ch:FindFirstChild("Humanoid") then cam.CameraSubject = ch.Humanoid end
+	end)
+end
 
 ------------------------------------------------------------------ показ редких мутаций (кинематика)
 local revealQueue, revealing = {}, false

@@ -181,22 +181,34 @@ local function slotMarker(pi, j, parent)
 	return m
 end
 
--- деревянный приподнятый ящик-грядка
-local function bedBox(parent, bcf, i, plotId)
+-- галактическая грядка: тёмный металлический ящик с подсветкой цвета планеты
+local function bedBox(parent, bcf, i, plotId, glow)
 	local bed = Instance.new("Model")
 	bed.Name = "Bed" .. i
 	bed.Parent = parent
 	local w = 7.6
-	for _, s in { -1, 1 } do
-		part(bed, "Plank", V3(w, 1.0, 0.5), bcf * CF(0, 0.5, s * (w / 2 - 0.25)), COL.wood, Mat.WoodPlanks)
-		part(bed, "Plank", V3(0.5, 1.0, w - 1), bcf * CF(s * (w / 2 - 0.25), 0.5, 0), COL.wood, Mat.WoodPlanks)
+	local frame = c(40, 44, 64)
+	for _, sgn in { -1, 1 } do
+		part(bed, "Plank", V3(w, 1.0, 0.5), bcf * CF(0, 0.5, sgn * (w / 2 - 0.25)), frame, Mat.Metal)
+		part(bed, "Plank", V3(0.5, 1.0, w - 1), bcf * CF(sgn * (w / 2 - 0.25), 0.5, 0), frame, Mat.Metal)
+		deco(bed, "Trim", V3(w + 0.04, 0.1, 0.54), bcf * CF(0, 1.02, sgn * (w / 2 - 0.25)), glow, Mat.Neon, { Transparency = 0.35 })
 	end
-	local soil = part(bed, "Soil", V3(w - 1, 0.4, w - 1), bcf * CF(0, 0.82, 0), COL.soil, Mat.Ground, { CanCollide = false })
+	local soil = part(bed, "Soil", V3(w - 1, 0.4, w - 1), bcf * CF(0, 0.82, 0), c(52, 40, 56), Mat.Ground, { CanCollide = false })
 	soil:SetAttribute("Idx", i)
 	soil:SetAttribute("Plot", plotId)
-	local cover = part(bed, "Cover", V3(w - 0.6, 0.25, w - 0.6), bcf * CF(0, 1.12, 0), c(30, 32, 42), Mat.Metal, { CanCollide = false })
+	local cover = part(bed, "Cover", V3(w - 0.6, 0.25, w - 0.6), bcf * CF(0, 1.12, 0), c(26, 28, 40), Mat.Metal, { CanCollide = false })
 	local lockOrb = ball(bed, "LockOrb", (bcf * CF(0, 1.7, 0)).Position, 0.6, c(255, 110, 100), Mat.Neon)
 	return { soil = soil, cover = cover, lockOrb = lockOrb, model = bed, pos = (bcf * CF(0, 1.02, 0)).Position, cf = bcf * CF(0, 1.02, 0) }
+end
+
+-- кристаллический пилон со светом
+local function pylon(parent, base, col, h)
+	ell(parent, "PylonBase", CF(base + V3(0, 0.4, 0)), V3(2.2, 0.8, 2.2), c(30, 32, 46), Mat.Slate, { CanCollide = false })
+	ell(parent, "Crystal", CF(base + V3(0, h * 0.5, 0)) * A(0.05, 0.4, 0.08), V3(0.9, h, 0.9), col, Mat.Glass, { Transparency = 0.25, CanCollide = false })
+	ell(parent, "Crystal", CF(base + V3(0.55, h * 0.3, 0.2)) * A(0.2, 1, 0.35), V3(0.6, h * 0.55, 0.6), col, Mat.Glass, { Transparency = 0.25, CanCollide = false })
+	ell(parent, "Crystal", CF(base + V3(-0.45, h * 0.25, -0.3)) * A(-0.3, 2, -0.3), V3(0.5, h * 0.45, 0.5), col, Mat.Glass, { Transparency = 0.25, CanCollide = false })
+	local core = ell(parent, "CrystalCore", CF(base + V3(0, h * 0.5, 0)), V3(0.35, h * 0.8, 0.35), col:Lerp(Color3.new(1, 1, 1), 0.4), Mat.Neon, { CanCollide = false })
+	light(core, col, 20, 1)
 end
 
 function Map.buildPlot(pi, j)
@@ -210,56 +222,85 @@ function Map.buildPlot(pi, j)
 	pm:SetAttribute("Center", cf.Position)
 	pm:SetAttribute("Planet", pi)
 	local plot = { id = id, planet = pi, slot = j, cf = cf, model = pm, beds = {}, ang = ang }
-	-- земля огорода: тёмная почва
-	-- земля огорода: тонкий слой почвы поверх рельефа (рельеф не трогаем, чтобы не засыпать грядки)
-	part(pm, "Ground", V3(62, 0.2, 54), cf * CF(0, 0.08, 0), c(70, 52, 42), Mat.Ground)
-	-- низкий деревянный забор с проходом спереди
-	local function rail(a, b)
-		seg(pm, "Rail", a, b, 0.22, COL.wood2, Mat.Wood)
-	end
+	local glow = Game.PlanetColors[pi]
+	local rng = Random.new(pi * 100 + j)
 	local W2, D2 = 30, 25.5
-	local corners = { V3(-W2, 0, -D2), V3(W2, 0, -D2), V3(W2, 0, D2), V3(-W2, 0, D2) }
-	for k = 1, 4 do
-		local a, b = corners[k], corners[k % 4 + 1]
-		local len = (b - a).Magnitude
-		local n = math.floor(len / 6)
-		for q = 0, n do
-			local p = a + (b - a) * (q / n)
-			if not (k == 1 and math.abs(p.X) < 4) then
-				part(pm, "Post", V3(0.4, 1.6, 0.4), cf * CF(p + V3(0, 0.8, 0)), COL.wood, Mat.Wood)
-			end
-		end
-		if k == 1 then
-			rail(cf:PointToWorldSpace(a + V3(0, 1.2, 0)), cf:PointToWorldSpace(V3(-4, 1.2, -D2)))
-			rail(cf:PointToWorldSpace(V3(4, 1.2, -D2)), cf:PointToWorldSpace(b + V3(0, 1.2, 0)))
-		else
-			rail(cf:PointToWorldSpace(a + V3(0, 1.2, 0)), cf:PointToWorldSpace(b + V3(0, 1.2, 0)))
-			rail(cf:PointToWorldSpace(a + V3(0, 0.6, 0)), cf:PointToWorldSpace(b + V3(0, 0.6, 0)))
+	-- космический пол: глянцевая тьма со звёздной пылью
+	part(pm, "Ground", V3(62, 0.3, 54), cf * CF(0, 0.1, 0), c(14, 14, 28), Mat.SmoothPlastic, { Reflectance = 0.18 })
+	for q = 1, 70 do
+		local x, z = rng:NextNumber(-W2 + 1, W2 - 1), rng:NextNumber(-D2 + 1, D2 - 1)
+		local sz = rng:NextNumber(0.1, 0.28)
+		local col = q % 3 == 0 and glow or (q % 3 == 1 and c(255, 255, 255) or c(160, 190, 255))
+		ball(pm, "Dust", (cf * CF(x, 0.27, z)).Position, sz, col, Mat.Neon)
+	end
+	-- светящаяся граница цвета планеты (проход спереди)
+	local function edge(a, b)
+		local p0, p1 = cf:PointToWorldSpace(a), cf:PointToWorldSpace(b)
+		deco(pm, "Edge", V3(0.3, 0.14, (p1 - p0).Magnitude), CFrame.lookAt((p0 + p1) / 2, p1), glow, Mat.Neon, { Transparency = 0.15 })
+	end
+	local y = 0.3
+	edge(V3(-W2, y, -D2), V3(-5, y, -D2))
+	edge(V3(5, y, -D2), V3(W2, y, -D2))
+	edge(V3(W2, y, -D2), V3(W2, y, D2))
+	edge(V3(W2, y, D2), V3(-W2, y, D2))
+	edge(V3(-W2, y, D2), V3(-W2, y, -D2))
+	-- кристаллические пилоны по углам
+	for _, p in { V3(-W2, 0, -D2), V3(W2, 0, -D2), V3(W2, 0, D2), V3(-W2, 0, D2) } do
+		pylon(pm, cf:PointToWorldSpace(p * 1.03), glow, 7 + rng:NextNumber(0, 2))
+	end
+	-- арка-ворота с голограммой имени
+	local gate = cf * CF(0, 0, -D2 - 1)
+	for _, sx in { -5, 5 } do
+		pylon(pm, gate:PointToWorldSpace(V3(sx, 0, 0)), glow, 5)
+	end
+	local prev
+	for k = 0, 14 do
+		local t = k / 14 * PI
+		local p = gate:PointToWorldSpace(V3(cos(t) * 5, 5.5 + sin(t) * 4, 0))
+		if prev then seg(pm, "Arch", prev, p, 0.28, glow, Mat.Neon) end
+		prev = p
+	end
+	local board = part(pm, "Sign", V3(8, 1.8, 0.1), gate * CF(0, 7.4, 0) * A(0, PI, 0), c(10, 12, 24), Mat.Glass, { CanCollide = false, Transparency = 0.6 })
+	plot.signFront = surfaceText(board, Enum.NormalId.Front, "Огород", glow, 40)
+	plot.signBack = surfaceText(board, Enum.NormalId.Back, "Огород", glow, 40)
+	part(pm, "EntryPath", V3(6, 0.2, 7), cf * CF(0, 0.12, -D2 - 1.5), c(30, 30, 52), Mat.SmoothPlastic, { CanCollide = false, Reflectance = 0.2 })
+	-- северное сияние за огородом: полупрозрачные светящиеся ленты
+	for k = 0, 13 do
+		local x = -28 + k * 4.3
+		local h = 12 + math.sin(k * 0.9) * 4 + rng:NextNumber(0, 3)
+		local col = glow:Lerp(c(90, 230, 210), (math.sin(k * 0.6) + 1) / 2)
+		deco(pm, "Aurora", V3(4.4, h, 0.1), cf * CF(x, h / 2 + 3 + math.sin(k * 0.7) * 1.5, D2 + 5 + math.sin(k * 1.3) * 1.5) * A(0, math.sin(k) * 0.2, 0), col, Mat.Neon, { Transparency = 0.86 })
+	end
+	-- мини-галактика над огородом (вращается на клиенте)
+	local gal = Instance.new("Model")
+	gal.Name = "MiniGalaxy"
+	local gc = cf.Position + V3(0, 26, 0)
+	local core = ball(gal, "GalaxyCore", gc, 2.2, c(255, 240, 210), Mat.Neon)
+	light(core, glow, 40, 1.2)
+	ball(gal, "GalaxyHalo", gc, 5, glow, Mat.Neon, { Transparency = 0.8 })
+	for arm = 0, 1 do
+		for q = 1, 22 do
+			local t = q / 22
+			local a = arm * PI + t * PI * 2.4
+			local r = 2 + t * 11
+			local p = gc + V3(cos(a) * r, (rng:NextNumber() - 0.5) * 0.8, sin(a) * r)
+			local col = glow:Lerp(c(255, 255, 255), 1 - t)
+			ball(gal, "GalaxyStar", p, 0.9 - t * 0.5, col, Mat.Neon, { Transparency = t * 0.3 })
 		end
 	end
-	-- дорожка от входа
-	part(pm, "EntryPath", V3(5, 0.2, 6), cf * CF(0, 0.1, -D2 - 1), c(120, 112, 104), Mat.Cobblestone, { CanCollide = false })
-	-- фонари по углам
-	for _, p in corners do
-		local base = cf:PointToWorldSpace(p * 1.04)
-		seg(pm, "LampPole", base, base + V3(0, 6, 0), 0.25, COL.plate, Mat.Metal)
-		local b = ball(pm, "LampBulb", base + V3(0, 6.3, 0), 0.8, COL.warm, Mat.Neon)
-		light(b, c(255, 226, 190), 22, 0.8)
-	end
-	-- табличка с именем
-	local board = part(pm, "Sign", V3(8, 2.4, 0.3), cf * CF(-9, 3, -D2 - 0.5) * A(0, PI, 0), COL.wood2, Mat.WoodPlanks, { CanCollide = false })
-	plot.signFront = surfaceText(board, Enum.NormalId.Front, "Огород", COL.gold, 34)
-	plot.signBack = surfaceText(board, Enum.NormalId.Back, "Огород", COL.gold, 34)
-	for _, sx in { -3.6, 3.6 } do part(pm, "SignPost", V3(0.35, 3.4, 0.35), cf * CF(-9 + sx, 1.7, -D2 - 0.5), COL.wood, Mat.Wood, { CanCollide = false }) end
+	gal.PrimaryPart = core
+	gal:SetAttribute("Spin", 0.25)
+	gal:SetAttribute("Pivot", gc)
+	gal.Parent = pm
 	-- грядки
 	local beds = Instance.new("Folder")
 	beds.Name = "Beds"
 	beds.Parent = pm
 	for bi = 1, Map.MaxBeds do
 		local lp = Map.bedLocalPos(bi)
-		plot.beds[bi] = bedBox(beds, cf * CF(lp), bi, id)
+		plot.beds[bi] = bedBox(beds, cf * CF(lp) * CF(0, 0.25, 0), bi, id, glow)
 	end
-	plot.entrance = cf * CF(0, 3, -D2 - 5) * A(0, PI, 0)
+	plot.entrance = cf * CF(0, 3, -D2 - 6) * A(0, PI, 0)
 	plot.center = cf.Position
 	local d = Instance.new("Folder")
 	d.Name = "Decor"
@@ -588,6 +629,214 @@ function Map.padCF(pi)
 end
 Map.planetAt = WT.planetAt
 
+------------------------------------------------------------------ чудо каждой планеты: чем дальше планета, тем зрелищнее
+local function emitter(parent, props)
+	local e = Instance.new("ParticleEmitter")
+	for k, v in props do e[k] = v end
+	e.Parent = parent
+	return e
+end
+local function anchorPart(parent, name, cf, size)
+	return part(parent, name, size or V3(1, 1, 1), cf, c(0, 0, 0), Mat.SmoothPlastic, { Transparency = 1, CanCollide = false, CanQuery = false, CanTouch = false })
+end
+local function spot(pi, deg, r)
+	local ctr = WT.Centers[pi]
+	local a = math.rad(deg)
+	local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
+	return V3(x, WT.groundY(x, z, pi), z)
+end
+local LANDMARK = {}
+
+-- Луна: разбитый посадочный модуль с флагом
+LANDMARK[1] = function(pi, f)
+	local base = spot(pi, 90, 138)
+	local cf = CF(base) * A(0.12, 0.6, 0.18)
+	part(f, "LanderBody", V3(6, 4, 6), cf * CF(0, 4, 0), c(220, 180, 70), Mat.Foil)
+	cyl(f, "LanderTop", cf * CF(0, 7, 0), 2.5, 4.5, c(200, 204, 214), Mat.Metal)
+	for k = 0, 3 do
+		local a = k * PI / 2 + PI / 4
+		seg(f, "LanderLeg", (cf * CF(cos(a) * 2.6, 2.4, sin(a) * 2.6)).Position, (cf * CF(cos(a) * 5, 0, sin(a) * 5)).Position, 0.35, c(180, 184, 196), Mat.Metal)
+		cyl(f, "LanderFoot", cf * CF(cos(a) * 5, 0.1, sin(a) * 5), 0.2, 1.4, c(180, 184, 196), Mat.Metal)
+	end
+	ell(f, "LanderDish", cf * CF(2.5, 9, 0) * A(0, 0, -0.6), V3(3.5, 0.5, 3.5), c(230, 232, 240), Mat.Metal)
+	local flag = spot(pi, 96, 132)
+	seg(f, "FlagPole", flag, flag + V3(0, 8, 0), 0.18, c(220, 220, 230), Mat.Metal)
+	part(f, "Flag", V3(0.1, 2.2, 3.6), CF(flag + V3(0, 6.8, 1.8)), c(90, 140, 230), Mat.SmoothPlastic, { CanCollide = false })
+end
+
+-- Марс: каменные арки, марсоход и пыльные смерчи
+LANDMARK[2] = function(pi, f)
+	for k, deg in { 45, 180, 290 } do
+		local base = spot(pi, deg, 140)
+		local dir = A(0, math.rad(deg) + PI / 2, 0)
+		local span, hgt = 14 + k * 3, 12 + k * 3
+		for q = 0, 12 do
+			local t = q / 12 * PI
+			local p = base + (dir * CF(cos(t) * span, sin(t) * hgt, 0)).Position
+			local sz = 4.5 - math.sin(t) * 1.2
+			ell(f, "Arch", CF(p) * A(q, q * 0.7, 0), V3(sz * 1.3, sz, sz * 1.1), c(160 + q * 2, 80, 56), Mat.Sandstone)
+		end
+	end
+	local rv = CF(spot(pi, 100, 132)) * A(0, 0.8, 0)
+	part(f, "RoverBody", V3(5, 1.6, 3.4), rv * CF(0, 2.2, 0), c(220, 222, 230), Mat.Metal)
+	part(f, "RoverPanel", V3(5.6, 0.2, 4.4), rv * CF(0, 3.2, 0), c(30, 50, 110), Mat.Glass)
+	seg(f, "RoverMast", (rv * CF(1.8, 3, 0)).Position, (rv * CF(1.8, 5.5, 0)).Position, 0.25, c(200, 200, 210), Mat.Metal)
+	part(f, "RoverCam", V3(0.8, 0.6, 1.2), rv * CF(1.8, 5.8, 0), c(40, 40, 50), Mat.Metal)
+	for _, x in { -1.8, 0, 1.8 } do
+		for _, z in { -1.9, 1.9 } do cyl(f, "Wheel", rv * CF(x, 0.8, z) * A(PI / 2, 0, 0), 0.6, 1.6, c(60, 56, 54), Mat.Rubber) end
+	end
+	for k, deg in { 20, 140, 250 } do
+		local p = spot(pi, deg, 120)
+		local dd = anchorPart(f, "DustDevil", CF(p + V3(0, 1, 0)), V3(6, 1, 6))
+		emitter(dd, { Color = ColorSequence.new(c(214, 130, 90)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(1, 6) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(2.5, 4), Rate = 40,
+			Speed = NumberRange.new(10, 16), SpreadAngle = Vector2.new(8, 8), RotSpeed = NumberRange.new(-200, 200), Rotation = NumberRange.new(0, 360),
+			EmissionDirection = Enum.NormalId.Top, Acceleration = V3(0, 2, 0), LightInfluence = 1 })
+	end
+end
+
+-- Европа: ледяные шипы, бьющие гейзеры и огромное сияние в небе
+LANDMARK[3] = function(pi, f)
+	local rng = Random.new(33)
+	for k = 1, 22 do
+		local deg = (k - 1) * 360 / 22 + rng:NextNumber(-6, 6)
+		local p = spot(pi, deg, rng:NextNumber(132, 150))
+		local h = rng:NextNumber(8, 22)
+		ell(f, "IceSpike", CF(p + V3(0, h * 0.42, 0)) * A(rng:NextNumber(-0.25, 0.25), rng:NextNumber(0, 6), rng:NextNumber(-0.25, 0.25)), V3(h * 0.22, h, h * 0.22),
+			c(170, 220, 250), Mat.Glass, { Transparency = 0.2, CanCollide = false })
+	end
+	for k, deg in { 45, 165, 285 } do
+		local p = spot(pi, deg, 128)
+		cyl(f, "GeyserVent", CF(p + V3(0, 0.3, 0)), 0.6, 5, c(150, 190, 220), Mat.Ice)
+		dcyl(f, "GeyserGlow", CF(p + V3(0, 0.62, 0)), 0.05, 3.6, c(120, 210, 255), Mat.Neon)
+		local g = anchorPart(f, "Geyser", CF(p + V3(0, 1, 0)), V3(2, 1, 2))
+		emitter(g, { Color = ColorSequence.new(c(235, 245, 255)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 5) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.2), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(2, 3), Rate = 60,
+			Speed = NumberRange.new(30, 45), SpreadAngle = Vector2.new(6, 6), Acceleration = V3(0, -14, 0), EmissionDirection = Enum.NormalId.Top })
+		light(g, c(140, 220, 255), 26, 1.2)
+	end
+	local ctr = WT.Centers[pi]
+	for k = 0, 30 do
+		local a = k / 30 * PI * 2
+		local r = 120
+		local h = 40 + math.sin(k * 0.8) * 12
+		local col = c(90, 255, 190):Lerp(c(150, 120, 255), (math.sin(k * 0.5) + 1) / 2)
+		deco(f, "SkyAurora", V3(26, h, 0.2), CFrame.lookAt(ctr + V3(cos(a) * r, 70 + h / 2, sin(a) * r), ctr + V3(0, 70 + h / 2, 0)) * A(0, PI / 2, 0), col, Mat.Neon, { Transparency = 0.84 })
+	end
+end
+
+-- Ио: действующий вулкан с лавовым фонтаном и реками лавы
+LANDMARK[4] = function(pi, f)
+	local base = spot(pi, 0, 128)
+	local layers = { { 62, 11 }, { 50, 11 }, { 39, 10 }, { 29, 9 }, { 20, 8 } }
+	local y = 0
+	for i, L in layers do
+		ell(f, "Volcano", CF(base + V3(0, y + L[2] * 0.5, 0)) * A(0, i, 0), V3(L[1], L[2] * 1.6, L[1]), c(46 + i * 4, 38, 40), Mat.Basalt)
+		y += L[2] * 0.8
+	end
+	local top = base + V3(0, y + 1, 0)
+	ell(f, "LavaPool", CF(top), V3(15, 1.6, 15), c(255, 110, 30), Mat.Neon)
+	local lp = anchorPart(f, "LavaFountain", CF(top + V3(0, 0.5, 0)), V3(4, 1, 4))
+	emitter(lp, { Color = ColorSequence.new(c(255, 200, 80), c(255, 70, 20)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.2), NumberSequenceKeypoint.new(1, 0.2) }),
+		LightEmission = 1, Lifetime = NumberRange.new(1.5, 2.5), Rate = 70, Speed = NumberRange.new(25, 40), SpreadAngle = Vector2.new(25, 25), Acceleration = V3(0, -30, 0),
+		EmissionDirection = Enum.NormalId.Top })
+	emitter(lp, { Color = ColorSequence.new(c(60, 50, 50)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 4), NumberSequenceKeypoint.new(1, 14) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(5, 8), Rate = 6,
+		Speed = NumberRange.new(6, 10), SpreadAngle = Vector2.new(15, 15), EmissionDirection = Enum.NormalId.Top, Acceleration = V3(2, 1, 0) })
+	light(lp, c(255, 120, 40), 60, 3)
+	-- реки лавы по склонам
+	for k = 0, 3 do
+		local a = k * PI / 2 + 0.4
+		local prev = top
+		for q = 1, 8 do
+			local t = q / 8
+			local r = t * 34
+			local p = base + V3(cos(a + t * 0.4) * r, (1 - t) * y, sin(a + t * 0.4) * r) + V3(0, 1.3, 0)
+			seg(f, "LavaRiver", prev, p, 1.6 - t * 0.6, c(255, 100 + t * 40, 30), Mat.Neon)
+			prev = p
+		end
+	end
+	for k, deg in { 120, 240 } do
+		local p = spot(pi, deg, 136)
+		ell(f, "LavaVent", CF(p + V3(0, 0.6, 0)), V3(7, 1.4, 7), c(40, 34, 36), Mat.Basalt)
+		local v = anchorPart(f, "Embers", CF(p + V3(0, 1.4, 0)), V3(3, 1, 3))
+		emitter(v, { Color = ColorSequence.new(c(255, 150, 60)), Size = NumberSequence.new(0.4, 0), LightEmission = 1, Lifetime = NumberRange.new(2, 3), Rate = 25,
+			Speed = NumberRange.new(6, 12), SpreadAngle = Vector2.new(20, 20), EmissionDirection = Enum.NormalId.Top })
+		light(v, c(255, 120, 40), 24, 1.5)
+	end
+end
+
+-- Туманность: парящие острова, светящиеся облака и сфера света
+LANDMARK[5] = function(pi, f)
+	local ctr = WT.Centers[pi]
+	local rng = Random.new(55)
+	for k = 1, 5 do
+		local a = k / 5 * PI * 2 + 0.3
+		local r = rng:NextNumber(60, 140)
+		local p = ctr + V3(cos(a) * r, rng:NextNumber(30, 55), sin(a) * r)
+		local isl = Instance.new("Model")
+		isl.Name = "FloatIsland"
+		local s2 = rng:NextNumber(8, 14)
+		local main = ell(isl, "Rock", CF(p), V3(s2 * 2, s2 * 0.8, s2 * 2), c(70, 60, 96), Mat.Slate, { CanCollide = false })
+		ell(isl, "RockBottom", CF(p - V3(0, s2 * 0.6, 0)), V3(s2 * 1.2, s2 * 1.4, s2 * 1.2), c(60, 52, 84), Mat.Slate, { CanCollide = false })
+		ell(isl, "Moss", CF(p + V3(0, s2 * 0.32, 0)), V3(s2 * 1.9, s2 * 0.25, s2 * 1.9), c(96, 220, 190), Mat.Grass, { CanCollide = false })
+		local g = ball(isl, "Wisp", p + V3(0, s2 * 0.6 + 2, 0), 1.6, c(190, 140, 255), Mat.Neon)
+		light(g, c(190, 140, 255), 24, 1.2)
+		isl.PrimaryPart = main
+		isl:SetAttribute("Drift", rng:NextNumber(0.03, 0.08))
+		isl.Parent = f
+	end
+	for k = 1, 9 do
+		local a = rng:NextNumber(0, PI * 2)
+		local p = ctr + V3(cos(a) * rng:NextNumber(120, 220), rng:NextNumber(10, 90), sin(a) * rng:NextNumber(120, 220))
+		ball(f, "NebulaCloud", p, rng:NextNumber(20, 45), ({ c(220, 110, 255), c(110, 200, 255), c(255, 120, 190) })[k % 3 + 1], Mat.Neon, { Transparency = 0.9 })
+	end
+	local orbP = spot(pi, 200, 138)
+	ball(f, "LightOrb", orbP + V3(0, 14, 0), 9, c(230, 200, 255), Mat.Neon, { Transparency = 0.2 })
+	ball(f, "LightOrbHalo", orbP + V3(0, 14, 0), 16, c(200, 140, 255), Mat.Neon, { Transparency = 0.85 })
+	local lo = anchorPart(f, "OrbSparks", CF(orbP + V3(0, 14, 0)), V3(8, 8, 8))
+	emitter(lo, { Color = ColorSequence.new(c(255, 220, 255)), Size = NumberSequence.new(0.5, 0), LightEmission = 1, Lifetime = NumberRange.new(2, 4), Rate = 30,
+		Speed = NumberRange.new(2, 6), SpreadAngle = Vector2.new(180, 180) })
+	light(lo, c(220, 170, 255), 60, 2.5)
+end
+
+-- Звёздное ядро: золотой храм, огромная звезда рядом и кольца вокруг планеты
+LANDMARK[6] = function(pi, f)
+	local base = spot(pi, 90, 136)
+	local gold = c(236, 196, 100)
+	for i, sz in { 26, 20, 14 } do
+		part(f, "TempleStep", V3(sz, 2.2, sz), CF(base + V3(0, (i - 0.5) * 2.2, 0)), gold:Lerp(c(120, 90, 50), 0.15 * i), Mat.Marble)
+	end
+	for k = 0, 7 do
+		local a = k / 8 * PI * 2
+		local p = base + V3(cos(a) * 9, 6.6, sin(a) * 9)
+		cyl(f, "Column", CF(p + V3(0, 5, 0)), 10, 1.2, c(250, 236, 200), Mat.Marble)
+		ball(f, "ColumnGem", p + V3(0, 10.6, 0), 1, gold, Mat.Neon)
+	end
+	part(f, "TempleRoof", V3(20, 1, 20), CF(base + V3(0, 17.3, 0)), gold, Mat.Metal)
+	local gem = ell(f, "TempleGem", CF(base + V3(0, 22, 0)) * A(0, 0.4, 0), V3(4, 7, 4), c(255, 240, 180), Mat.Neon)
+	light(gem, c(255, 220, 140), 50, 2.5)
+	-- звезда-солнце рядом с планетой
+	local ctr = WT.Centers[pi]
+	local sun = ctr + V3(-380, 180, 260)
+	ball(f, "Star", sun, 150, c(255, 220, 140), Mat.Neon)
+	ball(f, "StarCorona", sun, 200, c(255, 180, 90), Mat.Neon, { Transparency = 0.82 })
+	ball(f, "StarCorona2", sun, 280, c(255, 150, 70), Mat.Neon, { Transparency = 0.92 })
+	local sp = anchorPart(f, "StarFlares", CF(sun), V3(140, 140, 140))
+	emitter(sp, { Color = ColorSequence.new(c(255, 200, 110)), Size = NumberSequence.new(16, 0), LightEmission = 1, Lifetime = NumberRange.new(3, 5), Rate = 20,
+		Speed = NumberRange.new(20, 40), SpreadAngle = Vector2.new(180, 180) })
+	-- кольца вокруг планеты
+	for ri, R in { 205, 230 } do
+		local tilt = A(0.22 * ri, 0.3, 0.1)
+		for k = 1, 64 do
+			local a0, a1 = (k - 1) / 64 * PI * 2, k / 64 * PI * 2
+			local p0 = ctr + (tilt * CF(cos(a0) * R, 0, sin(a0) * R)).Position - V3(0, 20, 0)
+			local p1 = ctr + (tilt * CF(cos(a1) * R, 0, sin(a1) * R)).Position - V3(0, 20, 0)
+			deco(f, "Ring", V3(ri == 1 and 6 or 3, 0.3, (p1 - p0).Magnitude + 0.3), CFrame.lookAt((p0 + p1) / 2, p1), ri == 1 and c(255, 220, 150) or c(200, 170, 255), Mat.Neon, { Transparency = 0.55 })
+		end
+	end
+end
+
 ------------------------------------------------------------------ фон
 local function billboard(parent, name, image, pos, size)
 	-- картинка планеты на невидимой плоскости, повёрнутой к центру станции (SurfaceGui не зависит от прозрачности детали)
@@ -687,6 +936,10 @@ function Map.build()
 		local P = { index = pi, center = WT.Centers[pi], markers = {}, plotsFolder = plotsFolder, slotFolder = slots }
 		Map.planets[pi] = P
 		buildHub(pi, pf)
+		local lm = Instance.new("Folder")
+		lm.Name = "Landmark"
+		lm.Parent = pf
+		if LANDMARK[pi] then LANDMARK[pi](pi, lm) end
 		for j = 1, Map.SlotsPerPlanet do
 			P.markers[j] = slotMarker(pi, j, slots)
 		end
