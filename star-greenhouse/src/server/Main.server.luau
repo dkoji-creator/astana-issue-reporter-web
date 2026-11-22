@@ -27,7 +27,7 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
@@ -680,8 +680,7 @@ RX.Travel.OnServerInvoke = function(plr, pi)
 		s.traveling = false
 		local ch = plr.Character
 		if ch and plr.Parent then
-			local plot = s.plot and Map.plots[s.plot]
-			ch:PivotTo(plot and plot.entrance or Map.padCF(pi))
+			ch:PivotTo(Map.padCF(pi))
 		end
 	end)
 	return true, G.TravelTime
@@ -970,6 +969,24 @@ task.spawn(function()
 			end
 		end
 		pollenTick(t)
+		-- упал с острова: свободное падение с неба на свою планету
+		do
+			local WT = require(script.Parent:WaitForChild("WorldTerrain"))
+			for plr, d in D do
+				local ch = plr.Character
+				local root = ch and ch:FindFirstChild("HumanoidRootPart")
+				if root and not S[plr].traveling then
+					local near = WT.planetAt(root.Position)
+					if root.Position.Y < WT.Centers[near].Y - 70 then
+						local home = WT.Centers[d.planet or 1]
+						local a = math.random() * math.pi * 2
+						ch:PivotTo(CFrame.new(home + Vector3.new(math.cos(a) * 30, 190, math.sin(a) * 30)))
+						root.AssemblyLinearVelocity = Vector3.new(0, -20, 0)
+						RX.Skydive:FireClient(plr)
+					end
+				end
+			end
+		end
 		-- авто-сбор
 		for plr, d in D do
 			if d.perms.auto then

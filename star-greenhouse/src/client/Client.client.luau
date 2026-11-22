@@ -1324,63 +1324,113 @@ function playLaunch(target)
 	local ch = plr.Character
 	local root = ch and ch:FindFirstChild("HumanoidRootPart")
 	if not cam or not root then return end
-	local here = root.Position
-	local best, bd
-	for _, pf in world:GetChildren() do
-		local pad = pf:FindFirstChild("Hub") and pf.Hub:FindFirstChild("RocketPad")
-		if pad then
-			local d = (pad:GetPivot().Position - here).Magnitude
-			if not bd or d < bd then best, bd = pad, d end
-		end
+	local function padOf(i)
+		local pf = world:FindFirstChild("Planet" .. i)
+		local pad = pf and pf:FindFirstChild("Hub") and pf.Hub:FindFirstChild("RocketPad")
+		return pad and pad:GetPivot().Position
 	end
-	local base = best and best:GetPivot().Position or here
-	-- местная копия ракеты, которая улетает
+	local here = root.Position
+	local base, bd = here, math.huge
+	for i = 1, #G.Planets do
+		local p = padOf(i)
+		if p and (p - here).Magnitude < bd then base, bd = p, (p - here).Magnitude end
+	end
+	local dest = padOf(target) or base + Vector3.new(0, 0, 800)
+	-- местная ракета
 	local rk = Instance.new("Model")
 	rk.Name = "LaunchRocket"
-	local function rp(size, cf, color, mat, shape)
-		local p = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false, Size = size, CFrame = cf, Color = color, Material = mat }, rk)
+	local function rp(size, color, mat, shape)
+		local p = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, CastShadow = false, Size = size, Color = color, Material = mat }, rk)
 		if shape then p.Shape = shape end
 		return p
 	end
-	local body = rp(Vector3.new(12, 4.2, 4.2), CFrame.new(base + Vector3.new(0, 7.5, 0)) * CFrame.Angles(0, 0, math.pi / 2), Color3.fromRGB(235, 238, 248), Enum.Material.Metal, Enum.PartType.Cylinder)
-	local nose = rp(Vector3.new(4.2, 6, 4.2), CFrame.new(base + Vector3.new(0, 14.5, 0)), Color3.fromRGB(235, 70, 80), Enum.Material.Metal)
+	local body = rp(Vector3.new(12, 4.2, 4.2), Color3.fromRGB(235, 238, 248), Enum.Material.Metal, Enum.PartType.Cylinder)
+	local nose = rp(Vector3.new(4.2, 6, 4.2), Color3.fromRGB(235, 70, 80), Enum.Material.Metal)
 	make("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, nose)
-	local flame = rp(Vector3.new(3.4, 6, 3.4), CFrame.new(base + Vector3.new(0, -1, 0)), Color3.fromRGB(255, 190, 110), Enum.Material.Neon)
+	local flame = rp(Vector3.new(3.2, 7, 3.2), Color3.fromRGB(255, 190, 110), Enum.Material.Neon)
 	make("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, flame)
-	make("PointLight", { Color = Color3.fromRGB(255, 190, 120), Range = 40, Brightness = 3 }, flame)
-	rk.PrimaryPart = body
+	make("PointLight", { Color = Color3.fromRGB(255, 190, 120), Range = 50, Brightness = 4 }, flame)
+	local fa = make("Attachment", {}, flame)
+	local smoke = make("ParticleEmitter", { Color = ColorSequence.new(Color3.fromRGB(200, 196, 210)), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2), NumberSequenceKeypoint.new(1, 9) }),
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.3), NumberSequenceKeypoint.new(1, 1) }), Lifetime = NumberRange.new(1.5, 2.5), Rate = 60,
+		Speed = NumberRange.new(4, 10), SpreadAngle = Vector2.new(30, 30), EmissionDirection = Enum.NormalId.Bottom, Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-60, 60) }, fa)
+	local sparks = make("ParticleEmitter", { Color = ColorSequence.new(Color3.fromRGB(255, 200, 110), Color3.fromRGB(255, 90, 40)), Size = NumberSequence.new(0.6, 0), LightEmission = 1,
+		Lifetime = NumberRange.new(0.3, 0.6), Rate = 120, Speed = NumberRange.new(20, 35), SpreadAngle = Vector2.new(12, 12), EmissionDirection = Enum.NormalId.Bottom }, fa)
+	local streak = make("ParticleEmitter", { Color = ColorSequence.new(Color3.fromRGB(220, 235, 255)), Size = NumberSequence.new(0.25, 0.05), LightEmission = 1, Lifetime = NumberRange.new(0.25, 0.4),
+		Rate = 0, Speed = NumberRange.new(150, 200), SpreadAngle = Vector2.new(70, 70), EmissionDirection = Enum.NormalId.Bottom }, fa)
+	local function place(pos, look)
+		look = (look and look.Magnitude > 0.01) and look.Unit or Vector3.new(0, 1, 0)
+		local cf = CFrame.lookAt(pos, pos + look) * CFrame.Angles(-math.pi / 2, 0, 0)
+		body.CFrame = cf * CFrame.new(0, 7.5, 0) * CFrame.Angles(0, 0, math.pi / 2)
+		nose.CFrame = cf * CFrame.new(0, 14.5, 0)
+		flame.CFrame = cf * CFrame.new(0, -0.5, 0)
+	end
+	place(base, nil)
 	rk.Parent = fxFolder
 	local gui = make("ScreenGui", { Name = "Launch", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 60 }, pg)
-	local fade = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 248, 235), BackgroundTransparency = 1 }, gui)
-	local title = K.text(gui, "Полёт на планету " .. G.Planets[target].name, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.82), Size = UDim2.fromOffset(600, 40), MaxText = 30, TextColor3 = G.PlanetColors[target], TextTransparency = 1 })
-	playSfx("rocket")
+	local fade = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 10, 24), BackgroundTransparency = 1 }, gui)
+	local count = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(300, 110), MaxText = 96, TextColor3 = T.gold })
+	local title = K.text(gui, "Полёт на планету " .. G.Planets[target].name, { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.84), Size = UDim2.fromOffset(600, 36), MaxText = 28, TextColor3 = G.PlanetColors[target], TextTransparency = 1 })
 	cam.CameraType = Enum.CameraType.Scriptable
+	local T_COUNT, T_LIFT, T_CRUISE, T_LAND = 1.5, 1.9, 2.8, 1.3 -- сумма ≈ G.TravelTime
+	local liftTop = base + Vector3.new(0, 140, 0)
+	local destTop = dest + Vector3.new(0, 160, 0)
+	local mid = (liftTop + destTop) / 2 + Vector3.new(0, 220, 0)
+	local function bez(t) return liftTop:Lerp(mid, t):Lerp(mid:Lerp(destTop, t), t) end
 	local t0 = os.clock()
-	local start = rk:GetPivot()
+	local lastCount = 0
+	local played = false
 	local conn = RunService.RenderStepped:Connect(function()
 		local t = os.clock() - t0
-		local h = t < 0.6 and 0 or (t - 0.6) ^ 2 * 22
-		local shake = t < 1.2 and Vector3.new(math.random() - 0.5, 0, math.random() - 0.5) * 0.6 or Vector3.zero
-		rk:PivotTo(start + Vector3.new(0, h, 0) + shake)
-		flame.Size = Vector3.new(3.4, 6 + math.sin(t * 40) * 1.5 + math.min(t, 2) * 3, 3.4)
-		local rpPos = rk:GetPivot().Position
-		cam.CFrame = CFrame.lookAt(base + Vector3.new(26, 10 + h * 0.55, 30), rpPos)
-		fade.BackgroundTransparency = math.clamp(1 - (t - 2.2) / 0.9, 0, 1)
-		title.TextTransparency = math.clamp(1 - (t - 1.2) / 0.6, 0, 1)
+		local pos, look, camPos, camAt
+		if t < T_COUNT then
+			local n = 3 - math.floor(t / (T_COUNT / 3))
+			if n ~= lastCount and n >= 1 then lastCount = n count.Text = tostring(n) K.pop(count) playSfx("tap", 0.8 + (3 - n) * 0.15) end
+			pos = base + Vector3.new((math.random() - 0.5) * 0.15 * t, 0, (math.random() - 0.5) * 0.15 * t)
+			flame.Size = Vector3.new(2, 3 + t * 2, 2)
+			camPos, camAt = base + Vector3.new(24, 6, 26), base + Vector3.new(0, 9, 0)
+		elseif t < T_COUNT + T_LIFT then
+			local k = (t - T_COUNT) / T_LIFT
+			if not played then played = true count.Text = "ПУСК!" K.pop(count) playSfx("rocket") end
+			if k > 0.35 then count.Text = "" end
+			pos = base:Lerp(liftTop, k * k)
+			flame.Size = Vector3.new(3.4, 8 + math.sin(t * 40) * 1.5, 3.4)
+			local shake = Vector3.new(math.random() - 0.5, math.random() - 0.5, 0) * (1 - k) * 1.2
+			camPos, camAt = base + Vector3.new(30, 8 + k * 70, 34) + shake, pos + Vector3.new(0, 8, 0)
+			title.TextTransparency = 1 - k
+		elseif t < T_COUNT + T_LIFT + T_CRUISE then
+			local k = (t - T_COUNT - T_LIFT) / T_CRUISE
+			local e = k * k * (3 - 2 * k)
+			pos = bez(e)
+			look = bez(math.min(1, e + 0.02)) - pos
+			streak.Rate = 120
+			smoke.Rate = 10
+			local back = look.Magnitude > 0.01 and -look.Unit or Vector3.new(0, -1, 0)
+			camPos, camAt = pos + back * 40 + Vector3.new(0, 14, 0) + Vector3.new(math.sin(t) * 6, 0, math.cos(t) * 6), pos + (look.Magnitude > 0.01 and look.Unit * 30 or Vector3.zero)
+		else
+			local k = math.clamp((t - T_COUNT - T_LIFT - T_CRUISE) / T_LAND, 0, 1)
+			local e = 1 - (1 - k) ^ 2
+			pos = destTop:Lerp(dest, e)
+			look = Vector3.new(0, 1, 0)
+			streak.Rate = 0
+			smoke.Rate = 60
+			flame.Size = Vector3.new(3, 6 * (1 - e) + 1, 3)
+			camPos, camAt = dest + Vector3.new(28, 12, 30), pos + Vector3.new(0, 8, 0)
+			title.TextTransparency = e
+		end
+		place(pos, look)
+		cam.CFrame = CFrame.lookAt(camPos, camAt)
 	end)
-	task.wait(G.TravelTime + 0.15)
+	task.wait(T_COUNT + T_LIFT + T_CRUISE + T_LAND)
 	conn:Disconnect()
+	if FX.burst then FX.burst(dest + Vector3.new(0, 1, 0), Color3.fromRGB(230, 220, 210), 40) end
+	playSfx("unlock")
+	task.wait(0.4)
 	rk:Destroy()
 	cam.CameraType = Enum.CameraType.Custom
 	if ch:FindFirstChild("Humanoid") then cam.CameraSubject = ch.Humanoid end
-	for i = 1, 10 do
-		fade.BackgroundTransparency = i / 10
-		task.wait(0.05)
-	end
-	task.wait(1.2)
 	gui:Destroy()
-	toast("Добро пожаловать на планету " .. G.Planets[target].name .. "!", "rare", 4)
-	playSfx("unlock")
+	toast("Добро пожаловать на планету " .. G.Planets[target].name .. "! Огород ждёт тебя (кнопка «Домой»)", "rare", 5)
 end
 
 -- столб света над своим огородом: его видно издалека, легко вернуться
@@ -1596,6 +1646,30 @@ function FX.photoMode()
 		if ch:FindFirstChild("Humanoid") then cam.CameraSubject = ch.Humanoid end
 	end)
 end
+
+------------------------------------------------------------------ свободное падение: ветер, полосы, приземление
+remotes:WaitForChild("Skydive").OnClientEvent:Connect(function()
+	toast("Свободное падение!", "rare", 3)
+	playSfx("rocket", 1.6)
+	local ch = plr.Character
+	local root = ch and ch:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+	local att = make("Attachment", { Name = "SkyFx" }, root)
+	local e = make("ParticleEmitter", { Color = ColorSequence.new(Color3.fromRGB(220, 235, 255)), LightEmission = 0.5, Rate = 80, Lifetime = NumberRange.new(0.3, 0.5),
+		Speed = NumberRange.new(60, 90), SpreadAngle = Vector2.new(30, 30), EmissionDirection = Enum.NormalId.Top, Size = NumberSequence.new(0.15, 0.05),
+		Transparency = NumberSequence.new(0.2, 1) }, att)
+	local hum = ch:FindFirstChildOfClass("Humanoid")
+	local t0 = os.clock()
+	while os.clock() - t0 < 12 do
+		task.wait(0.1)
+		if hum and hum.FloorMaterial ~= Enum.Material.Air and os.clock() - t0 > 0.6 then break end
+	end
+	e.Enabled = false
+	task.delay(1, function() att:Destroy() end)
+	if FX.burst then FX.burst(root.Position - Vector3.new(0, 2, 0), Color3.fromRGB(255, 230, 170), 40) end
+	if FX.splash then FX.splash(root.Position - Vector3.new(0, 2.5, 0), Color3.fromRGB(180, 170, 200), 30, 25) end
+	playSfx("meteor", 1.3)
+end)
 
 ------------------------------------------------------------------ показ редких мутаций (кинематика)
 local revealQueue, revealing = {}, false

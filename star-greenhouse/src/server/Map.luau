@@ -149,6 +149,20 @@ local function kiosk(parent, name, cf, color, title)
 end
 
 
+------------------------------------------------------------------ настоящая высота рельефа (лучом), запасной вариант — расчёт
+function Map.surfaceY(x, z, pi)
+	local ctr = WT.Centers[pi]
+	local terr = workspace:FindFirstChildOfClass("Terrain")
+	local ok, res = pcall(function()
+		local params = RaycastParams.new()
+		params.FilterType = Enum.RaycastFilterType.Include
+		params.FilterDescendantsInstances = { terr }
+		return workspace:Raycast(V3(x, ctr.Y + 120, z), V3(0, -240, 0), params)
+	end)
+	if ok and res then return res.Position.Y end
+	return WT.groundY(x, z, pi)
+end
+
 ------------------------------------------------------------------ места под огороды
 local function slotCF(pi, j)
 	local ctr = WT.Centers[pi]
@@ -215,6 +229,15 @@ function Map.buildPlot(pi, j)
 	local id = ("%d_%d"):format(pi, j)
 	if Map.plots[id] then return Map.plots[id] end
 	local cf, ang = slotCF(pi, j)
+	-- поднимаем огород над самой высокой точкой рельефа под ним
+	local top = -math.huge
+	for _, sx in { -28, 0, 28 } do
+		for _, sz in { -24, 0, 24 } do
+			local wp = cf:PointToWorldSpace(V3(sx, 0, sz))
+			top = math.max(top, Map.surfaceY(wp.X, wp.Z, pi))
+		end
+	end
+	cf = cf + V3(0, (top + 0.6) - cf.Y, 0)
 	local P = Map.planets[pi]
 	if P.markers[j] then P.markers[j].Parent = nil end
 	local pm = Instance.new("Model")
@@ -226,7 +249,15 @@ function Map.buildPlot(pi, j)
 	local rng = Random.new(pi * 100 + j)
 	local W2, D2 = 30, 25.5
 	-- космический пол: глянцевая тьма со звёздной пылью
-	part(pm, "Ground", V3(62, 0.3, 54), cf * CF(0, 0.1, 0), c(14, 14, 28), Mat.SmoothPlastic, { Reflectance = 0.18 })
+	part(pm, "Ground", V3(62, 5, 54), cf * CF(0, -2.35, 0), c(14, 14, 28), Mat.SmoothPlastic, { Reflectance = 0.18 })
+	-- светящийся пояс по бокам платформы: огород видно издалека
+	for _, sd in { { V3(0, -0.6, -27.05), V3(62.2, 0.35, 0.2) }, { V3(0, -0.6, 27.05), V3(62.2, 0.35, 0.2) }, { V3(-31.05, -0.6, 0), V3(0.2, 0.35, 54.2) }, { V3(31.05, -0.6, 0), V3(0.2, 0.35, 54.2) } } do
+		deco(pm, "SideGlow", sd[2], cf * CF(sd[1]), glow, Mat.Neon, { Transparency = 0.1 })
+	end
+	-- ступени у входа
+	for k = 1, 3 do
+		part(pm, "Step", V3(8, 0.6, 1.6), cf * CF(0, -0.3 - (k - 1) * 0.6 - 0.3, -27 - k * 1.5 + 0.7), c(30, 30, 52), Mat.SmoothPlastic, { Reflectance = 0.15 })
+	end
 	for q = 1, 70 do
 		local x, z = rng:NextNumber(-W2 + 1, W2 - 1), rng:NextNumber(-D2 + 1, D2 - 1)
 		local sz = rng:NextNumber(0.1, 0.28)
@@ -475,7 +506,9 @@ local function buildHub(pi, parent)
 	local f = Instance.new("Folder")
 	f.Name = "Hub"
 	f.Parent = parent
-	cyl(f, "Plaza", CF(ctr + V3(0, 0.2, 0)), 0.5, 58, PLAZA[pi], Mat.Concrete)
+	local lift = math.max(0, Map.surfaceY(ctr.X, ctr.Z, pi) - ctr.Y)
+	cyl(f, "PlazaBase", CF(ctr + V3(0, lift - 1.5, 0)), 4, 58, PLAZA[pi]:Lerp(c(30, 30, 40), 0.4), Mat.Concrete)
+	cyl(f, "Plaza", CF(ctr + V3(0, lift + 0.2, 0)), 0.5, 58, PLAZA[pi], Mat.Concrete)
 	dcyl(f, "PlazaRing", CF(ctr + V3(0, 0.46, 0)), 0.06, 58.4, COL.trim, Mat.Metal)
 	dcyl(f, "PlazaInner", CF(ctr + V3(0, 0.47, 0)), 0.06, 57.6, PLAZA[pi], Mat.Concrete)
 	-- ракета в центре: на ней летают между планетами
@@ -947,10 +980,7 @@ function Map.build()
 		rocks.Name = "Rocks"
 		rocks.Parent = pf
 		buildRocks(pi, rocks)
-		local bar = Instance.new("Folder")
-		bar.Name = "Barrier"
-		bar.Parent = pf
-		buildBarrier(pi, bar)
+		-- стен по краю нет: с островов можно прыгать (падающих ловит сервер)
 	end
 	local bg = Instance.new("Folder")
 	bg.Name = "Backdrop"
