@@ -2187,6 +2187,55 @@ local function hintText()
 	return ""
 end
 
+-- дорожка-подсказка для новичков: бегущие стрелки по земле к следующей цели (киоск семян, свой огород, киоск продажи)
+do
+	local TEXg = {}
+	pcall(function() TEXg = require(ReplicatedStorage.Shared.Config.Particles) end)
+	local a0 = make("Attachment", { Name = "GuideA0" }, workspace.Terrain)
+	local a1 = make("Attachment", { Name = "GuideA1" }, workspace.Terrain)
+	local beam = make("Beam", { Name = "GuideBeam", Attachment0 = a0, Attachment1 = a1, Texture = TEXg.chevron or "", TextureMode = Enum.TextureMode.Wrap, TextureLength = 3.5,
+		TextureSpeed = 1.4, FaceCamera = true, Width0 = 2.4, Width1 = 2.4, LightEmission = 1, LightInfluence = 0, Segments = 1, Enabled = false,
+		Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6), NumberSequenceKeypoint.new(0.15, 0.15), NumberSequenceKeypoint.new(1, 0.15) }) }, workspace.Terrain)
+	local target, tcol
+	loop(0.3, function()
+		target = nil
+		if (ST.stats and (ST.stats.harvests or 0) >= 12) or not ST.plot then return end
+		local pf = world:FindFirstChild("Planet" .. (ST.planet or 1))
+		local hub = pf and pf:FindFirstChild("Hub")
+		local function kiosk(id)
+			local k = hub and hub:FindFirstChild("Kiosk_" .. id)
+			return k and k:GetPivot().Position
+		end
+		local plot = plotsFolder:FindFirstChild("Plot" .. ST.plot)
+		local center = plot and plot:GetAttribute("Center")
+		local growing, ready = 0, 0
+		local bedsF = plot and plot:FindFirstChild("Beds")
+		if bedsF then
+			for _, soil in bedsF:GetDescendants() do
+				if soil.Name == "Soil" and soil:GetAttribute("Plant") then
+					growing += 1
+					if nowS() >= (soil:GetAttribute("Ready") or 0) then ready += 1 end
+				end
+			end
+		end
+		if ready > 0 and center then target, tcol = center, T.green
+		elseif #ST.fruits > 0 then target, tcol = kiosk("sell"), T.gold
+		elseif next(ST.seeds) == nil and growing == 0 then target, tcol = kiosk("shop"), T.green
+		elseif next(ST.seeds) and growing == 0 and center then target, tcol = center, T.cold end
+	end)
+	RunService.RenderStepped:Connect(function()
+		local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		if not target or not root or (target - root.Position).Magnitude < 16 then
+			beam.Enabled = false
+			return
+		end
+		a0.WorldPosition = root.Position - Vector3.new(0, 2.4, 0)
+		a1.WorldPosition = target + Vector3.new(0, 0.6, 0)
+		beam.Color = ColorSequence.new(tcol or T.gold)
+		beam.Enabled = true
+	end)
+end
+
 loop(0.5, function()
 	do
 		UI.coinTarget = ST.coins

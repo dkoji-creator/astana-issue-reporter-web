@@ -4,4 +4,5 @@ return {
 	sparkle = "rbxassetid://98437240377521",
 	ripple = "rbxassetid://136316473284787",
 	wisp = "rbxassetid://122458225570877",
+	chevron = "rbxassetid://114535176736041",
 }
