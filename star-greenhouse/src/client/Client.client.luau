@@ -26,7 +26,7 @@ local Audio = require(Shared:WaitForChild("Config"):WaitForChild("Audio"))
 local FX = {} -- эффекты (заполняются ниже, вызываются раньше)
 -- игрок у киоска своей планеты (продажа и покупка семян только там)
 local sfx = {}
-local AUDIO = { m = 6, s = 8, h = 1, t = 1 } -- t: 1 = классика, 2 = космос -- громкость музыки и звуков (0-10), подсказки вкл/выкл; приходят с сервера
+local AUDIO = { m = 6, s = 8, h = 1, t = 1, c = 1 } -- t: 1 = классика, 2 = космос -- громкость музыки и звуков (0-10), подсказки вкл/выкл; приходят с сервера
 local sfxGroup = make("SoundGroup", { Name = "Sfx", Volume = 0.8 }, SoundService)
 local musicGroup = make("SoundGroup", { Name = "Music", Volume = 0.36 }, SoundService)
 local function applyAudio()
@@ -411,6 +411,8 @@ end
 local petFolder = make("Folder", { Name = "Pets" }, workspace)
 local PetLook = require(Shared:WaitForChild("Config"):WaitForChild("PetLook"))
 -- 3D-модель питомца из загруженных мешей (если есть); иначе фигуры ниже
+-- в glb питомцы смотрят в -Z, а после импорта в Roblox оказываются развёрнуты: поворачиваем мордой вперёд
+local FLIP = CFrame.Angles(0, math.pi, 0)
 local function buildPetMesh(id, lvl, parent)
 	local root = ReplicatedStorage:FindFirstChild("PetMeshes")
 	local src = root and root:FindFirstChild(id)
@@ -436,7 +438,7 @@ local function buildPetMesh(id, lvl, parent)
 			p.Parent = m
 			local anim
 			if key == "Crystal" then anim = "crystal" elseif key == "Halo" then anim = "halo" end
-			local e = { p = p, off = CFrame.new(t.Position * sc) * (t.CFrame - t.Position), anim = anim, ph = tonumber(t.Name:match("%d+$")) or 0 }
+			local e = { p = p, off = FLIP * CFrame.new(t.Position * sc) * (t.CFrame - t.Position), anim = anim, ph = tonumber(t.Name:match("%d+$")) or 0 }
 			table.insert(parts, e)
 			if key == "Fur" or (not first and key ~= "Crystal") then first = first or p end
 		end
@@ -1747,7 +1749,7 @@ do
 	listLayout(body, nil, 5)
 	local rows = {}
 	local function send()
-		remotes.Settings:FireServer(AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t)
+		remotes.Settings:FireServer(AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t, AUDIO.c)
 	end
 	local function stepper(order, title, key, onChange)
 		local r = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = order, BackgroundColor3 = T.panel2 })
@@ -1803,6 +1805,21 @@ do
 	end)
 	rows.t = showT
 	showT()
+	-- находки других игроков в чате этого сервера (в глобальном чате остаются всегда)
+	local cr = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 5, BackgroundColor3 = T.panel2 })
+	K.text(cr, "Находки игроков в чате сервера", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.62, 0, 1, 0), MaxText = 16, TextXAlignment = Enum.TextXAlignment.Left })
+	local cb, cl = K.button(cr, "", T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(120, 38), MaxText = 18 })
+	local function showC()
+		cl.Text = AUDIO.c == 1 and "Вкл" or "Выкл"
+		K.recolor(cb, AUDIO.c == 1 and T.green or T.panel)
+	end
+	cb.Activated:Connect(function()
+		AUDIO.c = 1 - AUDIO.c
+		showC()
+		send()
+	end)
+	rows.c = showC
+	showC()
 	function hooks.settings()
 		for _, fn in rows do fn() end
 	end
@@ -1889,7 +1906,7 @@ loop(0.5, function()
 		-- обновления окон
 		if dirty.settings and ST.settings then
 			local oldT = AUDIO.t
-			AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t = ST.settings.m or 6, ST.settings.s or 8, ST.settings.h or 1, ST.settings.t or 1
+			AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t, AUDIO.c = ST.settings.m or 6, ST.settings.s or 8, ST.settings.h or 1, ST.settings.t or 1, ST.settings.c or 1
 			applyAudio()
 			if oldT ~= AUDIO.t and FX.setTrack then FX.setTrack(AUDIO.t) end
 			if windows.settings.Visible then hooks.settings() end
@@ -2283,33 +2300,87 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 	toast(("%s%s, %.2f кг"):format(title ~= "" and (title .. " ") or "", name, kg or 0), title ~= "" and "rare" or "ok")
 	playSfx(title ~= "" and "harvestRare" or "harvest")
 end)
--- редкие находки других игроков: строка в чате (свой сервер и другие сервера), без баннеров на экране
-local function chatLine(text)
-	local ok = pcall(function()
-		local TCS = game:GetService("TextChatService")
-		local chs = TCS:FindFirstChild("TextChannels")
-		local ch = chs and (chs:FindFirstChild("RBXGeneral") or chs:FindFirstChildWhichIsA("TextChannel"))
-		if not ch then error("нет канала") end
-		ch:DisplaySystemMessage(text)
+-- редкие находки: строка в чате сервера (можно выключить в настройках) и в глобальном чате (если он есть в игре)
+local function chatChannels()
+	local TCS = game:GetService("TextChatService")
+	local chs = TCS:FindFirstChild("TextChannels")
+	if not chs then return nil, {} end
+	local here = chs:FindFirstChild("RBXGeneral")
+	local global = {}
+	for _, ch in chs:GetChildren() do
+		local n = ch.Name
+		-- общий кросс-серверный канал (вкладка Global): любой канал, кроме обычных, командных, личных и системного
+		if ch:IsA("TextChannel") and n ~= "RBXGeneral" and n ~= "RBXSystem" and not n:find("^RBXTeam") and not n:find("^RBXWhisper") then
+			table.insert(global, ch)
+		end
+	end
+	return here, global
+end
+local function chatLine(text, toHere, toGlobal)
+	local shown = false
+	pcall(function()
+		local here, global = chatChannels()
+		if toGlobal then
+			for _, ch in global do
+				if pcall(function() ch:DisplaySystemMessage(text) end) then shown = true end
+			end
+		end
+		if here and toHere then
+			here:DisplaySystemMessage(text)
+			shown = true
+		end
 	end)
-	if not ok then
+	if not shown and toHere then
 		pcall(function()
 			game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", { Text = text:gsub("<[^>]+>", ""), Color = Color3.fromRGB(255, 210, 120) })
 		end)
 	end
 end
-FX.chatLine = chatLine
-remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance, pos, otherServer)
-	local name = (title ~= "" and (title .. " ") or "") .. plant
-	chatLine(('<font color="#FFD27A">★ %s</font> нашёл <font color="#C9A0FF">«%s»</font> <font color="#9FD8FF">(%s)</font>%s'):format(
-		who, name, G.fmtOdds(chance), otherServer and ' <font color="#A0A8C0">· другой сервер</font>' or ""))
-	-- сверхредкая находка на этом сервере: только столб света в мире
-	if not otherServer and typeof(pos) == "Vector3" and chance <= 1 / 1000000 then
-		local col = Color3.fromRGB(255, 230, 150)
+FX.chatLine = function(text) chatLine(text, true, false) end
+-- моя сверхредкая находка: вспышка, баннер, столб света и звук — только у меня
+local function myLegend(plant, title, chance, pos)
+	playSfx("legendary")
+	local col = Color3.fromRGB(255, 230, 150)
+	if typeof(pos) == "Vector3" then
 		local beam = make("Part", { Name = "LegendBeam", Shape = Enum.PartType.Cylinder, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
-			Material = Enum.Material.Neon, Color = col, Transparency = 0.45, Size = Vector3.new(3000, 5, 5), CFrame = CFrame.new(pos + Vector3.new(0, 1500, 0)) * CFrame.Angles(0, 0, math.pi / 2) }, fxFolder)
-		TweenService:Create(beam, TweenInfo.new(15), { Transparency = 1, Size = Vector3.new(3000, 1, 1) }):Play()
-		task.delay(15, function() beam:Destroy() end)
+			Material = Enum.Material.Neon, Color = col, Transparency = 0.3, Size = Vector3.new(3000, 8, 8), CFrame = CFrame.new(pos + Vector3.new(0, 1500, 0)) * CFrame.Angles(0, 0, math.pi / 2) }, fxFolder)
+		make("PointLight", { Color = col, Range = 60, Brightness = 5 }, beam)
+		TweenService:Create(beam, TweenInfo.new(20), { Transparency = 1, Size = Vector3.new(3000, 2, 2) }):Play()
+		task.delay(20, function() beam:Destroy() end)
+		if FX.burst then FX.burst(pos + Vector3.new(0, 2, 0), col, 80) end
+	end
+	local gui = make("ScreenGui", { Name = "Legend", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 55 }, pg)
+	local flash = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.1 }, gui)
+	TweenService:Create(flash, TweenInfo.new(1.2), { BackgroundTransparency = 1 }):Play()
+	local b = K.text(gui, (title ~= "" and title or "ЛЕГЕНДА") .. "!", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(700, 60), MaxText = 48, TextColor3 = T.gold })
+	K.text(gui, plant .. " · " .. G.fmtOdds(chance), { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.38), Size = UDim2.fromOffset(700, 30), MaxText = 22 })
+	K.pop(b)
+	task.delay(6, function() gui:Destroy() end)
+end
+remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance, pos, otherServer, uid)
+	local name = (title ~= "" and (title .. " ") or "") .. plant
+	local mine = uid == plr.UserId
+	local text = ('<font color="#FFD27A">★ %s</font> нашёл <font color="#C9A0FF">«%s»</font> <font color="#9FD8FF">(%s)</font>%s'):format(
+		who, name, G.fmtOdds(chance), otherServer and ' <font color="#A0A8C0">· другой сервер</font>' or "")
+	if otherServer then
+		-- с других серверов: только глобальный чат (если его нет — в чат сервера, когда это не выключено)
+		chatLine(text, false, true)
+		local _, global = chatChannels()
+		if #global == 0 and AUDIO.c == 1 then chatLine(text, true, false) end
+	else
+		chatLine(text, mine or AUDIO.c == 1, true)
+	end
+	if not otherServer and chance <= 1 / 1000000 then
+		if mine then
+			task.delay(0.4, function() myLegend(plant, title, chance, pos) end)
+		elseif typeof(pos) == "Vector3" then
+			-- у других игроков: только тонкий столб света в мире, без экрана
+			local col = Color3.fromRGB(255, 230, 150)
+			local beam = make("Part", { Name = "LegendBeam", Shape = Enum.PartType.Cylinder, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+				Material = Enum.Material.Neon, Color = col, Transparency = 0.45, Size = Vector3.new(3000, 5, 5), CFrame = CFrame.new(pos + Vector3.new(0, 1500, 0)) * CFrame.Angles(0, 0, math.pi / 2) }, fxFolder)
+			TweenService:Create(beam, TweenInfo.new(15), { Transparency = 1, Size = Vector3.new(3000, 1, 1) }):Play()
+			task.delay(15, function() beam:Destroy() end)
+		end
 	end
 end)
 

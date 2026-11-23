@@ -94,34 +94,79 @@ class Creature:
         vol = F.reshape(len(xs), len(ys), len(zs))
         v, faces, normals, _ = measure.marching_cubes(vol, 0.0, spacing=(step, step, step))
         v = v + lo
-        # области: ближайший примитив (со сдвигом bias, чтобы пятна вылезали на поверхность)
-        D = np.stack([f(v) - bias for f, _, _, bias in self.prims], 1)
-        lab = np.argmin(D, 1)
+        # области: у каждой вершины «счёт» каждой области = расстояние до её ближайшего примитива (со сдвигом bias)
         regions = [r for _, r, _, _ in self.prims]
         names = sorted(set(regions))
-        rid = np.array([names.index(regions[i]) for i in lab])
-        # сглаживание границ цвета: несколько проходов «большинство среди соседей»
+        S = np.full((len(v), len(names)), 1e9)
+        for f, r, _, bias in self.prims:
+            j = names.index(r)
+            S[:, j] = np.minimum(S[:, j], f(v) - bias)
+        # сглаживание счёта по соседям: границы цветов становятся плавными кривыми
         e = np.vstack([faces[:, [0, 1]], faces[:, [1, 2]], faces[:, [2, 0]]])
         e = np.vstack([e, e[:, ::-1]])
-        for _ in range(self.smooth):
-            cnt = np.zeros((len(v), len(names)))
-            np.add.at(cnt, (e[:, 0], rid[e[:, 1]]), 1.0)
-            cnt[np.arange(len(v)), rid] += 1.5
-            rid = np.argmax(cnt, 1)
-        vreg = np.array([names[i] for i in rid])
+        deg = np.bincount(e[:, 0], minlength=len(v)).astype(float)[:, None]
+        for _ in range(self.smooth * 2):
+            acc = np.zeros_like(S)
+            np.add.at(acc, e[:, 0], S[e[:, 1]])
+            S = 0.5 * S + 0.5 * acc / np.maximum(deg, 1)
+        lab = np.argmin(S, 1)
         # нормали из marching cubes смотрят внутрь поля (градиент), разворачиваем наружу
         n = -normals
         n /= np.maximum(np.linalg.norm(n, axis=1, keepdims=True), 1e-9)
-        out = {}
-        freg = vreg[faces]
-        # область грани: большинство вершин
-        for name in sorted(set(regions)):
-            cnt = (freg == name).sum(1)
-            sel = faces[cnt >= 2]
+        fl = lab[faces]
+        same = (fl[:, 0] == fl[:, 1]) & (fl[:, 1] == fl[:, 2])
+        acc_v = {j: [] for j in range(len(names))}
+        acc_n = {j: [] for j in range(len(names))}
+        acc_i = {j: [] for j in range(len(names))}
+        acc_c = {j: 0 for j in range(len(names))}
+        # целые треугольники одной области
+        for j in range(len(names)):
+            sel = faces[same & (fl[:, 0] == j)]
             if len(sel) == 0:
                 continue
             used, inv = np.unique(sel, return_inverse=True)
-            out[name] = Mesh(v[used], n[used], inv.reshape(-1, 3)[:, ::-1])
+            acc_v[j].append(v[used]); acc_n[j].append(n[used]); acc_i[j].append(inv.reshape(-1, 3) + acc_c[j]); acc_c[j] += len(used)
+        # смешанные треугольники режутся по линиям равенства счёта (как в marching triangles)
+        for f3 in faces[~same]:
+            present = sorted(set(lab[f3]))
+            P = [(v[k], n[k], S[k, present]) for k in f3]
+            for ai, j in enumerate(present):
+                poly = P
+                for bi in range(len(present)):
+                    if bi == ai or len(poly) < 3:
+                        continue
+                    out = []
+                    for q in range(len(poly)):
+                        A, B = poly[q], poly[(q + 1) % len(poly)]
+                        ga, gb = A[2][ai] - A[2][bi], B[2][ai] - B[2][bi]
+                        if ga <= 0:
+                            out.append(A)
+                        if (ga <= 0) != (gb <= 0):
+                            t = ga / (ga - gb)
+                            out.append((A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t))
+                    poly = out
+                if len(poly) < 3:
+                    continue
+                pv = np.array([q[0] for q in poly]); pn = np.array([q[1] for q in poly])
+                pn /= np.maximum(np.linalg.norm(pn, axis=1, keepdims=True), 1e-9)
+                base = acc_c[j]
+                tri = np.array([[base, base + q, base + q + 1] for q in range(1, len(poly) - 1)])
+                acc_v[j].append(pv); acc_n[j].append(pn); acc_i[j].append(tri); acc_c[j] += len(poly)
+        out = {}
+        for j, name in enumerate(names):
+            if not acc_v[j]:
+                continue
+            V, N, I = np.vstack(acc_v[j]), np.vstack(acc_n[j]), np.vstack(acc_i[j])
+            # дробные кусочки: склеить совпадающие вершины, выбросить вырожденные треугольники
+            key = np.round(V / 1e-5).astype(np.int64)
+            _, first, inv = np.unique(key, axis=0, return_index=True, return_inverse=True)
+            inv = inv.reshape(-1)
+            I = inv[I]
+            ok = (I[:, 0] != I[:, 1]) & (I[:, 1] != I[:, 2]) & (I[:, 0] != I[:, 2])
+            I = I[ok]
+            if len(I) == 0:
+                continue
+            out[name] = Mesh(V[first], N[first], I[:, ::-1])
         for name, m in self.extra:
             out[name] = out[name].add(m) if name in out else m
         return out
@@ -356,7 +401,8 @@ def dragon():
         # крылья: косточка и перепонка
         c.cone("WingBone", (s * 0.3, 1.15, 0.2), (s * 1.05, 1.75, 0.35), 0.06, 0.04, k=0.05)
         c.cone("WingBone", (s * 1.05, 1.75, 0.35), (s * 1.25, 1.2, 0.5), 0.04, 0.02, k=0.04)
-        c.ell("Wing", (s * 0.85, 1.35, 0.42), (0.42, 0.34, 0.05), rot(0, s * -0.3, s * 0.45), k=0.06)
+        # перепонка — отдельный гладкий меш: тонкая форма в поле расстояний выходит рваной
+        c.extra.append(("Wing", uv_sphere((s * 0.85, 1.35, 0.42), (0.44, 0.36, 0.045), rot(0, s * -0.3, s * 0.45), seg=36, ring=20)))
     tail = [(0, 0.75, 0.6), (0.1, 0.65, 1.0), (0.3, 0.7, 1.35), (0.45, 0.9, 1.6)]
     rad = [0.26, 0.18, 0.12, 0.06]
     for i in range(3):

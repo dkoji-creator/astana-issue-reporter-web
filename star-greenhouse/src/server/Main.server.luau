@@ -64,7 +64,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1 }, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 }, pets = { owned = {}, eq = "" },
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1, c = 1 }, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 }, pets = { owned = {}, eq = "" },
 	}
 end
 
@@ -490,7 +490,7 @@ local function harvestBed(plr, i, silent)
 	end
 	if chance <= 1 / 50000 then
 		local pl = s.plot and Map.plots[s.plot]
-		RX.Announce:FireAllClients(plr.DisplayName, plant.name, G.mutTitle(b.m), chance, pl and pl.beds[i] and pl.beds[i].pos)
+		RX.Announce:FireAllClients(plr.DisplayName, plant.name, G.mutTitle(b.m), chance, pl and pl.beds[i] and pl.beds[i].pos, false, plr.UserId)
 		-- и в чат всех других серверов игры
 		if now() - lastGlobalAnn >= 5 then
 			lastGlobalAnn = now()
@@ -923,11 +923,11 @@ RX.SelectCan.OnServerEvent:Connect(function(plr, tier)
 		push(plr, "can")
 	end
 end)
-RX.Settings.OnServerEvent:Connect(function(plr, m, sv, h, tk)
+RX.Settings.OnServerEvent:Connect(function(plr, m, sv, h, tk, ch)
 	local d = D[plr]
 	if not d then return end
 	local function n(v, def) return math.clamp(math.floor(tonumber(v) or def), 0, 10) end
-	d.settings = { m = n(m, 6), s = n(sv, 8), h = (h == 0) and 0 or 1, t = (tk == 2) and 2 or 1 }
+	d.settings = { m = n(m, 6), s = n(sv, 8), h = (h == 0) and 0 or 1, t = (tk == 2) and 2 or 1, c = (ch == 0) and 0 or 1 }
 end)
 RX.BuyCan.OnServerInvoke = function(plr, tier, qty)
 	local d = D[plr]
