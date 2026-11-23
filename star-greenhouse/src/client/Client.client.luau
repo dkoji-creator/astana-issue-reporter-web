@@ -1249,7 +1249,13 @@ do
 		local found, muts = 0, 0
 		for _ in ST.idx do found += 1 end
 		for _ in ST.mutSeen do muts += 1 end
-		UI.idxCount.Text = ("Найдено растений %d из %d  ·  мутаций %d из %d"):format(found, #G.PlantList, muts, #G.MutOrder)
+		local mult = G.atlasLuck(ST.idx or {}, ST.mutSeen or {})
+		local tabInfo = ""
+		if type(UI.idxTab) == "number" then
+			local h, t = G.atlasPlanet(ST.idx or {}, UI.idxTab)
+			tabInfo = h >= t and " · планета собрана" or (" · планета %d/%d (+%d%%)"):format(h, t, math.floor(G.AtlasBonus.planet * 100))
+		end
+		UI.idxCount.Text = ("Растений %d/%d · мутаций %d/%d · удача x%.2f%s"):format(found, #G.PlantList, muts, #G.MutOrder, mult, tabInfo)
 		if UI.idxTab == "mut" then
 			grid_l.CellSize = UDim2.new(1, -4, 0, 46)
 			for i, id in G.MutOrder do
@@ -3723,6 +3729,50 @@ function FX.coinFly(total)
 			end)
 		end)
 	end
+end
+-- атмосфера планет: частицы вокруг камеры и тихий фоновый звук своей планеты
+do
+	local TEXa = {}
+	pcall(function() TEXa = require(ReplicatedStorage.Shared.Config.Particles) end)
+	local SMOKE = "rbxasset://textures/particles/smoke_main.dds"
+	local NS, NR = NumberSequence.new, NumberRange.new
+	local AMB = {
+		{ tex = TEXa.sparkle, col = ColorSequence.new(Color3.fromRGB(200, 215, 255)), size = NS(0.22, 0), rate = 22, life = NR(6, 9), speed = NR(0.2, 0.6), acc = Vector3.new(0, 0.05, 0), light = 1, tr = NS(0.25, 1) },
+		{ tex = SMOKE, col = ColorSequence.new(Color3.fromRGB(205, 120, 80)), size = NS(5, 9), rate = 7, life = NR(6, 9), speed = NR(2, 5), acc = Vector3.new(2.2, 0, 1), light = 0, tr = NS({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.4, 0.86), NumberSequenceKeypoint.new(1, 1) }) },
+		{ tex = TEXa.glow, col = ColorSequence.new(Color3.fromRGB(235, 245, 255)), size = NS(0.28, 0.18), rate = 45, life = NR(8, 11), speed = NR(0.3, 0.8), acc = Vector3.new(0.4, -1.1, 0.2), light = 0.6, tr = NS(0.15, 0.9) },
+		{ tex = TEXa.sparkle, col = ColorSequence.new(Color3.fromRGB(255, 170, 80), Color3.fromRGB(255, 60, 30)), size = NS(0.3, 0), rate = 32, life = NR(3, 5), speed = NR(0.5, 1.5), acc = Vector3.new(0, 2.6, 0), light = 1, tr = NS(0.1, 1) },
+		{ tex = TEXa.glow, col = ColorSequence.new(Color3.fromRGB(255, 140, 220), Color3.fromRGB(120, 255, 220)), size = NS(0.55, 0.2), rate = 18, life = NR(6, 9), speed = NR(0.2, 0.5), acc = Vector3.new(0, 0.15, 0), light = 1, tr = NS(0.35, 1) },
+		{ tex = TEXa.sparkle, col = ColorSequence.new(Color3.fromRGB(255, 225, 150)), size = NS(0.32, 0), rate = 28, life = NR(5, 8), speed = NR(0.3, 0.9), acc = Vector3.new(0, 0.4, 0), light = 1, tr = NS(0.2, 1) },
+	}
+	local box = make("Part", { Name = "AmbientFx", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Transparency = 1, Size = Vector3.new(110, 46, 110) }, workspace)
+	local em = make("ParticleEmitter", { Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume, SpreadAngle = Vector2.new(180, 180), LightInfluence = 0,
+		Rotation = NR(0, 360), RotSpeed = NR(-20, 20) }, box)
+	local snd = make("Sound", { Name = "Ambient", Looped = true, Volume = 0, SoundGroup = musicGroup }, SoundService)
+	local cur = 0
+	local function apply(pi)
+		local a = AMB[pi] or AMB[1]
+		em.Texture = a.tex or "rbxasset://textures/particles/sparkles_main.dds"
+		em.Color, em.Size, em.Rate, em.Lifetime, em.Speed, em.Acceleration, em.LightEmission, em.Transparency = a.col, a.size, a.rate, a.life, a.speed, a.acc, a.light, a.tr
+		local id = Audio.Ambient and Audio.Ambient[pi]
+		if id and snd.SoundId ~= id then
+			TweenService:Create(snd, TweenInfo.new(1), { Volume = 0 }):Play()
+			task.delay(1.05, function()
+				snd.SoundId = id
+				snd:Play()
+				TweenService:Create(snd, TweenInfo.new(2.5), { Volume = 0.55 }):Play()
+			end)
+		end
+	end
+	RunService.RenderStepped:Connect(function()
+		local cam = workspace.CurrentCamera
+		if not cam then return end
+		box.CFrame = CFrame.new(cam.CFrame.Position + cam.CFrame.LookVector * 18)
+		local pi = ST.planet or 1
+		if pi ~= cur then
+			cur = pi
+			apply(pi)
+		end
+	end)
 end
 remotes:WaitForChild("Event").OnClientEvent:Connect(function(id, left)
 	local ev

@@ -277,6 +277,32 @@ end
 G.pickSeed = pickSeed
 
 ------------------------------------------------------------------ рейд «Комета-пожиратель»: весь сервер вместе сбивает комету
+------------------------------------------------------------------ коллекция в атласе: полный атлас планеты и все мутации навсегда добавляют удачи
+G.AtlasBonus = { planet = 0.10, mutations = 0.25 }
+-- сколько сортов планеты найдено: найдено, всего
+function G.atlasPlanet(idx, pi: number): (number, number)
+	local pid = G.Planets[pi].id
+	local have, total = 0, 0
+	for _, p in G.PlantList do
+		if p.planet == pid then
+			total += 1
+			if idx[p.id] then have += 1 end
+		end
+	end
+	return have, total
+end
+-- множитель удачи от коллекции и число полных атласов
+function G.atlasLuck(idx, mutSeen): (number, number, boolean)
+	local full = 0
+	for pi = 1, #G.Planets do
+		local h, t = G.atlasPlanet(idx, pi)
+		if h >= t then full += 1 end
+	end
+	local allMut = true
+	for _, id in G.MutOrder do if not mutSeen[id] then allMut = false break end end
+	return 1 + full * G.AtlasBonus.planet + (allMut and G.AtlasBonus.mutations or 0), full, allMut
+end
+
 ------------------------------------------------------------------ Звёздный путь: сезон (календарный месяц) из 30 уровней с наградами
 G.Pass = {
 	levels = 30,

@@ -33,6 +33,15 @@ return {
 	},
 	-- громкость отдельных звуков (по умолчанию 1)
 	Gain = { meteor = 0.35, boom = 0.7, laser = 0.6, rocket = 0.9, legendary = 0.8, brew = 0.8, star = 0.7, harvestRare = 0.8 },
+	-- фон каждой планеты (библиотека Roblox: APM и ProSoundEffects), тихо под музыкой
+	Ambient = {
+		"rbxassetid://1845647305", -- Луна: Space Ambience (APM)
+		"rbxassetid://9114057128", -- Марс: Desert Wind Whistley Light Gusts 2
+		"rbxassetid://9113203961", -- Европа: Attic Wind Whistley Cold Hollow 2
+		"rbxassetid://9112823197", -- Ио: Lava Rumble 1
+		"rbxassetid://9119392620", -- Туманность: Space Presence 2
+		"rbxassetid://1845647303", -- Ядро: Space Ambience (APM)
+	},
 	Custom = {
 		music = "rbxassetid://120589657844865", space = "rbxassetid://72330274258040",
 	},

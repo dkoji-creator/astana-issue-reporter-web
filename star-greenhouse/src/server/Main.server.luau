@@ -393,6 +393,7 @@ local function newBed(plr, d, plantId, regrow)
 	local plv = peq ~= "" and d.pets.owned[peq]
 	if plv then luck *= G.petLuck(peq, plv) end
 	if now() < BOOST.luck then luck *= G.Boosts.luck.mult end
+	luck *= G.atlasLuck(d.idx, d.mutSeen)
 	if d.potion.uses > 0 then
 		luck *= d.potion.luck
 		d.potion.uses -= 1
@@ -486,11 +487,22 @@ local function harvestBed(plr, i, silent)
 	local fruit = { uid = d.uid, id = b.id, m = b.m, w = b.w, t = now() }
 	table.insert(d.fruits, fruit)
 	-- индекс
+	local _, fullBefore, mutBefore = G.atlasLuck(d.idx, d.mutSeen)
 	local e = d.idx[b.id] or { n = 0, best = 0 }
 	e.n += 1
 	if b.w > e.best then e.best = b.w end
 	d.idx[b.id] = e
 	for _, mid in b.m do d.mutSeen[mid] = true end
+	-- коллекция: новый полный атлас планеты или все мутации — постоянная удача
+	local _, fullAfter, mutAfter = G.atlasLuck(d.idx, d.mutSeen)
+	if not silent and (fullAfter > fullBefore or (mutAfter and not mutBefore)) then
+		local pi = G.PlanetIndex[plant.planet] or 1
+		local head = fullAfter > fullBefore and ("АТЛАС: " .. G.Planets[pi].name:upper() .. " СОБРАН!") or "ВСЕ МУТАЦИИ НАЙДЕНЫ!"
+		local sub = fullAfter > fullBefore and ("+" .. math.floor(G.AtlasBonus.planet * 100) .. "% удачи навсегда") or ("+" .. math.floor(G.AtlasBonus.mutations * 100) .. "% удачи навсегда")
+		task.delay(2.5, function()
+			if plr.Parent then RX.Reveal:FireClient(plr, { id = b.id, m = {}, w = plant.kg, head = head, sub = sub, color = Color3.fromRGB(255, 215, 120), sfx = "chest" }) end
+		end)
+	end
 	d.stats.harvests += 1
 	local chance = G.mutChance(b.m)
 	if chance < d.stats.bestChance then d.stats.bestChance = chance end
