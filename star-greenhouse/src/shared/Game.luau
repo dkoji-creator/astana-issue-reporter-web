@@ -277,6 +277,63 @@ end
 G.pickSeed = pickSeed
 
 ------------------------------------------------------------------ рейд «Комета-пожиратель»: весь сервер вместе сбивает комету
+------------------------------------------------------------------ Звёздный путь: сезон (календарный месяц) из 30 уровней с наградами
+G.Pass = {
+	levels = 30,
+	-- опыт за действия (sell — за каждый проданный плод, не больше 20 за раз)
+	xp = { plant = 2, water = 1, harvest = 3, mutation = 6, sell = 1, stars = 2, quest = 40, daily = 40, raid = 60, chest = 30, race = 25, fish = 6, cannon = 15, brew = 12 },
+}
+function G.passNeed(level: number): number return 120 + 30 * level end -- опыт с уровня level-1 до level
+-- уровень по опыту: уровень, опыт внутри текущего уровня, сколько нужно до следующего
+function G.passLevel(xp: number): (number, number, number)
+	local lvl, rest = 0, xp
+	while lvl < G.Pass.levels and rest >= G.passNeed(lvl + 1) do
+		rest -= G.passNeed(lvl + 1)
+		lvl += 1
+	end
+	return lvl, rest, lvl < G.Pass.levels and G.passNeed(lvl + 1) or 0
+end
+function G.passSeason(t: number): number
+	local d = os.date("!*t", t)
+	return d.year * 12 + d.month
+end
+-- число дней от 1970-01-01 до даты (алгоритм Хиннанта, без часовых поясов)
+local function daysFromCivil(y, m, d)
+	y = m <= 2 and y - 1 or y
+	local era = (y >= 0 and y or y - 399) // 400
+	local yoe = y - era * 400
+	local doy = (153 * (m + (m > 2 and -3 or 9)) + 2) // 5 + d - 1
+	local doe = yoe * 365 + yoe // 4 - yoe // 100 + doy
+	return era * 146097 + doe - 719468
+end
+-- конец сезона: полночь UTC первого числа следующего месяца
+function G.passSeasonEnd(t: number): number
+	local d = os.date("!*t", t)
+	local y, m = d.year, d.month + 1
+	if m > 12 then y, m = y + 1, 1 end
+	return daysFromCivil(y, m, 1) * 86400
+end
+-- описание награды уровня (без случайности, для окна)
+function G.passRewardDef(level: number)
+	if level == 30 then return { kind = "seed", rank = 6, qty = 1, text = "Мифическое семя" } end
+	if level == 5 then return { kind = "coins", mult = 40, text = "Мешок монет" } end
+	if level == 10 then return { kind = "seed", rank = 4, qty = 2, text = "2 эпических семени" } end
+	if level == 15 then return { kind = "can", tier = 5, qty = 3, text = "3 лейки сверхновой" } end
+	if level == 20 then return { kind = "seed", rank = 5, qty = 1, text = "Легендарное семя" } end
+	if level == 25 then return { kind = "coins", mult = 120, text = "Сундук монет" } end
+	local k = level % 5
+	if k == 1 then return { kind = "coins", mult = 6 + level, text = "Монеты" } end
+	if k == 2 then
+		local r = math.min(4, 2 + level // 10)
+		return { kind = "seed", rank = r, qty = 1, text = ({ "", "Необычное семя", "Редкое семя", "Эпическое семя" })[r] }
+	end
+	if k == 3 then
+		local tier = math.min(4, 1 + level // 8)
+		return { kind = "can", tier = tier, qty = 3, text = "3 лейки: " .. G.Cans[tier].name }
+	end
+	return { kind = "elixir", text = "Эликсир удачи x25" }
+end
+
 -- админ-ивенты сразу на всех серверах (для эфиров и роликов)
 G.Boosts = { luck = { mult = 10, time = 600, name = "МЕГА-УДАЧА x10" }, gold = { mult = 5, time = 600, name = "ЗОЛОТОЙ ЗВЕЗДОПАД x5" } }
 G.Raid = { first = 420, period = 1500, warn = 45, duration = 80, hpBase = 140, hpPerPlayer = 110, maxRate = 7, minHits = 5 }

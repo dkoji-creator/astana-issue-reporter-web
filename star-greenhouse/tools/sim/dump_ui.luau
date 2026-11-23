@@ -434,6 +434,18 @@ do
 	frames(30, 0.2)
 	dumpState("raid")
 end
+do
+	for _, g in pg:GetChildren() do if g.Name == "Reveal" then g:Destroy() end end
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then b.Activated:Fire() end end
+	frames(5, 0.2)
+	for _, d in pg.SpiritWindows:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "Звёздный путь" and d.Parent:IsA("TextButton") then d.Parent.Activated:Fire() break end
+	end
+	frames(8, 0.2)
+	dumpState("pass")
+	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
+	frames(3, 0.2)
+end
 -- превью табло лидеров (SurfaceGui переносится в ScreenGui для рендера)
 do
 	local board = workspace.World:FindFirstChild("LeaderBoard", true)

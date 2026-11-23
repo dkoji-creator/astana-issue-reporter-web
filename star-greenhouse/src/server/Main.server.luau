@@ -33,13 +33,13 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Slots", "Raid", "RaidHit", "Boost", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Slots", "Raid", "RaidHit", "Boost", "Pass", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic", "RaceStart", "RaceFinish", "TpTo", "PetBuy", "PetEquip", "TradeRequest", "ContestVote", "ContestView" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic", "RaceStart", "RaceFinish", "TpTo", "PetBuy", "PetEquip", "PassClaim", "TradeRequest", "ContestVote", "ContestView" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -64,7 +64,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1, c = 1, a = 1 }, slots = {}, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 }, pets = { owned = {}, eq = "" },
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1, c = 1, a = 1 }, slots = {}, pass = { s = 0, xp = 0, c = {} }, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 }, pets = { owned = {}, eq = "" },
 	}
 end
 
@@ -173,7 +173,7 @@ local function snapshot(plr)
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak,
 			nextDay = (d.daily.last == math.floor(now() / 86400) - 1) and (d.daily.streak % 7 + 1) or ((d.daily.last == math.floor(now() / 86400)) and d.daily.streak or 1) },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {}, race = d.race, pets = d.pets, slots = d.slots,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {}, race = d.race, pets = d.pets, slots = d.slots, pass = d.pass,
 	}
 end
 local function push(plr, ...)
@@ -325,9 +325,28 @@ local function ensureQuests(d)
 		end
 	end
 end
+-- Звёздный путь: опыт за действия, новый сезон каждый месяц
+local function passFresh(d)
+	local season = G.passSeason(now())
+	if type(d.pass) ~= "table" or d.pass.s ~= season then d.pass = { s = season, xp = 0, c = {} } end
+	return d.pass
+end
+local function passXp(plr, kind, n)
+	local d = D[plr]
+	local per = G.Pass.xp[kind]
+	if not d or not per then return end
+	local p = passFresh(d)
+	local before = G.passLevel(p.xp)
+	local gain = per * math.min(n or 1, kind == "sell" and 20 or 5)
+	p.xp += gain
+	local after = G.passLevel(p.xp)
+	if after > before then RX.Pass:FireClient(plr, "level", after) end
+	push(plr, "pass")
+end
 local function questProgress(plr, kind, n)
 	local d = D[plr]
 	if not d then return end
+	passXp(plr, kind, n)
 	local changed = false
 	for _, q in d.q do
 		if q.k == kind and q.have < q.need then
@@ -758,7 +777,49 @@ RX.Daily.OnServerInvoke = function(plr)
 		RX.Reveal:FireClient(plr, { id = id, m = {}, w = G.Plants[id].kg, head = "7 ДНЕЙ ПОДРЯД!", sub = "Легендарное семя и 5 леек сверхновой", color = Color3.fromRGB(255, 205, 70), sfx = "chest" })
 	end
 	push(plr, "coins", "earned", "seeds", "daily", "sel", "planets", "cans")
+	passXp(plr, "daily", 1)
 	return true, text, d.daily.streak
+end
+
+-- Звёздный путь: забрать награду уровня (или все доступные)
+RX.PassClaim.OnServerInvoke = function(plr, which)
+	local d = D[plr]
+	if not d then return false, "Нет данных" end
+	local p = passFresh(d)
+	local lvl = G.passLevel(p.xp)
+	local pn = math.max(1, unlockedPlanets(d))
+	local rng = Random.new()
+	local got = {}
+	local function claim(L)
+		local key = tostring(L)
+		if L < 1 or L > lvl or p.c[key] then return end
+		p.c[key] = true
+		local def = G.passRewardDef(L)
+		if def.kind == "coins" then
+			local coins = G.starReward(pn, true) * def.mult
+			addCoins(plr, coins)
+			table.insert(got, "+" .. G.fmt(coins) .. " монет")
+		elseif def.kind == "seed" then
+			local id = G.pickSeed(def.rank, pn, rng)
+			d.seeds[id] = (d.seeds[id] or 0) + def.qty
+			table.insert(got, G.Plants[id].name .. (def.qty > 1 and (" x" .. def.qty) or ""))
+			if def.rank >= 5 then RX.Reveal:FireClient(plr, { id = id, m = {}, w = G.Plants[id].kg, head = "ЗВЁЗДНЫЙ ПУТЬ: УРОВЕНЬ " .. L, sub = def.text, color = Color3.fromRGB(255, 205, 90), sfx = "chest" }) end
+		elseif def.kind == "can" then
+			d.cans["c" .. def.tier] = (d.cans["c" .. def.tier] or 0) + def.qty
+			table.insert(got, def.text)
+		elseif def.kind == "elixir" then
+			giveElixir(d)
+			table.insert(got, def.text)
+		end
+	end
+	if which == "all" then
+		for L = 1, lvl do claim(L) end
+	elseif type(which) == "number" then
+		claim(math.floor(which))
+	end
+	if #got == 0 then return false, "Нечего забирать" end
+	push(plr, "coins", "earned", "seeds", "cans", "potion", "planets", "pass")
+	return true, table.concat(got, ", ")
 end
 RX.Redeem.OnServerInvoke = function(plr, code)
 	local d = D[plr]
@@ -861,6 +922,7 @@ RX.ClaimQuest.OnServerInvoke = function(plr, i)
 	if not q or q.have < q.need then return false end
 	table.remove(d.q, i)
 	addCoins(plr, q.reward)
+	passXp(plr, "quest", 1)
 	ensureQuests(d)
 	push(plr, "coins", "earned", "planets", "q")
 	return true, q.reward
@@ -1213,6 +1275,7 @@ RX.Brew.OnServerInvoke = function(plr, uids)
 	local plant = G.Plants[res.id]
 	local sub = ("%s · семян: %d%s"):format(G.Rarity[plant.rarity].name, res.qty, res.elixir and " · + эликсир удачи x25" or "")
 	rewardReveal(plr, res.up and "АЛХИМИЯ: РЕДЧЕ!" or "АЛХИМИЯ!", res.id, sub, G.Rarity[plant.rarity].color, "brew")
+	passXp(plr, "brew", 1)
 	return true, res
 end
 
@@ -1240,6 +1303,7 @@ RX.CannonEnd.OnServerInvoke = function(plr, hits)
 	local plant = G.Plants[res.id]
 	rewardReveal(plr, hits >= 20 and "МЕТКИЙ СТРЕЛОК!" or "МЕТЕОРИТЫ СБИТЫ!", res.id,
 		("Сбито: %d · +%s монет · семян: %d"):format(hits, G.fmt(res.coins), res.qty), G.Rarity[plant.rarity].color)
+	passXp(plr, "cannon", 1)
 	return true, res
 end
 
@@ -1588,6 +1652,7 @@ RX.RaceFinish.OnServerInvoke = function(plr, token, passed)
 		out.cooldown = d.cd.race - now()
 	end
 	push(plr, "race", "cd", "seeds", "potion")
+	passXp(plr, "race", 1)
 	return true, out
 end
 
@@ -1626,6 +1691,7 @@ RX.FishResult.OnServerInvoke = function(plr, token, ok)
 		rewardReveal(plr, "УЛОВ: " .. string.upper(fish.name) .. "!", res.id, ("+%s монет%s"):format(G.fmt(res.coins or 0), res.elixir and " · эликсир удачи x25" or ""), fish.color, "chest")
 	end
 	push(plr, "seeds", "potion", "stats")
+	passXp(plr, "fish", 1)
 	return true, res
 end
 
@@ -1641,6 +1707,7 @@ game:GetService("ProximityPromptService").PromptTriggered:Connect(function(pr, p
 	d.cd.chest = now() + G.Chest.cooldown
 	d.stats.chests += 1
 	local res = G.chestReward(math.max(1, unlockedPlanets(d)), Random.new())
+	passXp(plr, "chest", 1)
 	d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty
 	if res.elixir then giveElixir(d) end
 	addCoins(plr, res.coins)
@@ -1853,6 +1920,7 @@ local function raidFinish(win)
 			if res.id then d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty end
 			if res.elixir then giveElixir(d) end
 			d.stats.raids = (d.stats.raids or 0) + 1
+			passXp(plr, "raid", 1)
 			push(plr, "seeds", "potion", "stats")
 			RX.Raid:FireClient(plr, "win", top, { coins = res.coins, id = res.id, qty = res.qty, elixir = res.elixir, rank = i, share = share, hits = e.h })
 		else

@@ -384,7 +384,7 @@ do
 		-- фото-режим из меню «Ещё»
 		local photoBtn
 		for _, d in pg.SpiritWindows:GetDescendants() do
-			if d:IsA("TextButton") and d.LayoutOrder == 4 and d.Parent and d.Parent.Parent and d.Parent.Parent.Visible then photoBtn = d end
+			if d:IsA("TextLabel") and d.Text == "Фото-режим" and d.Parent:IsA("TextButton") then photoBtn = d.Parent end
 		end
 		check(photoBtn ~= nil, "нет кнопки фото-режима")
 		if photoBtn then
@@ -858,6 +858,20 @@ do
 	local n = 0
 	if bh then for _, c in bh:GetChildren() do if c:IsA("Frame") then n += 1 end end end
 	check(n == 2, "значков ивентов должно быть 2, а их " .. n)
+	for _, g in pg:GetChildren() do if g.Name == "Reveal" then g:Destroy() end end
+end
+
+stage("звёздный путь")
+do
+	local st = inv("State")
+	check(st.pass ~= nil and (st.pass.xp or 0) > 0, "нет опыта Звёздного пути")
+	local lvl = G.passLevel(st.pass.xp)
+	if lvl >= 1 then
+		local ok, text = inv("PassClaim", "all")
+		check(ok == true, "награды пути не выдались: " .. tostring(text))
+		local ok2 = inv("PassClaim", 1)
+		check(ok2 == false, "награду можно забрать дважды")
+	end
 	for _, g in pg:GetChildren() do if g.Name == "Reveal" then g:Destroy() end end
 end
 

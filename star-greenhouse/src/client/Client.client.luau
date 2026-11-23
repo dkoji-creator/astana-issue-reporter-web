@@ -1933,10 +1933,96 @@ do
 end
 
 ------------------------------------------------------------------ окно «Ещё»: всё второстепенное в одном месте
+------------------------------------------------------------------ окно: Звёздный путь (сезонный пропуск)
+do
+	local f, body = mkWindow("pass", "Звёздный путь", "trophy", T.gold, 0.94, 0.86)
+	local lvlL = K.text(body, "", { Size = UDim2.new(0.3, 0, 0, 26), MaxText = 20, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.gold })
+	local barBack = make("Frame", { Position = UDim2.new(0.3, 6, 0, 6), Size = UDim2.new(0.42, -12, 0, 14), BackgroundColor3 = T.panel2 }, body)
+	K.corner(barBack, UDim.new(1, 0))
+	local barFill = make("Frame", { Size = UDim2.fromScale(0, 1), BackgroundColor3 = T.gold }, barBack)
+	K.corner(barFill, UDim.new(1, 0))
+	K.gradient(barFill, Color3.fromRGB(255, 230, 150), Color3.fromRGB(255, 170, 60), 0)
+	local xpL = K.text(barBack, "", { Size = UDim2.fromScale(1, 1), MaxText = 11 })
+	local seasonL = K.text(body, "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, 0, 0, 0), Size = UDim2.new(0.28, 0, 0, 26), MaxText = 13, TextXAlignment = Enum.TextXAlignment.Right, TextColor3 = T.sub, Medium = true })
+	local row = make("ScrollingFrame", { Position = UDim2.fromOffset(0, 32), Size = UDim2.new(1, 0, 1, -82), BackgroundTransparency = 1, BorderSizePixel = 0, CanvasSize = UDim2.new(),
+		AutomaticCanvasSize = Enum.AutomaticSize.X, ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 4, ScrollBarImageColor3 = T.line }, body)
+	listLayout(row, Enum.FillDirection.Horizontal, 8)
+	local allB = K.button(body, "Забрать всё", T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 0, 1, 0), Size = UDim2.new(0.3, 0, 0, 40), MaxText = 18 })
+	K.text(body, "Опыт дают сбор, мутации, звёзды, задания, подарок дня, рейды, сундук, гонка и пушка. Каждый месяц новый сезон",
+		{ AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0.3, 10, 1, 0), Size = UDim2.new(0.7, -10, 0, 40), MaxText = 14, TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
+	local KIND_ICON = { coins = "coin", can = "water", elixir = "potion" }
+	local RANK_COL = { T.sub, T.green, T.blue, T.purple, T.gold, T.pink }
+	local function state()
+		local p = ST.pass or { xp = 0, c = {} }
+		local lvl, have, need = G.passLevel(p.xp or 0)
+		return p, lvl, have, need
+	end
+	local function claim(which)
+		local ok, text = remotes.PassClaim:InvokeServer(which)
+		if ok then
+			toast("Звёздный путь: " .. text, "rare", 4)
+			playSfx("unlock")
+		else
+			toast(text or "Нечего забирать", "bad")
+		end
+	end
+	function hooks.pass()
+		clear(row)
+		local p, lvl, have, need = state()
+		lvlL.Text = ("Уровень %d из %d"):format(lvl, G.Pass.levels)
+		barFill.Size = UDim2.fromScale(need > 0 and math.clamp(have / need, 0, 1) or 1, 1)
+		xpL.Text = need > 0 and ("%d / %d опыта"):format(have, need) or "Сезон пройден!"
+		local left = G.passSeasonEnd(nowS()) - nowS()
+		seasonL.Text = ("Новый сезон через %d д %d ч"):format(left // 86400, (left % 86400) // 3600)
+		local claimable = 0
+		for L = 1, G.Pass.levels do
+			local def = G.passRewardDef(L)
+			local got = p.c and p.c[tostring(L)]
+			local open = L <= lvl
+			if open and not got then claimable += 1 end
+			local big = L % 5 == 0
+			local col = big and T.gold or (def.rank and RANK_COL[def.rank]) or T.cold
+			local card = make("Frame", { Size = UDim2.fromOffset(big and 116 or 100, 176), BackgroundColor3 = big and Color3.fromRGB(44, 36, 30) or T.panel2, BackgroundTransparency = open and 0 or 0.35, LayoutOrder = L }, row)
+			K.corner(card, UDim.new(0, 12))
+			K.stroke(card, open and col or T.line, open and 1.6 or 1, false, open and 0.1 or 0.6)
+			K.text(card, tostring(L), { Position = UDim2.fromOffset(0, 4), Size = UDim2.new(1, 0, 0, 22), MaxText = 18, TextColor3 = open and col or T.sub })
+			local ic = make("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0.5, -30, 0, 28), Size = UDim2.fromOffset(60, 60) }, card)
+			if def.kind == "seed" then
+				K.icon(ic, "seed", { Size = UDim2.fromScale(1, 1), ImageColor3 = RANK_COL[def.rank] or T.gold })
+			else
+				K.icon(ic, KIND_ICON[def.kind] or "gift", { Size = UDim2.fromScale(1, 1) })
+			end
+			local amount = def.kind == "coins" and ("+" .. G.fmt(G.starReward(math.max(1, ST.planets or 1), true) * def.mult)) or def.text
+			K.text(card, amount, { Position = UDim2.fromOffset(4, 92), Size = UDim2.new(1, -8, 0, 36), MaxText = 12, TextWrapped = true, TextColor3 = open and T.text or T.sub, Medium = true })
+			if got then
+				K.text(card, "Получено", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.new(1, -12, 0, 28), MaxText = 14, TextColor3 = T.green })
+			elseif open then
+				local b = K.button(card, "Забрать", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.new(1, -12, 0, 32), MaxText = 14 })
+				b.Activated:Connect(function() claim(L) end)
+			else
+				K.icon(card, "lock", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -12), Size = UDim2.fromOffset(22, 22), ImageColor3 = T.sub })
+			end
+		end
+		allB.Visible = claimable > 0
+		if UI.passBadge then UI.passBadge.Visible = claimable > 0 end
+	end
+	allB.Activated:Connect(function() claim("all") end)
+	-- новый уровень: баннер и звук
+	remotes:WaitForChild("Pass").OnClientEvent:Connect(function(kind, lvl)
+		if kind ~= "level" then return end
+		playSfx("unlock")
+		local b = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(520, 70), BackgroundTransparency = 1, ZIndex = 25 }, hud)
+		K.text(b, "ЗВЁЗДНЫЙ ПУТЬ", { Size = UDim2.new(1, 0, 0, 22), MaxText = 18, TextColor3 = T.sub, ZIndex = 26 })
+		K.text(b, "Уровень " .. lvl .. "! Забери награду в «Ещё»", { Position = UDim2.fromOffset(0, 22), Size = UDim2.new(1, 0, 0, 44), MaxText = 34, TextColor3 = T.gold, ZIndex = 26 })
+		K.pop(b)
+		task.delay(3, function() b:Destroy() end)
+	end)
+end
+
 do
 	local f, body = mkWindow("menu", "Ещё", "settings", T.purple, 0.86, 0.8)
 	make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 0, 54), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, body)
-	local items = { { "index", "atlas", "Атлас растений", T.purple }, { "market", "news", "Рынок", T.pink }, { "daily", "gift", "Подарок дня", T.orange },
+	local items = { { "pass", "trophy", "Звёздный путь", T.gold }, { "index", "atlas", "Атлас растений", T.purple }, { "market", "news", "Рынок", T.pink }, { "daily", "gift", "Подарок дня", T.orange },
 		{ "photo", "luck", "Фото-режим", T.cold }, { "settings", "settings", "Настройки", T.green }, { "trade", "jar", "Обмен", T.gold }, { "contest", "trophy", "Конкурс огородов", T.pink } }
 	if plr.UserId == ADMIN_ID then table.insert(items, { "admin", "admin", "Админ", T.red }) end
 	for i, it in items do
@@ -1945,10 +2031,10 @@ do
 		K.stroke(b, it[4], 1.2, false, 0.35)
 		K.icon(b, it[2], { Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(10, 10) })
 		K.text(b, it[3], { Position = UDim2.fromOffset(52, 0), Size = UDim2.new(1, -58, 1, 0), MaxText = 15, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true })
-		if it[1] == "daily" then
+		if it[1] == "daily" or it[1] == "pass" then
 			local badge = make("Frame", { Name = "Badge", Size = UDim2.fromOffset(12, 12), Position = UDim2.new(1, -16, 0, 6), BackgroundColor3 = T.gold, Visible = false }, b)
 			K.corner(badge, UDim.new(1, 0))
-			UI.dailyBadge2 = badge
+			if it[1] == "daily" then UI.dailyBadge2 = badge else UI.passBadge = badge end
 		end
 		b.Activated:Connect(function()
 			K.bounce(b)
@@ -2139,7 +2225,14 @@ loop(0.5, function()
 		if windows.shop.Visible and nearShop ~= UI.wasNearShop then hooks.shop() end
 		if windows.bag.Visible and nearSell ~= UI.wasNearSell then hooks.bag() end
 		UI.wasNearShop, UI.wasNearSell = nearShop, nearSell
-		UI.buttons.menu:FindFirstChild("Badge").Visible = ST.daily.can
+		-- значок на «Ещё»: подарок дня или награды Звёздного пути
+		local passReady = false
+		if ST.pass then
+			local lvl = G.passLevel(ST.pass.xp or 0)
+			for L = 1, lvl do if not (ST.pass.c and ST.pass.c[tostring(L)]) then passReady = true break end end
+		end
+		if UI.passBadge then UI.passBadge.Visible = passReady end
+		UI.buttons.menu:FindFirstChild("Badge").Visible = ST.daily.can or passReady
 		if UI.dailyBadge2 then UI.dailyBadge2.Visible = ST.daily.can end
 		-- обновления окон
 		if dirty.settings and ST.settings then
@@ -2154,6 +2247,7 @@ loop(0.5, function()
 		if windows.store.Visible and (dirty.coins or dirty.cans or dirty.perms) then hooks.store() end
 		if windows.alchemy.Visible and dirty.fruits then hooks.alchemy() end
 		if windows.pets.Visible and (dirty.pets or dirty.coins) then hooks.pets() end
+		if windows.pass and windows.pass.Visible and dirty.pass then hooks.pass() end
 		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
 		if windows.bag.Visible and (dirty.fruits or dirty.coins or dirty.seeds) then hooks.bag() end
 		if windows.shop.Visible and (dirty.sold or dirty.bought or dirty.planets) then hooks.shop() end
