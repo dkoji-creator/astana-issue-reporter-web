@@ -448,6 +448,30 @@ do
 	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
 	frames(3, 0.2)
 end
+do
+	-- сцена сверхредкой находки
+	inv("Admin", "revealShow")
+	for _ = 1, 400 do
+		-- закрыть карточки, которые стоят в очереди раньше
+		local rv = pg:FindFirstChild("Reveal")
+		if rv then
+			for _, d in rv:GetDescendants() do
+				if d:IsA("TextLabel") and d.Text == "Круто!" and d.Parent:IsA("TextButton") then d.Parent.Activated:Fire() end
+			end
+		end
+		if pg:FindFirstChild("Cinema") then break end
+		frames(1, 0.1)
+	end
+	for _ = 1, 60 do
+		frames(1, 0.1)
+		if pg:FindFirstChild("Cinema") and #pg.Cinema:GetChildren() > 6 then break end
+	end
+	frames(25, 0.1)
+	local names = {}
+	for _, g in pg:GetChildren() do table.insert(names, g.Name .. "=" .. tostring(g.Enabled) .. "/" .. #g:GetChildren()) end
+	table.insert(SIM.log, "PG: " .. table.concat(names, ", ") .. " cam=" .. tostring(workspace.CurrentCamera.CameraType))
+	dumpState("cinema")
+end
 -- превью табло лидеров (SurfaceGui переносится в ScreenGui для рендера)
 do
 	local board = workspace.World:FindFirstChild("LeaderBoard", true)

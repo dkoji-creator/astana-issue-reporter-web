@@ -1950,7 +1950,27 @@ local function raidFinish(win)
 	RAID.active = false
 	RAID.next = now() + G.Raid.period
 	if not win then
-		RX.Raid:FireAllClients("fail")
+		-- комета врезается в планету и сжигает четверть урожая на грядках (новичков не трогает)
+		for _, plr in Players:GetPlayers() do
+			local d = D[plr]
+			local burnt = {}
+			if d and (d.stats.harvests or 0) >= G.Raid.safeHarvests then
+				local idxs = {}
+				for i in d.beds do table.insert(idxs, i) end
+				local n = math.floor(#idxs * G.Raid.burn + 0.5)
+				for k = #idxs, 2, -1 do
+					local j = math.random(1, k)
+					idxs[k], idxs[j] = idxs[j], idxs[k]
+				end
+				for k = 1, n do
+					local i = idxs[k]
+					d.beds[i] = nil
+					refreshBed(plr, i)
+					table.insert(burnt, i)
+				end
+			end
+			RX.Raid:FireClient(plr, "fail", burnt)
+		end
 		return
 	end
 	local list, total = {}, 0

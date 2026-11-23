@@ -849,6 +849,18 @@ do
 	check(res, "нет окна итогов рейда")
 end
 
+stage("рейд кометы: провал")
+do
+	check(inv("Admin", "raid") == true, "второй рейд не начался")
+	frames(10, 0.2)
+	-- никто не стреляет: время рейда выходит
+	frames(G.Raid.duration * 5 + 20, 0.2)
+	frames(20, 0.1)
+	local rf = workspace:FindFirstChild("Raid")
+	check(rf and rf:FindFirstChild("DevourerComet") == nil, "комета не упала")
+	check(rf and rf:FindFirstChild("Crater") ~= nil, "нет кратера после падения кометы")
+end
+
 stage("админ-ивенты на всех серверах")
 do
 	check(inv("Admin", "g_luck") == true, "мега-удача не включилась")
