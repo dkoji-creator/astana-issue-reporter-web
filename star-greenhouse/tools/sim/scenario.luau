@@ -13,7 +13,7 @@ local shared = folder("Shared", RS)
 mod("ModuleScript", "Game", shared, "shared/Game")
 mod("ModuleScript", "PlantModels", shared, "shared/PlantModels")
 local cfg = folder("Config", shared)
-for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantMeshes", "PetMeshes", "PetLook" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
+for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantMeshes", "PetMeshes", "PetLook", "Particles" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
 local srv = folder("Server", game:GetService("ServerScriptService"))
 local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")
@@ -392,7 +392,19 @@ do
 			frames(10, 0.1)
 			local ph = pg:FindFirstChild("Photo")
 			check(ph ~= nil, "фото-режим не включился")
-			if ph then ph:FindFirstChildOfClass("TextButton").Activated:Fire() frames(3, 0.1) end
+			if ph then
+				-- переключить все камеры и фильтры, затем выйти кнопкой «Выйти»
+				local exitB
+				for _, d in ph:GetDescendants() do
+					if d:IsA("TextButton") then
+						local l = d:FindFirstChildOfClass("TextLabel")
+						if l and l.Text == "Выйти" then exitB = d elseif l then d.Activated:Fire() frames(2, 0.1) end
+					end
+				end
+				check(exitB ~= nil, "нет кнопки выхода из фото-режима")
+				if exitB then exitB.Activated:Fire() end
+				frames(3, 0.1)
+			end
 			check(hud.Enabled, "интерфейс не вернулся после фото-режима")
 		end
 	end

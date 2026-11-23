@@ -1704,7 +1704,15 @@ if plr.UserId == ADMIN_ID then
 	btn("Зелье x10 на 20 посадок", T.pink, cmd("potion"))
 	btn("Быстрый бег вкл/выкл", T.blue, cmd("speed"))
 	btn("Опыление сейчас", T.green, cmd("pollen", nil, "Пыльца скоро прилетит"))
-	btn("Витрина для ТикТока", T.gold, cmd("showcase", nil, "Огород заполнен гигантами"))
+	btn("Витрина для ТикТока", T.gold, cmd("showcase", nil, "Огород заполнен гигантами с высшими мутациями"))
+	btn("Сцена: легендарная находка", T.pink, function()
+		for _, w in windows do if w.Visible then K.close(w) end end
+		remotes.Admin:InvokeServer("revealShow")
+	end)
+	btn("Кино-облёт огорода", T.cold, function()
+		for _, w in windows do if w.Visible then K.close(w) end end
+		task.delay(0.4, function() FX.photoMode("cinema") end)
+	end)
 	btn("Все донаты: разблокировать", T.pink, cmd("alldonate", nil, "Все донаты выданы"))
 	btn("Все питомцы: макс. уровень", T.cold, cmd("pets", nil, "Питомцы выданы"))
 	btn("Конкурс огородов сейчас", T.pink, cmd("contest", nil, "Голосование началось"))
@@ -2950,12 +2958,14 @@ remotes:WaitForChild("Pollen").OnClientEvent:Connect(function(bedIdx, token)
 	task.delay(0.5, function() swarm:Destroy() end)
 end)
 
------------------------------------------------------------------- фото-режим: без интерфейса, камера медленно облетает огород
-function FX.photoMode()
+------------------------------------------------------------------ фото-режим: камеры, фильтры, размытие фона, кинорамка, чистый кадр
+-- startMode: "orbit" | "free" | "selfie" | "cinema"
+function FX.photoMode(startMode)
 	local cam = workspace.CurrentCamera
 	local ch = plr.Character
 	local root = ch and ch:FindFirstChild("HumanoidRootPart")
-	if not cam or not root then return end
+	if not cam or not root or pg:FindFirstChild("Photo") then return end
+	local UIS2 = game:GetService("UserInputService")
 	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
 	local center = (plot and plot:GetAttribute("Center")) or root.Position
 	if (center - root.Position).Magnitude > 60 then center = root.Position end
@@ -2967,26 +2977,173 @@ function FX.photoMode()
 		end
 	end
 	pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+	-- эффекты кадра живут в камере: видны только этому игроку
+	local fx = Instance.new("Folder")
+	fx.Name = "PhotoFx"
+	local cc = make("ColorCorrectionEffect", { Name = "PhotoCC", Enabled = false }, cam)
+	local bloom = make("BloomEffect", { Name = "PhotoBloom", Enabled = false, Intensity = 0.6, Size = 30, Threshold = 1.4 }, cam)
+	local dof = make("DepthOfFieldEffect", { Name = "PhotoDof", Enabled = false, FarIntensity = 0.75, NearIntensity = 0.4, FocusDistance = 30, InFocusRadius = 14 }, cam)
 	local gui = make("ScreenGui", { Name = "Photo", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 80 }, pg)
-	local exit = make("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "" }, gui)
-	local hintL = K.text(gui, "Коснись экрана, чтобы выйти", { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(360, 22), MaxText = 15, TextColor3 = T.sub })
-	task.delay(2.5, function() if hintL.Parent then TweenService:Create(hintL, TweenInfo.new(1), { TextTransparency = 1 }):Play() end end)
-	cam.CameraType = Enum.CameraType.Scriptable
+	-- виньетка и кинорамка
+	local vign = make("Frame", { Name = "Vignette", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false }, gui)
+	for i, rot in { 90, 270, 0, 180 } do
+		local fr = make("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0,
+			Size = i <= 2 and UDim2.fromScale(1, 0.32) or UDim2.fromScale(0.22, 1),
+			Position = (i == 2 and UDim2.fromScale(0, 0.68)) or (i == 4 and UDim2.fromScale(0.78, 0)) or UDim2.new() }, vign)
+		make("UIGradient", { Rotation = rot, Transparency = NumberSequence.new(0.35, 1) }, fr)
+	end
+	local bars = make("Frame", { Name = "Bars", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false }, gui)
+	make("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, Size = UDim2.fromScale(1, 0.11) }, bars)
+	make("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.fromScale(1, 0.11) }, bars)
+	-- касание по пустому месту возвращает спрятанную панель
+	local tap = make("TextButton", { Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Text = "", ZIndex = 1 }, gui)
+	local panel = make("Frame", { Name = "Panel", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.new(0.96, 0, 0, 122),
+		BackgroundColor3 = T.panel, BackgroundTransparency = 0.18, ZIndex = 5 }, gui)
+	K.corner(panel, UDim.new(0, 14))
+	K.stroke(panel, T.line, 1, false, 0.4)
+	local rowsHolder = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(8, 6), Size = UDim2.new(1, -16, 1, -12), ZIndex = 5 }, panel)
+	listLayout(rowsHolder, nil, 4)
+	local function row(title, order)
+		local r = make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 32), LayoutOrder = order, ZIndex = 5 }, rowsHolder)
+		K.text(r, title, { Size = UDim2.new(0, 78, 1, 0), MaxText = 13, TextColor3 = T.sub, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 5 })
+		local list = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(80, 0), Size = UDim2.new(1, -80, 1, 0), ZIndex = 5 }, r)
+		listLayout(list, Enum.FillDirection.Horizontal, 5)
+		return list
+	end
+	local function chips(parent, items, cur, onPick)
+		local btns = {}
+		local function paint(k)
+			for key, b in btns do K.recolor(b, key == k and T.blue or T.panel2) end
+		end
+		for i, it in items do
+			local b = K.button(parent, it[2], T.panel2, { Size = UDim2.new(1 / #items, -5, 1, 0), MaxText = 12, LayoutOrder = i, ZIndex = 6 })
+			btns[it[1]] = b
+			b.Activated:Connect(function() paint(it[1]) onPick(it[1]) end)
+		end
+		paint(cur)
+		return paint
+	end
+	-- камеры
+	local mode = startMode or "orbit"
+	local yaw, pitch, dist = 0.6, 0.35, 34
 	local t0 = os.clock()
-	local conn = RunService.RenderStepped:Connect(function()
-		local t = os.clock() - t0
-		local a = t * 0.12
-		local r = 46 + math.sin(t * 0.2) * 8
-		cam.CFrame = CFrame.lookAt(center + Vector3.new(math.cos(a) * r, 16 + math.sin(t * 0.3) * 6, math.sin(a) * r), center + Vector3.new(0, 4, 0))
+	chips(row("Камера", 1), { { "orbit", "Облёт" }, { "free", "Свободная" }, { "selfie", "Селфи" }, { "cinema", "Кино" } }, mode, function(k) mode = k t0 = os.clock() end)
+	-- фильтры
+	local FILTERS = {
+		none = nil,
+		film = { cc = { Contrast = 0.18, Saturation = -0.08, Brightness = -0.02, TintColor = Color3.fromRGB(255, 236, 214) }, bloom = true },
+		neon = { cc = { Contrast = 0.12, Saturation = 0.35, Brightness = 0.02, TintColor = Color3.fromRGB(240, 225, 255) }, bloom = true },
+		sunset = { cc = { Contrast = 0.1, Saturation = 0.1, Brightness = 0.03, TintColor = Color3.fromRGB(255, 205, 170) }, bloom = true },
+		cosmos = { cc = { Contrast = 0.14, Saturation = 0.15, Brightness = -0.03, TintColor = Color3.fromRGB(205, 190, 255) }, bloom = true },
+		mono = { cc = { Contrast = 0.25, Saturation = -1, Brightness = 0, TintColor = Color3.new(1, 1, 1) } },
+	}
+	local function setFilter(k)
+		local f = FILTERS[k]
+		cc.Enabled = f ~= nil
+		bloom.Enabled = f ~= nil and f.bloom == true
+		if f then for key, val in f.cc do cc[key] = val end end
+	end
+	chips(row("Фильтр", 2), { { "none", "Нет" }, { "film", "Кино" }, { "neon", "Неон" }, { "sunset", "Закат" }, { "cosmos", "Космос" }, { "mono", "Ч/Б" } }, "none", setFilter)
+	-- кадр: размытие фона, виньетка, кинорамка, скрыть панель, выход
+	local r3 = row("Кадр", 3)
+	local function toggle(text, order, fn)
+		local on = false
+		local b = K.button(r3, text, T.panel2, { Size = UDim2.new(0.2, -5, 1, 0), MaxText = 12, LayoutOrder = order, ZIndex = 6 })
+		b.Activated:Connect(function()
+			on = not on
+			K.recolor(b, on and T.blue or T.panel2)
+			fn(on)
+		end)
+		return b
+	end
+	toggle("Размытие", 1, function(on) dof.Enabled = on end)
+	toggle("Виньетка", 2, function(on) vign.Visible = on end)
+	toggle("Кинорамка", 3, function(on) bars.Visible = on end)
+	local hideB = K.button(r3, "Чистый кадр", T.green, { Size = UDim2.new(0.2, -5, 1, 0), MaxText = 12, LayoutOrder = 4, ZIndex = 6 })
+	local exitB = K.button(r3, "Выйти", T.pink, { Size = UDim2.new(0.2, -5, 1, 0), MaxText = 12, LayoutOrder = 5, ZIndex = 6 })
+	local hint = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 12), Size = UDim2.fromOffset(420, 20), MaxText = 14, TextColor3 = T.sub, ZIndex = 5 })
+	local function showHint(text)
+		hint.Text = text
+		hint.TextTransparency = 0
+		task.delay(2.5, function() if hint.Parent and hint.Text == text then TweenService:Create(hint, TweenInfo.new(0.8), { TextTransparency = 1 }):Play() end end)
+	end
+	showHint("Свободная камера: веди пальцем, чтобы крутить; двумя пальцами — приблизить")
+	hideB.Activated:Connect(function()
+		panel.Visible = false
+		showHint("Коснись экрана, чтобы вернуть панель")
 	end)
-	exit.Activated:Connect(function()
-		conn:Disconnect()
+	tap.Activated:Connect(function() panel.Visible = true end)
+	-- управление свободной камерой
+	local dragging, last
+	local conns = {}
+	table.insert(conns, UIS2.InputBegan:Connect(function(input, gp)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging, last = true, input.Position
+		end
+	end))
+	table.insert(conns, UIS2.InputEnded:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+	end))
+	table.insert(conns, UIS2.InputChanged:Connect(function(input)
+		if dragging and mode == "free" and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) and last then
+			local d = input.Position - last
+			last = input.Position
+			yaw -= d.X * 0.008
+			pitch = math.clamp(pitch + d.Y * 0.006, -0.2, 1.3)
+		elseif input.UserInputType == Enum.UserInputType.MouseWheel then
+			dist = math.clamp(dist - input.Position.Z * 3, 8, 90)
+		end
+	end))
+	pcall(function()
+		table.insert(conns, UIS2.TouchPinch:Connect(function(_, scale, _, state)
+			if mode == "free" and state == Enum.UserInputState.Change then dist = math.clamp(dist / math.clamp(scale, 0.9, 1.1), 8, 90) end
+		end))
+	end)
+	cam.CameraType = Enum.CameraType.Scriptable
+	table.insert(conns, RunService.RenderStepped:Connect(function()
+		local t = os.clock() - t0
+		local rp = root.Parent and root.Position or center
+		local camPos, look
+		if mode == "orbit" then
+			local a = t * 0.12
+			local r = 46 + math.sin(t * 0.2) * 8
+			camPos, look = center + Vector3.new(math.cos(a) * r, 16 + math.sin(t * 0.3) * 6, math.sin(a) * r), center + Vector3.new(0, 4, 0)
+		elseif mode == "free" then
+			local tgt = center + Vector3.new(0, 4, 0)
+			camPos = tgt + Vector3.new(math.cos(yaw) * math.cos(pitch), math.sin(pitch), math.sin(yaw) * math.cos(pitch)) * dist
+			look = tgt
+		elseif mode == "selfie" then
+			-- камера перед лицом персонажа, лёгкое покачивание; огород за спиной
+			local fcf = root.CFrame
+			local head = rp + Vector3.new(0, 1.6, 0)
+			camPos = (fcf * CFrame.new(1.2 + math.sin(t * 0.5) * 0.6, 2.2 + math.sin(t * 0.7) * 0.2, -7.5)).Position
+			look = head
+		else
+			-- кино: медленный наезд с высоты к огороду и проход вдоль грядок, по кругу каждые 14 с
+			local k = (t % 14) / 14
+			local e = k * k * (3 - 2 * k)
+			local a = 0.8 + e * 1.4
+			local r = 70 - e * 48
+			camPos = center + Vector3.new(math.cos(a) * r, 40 - e * 32, math.sin(a) * r)
+			look = center + Vector3.new(0, 3 + e * 2, 0)
+		end
+		cam.CFrame = CFrame.lookAt(camPos, look)
+		dof.FocusDistance = (camPos - look).Magnitude
+	end))
+	local function close()
+		for _, c in conns do c:Disconnect() end
 		gui:Destroy()
+		cc:Destroy()
+		bloom:Destroy()
+		dof:Destroy()
+		fx:Destroy()
 		for _, g in hidden do g.Enabled = true end
 		pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
 		cam.CameraType = Enum.CameraType.Custom
 		if ch:FindFirstChild("Humanoid") then cam.CameraSubject = ch.Humanoid end
-	end)
+	end
+	exitB.Activated:Connect(close)
+	FX.closePhoto = close
 end
 
 ------------------------------------------------------------------ свободное падение: ветер, полосы, приземление

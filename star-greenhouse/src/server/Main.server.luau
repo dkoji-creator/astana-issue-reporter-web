@@ -1125,19 +1125,37 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		for _, p in G.PlantList do
 			if p.rarity == "mythic" or p.rarity == "legendary" or p.rarity == "epic" then table.insert(pool, p.id) end
 		end
-		local rare = { "rainbow", "golden", "starry", "plasma", "galactic", "blackhole", "supernova", "singularity", "neon", "crystal" }
+		-- в каждой грядке минимум одна высшая мутация (уровень 5–6) и пара красивых поменьше
+		local top = { "starry", "plasma", "galactic", "blackhole", "supernova", "singularity" }
+		local extra = { "rainbow", "golden", "neon", "crystal", "electric", "ghost" }
 		d.bedCount = math.max(d.bedCount, 12)
 		for i = 1, 12 do
 			local id = pool[math.random(1, #pool)]
-			local m = {}
-			for _ = 1, math.random(2, 4) do
-				local mid = rare[math.random(1, #rare)]
+			local m = { top[(i - 1) % #top + 1] }
+			if math.random() < 0.5 then
+				local t2 = top[math.random(1, #top)]
+				if not table.find(m, t2) then table.insert(m, t2) end
+			end
+			for _ = 1, math.random(1, 2) do
+				local mid = extra[math.random(1, #extra)]
 				if not table.find(m, mid) then table.insert(m, mid) end
 			end
 			local pl = G.Plants[id]
 			d.beds[i] = { id = id, t0 = now() - 60, ready = now() - 1, m = m, w = math.floor(pl.kg * math.random(20, 300) * 100) / 100 }
 		end
 		refreshAllBeds(plr)
+	elseif cmd == "revealShow" then
+		-- для роликов: показать полную сцену сверхредкой находки только себе (данные не меняются)
+		local pool = {}
+		for _, p in G.PlantList do if p.rarity == "mythic" then table.insert(pool, p.id) end end
+		local id = pool[math.random(1, #pool)]
+		local m = { "singularity", ({ "supernova", "galactic", "plasma" })[math.random(1, 3)] }
+		local chance = G.mutChance(m)
+		local pl = s.plot and Map.plots[s.plot]
+		local pos = pl and pl.beds[1] and pl.beds[1].pos or (plr.Character and plr.Character:GetPivot().Position)
+		RX.Reveal:FireClient(plr, { id = id, m = m, w = math.floor(G.Plants[id].kg * 120 * 100) / 100, chance = chance })
+		RX.Announce:FireClient(plr, plr.DisplayName, G.Plants[id].name, G.mutTitle(m), chance, pos, false, plr.UserId)
+		return true
 	elseif cmd == "pollen" then
 		s.nextPollen = 0
 		return true

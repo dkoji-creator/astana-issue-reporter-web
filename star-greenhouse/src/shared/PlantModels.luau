@@ -2,6 +2,8 @@
 -- Модель строится в локальных координатах, корень (Root) в точке почвы. Все детали Anchored, без коллизий.
 -- Имена деталей: F* — мякоть плода (перекрашивается мутацией), G* — светящиеся, L* — листья, S* — стебли.
 local G = require(script.Parent:WaitForChild("Game"))
+local TEX = {}
+pcall(function() TEX = require(script.Parent:WaitForChild("Config"):WaitForChild("Particles")) end)
 
 local PM = {}
 local V3, CF, A = Vector3.new, CFrame.new, CFrame.Angles
@@ -653,75 +655,71 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 	end
 	local root = m.PrimaryPart
 	local height = 3.5 * k
+	local width = 2.2 * k
 	local l = Instance.new("PointLight")
-	l.Color, l.Range, l.Brightness = glow, 6 + tier * 3, 0.5 + tier * 0.25
+	l.Color, l.Range, l.Brightness = glow, 6 + tier * 2.5, 0.45 + tier * 0.18
 	l.Parent = root
-	local att = Instance.new("Attachment")
-	att.Name = "MutFx"
-	att.Position = V3(0, height * 0.55, 0)
-	att.Parent = root
-	sparkles(att, glow, tier)
-	-- светящийся круг на земле (с редкости 2): пульсирует (клиент, атрибут Pulse)
+	-- невидимый объём размером с растение: из него летят частицы ауры (форма Box берёт размер детали)
+	local box = Instance.new("Part")
+	box.Name = "MutVolume"
+	box.Size = V3(width, height, width)
+	box.CFrame = CF(0, height * 0.5, 0)
+	box.Transparency, box.Anchored, box.CanCollide, box.CanQuery, box.CanTouch, box.CastShadow = 1, true, false, false, false, false
+	box.Parent = m
+	local function emit(props)
+		local e = Instance.new("ParticleEmitter")
+		e.LightInfluence = 0
+		local parent = props.Parent or box
+		props.Parent = nil
+		for key, val in props do e[key] = val end
+		e.Parent = parent
+		return e
+	end
+	local light = isDark and Color3.fromRGB(190, 130, 255) or glow:Lerp(Color3.new(1, 1, 1), 0.3)
+	-- 1+: мерцающие звёздочки по всему растению
+	emit({ Name = "MutSparkle", Texture = TEX.sparkle or "rbxasset://textures/particles/sparkles_main.dds", Color = ColorSequence.new(light, glow),
+		LightEmission = 1, Rate = 3 + tier * 3, Lifetime = NumberRange.new(0.8, 1.6), Speed = NumberRange.new(0.1, 0.5), SpreadAngle = Vector2.new(180, 180),
+		Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.35 + 0.08 * tier), NumberSequenceKeypoint.new(1, 0) }),
+		Rotation = NumberRange.new(0, 90), RotSpeed = NumberRange.new(-40, 40), Transparency = NumberSequence.new(0.05, 0.4) })
+	-- 2+: мягкие светящиеся шарики плавают вокруг (настоящая аура, без «пластика»)
 	if tier >= 2 then
-		local disc = Instance.new("Part")
-		disc.Name = "MutRing"
-		disc.Shape = Enum.PartType.Cylinder
-		disc.Size = V3(0.06, 2.4 * k + tier * 0.4, 2.4 * k + tier * 0.4)
-		disc.CFrame = CF(0, 0.05, 0) * CFrame.Angles(0, 0, math.pi / 2)
-		disc.Color, disc.Material, disc.Transparency = glow, Material.Neon, 0.55
-		disc.Anchored, disc.CanCollide, disc.CanQuery, disc.CanTouch, disc.CastShadow = true, false, false, false, false
-		disc:SetAttribute("MutPulse", tier)
-		disc.Parent = m
+		emit({ Name = "MutOrbs", Texture = TEX.glow or SMOKE, Color = ColorSequence.new(glow), LightEmission = isDark and 0.3 or 1,
+			Rate = 2 + tier * 2.5, Lifetime = NumberRange.new(2, 3.5), Speed = NumberRange.new(0.2, 0.7), SpreadAngle = Vector2.new(180, 180),
+			Acceleration = V3(0, 0.25, 0), Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.5 + 0.18 * tier), NumberSequenceKeypoint.new(1, 0) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, isDark and 0.35 or 0.55), NumberSequenceKeypoint.new(1, 1) }) })
+		-- расходящиеся круги света по земле
+		local ground = Instance.new("Attachment")
+		ground.Name = "MutGround"
+		ground.Position = V3(0, 0.15, 0)
+		ground.Parent = root
+		emit({ Name = "MutRipple", Parent = ground, Texture = TEX.ripple or SMOKE, Color = ColorSequence.new(glow), LightEmission = 1,
+			Rate = 0.35 + tier * 0.12, Lifetime = NumberRange.new(2.4), Speed = NumberRange.new(0.01), EmissionDirection = Enum.NormalId.Top,
+			Orientation = Enum.ParticleOrientation.VelocityPerpendicular,
+			Size = NumberSequence.new(width * 0.25, width * (1 + tier * 0.12)),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.15, 0.25), NumberSequenceKeypoint.new(1, 1) }) })
+		-- мягкое пятно света под растением
+		emit({ Name = "MutPool", Parent = ground, Texture = TEX.glow or SMOKE, Color = ColorSequence.new(glow), LightEmission = 1,
+			Rate = 1.2, Lifetime = NumberRange.new(2.5), Speed = NumberRange.new(0.01), EmissionDirection = Enum.NormalId.Top,
+			Orientation = Enum.ParticleOrientation.VelocityPerpendicular, Size = NumberSequence.new(width * 1.4),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, isDark and 0.5 or 0.72), NumberSequenceKeypoint.new(1, 1) }) })
 	end
-	if tier >= 3 then aura(att, glow, height, tier) end
-	-- с редкости 4: контур-свечение всего растения, столб света и поднимающиеся огоньки
+	-- 4+: огоньки поднимаются над растением тонкой струйкой
 	if tier >= 4 then
-		local hl = Instance.new("Highlight")
-		hl.Name = "MutGlow"
-		hl.FillColor = isDark and Color3.fromRGB(20, 8, 40) or glow
-		hl.OutlineColor = isDark and Color3.fromRGB(190, 120, 255) or glow:Lerp(Color3.new(1, 1, 1), 0.25)
-		hl.FillTransparency = isDark and 0.45 or (tier >= 6 and 0.7 or 0.82)
-		hl.OutlineTransparency = tier >= 5 and 0 or 0.25
-		hl.DepthMode = Enum.HighlightDepthMode.Occluded
-		hl.Parent = m
-		local a0 = Instance.new("Attachment")
-		a0.Name = "PillarBottom"
-		a0.Position = V3(0, 0.2, 0)
-		a0.Parent = root
-		local a1 = Instance.new("Attachment")
-		a1.Name = "PillarTop"
-		a1.Position = V3(0, height * (tier >= 6 and 5 or tier == 5 and 3.8 or 2.6), 0)
-		a1.Parent = root
-		local beam = Instance.new("Beam")
-		beam.Name = "MutPillar"
-		beam.Attachment0, beam.Attachment1 = a0, a1
-		beam.Color = ColorSequence.new(glow)
-		beam.LightEmission, beam.LightInfluence = 1, 0
-		beam.Width0, beam.Width1 = (1.4 + tier * 0.25) * k, 0.2 * k
-		beam.FaceCamera = true
-		beam.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(0.6, 0.8), NumberSequenceKeypoint.new(1, 1) })
-		beam.Parent = root
-		local rise = Instance.new("ParticleEmitter")
-		rise.Name = "MutRise"
-		rise.Color = ColorSequence.new(glow, Color3.new(1, 1, 1))
-		rise.LightEmission, rise.LightInfluence = 1, 0
-		rise.Rate = 4 + tier * 2
-		rise.Lifetime = NumberRange.new(1.5, 2.5)
-		rise.Speed = NumberRange.new(1.5, 3)
-		rise.SpreadAngle = Vector2.new(12, 12)
-		rise.EmissionDirection = Enum.NormalId.Top
-		rise.Size = NumberSequence.new(0.22 + 0.05 * tier, 0)
-		rise.Transparency = NumberSequence.new(0, 1)
-		rise.Parent = a0
+		emit({ Name = "MutRise", Texture = TEX.sparkle or SMOKE, Color = ColorSequence.new(glow, light), LightEmission = 1,
+			Rate = 4 + tier * 2, Lifetime = NumberRange.new(1.8, 2.6), Speed = NumberRange.new(1.2, 2.4), SpreadAngle = Vector2.new(15, 15),
+			EmissionDirection = Enum.NormalId.Top, Shape = Enum.ParticleEmitterShape.Disc, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
+			Size = NumberSequence.new(0.3 + 0.05 * tier, 0), Transparency = NumberSequence.new(0, 1), RotSpeed = NumberRange.new(-90, 90) })
 	end
-	-- маленькие кометы с хвостами вокруг растения
+	-- 5+: маленькие кометы с хвостами вокруг растения
 	if tier >= 5 then
-		local n = tier == 5 and 3 or 5
+		local n = tier == 5 and 3 or 4
 		for j = 1, n do
-			local o = ball(m, "Orbit", V3(0, 0, 0), 0.24 * k, glow, Material.Neon)
+			local o = ball(m, "Orbit", V3(0, 0, 0), 0.22 * k, light, Material.Neon)
 			o.CastShadow = false
-			o:SetAttribute("R", (1.4 + (j % 2) * 0.45) * k)
-			o:SetAttribute("H", height * (0.25 + 0.14 * j))
+			o:SetAttribute("R", (1.3 + (j % 2) * 0.4) * k)
+			o:SetAttribute("H", height * (0.25 + 0.15 * j))
 			o:SetAttribute("S", 1.1 + 0.25 * j)
 			o:SetAttribute("P", j * 6.283 / n)
 			local a0 = Instance.new("Attachment")
@@ -732,43 +730,35 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 			a1.Parent = o
 			local tr = Instance.new("Trail")
 			tr.Attachment0, tr.Attachment1 = a0, a1
-			tr.Color = ColorSequence.new(glow)
+			tr.Color = ColorSequence.new(light, glow)
 			tr.LightEmission = 1
-			tr.Lifetime = 0.7
-			tr.Transparency = NumberSequence.new(0.2, 1)
+			tr.Lifetime = 0.6
+			tr.Transparency = NumberSequence.new(0.25, 1)
+			tr.WidthScale = NumberSequence.new(1, 0)
 			tr.FaceCamera = true
 			tr.Parent = o
 		end
 	end
-	-- высшая редкость: воронка частиц, которые затягивает внутрь (у чёрной дыры тёмные)
+	-- 6: закрученные светящиеся мазки и тонкий вращающийся ореол
 	if tier >= 6 then
-		local vort = Instance.new("ParticleEmitter")
-		vort.Name = "MutVortex"
-		vort.Color = ColorSequence.new(isDark and Color3.fromRGB(170, 110, 255) or glow, Color3.new(1, 1, 1))
-		vort.LightEmission, vort.LightInfluence = 1, 0
-		vort.Rate = 30
-		vort.Lifetime = NumberRange.new(0.8, 1.2)
-		vort.Speed = NumberRange.new(2.5, 4)
-		vort.Size = NumberSequence.new(0.3, 0.05)
-		vort.Transparency = NumberSequence.new(0.1, 1)
-		vort.Shape = Enum.ParticleEmitterShape.Sphere
-		vort.ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface
-		vort.ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward
-		vort.RotSpeed = NumberRange.new(-180, 180)
-		vort.Parent = att
-		-- светящееся кольцо-ореол над растением из коротких сегментов (клиент вращает)
-		local R, n = 0.85 * k, 20
+		emit({ Name = "MutWisp", Texture = TEX.wisp or SMOKE, Color = ColorSequence.new(glow, light), LightEmission = isDark and 0.4 or 1,
+			Rate = 6, Lifetime = NumberRange.new(1.4, 2.2), Speed = NumberRange.new(0.3, 0.8), SpreadAngle = Vector2.new(180, 180),
+			Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
+			Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-120, 120),
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(0.5, 1.4 * k), NumberSequenceKeypoint.new(1, 0.3) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.4, 0.45), NumberSequenceKeypoint.new(1, 1) }) })
+		local R, n = 0.8 * k, 24
 		for j = 1, n do
 			local a = j / n * math.pi * 2
 			local sp = Instance.new("Part")
 			sp.Name = "MutHaloSeg"
-			sp.Size = V3(0.14 * k, 0.14 * k, 2 * math.pi * R / n * 1.08)
-			sp.Color, sp.Material, sp.Transparency = isDark and Color3.fromRGB(190, 120, 255) or glow, Material.Neon, 0.15
+			sp.Size = V3(0.07 * k, 0.07 * k, 2 * math.pi * R / n * 1.05)
+			sp.Color, sp.Material, sp.Transparency = light, Material.Neon, 0.2
 			sp.Anchored, sp.CanCollide, sp.CanQuery, sp.CanTouch, sp.CastShadow = true, false, false, false, false
 			sp:SetAttribute("A", a)
 			sp:SetAttribute("R", R)
-			sp:SetAttribute("H", height * 1.12)
-			sp.CFrame = CF(math.cos(a) * R, height * 1.12, math.sin(a) * R) * CFrame.Angles(0, -a, 0)
+			sp:SetAttribute("H", height * 1.1)
+			sp.CFrame = CF(math.cos(a) * R, height * 1.1, math.sin(a) * R) * CFrame.Angles(0, -a, 0)
 			sp.Parent = m
 		end
 	end
@@ -782,9 +772,7 @@ function PM.animate(m, t: number)
 	local okS, sc = pcall(function() return m:GetScale() end)
 	if not okS or type(sc) ~= "number" then sc = 1 end
 	for _, p in m:GetChildren() do
-		if p.Name == "MutRing" then
-			p.Transparency = 0.45 + 0.25 * (math.sin(t * 2.2 + p:GetAttribute("MutPulse")) + 1) / 2
-		elseif p.Name == "MutHaloSeg" then
+		if p.Name == "MutHaloSeg" then
 			local a = p:GetAttribute("A") + t * 0.6
 			local r = p:GetAttribute("R") * sc
 			p.CFrame = rc * CF(0, p:GetAttribute("H") * sc + math.sin(t * 1.5) * 0.15, 0) * CFrame.Angles(0.18 * math.sin(t * 0.8), 0, 0) * CF(math.cos(a) * r, 0, math.sin(a) * r) * CFrame.Angles(0, -a, 0)

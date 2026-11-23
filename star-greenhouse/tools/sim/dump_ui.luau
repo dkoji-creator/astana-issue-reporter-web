@@ -13,7 +13,7 @@ local shared = folder("Shared", RS)
 mod("ModuleScript", "Game", shared, "shared/Game")
 mod("ModuleScript", "PlantModels", shared, "shared/PlantModels")
 local cfg = folder("Config", shared)
-for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantMeshes", "PetMeshes", "PetLook" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
+for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantMeshes", "PetMeshes", "PetLook", "Particles" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
 local srv = folder("Server", game:GetService("ServerScriptService"))
 local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")
@@ -412,6 +412,22 @@ do
 	end
 	frames(10, 0.2)
 	dumpState("mystic")
+end
+do
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then b.Activated:Fire() end end
+	frames(5, 0.2)
+	for _, d in pg.SpiritWindows:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "Фото-режим" and d.Parent:IsA("TextButton") then d.Parent.Activated:Fire() break end
+	end
+	frames(8, 0.2)
+	dumpState("photo")
+	local ph = pg:FindFirstChild("Photo")
+	if ph then
+		for _, d in ph:GetDescendants() do
+			if d:IsA("TextLabel") and d.Text == "Выйти" then d.Parent.Activated:Fire() end
+		end
+	end
+	frames(3, 0.2)
 end
 -- превью табло лидеров (SurfaceGui переносится в ScreenGui для рендера)
 do
