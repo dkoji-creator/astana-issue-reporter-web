@@ -165,14 +165,22 @@ local function clear(frame)
 end
 
 -- модель для окна: без света и частиц; silhouette — чёрный силуэт для ещё не найденных
+-- модель для окон-превью: без частиц, света и служебных деталей (в ViewportFrame частицы и «силовое поле» рисуются квадратами)
+local VIEW_DROP = { Orbit = true, H = true, MutVolume = true, MutHaloSeg = true }
 local function cardModel(id, muts, silhouette)
 	local m = PM.build(id, muts)
 	for _, d in m:GetDescendants() do
-		if d:IsA("Light") or d:IsA("ParticleEmitter") or d:IsA("Attachment") then
+		if d.Parent == nil then continue end
+		if d:IsA("Light") or d:IsA("ParticleEmitter") or d:IsA("Attachment") or d:IsA("Trail") or d:IsA("Beam") or d:IsA("Highlight") then
 			d:Destroy()
 		elseif d:IsA("BasePart") then
 			d.Anchored = true
-			if d.Name == "Orbit" or d.Name == "H" then d:Destroy() end
+			if VIEW_DROP[d.Name] then
+				d:Destroy()
+			elseif d.Material == Enum.Material.ForceField then
+				d.Material = Enum.Material.Glass
+				d.Transparency = math.max(d.Transparency, 0.35)
+			end
 		end
 	end
 	if silhouette then
@@ -3187,16 +3195,17 @@ local function playReveal(info)
 		local r = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(900, 14), BackgroundColor3 = col, BackgroundTransparency = 0.7, Rotation = i * 15, BorderSizePixel = 0 }, rays)
 		K.gradient(r, col, col)
 	end
-	local holder = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.45), Size = UDim2.fromScale(0.1, 0.1), BackgroundTransparency = 1 }, back)
+	local holder = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.43), Size = UDim2.fromScale(0.1, 0.1), BackgroundTransparency = 1 }, back)
 	local vp, setAngle = modelView(holder, info.id, info.m, false)
-	TweenService:Create(holder, TweenInfo.new(0.9, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromScale(0.5, 0.58) }):Play()
+	TweenService:Create(holder, TweenInfo.new(0.9, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromScale(0.5, 0.5) }):Play()
 	local head = K.text(back, info.head or "МУТАЦИЯ!", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.04), Size = UDim2.fromOffset(500, 56), MaxText = 52, TextColor3 = col })
 	local title = G.mutTitle(info.m)
-	K.text(back, (title ~= "" and (title .. " ") or "") .. plantName(info.id) .. (info.head and " (семя)" or ""), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.74), Size = UDim2.fromOffset(640, 40), MaxText = 34, TextColor3 = T.text })
-	K.text(back, info.sub or ("Шанс " .. G.fmtOdds(info.chance) .. ", вес " .. ("%.2f"):format(info.w) .. " кг"), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.fromScale(0.5, 0.82), Size = UDim2.fromOffset(560, 30), MaxText = 24, TextColor3 = T.gold })
+	-- снизу вверх: кнопка, строка шанса, название — ничего не перекрывается
+	K.text(back, (title ~= "" and (title .. " ") or "") .. plantName(info.id) .. (info.head and " (семя)" or ""), { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -96), Size = UDim2.new(0.9, 0, 0, 34), MaxText = 30, TextColor3 = T.text })
+	K.text(back, info.sub or ("Шанс " .. G.fmtOdds(info.chance) .. " · вес " .. ("%.2f"):format(info.w) .. " кг"), { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -66), Size = UDim2.new(0.9, 0, 0, 28), MaxText = 22, TextColor3 = T.gold })
 	local flash = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0 }, back)
 	TweenService:Create(flash, TweenInfo.new(0.7), { BackgroundTransparency = 1 }):Play()
-	local ok = K.button(back, "Круто!", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -16), Size = UDim2.fromOffset(200, 48), MaxText = 24 })
+	local ok = K.button(back, "Круто!", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -12), Size = UDim2.fromOffset(180, 48), MaxText = 22 })
 	local done = false
 	ok.Activated:Connect(function() done = true end)
 	local t0 = os.clock()

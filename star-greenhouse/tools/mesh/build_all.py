@@ -3,6 +3,7 @@ python3 build_all.py [planet ...]"""
 import os, re, sys, numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 import forms, render, preview
+from geom import Mesh as Mesh_
 from glb import write_glb
 
 ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
@@ -23,6 +24,42 @@ def parse_plants():
     return out
 
 
+def components(m):
+    """Связные куски меша (вершины на одном месте считаются общими): список массивов индексов треугольников."""
+    key = np.round(m.v / 1e-4).astype(np.int64)
+    _, uid = np.unique(key, axis=0, return_inverse=True)
+    uid = uid.reshape(-1)
+    parent = np.arange(uid.max() + 1)
+
+    def find(a):
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
+    for f in uid[m.i]:
+        ra, rb, rc = find(f[0]), find(f[1]), find(f[2])
+        parent[rb] = ra
+        parent[find(rc)] = ra
+    roots = np.array([find(uid[f[0]]) for f in m.i])
+    return [np.where(roots == r)[0] for r in np.unique(roots)]
+
+
+def glow_core(m, k=0.62):
+    """Светящаяся сердцевина: каждый объёмный плод уменьшается вокруг своего центра (плоские лепестки пропускаются)."""
+    out = Mesh_()
+    for faces in components(m):
+        idx = np.unique(m.i[faces])
+        pts = m.v[idx]
+        ext = pts.max(0) - pts.min(0)
+        if ext.min() < 0.3 * ext.max() or ext.max() < 0.05:
+            continue
+        c = pts.mean(0)
+        remap = {int(o): j for j, o in enumerate(idx)}
+        tri = np.vectorize(remap.get)(m.i[faces])
+        out.add(Mesh_(c + (pts - c) * k, m.n[idx], tri))
+    return out
+
+
 def build(p):
     rng = np.random.default_rng(p["index"] * 977 + 13)
     lvl = RANK[p["rarity"]] / 5.0
@@ -33,6 +70,11 @@ def build(p):
         m = m.copy()
         m.fix_winding()
         out[role] = m.xform(None, (0, 0, 0), sc)
+    # редкие и выше: плоды-драгоценности — стеклянная оболочка и светящаяся сердцевина внутри (роль C)
+    if RANK[p["rarity"]] >= 2 and "F" in out:
+        core = glow_core(out["F"])
+        if len(core.v):
+            out["C"] = core
     return out
 
 

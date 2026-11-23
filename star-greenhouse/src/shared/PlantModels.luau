@@ -458,6 +458,9 @@ local function meshModel(model, plant, tpl)
 		G = c2:Lerp(Color3.new(1, 1, 1), 0.1), R = c1:Lerp(Color3.fromRGB(40, 38, 50), 0.75),
 	}
 	local style = MESH_STYLE[plant.form] or {}
+	-- редкие сорта: плоды-драгоценности — стеклянная оболочка и светящаяся сердцевина (роль C)
+	local jewel = tpl:FindFirstChild("C") ~= nil
+	roles.C = c2:Lerp(Color3.new(1, 1, 1), 0.2)
 	for _, src in tpl:GetChildren() do
 		if src:IsA("BasePart") then
 			local role = src.Name
@@ -466,7 +469,14 @@ local function meshModel(model, plant, tpl)
 			p.Anchored, p.CanCollide, p.CanTouch, p.CanQuery = true, false, false, false
 			p.Color = roles[role] or c1
 			local st = style[role]
-			if role == "G" then
+			if role == "C" then
+				p.Material = Material.Neon
+				p.Transparency = 0.05
+			elseif role == "F" and jewel then
+				p.Material = Material.Glass
+				p.Transparency = math.max(st and st[2] or 0, 0.32)
+				p.Reflectance = 0.18
+			elseif role == "G" then
 				p.Material = Material.Neon
 			elseif role == "L" then
 				p.Material = Material.SmoothPlastic
@@ -640,6 +650,8 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 					if isGold then p.Reflectance = 0.35 end
 				end
 				if isGhost then p.Transparency = math.max(p.Transparency, 0.55) end
+			elseif n == "C" then
+				p.Color = isDark and Color3.fromRGB(150, 90, 255) or (isRainbow and p.Color or glow:Lerp(Color3.new(1, 1, 1), 0.15))
 			elseif n == "G" and tier >= 3 then
 				p.Color = p.Color:Lerp(glow, 0.6):Lerp(Color3.new(0, 0, 0), 0.1)
 			end
