@@ -847,6 +847,20 @@ do
 	check(res, "нет окна итогов рейда")
 end
 
+stage("админ-ивенты на всех серверах")
+do
+	check(inv("Admin", "g_luck") == true, "мега-удача не включилась")
+	check(inv("Admin", "g_gold") == true, "звездопад не включился")
+	check(inv("Admin", "g_seeds") == true, "подарок не выдан")
+	frames(10, 0.2)
+	local hud3 = pg:FindFirstChild("StarHUD")
+	local bh = hud3 and hud3:FindFirstChild("Boosts")
+	local n = 0
+	if bh then for _, c in bh:GetChildren() do if c:IsA("Frame") then n += 1 end end end
+	check(n == 2, "значков ивентов должно быть 2, а их " .. n)
+	for _, g in pg:GetChildren() do if g.Name == "Reveal" then g:Destroy() end end
+end
+
 stage("выход")
 Players.PlayerRemoving:Fire(plr)
 frames(5)

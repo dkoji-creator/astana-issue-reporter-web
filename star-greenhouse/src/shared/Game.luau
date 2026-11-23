@@ -277,6 +277,8 @@ end
 G.pickSeed = pickSeed
 
 ------------------------------------------------------------------ рейд «Комета-пожиратель»: весь сервер вместе сбивает комету
+-- админ-ивенты сразу на всех серверах (для эфиров и роликов)
+G.Boosts = { luck = { mult = 10, time = 600, name = "МЕГА-УДАЧА x10" }, gold = { mult = 5, time = 600, name = "ЗОЛОТОЙ ЗВЕЗДОПАД x5" } }
 G.Raid = { first = 420, period = 1500, warn = 45, duration = 80, hpBase = 140, hpPerPlayer = 110, maxRate = 7, minHits = 5 }
 -- награда по доле урона и месту в рейтинге
 function G.raidReward(planets: number, share: number, rank: number, rng)

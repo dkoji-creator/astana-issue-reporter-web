@@ -33,7 +33,7 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Slots", "Raid", "RaidHit", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Slots", "Raid", "RaidHit", "Boost", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
@@ -341,6 +341,7 @@ end
 ------------------------------------------------------------------ события по часам
 local activeEvent = nil
 local forcedEvent = nil -- { ev, untilTime } — включает админ
+local BOOST = { luck = 0, gold = 0 } -- до какого времени действуют админ-ивенты на всех серверах
 local function eventNow()
 	if forcedEvent and now() < forcedEvent[2] then return forcedEvent[1], forcedEvent[2] - now() end
 	local ev, left, active = G.eventAt(now())
@@ -372,6 +373,7 @@ local function newBed(plr, d, plantId, regrow)
 	local peq = d.pets.eq or ""
 	local plv = peq ~= "" and d.pets.owned[peq]
 	if plv then luck *= G.petLuck(peq, plv) end
+	if now() < BOOST.luck then luck *= G.Boosts.luck.mult end
 	if d.potion.uses > 0 then
 		luck *= d.potion.luck
 		d.potion.uses -= 1
@@ -887,13 +889,14 @@ do
 		end,
 		isMeteorEvent = function()
 			local ev = eventNow()
-			return ev ~= nil and ev.id == "meteor"
+			return (ev ~= nil and ev.id == "meteor") or now() < BOOST.gold
 		end,
 		onCollect = function(plr, meteor, pos)
 			local d = D[plr]
 			if not d then return end
 			local pn = math.max(1, unlockedPlanets(d))
 			local coins = G.starReward(pn, meteor)
+			if now() < BOOST.gold then coins *= G.Boosts.gold.mult end
 			addCoins(plr, coins)
 			d.stats.stars = (d.stats.stars or 0) + 1
 			-- иногда звезда приносит семя
@@ -1045,6 +1048,7 @@ end
 local grant -- покупки за Robux (объявлено ниже)
 local applyPet -- питомец игрока (объявлено ниже)
 local CONTEST = {} -- конкурс огородов (функции ниже)
+local applyGlobal -- админ-ивент на этом сервере (ниже)
 local RAID = { active = false, hp = 0, max = 0, ends = 0, hits = {}, last = {}, recent = {}, warned = false } -- рейд кометы (ниже)
 RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if plr.UserId ~= ADMIN_ID then return false end
@@ -1099,18 +1103,14 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		for _, b in d.beds do b.ready = now() end
 		refreshAllBeds(plr)
 	elseif cmd == "event" then
-		for _, ev in G.Events do
-			if ev.id == arg then
-				forcedEvent = { ev, now() + G.EventLength }
-				RX.Event:FireAllClients(ev.id, G.EventLength)
-				if ev.grow then
-					for p2, d2 in D do
-						for _, b in d2.beds do b.ready = now() + flareRemaining(b.ready - now(), G.EventLength) end
-						if S[p2].plot then refreshAllBeds(p2) end
-					end
-				end
-			end
-		end
+		applyGlobal("g_event", arg)
+	elseif cmd:sub(1, 2) == "g_" then
+		-- админ-ивент на всех серверах: этот сервер сразу, остальные через MessagingService
+		applyGlobal(cmd, arg)
+		task.spawn(function()
+			pcall(function() game:GetService("MessagingService"):PublishAsync("SG_Admin", { job = game.JobId, cmd = cmd, arg = arg }) end)
+		end)
+		return true
 	elseif cmd == "stopEvent" then
 		forcedEvent = { G.Events[1], 0 }
 	elseif cmd == "maxup" then
@@ -1751,6 +1751,56 @@ task.spawn(function()
 		end)
 	end)
 end)
+------------------------------------------------------------------ админ-ивенты на всех серверах
+function applyGlobal(cmd, arg)
+	if cmd == "g_luck" or cmd == "g_gold" then
+		local key = cmd == "g_luck" and "luck" or "gold"
+		BOOST[key] = now() + G.Boosts[key].time
+		RX.Boost:FireAllClients(key, BOOST[key])
+	elseif cmd == "g_seeds" then
+		for _, plr in Players:GetPlayers() do
+			local d = D[plr]
+			if d then
+				local id = G.pickSeed(4, math.max(1, unlockedPlanets(d)), Random.new())
+				d.seeds[id] = (d.seeds[id] or 0) + 1
+				push(plr, "seeds")
+				rewardReveal(plr, "ПОДАРОК ВСЕМ!", id, "Редкое семя каждому игроку на всех серверах", Color3.fromRGB(255, 215, 120), "chest")
+			end
+		end
+	elseif cmd == "g_event" then
+		for _, ev in G.Events do
+			if ev.id == arg then
+				forcedEvent = { ev, now() + G.EventLength }
+				RX.Event:FireAllClients(ev.id, G.EventLength)
+				if ev.grow then
+					for p2, d2 in D do
+						for _, b in d2.beds do b.ready = now() + flareRemaining(b.ready - now(), G.EventLength) end
+						if S[p2].plot then refreshAllBeds(p2) end
+					end
+				end
+			end
+		end
+	elseif cmd == "g_raid" then
+		RAID.start()
+	end
+end
+task.spawn(function()
+	pcall(function()
+		game:GetService("MessagingService"):SubscribeAsync("SG_Admin", function(m)
+			local d = m.Data
+			if type(d) == "table" and d.job ~= game.JobId and type(d.cmd) == "string" then applyGlobal(d.cmd, d.arg) end
+		end)
+	end)
+end)
+Players.PlayerAdded:Connect(function(plr)
+	task.delay(7, function()
+		if not plr.Parent then return end
+		for key, untilT in BOOST do
+			if now() < untilT then RX.Boost:FireClient(plr, key, untilT) end
+		end
+	end)
+end)
+
 ------------------------------------------------------------------ рейд «Комета-пожиратель»: весь сервер вместе сбивает огромную комету
 RAID.next = now() + G.Raid.first
 local function raidCenter(plr)

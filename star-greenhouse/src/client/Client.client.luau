@@ -1723,6 +1723,12 @@ if plr.UserId == ADMIN_ID then
 	end)
 	btn("Все донаты: разблокировать", T.pink, cmd("alldonate", nil, "Все донаты выданы"))
 	btn("Все питомцы: макс. уровень", T.cold, cmd("pets", nil, "Питомцы выданы"))
+	-- для эфиров: сразу на всех серверах игры
+	btn("ВСЕ СЕРВЕРЫ: мега-удача x10", T.purple, cmd("g_luck", nil, "Мега-удача на всех серверах"))
+	btn("ВСЕ СЕРВЕРЫ: золотой звездопад", T.gold, cmd("g_gold", nil, "Звездопад на всех серверах"))
+	btn("ВСЕ СЕРВЕРЫ: подарок-семя всем", T.green, cmd("g_seeds", nil, "Подарки разосланы"))
+	btn("ВСЕ СЕРВЕРЫ: метеоритный дождь", T.orange, cmd("g_event", "meteor", "Метеоритный дождь везде"))
+	btn("ВСЕ СЕРВЕРЫ: рейд кометы", T.orange, cmd("g_raid", nil, "Комета летит на все серверы"))
 	btn("Рейд: Комета-пожиратель", T.orange, function()
 		for _, w in windows do if w.Visible then K.close(w) end end
 		remotes.Admin:InvokeServer("raid")
@@ -3508,6 +3514,44 @@ do
 	end)
 end
 
+-- админ-ивенты (мега-удача, золотой звездопад): большой баннер и значок с таймером
+do
+	local holder = make("Frame", { Name = "Boosts", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 172), Size = UDim2.fromOffset(420, 26), BackgroundTransparency = 1, ZIndex = 14 }, hud)
+	listLayout(holder, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
+	local chips = {}
+	local COL = { luck = T.purple, gold = T.gold }
+	remotes:WaitForChild("Boost").OnClientEvent:Connect(function(kind, untilT)
+		local def = G.Boosts[kind]
+		if not def then return end
+		local col = COL[kind] or T.gold
+		if chips[kind] then chips[kind].frame:Destroy() end
+		local f = make("Frame", { Size = UDim2.fromOffset(200, 26), BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, ZIndex = 14 }, holder)
+		K.corner(f, UDim.new(1, 0))
+		K.stroke(f, col, 1.4, false, 0.1)
+		local l = K.text(f, "", { Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3), MaxText = 13, TextColor3 = col, ZIndex = 15 })
+		chips[kind] = { frame = f, label = l, untilT = untilT, name = def.name }
+		-- баннер на весь экран
+		playSfx("legendary")
+		local b = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.32), Size = UDim2.fromOffset(640, 90), BackgroundTransparency = 1, ZIndex = 30 }, hud)
+		K.text(b, "АДМИН-ИВЕНТ", { Size = UDim2.new(1, 0, 0, 26), MaxText = 22, TextColor3 = T.sub, ZIndex = 31 })
+		K.text(b, def.name, { Position = UDim2.fromOffset(0, 26), Size = UDim2.new(1, 0, 0, 56), MaxText = 50, TextColor3 = col, ZIndex = 31 })
+		K.pop(b)
+		task.delay(4, function() b:Destroy() end)
+		if FX.chatLine then FX.chatLine(('<font color="#FFD27A">★ АДМИН-ИВЕНТ:</font> %s на 10 минут на всех серверах!'):format(def.name)) end
+	end)
+	loop(0.5, function()
+		local t = nowS()
+		for kind, c in chips do
+			local left = c.untilT - t
+			if left <= 0 then
+				c.frame:Destroy()
+				chips[kind] = nil
+			else
+				c.label.Text = ("%s · %d:%02d"):format(c.name, left // 60, left % 60)
+			end
+		end
+	end)
+end
 remotes:WaitForChild("Event").OnClientEvent:Connect(function(id, left)
 	local ev
 	for _, e in G.Events do if e.id == id then ev = e end end
