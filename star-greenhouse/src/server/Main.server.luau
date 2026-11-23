@@ -77,6 +77,14 @@ local function mergeDefaults(d)
 	for k, v in base.stats do if d.stats[k] == nil then d.stats[k] = v end end
 	for k, v in base.cans do if d.cans[k] == nil then d.cans[k] = v end end
 	for k, v in base.cd do if d.cd[k] == nil then d.cd[k] = v end end
+	-- цены планет выросли: уже открытые по старым порогам планеты сохраняются
+	if not d.econ2 then
+		local n = 0
+		for i, need in G.PlanetUnlockOld do
+			if (d.earned or 0) >= need then n = i end
+		end
+		d.reached, d.econ2 = math.max(d.reached or 0, n), true
+	end
 	-- трасса гонки стала длиннее (планеты x1.3): старые рекорды не сравнимы
 	if (d.race.track or 1) < 2 then d.race.best, d.race.track = 0, 2 end
 	if d.pets then
@@ -129,7 +137,8 @@ local function unlockedPlanets(d)
 	for i, need in G.PlanetUnlock do
 		if d.earned >= need then n = i end
 	end
-	return n
+	-- планеты, открытые до подорожания, остаются открытыми
+	return math.max(n, d.reached or 0)
 end
 
 -- сводка огородов по планетам для окна полёта: грядок, посажено, созрело
@@ -1044,7 +1053,7 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if cmd == "coins" then
 		addCoins(plr, 1000000)
 	elseif cmd == "coinsB" then
-		addCoins(plr, 1000000000)
+		addCoins(plr, 1e15) -- после подорожания планет 1 млрд мало для проверки Ядра
 	elseif cmd == "planets" then
 		d.earned = math.max(d.earned, G.PlanetUnlock[6])
 	elseif cmd == "contest" then

@@ -1902,7 +1902,7 @@ local function buildBackdrop(parent)
 	billboard(parent, "BlueWorld", PlanetImg.earth, V3(-6200, 900, -3000), 1800)
 	-- чёрная дыра высоко над краем карты: видна, если поднять камеру, с любой планеты
 	if PlanetImg.blackhole then
-		local bh = billboard(parent, "BlackHole", PlanetImg.blackhole, V3(300, 3600, -2600), 2600, V3(0, 700, 0))
+		local bh = billboard(parent, "BlackHole", PlanetImg.blackhole, V3(210, 2730, -1820), 2600, V3(0, 700, 0))
 		bh:SetAttribute("BlackHole", true)
 	end
 	local rng = Random.new(404)
@@ -1954,12 +1954,6 @@ local function buildLighting()
 	cc.Contrast, cc.Saturation, cc.Brightness = 0.12, -0.04, 0
 	cc.TintColor = c(245, 240, 255)
 	cc.Parent = Lighting
-	-- лёгкая космическая дымка: глубина и кинематографичность вместо «пластика»
-	local atm = Instance.new("Atmosphere")
-	atm.Density, atm.Offset = 0.1, 0
-	atm.Color, atm.Decay = c(96, 86, 150), c(40, 30, 80)
-	atm.Glare, atm.Haze = 0.15, 0.6
-	atm.Parent = Lighting
 	local rays = Instance.new("SunRaysEffect")
 	rays.Intensity, rays.Spread = 0.03, 0.5
 	rays.Parent = Lighting
