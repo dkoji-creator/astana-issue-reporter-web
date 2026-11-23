@@ -825,6 +825,28 @@ do
 	frames(5, 0.1)
 end
 
+stage("рейд кометы")
+do
+	local before = inv("State").coins
+	check(inv("Admin", "raid") == true, "рейд не начался")
+	frames(10, 0.2)
+	local rf = workspace:FindFirstChild("Raid")
+	check(rf and rf:FindFirstChild("DevourerComet") ~= nil, "нет кометы у клиента")
+	local hud2 = pg:FindFirstChild("StarHUD")
+	check(hud2 and hud2:FindFirstChild("RaidBar") ~= nil, "нет полосы здоровья кометы")
+	for _ = 1, 540 do
+		fire("RaidHit")
+		frames(1, 0.145)
+		if not (rf and rf:FindFirstChild("DevourerComet")) then break end
+	end
+	frames(20, 0.1)
+	check(rf:FindFirstChild("DevourerComet") == nil, "комета не уничтожена")
+	check(inv("State").coins > before, "нет награды за рейд")
+	local res = false
+	for _, d in hud2:GetDescendants() do if d:IsA("TextLabel") and d.Text == "КОМЕТА СБИТА!" then res = true end end
+	check(res, "нет окна итогов рейда")
+end
+
 stage("выход")
 Players.PlayerRemoving:Fire(plr)
 frames(5)

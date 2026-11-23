@@ -303,6 +303,12 @@ function RND.NextNumber(r, a, b)
 	return a + rstep(r) * (b - a)
 end
 function RND.NextInteger(r, a, b) return a + math.floor(rstep(r) * (b - a + 1)) end
+function RND.NextUnitVector(r)
+	local z = rstep(r) * 2 - 1
+	local a = rstep(r) * math.pi * 2
+	local q = math.sqrt(1 - z * z)
+	return Vector3.new(q * math.cos(a), z, q * math.sin(a))
+end
 
 -- Enum.Тип.Имя → один и тот же объект
 local enumCache = {}

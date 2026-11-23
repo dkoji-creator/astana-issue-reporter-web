@@ -276,6 +276,19 @@ local function pickSeed(rank, planets, rng)
 end
 G.pickSeed = pickSeed
 
+------------------------------------------------------------------ рейд «Комета-пожиратель»: весь сервер вместе сбивает комету
+G.Raid = { first = 420, period = 1500, warn = 45, duration = 80, hpBase = 140, hpPerPlayer = 110, maxRate = 7, minHits = 5 }
+-- награда по доле урона и месту в рейтинге
+function G.raidReward(planets: number, share: number, rank: number, rng)
+	local base = G.starReward(planets, true)
+	local coins = math.floor(base * (12 + 90 * math.clamp(share, 0, 1)))
+	local id, qty
+	if rank == 1 then id, qty = pickSeed(5, planets, rng), 1
+	elseif rank <= 3 then id, qty = pickSeed(4, planets, rng), 1
+	elseif rng:NextNumber() < 0.45 then id, qty = pickSeed(3, planets, rng), 1 end
+	return { coins = coins, id = id, qty = qty, elixir = rank == 1 or rng:NextNumber() < 0.25 }
+end
+
 G.PlanetPlace = { "Алхимия", "Гонка", "Пушка", "Рыбалка", "Паркур", "Телескоп" }
 G.PlanetPlaceSpot = { "alchemy", "raceStart", "cannon", "fishing", "spiralStart", "telescope" }
 G.PlanetFeature = { "Алхимия", "Гонка в пыльной буре", "Метеорная пушка", "Рыбалка в лаве", "Паркур к сундуку", "Телескоп и прыжок в бездну" }

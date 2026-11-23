@@ -1723,6 +1723,10 @@ if plr.UserId == ADMIN_ID then
 	end)
 	btn("Все донаты: разблокировать", T.pink, cmd("alldonate", nil, "Все донаты выданы"))
 	btn("Все питомцы: макс. уровень", T.cold, cmd("pets", nil, "Питомцы выданы"))
+	btn("Рейд: Комета-пожиратель", T.orange, function()
+		for _, w in windows do if w.Visible then K.close(w) end end
+		remotes.Admin:InvokeServer("raid")
+	end)
 	btn("Конкурс огородов сейчас", T.pink, cmd("contest", nil, "Голосование началось"))
 	btn("Закончить конкурс", T.panel2, cmd("contestEnd", nil, "Подсчёт голосов"))
 	btn("Мистический торговец сейчас", T.purple, cmd("mystic", nil, "Торговец появился на всех площадях"))
@@ -3257,6 +3261,253 @@ local function streak(color, size, dur)
 	task.delay(dur + 0.1, function() p:Destroy() end)
 end
 local lastEvent = ""
+------------------------------------------------------------------ рейд «Комета-пожиратель»: тапай по комете вместе со всем сервером
+do
+	local UISr = game:GetService("UserInputService")
+	local TEXr = {}
+	pcall(function() TEXr = require(ReplicatedStorage.Shared.Config.Particles) end)
+	local R = nil -- текущий рейд: { model, core, pos, radius, hp, max, ends, gui, fill, hpText, timer, conn }
+	local raidFolder = make("Folder", { Name = "Raid" }, workspace)
+	local lastShot, combo, comboT = 0, 0, 0
+	local function cometModel(pos)
+		local m = Instance.new("Model")
+		m.Name = "DevourerComet"
+		local core = make("Part", { Name = "Core", Shape = Enum.PartType.Ball, Size = Vector3.new(20, 20, 20), Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false,
+			CastShadow = false, Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 120, 60), CFrame = CFrame.new(pos) }, m)
+		local rng = Random.new(77)
+		for i = 1, 14 do
+			local dir = rng:NextUnitVector()
+			local s = rng:NextNumber(9, 15)
+			local rock = make("Part", { Name = "Rock", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Material = Enum.Material.Basalt,
+				Color = Color3.fromRGB(46, 30, 34), Size = Vector3.new(s, s * 0.8, s * 0.9), CFrame = CFrame.new(pos + dir * 10.5) * CFrame.Angles(rng:NextNumber(0, 6), rng:NextNumber(0, 6), 0) }, m)
+			rock:SetAttribute("Off", core.CFrame:ToObjectSpace(rock.CFrame))
+			if i % 3 == 0 then
+				make("Part", { Name = "Vein", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Material = Enum.Material.Neon,
+					Color = Color3.fromRGB(255, 90, 40), Size = Vector3.new(s * 0.9, 0.4, s * 0.2), CFrame = rock.CFrame * CFrame.new(0, s * 0.3, 0) }, m):SetAttribute("Off", core.CFrame:ToObjectSpace(rock.CFrame * CFrame.new(0, s * 0.3, 0)))
+			end
+		end
+		local att = make("Attachment", {}, core)
+		make("ParticleEmitter", { Name = "Fire", Texture = "rbxasset://textures/particles/fire_main.dds", Color = ColorSequence.new(Color3.fromRGB(255, 200, 120), Color3.fromRGB(255, 70, 30)),
+			LightEmission = 1, LightInfluence = 0, Rate = 60, Lifetime = NumberRange.new(1.2, 2), Speed = NumberRange.new(8, 16), SpreadAngle = Vector2.new(40, 40),
+			EmissionDirection = Enum.NormalId.Top, Size = NumberSequence.new(14, 2), Transparency = NumberSequence.new(0.2, 1), RotSpeed = NumberRange.new(-60, 60) }, att)
+		make("ParticleEmitter", { Name = "Glow", Texture = TEXr.glow or "rbxasset://textures/particles/smoke_main.dds", Color = ColorSequence.new(Color3.fromRGB(255, 120, 60)),
+			LightEmission = 1, LightInfluence = 0, Rate = 6, Lifetime = NumberRange.new(1.5, 2), Speed = NumberRange.new(0), Size = NumberSequence.new(46, 60),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.4, 0.6), NumberSequenceKeypoint.new(1, 1) }), LockedToPart = true }, att)
+		make("PointLight", { Color = Color3.fromRGB(255, 120, 60), Range = 120, Brightness = 3 }, core)
+		m.PrimaryPart = core
+		m.Parent = raidFolder
+		return m, core
+	end
+	local function setComet(cf)
+		if not R then return end
+		R.core.CFrame = cf
+		for _, p in R.model:GetChildren() do
+			local off = p:GetAttribute("Off")
+			if off then p.CFrame = cf * off end
+		end
+	end
+	local function laser(from, to, color, w)
+		local d = (to - from).Magnitude
+		local beam = make("Part", { Name = "RaidLaser", Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Material = Enum.Material.Neon,
+			Color = color, Size = Vector3.new(w, w, d), CFrame = CFrame.lookAt((from + to) / 2, to), Transparency = 0.1 }, raidFolder)
+		TweenService:Create(beam, TweenInfo.new(0.18), { Transparency = 1, Size = Vector3.new(w * 0.2, w * 0.2, d) }):Play()
+		task.delay(0.2, function() beam:Destroy() end)
+	end
+	local function floatHit(pos, text, color)
+		local a = make("Part", { Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, Transparency = 1, Size = Vector3.new(0.2, 0.2, 0.2), CFrame = CFrame.new(pos) }, raidFolder)
+		local bb = make("BillboardGui", { Size = UDim2.fromOffset(90, 34), AlwaysOnTop = true, LightInfluence = 0, MaxDistance = 600 }, a)
+		local l = K.text(bb, text, { Size = UDim2.fromScale(1, 1), MaxText = 26, TextColor3 = color })
+		TweenService:Create(a, TweenInfo.new(0.7), { CFrame = CFrame.new(pos + Vector3.new(math.random(-6, 6), 9, 0)) }):Play()
+		TweenService:Create(l, TweenInfo.new(0.7), { TextTransparency = 1 }):Play()
+		task.delay(0.75, function() a:Destroy() end)
+	end
+	local function clear()
+		if not R then return end
+		if R.conn then R.conn:Disconnect() end
+		if R.model then R.model:Destroy() end
+		if R.gui then R.gui:Destroy() end
+		R = nil
+	end
+	local function hudBar()
+		local f = make("Frame", { Name = "RaidBar", AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 118), Size = UDim2.fromOffset(380, 50), BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, ZIndex = 15 }, hud)
+		K.corner(f, UDim.new(0, 12))
+		K.stroke(f, Color3.fromRGB(255, 110, 60), 1.4, false, 0.15)
+		K.text(f, "КОМЕТА-ПОЖИРАТЕЛЬ · тапай по ней!", { Position = UDim2.fromOffset(10, 3), Size = UDim2.new(1, -80, 0, 18), MaxText = 14, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = Color3.fromRGB(255, 160, 110), ZIndex = 16 })
+		local timer = K.text(f, "", { AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -10, 0, 3), Size = UDim2.fromOffset(70, 18), MaxText = 14, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 16 })
+		local back = make("Frame", { Position = UDim2.new(0, 10, 0, 25), Size = UDim2.new(1, -20, 0, 16), BackgroundColor3 = Color3.fromRGB(30, 18, 22), ZIndex = 16 }, f)
+		K.corner(back, UDim.new(1, 0))
+		local fill = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 90, 50), ZIndex = 17 }, back)
+		K.corner(fill, UDim.new(1, 0))
+		K.gradient(fill, Color3.fromRGB(255, 190, 90), Color3.fromRGB(255, 60, 40), 0)
+		local hpText = K.text(back, "", { Size = UDim2.fromScale(1, 1), MaxText = 12, ZIndex = 18 })
+		K.pop(f)
+		return f, fill, hpText, timer
+	end
+	local function startRaid(hp, max, ends, center)
+		clear()
+		local pos = center + Vector3.new(46, 118, -52)
+		local model, core = cometModel(pos + Vector3.new(700, 500, -900))
+		R = { model = model, core = core, pos = pos, radius = 16, hp = hp, max = max, ends = ends, arrive = os.clock() + 3.5 }
+		R.gui, R.fill, R.hpText, R.timer = hudBar()
+		playSfx("rocket", 0.6)
+		toast("Комета-пожиратель атакует сервер! Тапай по ней все вместе", "rare", 5)
+		local from = pos + Vector3.new(700, 500, -900)
+		local t0 = os.clock()
+		local nextBall = os.clock() + 4
+		R.conn = RunService.RenderStepped:Connect(function()
+			if not R then return end
+			local t = os.clock() - t0
+			local k = math.clamp(t / 3.5, 0, 1)
+			local e = 1 - (1 - k) ^ 3
+			local p = from:Lerp(R.pos, e) + Vector3.new(0, math.sin(t * 1.3) * 2.5, 0)
+			setComet(CFrame.new(p) * CFrame.Angles(t * 0.35, t * 0.5, t * 0.2))
+			local left = math.max(0, R.ends - nowS())
+			R.timer.Text = ("%d:%02d"):format(left // 60, left % 60)
+			-- комета огрызается огненными шарами в землю рядом с игроками
+			if k >= 1 and os.clock() > nextBall then
+				nextBall = os.clock() + math.random(18, 30) / 10
+				local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+				if root then
+					local target = root.Position + Vector3.new(math.random(-40, 40), -3, math.random(-40, 40))
+					local ball = make("Part", { Shape = Enum.PartType.Ball, Size = Vector3.new(3, 3, 3), Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+						Material = Enum.Material.Neon, Color = Color3.fromRGB(255, 140, 70), CFrame = CFrame.new(p) }, raidFolder)
+					local a0 = make("Attachment", { Position = Vector3.new(0, 1, 0) }, ball)
+					local a1 = make("Attachment", { Position = Vector3.new(0, -1, 0) }, ball)
+					make("Trail", { Attachment0 = a0, Attachment1 = a1, Lifetime = 0.4, LightEmission = 1, FaceCamera = true, Color = ColorSequence.new(Color3.fromRGB(255, 200, 120), Color3.fromRGB(255, 70, 30)),
+						Transparency = NumberSequence.new(0.1, 1), WidthScale = NumberSequence.new(1, 0) }, ball)
+					local s0 = os.clock()
+					local bc
+					bc = RunService.RenderStepped:Connect(function()
+						local q = math.clamp((os.clock() - s0) / 0.9, 0, 1)
+						ball.CFrame = CFrame.new(p:Lerp(target, q * q))
+						if q >= 1 then
+							bc:Disconnect()
+							ball:Destroy()
+							if FX.burst then FX.burst(target + Vector3.new(0, 1, 0), Color3.fromRGB(255, 130, 60), 26) end
+							if (target - root.Position).Magnitude < 30 then playSfx("boom", 1.4) end
+						end
+					end)
+				end
+			end
+		end)
+	end
+	local function shoot(screenPos)
+		if not R or os.clock() < R.arrive then return end
+		local cam = workspace.CurrentCamera
+		local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+		if not cam or not root then return end
+		local ray = cam:ViewportPointToRay(screenPos.X, screenPos.Y)
+		local c = R.core.Position
+		local toC = c - ray.Origin
+		local along = toC:Dot(ray.Direction)
+		local miss = (toC - ray.Direction * along).Magnitude
+		if along <= 0 or miss > R.radius * 1.6 then return end
+		local now0 = os.clock()
+		if now0 - lastShot < 1 / G.Raid.maxRate then return end
+		lastShot = now0
+		combo = (now0 - comboT < 0.8) and combo + 1 or 1
+		comboT = now0
+		local hitPos = c - ray.Direction * math.min(R.radius, math.max(4, R.radius - miss * 0.3))
+		laser(root.Position + Vector3.new(0, 2.5, 0), hitPos, Color3.fromRGB(120, 230, 255), 0.45)
+		if FX.burst then FX.burst(hitPos, Color3.fromRGB(255, 200, 120), 6) end
+		floatHit(hitPos, combo >= 5 and ("x" .. combo) or "-1", combo >= 10 and T.gold or Color3.fromRGB(255, 230, 200))
+		playSfx("laser", 1.1 + math.min(combo, 20) * 0.02)
+		remotes.RaidHit:FireServer()
+	end
+	UISr.InputBegan:Connect(function(input, gp)
+		if not R or gp then return end
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			shoot(input.Position)
+		end
+	end)
+	local function explode()
+		if not R then return end
+		local c = R.core.Position
+		playSfx("boom", 0.8)
+		playSfx("legendary")
+		if FX.burst then
+			FX.burst(c, Color3.fromRGB(255, 200, 120), 120)
+			FX.burst(c, Color3.fromRGB(255, 90, 50), 80)
+		end
+		for _, p in R.model:GetChildren() do
+			if p:IsA("BasePart") and p ~= R.core then
+				local dir = (p.Position - c).Unit
+				TweenService:Create(p, TweenInfo.new(1.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { CFrame = p.CFrame + dir * 90 + Vector3.new(0, -40, 0), Transparency = 1 }):Play()
+			end
+		end
+		TweenService:Create(R.core, TweenInfo.new(0.5), { Size = Vector3.new(70, 70, 70), Transparency = 1 }):Play()
+		local fl = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(255, 230, 200), BackgroundTransparency = 0.2, ZIndex = 40 }, hud)
+		TweenService:Create(fl, TweenInfo.new(0.9), { BackgroundTransparency = 1 }):Play()
+		task.delay(1, function() fl:Destroy() end)
+	end
+	local function resultPanel(top, mine)
+		local f = make("Frame", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(420, 200), BackgroundColor3 = T.panel, BackgroundTransparency = 0.05, ZIndex = 30 }, hud)
+		K.corner(f, UDim.new(0, 16))
+		K.stroke(f, T.gold, 1.6, false, 0.1)
+		K.text(f, "КОМЕТА СБИТА!", { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 34), MaxText = 30, TextColor3 = T.gold, ZIndex = 31 })
+		local lines = {}
+		for i, e in top do table.insert(lines, ("%d. %s — %d"):format(i, e.name, e.h)) end
+		K.text(f, #lines > 0 and table.concat(lines, "   ") or "", { Position = UDim2.fromOffset(10, 46), Size = UDim2.new(1, -20, 0, 22), MaxText = 14, TextColor3 = T.sub, ZIndex = 31 })
+		local my = mine and ("Твой вклад %d%% (%d выстр.): +%s монет%s%s"):format(math.floor(mine.share * 100 + 0.5), mine.hits, G.fmt(mine.coins), mine.id and (", семя «" .. plantName(mine.id) .. "»") or "", mine.elixir and ", эликсир удачи" or "")
+			or ("Чтобы получить награду, сделай хотя бы %d выстрелов"):format(G.Raid.minHits)
+		K.text(f, my, { Position = UDim2.fromOffset(14, 76), Size = UDim2.new(1, -28, 0, 60), MaxText = 16, TextWrapped = true, TextColor3 = mine and T.green or T.sub, ZIndex = 31 })
+		local okB = K.button(f, "Ура!", T.green, { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -10), Size = UDim2.fromOffset(160, 40), MaxText = 20, ZIndex = 31 })
+		okB.Activated:Connect(function() f:Destroy() end)
+		K.pop(f)
+		task.delay(12, function() if f.Parent then f:Destroy() end end)
+	end
+	remotes:WaitForChild("Raid").OnClientEvent:Connect(function(kind, a, b, c, d)
+		if kind == "warn" then
+			toast("Через минуту к серверу прилетит Комета-пожиратель! Собьём её вместе", "rare", 6)
+			if FX.chatLine then FX.chatLine('<font color="#FF9A6A">☄ Через минуту прилетит Комета-пожиратель!</font> Тапай по ней, чтобы стрелять') end
+		elseif kind == "start" then
+			startRaid(a, b, c, typeof(d) == "Vector3" and d or Vector3.zero)
+		elseif kind == "hp" and R then
+			R.hp, R.max = a, b
+			R.fill.Size = UDim2.fromScale(math.clamp(a / math.max(1, b), 0, 1), 1)
+			R.hpText.Text = ("%d / %d"):format(a, b)
+			-- лазеры других игроков рядом
+			for _, uid in c or {} do
+				if uid ~= plr.UserId then
+					local o = Players:GetPlayerByUserId(uid)
+					local r2 = o and o.Character and o.Character:FindFirstChild("HumanoidRootPart")
+					if r2 and (r2.Position - R.core.Position).Magnitude < 400 then
+						laser(r2.Position + Vector3.new(0, 2.5, 0), R.core.Position + Random.new():NextUnitVector() * R.radius * 0.8, Color3.fromRGB(255, 170, 230), 0.35)
+					end
+				end
+			end
+		elseif kind == "win" then
+			explode()
+			task.delay(0.9, function()
+				clear()
+				resultPanel(a or {}, b)
+				if b then playSfx("coins") end
+			end)
+			if FX.chatLine and a and a[1] then FX.chatLine(('<font color="#FFD27A">☄ Сервер сбил Комету-пожирателя!</font> Лучший стрелок: %s'):format(a[1].name)) end
+		elseif kind == "fail" then
+			if R then
+				-- комета уносится прочь целиком
+				local m = R.model
+				local p0 = R.core.Position
+				if R.conn then R.conn:Disconnect() R.conn = nil end
+				R.model = nil
+				clear()
+				local s0 = os.clock()
+				local fc
+				fc = RunService.RenderStepped:Connect(function()
+					local q = math.clamp((os.clock() - s0) / 3, 0, 1)
+					if m.Parent then m:PivotTo(CFrame.new(p0:Lerp(p0 + Vector3.new(-900, 600, 900), q * q))) end
+					if q >= 1 then
+						fc:Disconnect()
+						m:Destroy()
+					end
+				end)
+			end
+			toast("Комета улетела... В следующий раз стреляйте дружнее!", "bad", 5)
+		end
+	end)
+end
+
 remotes:WaitForChild("Event").OnClientEvent:Connect(function(id, left)
 	local ev
 	for _, e in G.Events do if e.id == id then ev = e end end

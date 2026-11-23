@@ -33,7 +33,7 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Slots", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Slots", "Raid", "RaidHit", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
@@ -1045,6 +1045,7 @@ end
 local grant -- покупки за Robux (объявлено ниже)
 local applyPet -- питомец игрока (объявлено ниже)
 local CONTEST = {} -- конкурс огородов (функции ниже)
+local RAID = { active = false, hp = 0, max = 0, ends = 0, hits = {}, last = {}, recent = {}, warned = false } -- рейд кометы (ниже)
 RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if plr.UserId ~= ADMIN_ID then return false end
 	local d, s = D[plr], S[plr]
@@ -1059,6 +1060,8 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		d.earned = math.max(d.earned, G.PlanetUnlock[6])
 	elseif cmd == "contest" then
 		return CONTEST.start(true)
+	elseif cmd == "raid" then
+		return RAID.start()
 	elseif cmd == "contestEnd" then
 		CONTEST.endNow()
 	elseif cmd == "pets" then
@@ -1748,6 +1751,113 @@ task.spawn(function()
 		end)
 	end)
 end)
+------------------------------------------------------------------ рейд «Комета-пожиратель»: весь сервер вместе сбивает огромную комету
+RAID.next = now() + G.Raid.first
+local function raidCenter(plr)
+	local ch = plr.Character
+	local pos = ch and ch:GetPivot().Position
+	local pi = pos and Map.planetAt(pos) or 1
+	return Map.planets[pi] and Map.planets[pi].center or Vector3.zero
+end
+local function raidSend(plr)
+	RX.Raid:FireClient(plr, "start", RAID.hp, RAID.max, RAID.ends, raidCenter(plr))
+end
+function RAID.start()
+	if RAID.active then return false end
+	local n = #Players:GetPlayers()
+	RAID.active = true
+	RAID.max = G.Raid.hpBase + G.Raid.hpPerPlayer * math.max(1, n)
+	RAID.hp = RAID.max
+	RAID.ends = now() + G.Raid.duration
+	RAID.hits, RAID.last, RAID.recent = {}, {}, {}
+	RAID.warned = false
+	for _, plr in Players:GetPlayers() do raidSend(plr) end
+	return true
+end
+local function raidFinish(win)
+	RAID.active = false
+	RAID.next = now() + G.Raid.period
+	if not win then
+		RX.Raid:FireAllClients("fail")
+		return
+	end
+	local list, total = {}, 0
+	for plr, h in RAID.hits do
+		if plr.Parent then
+			total += h
+			table.insert(list, { plr = plr, h = h })
+		end
+	end
+	table.sort(list, function(a, b) return a.h > b.h end)
+	local top = {}
+	for i = 1, math.min(3, #list) do top[i] = { name = list[i].plr.DisplayName, h = list[i].h } end
+	local got = {}
+	for i, e in list do
+		local plr, d = e.plr, D[e.plr]
+		got[plr] = true
+		if d and e.h >= G.Raid.minHits then
+			local planets = math.max(1, unlockedPlanets(d))
+			local share = e.h / math.max(1, total)
+			local res = G.raidReward(planets, share, i, Random.new())
+			addCoins(plr, res.coins)
+			if res.id then d.seeds[res.id] = (d.seeds[res.id] or 0) + res.qty end
+			if res.elixir then giveElixir(d) end
+			d.stats.raids = (d.stats.raids or 0) + 1
+			push(plr, "seeds", "potion", "stats")
+			RX.Raid:FireClient(plr, "win", top, { coins = res.coins, id = res.id, qty = res.qty, elixir = res.elixir, rank = i, share = share, hits = e.h })
+		else
+			RX.Raid:FireClient(plr, "win", top, nil)
+		end
+	end
+	for _, plr in Players:GetPlayers() do
+		if not got[plr] then RX.Raid:FireClient(plr, "win", top, nil) end
+	end
+end
+RX.RaidHit.OnServerEvent:Connect(function(plr)
+	if not RAID.active or not D[plr] then return end
+	local t = os.clock()
+	if t - (RAID.last[plr] or 0) < 1 / G.Raid.maxRate then return end
+	RAID.last[plr] = t
+	RAID.hits[plr] = (RAID.hits[plr] or 0) + 1
+	RAID.recent[plr.UserId] = true
+	RAID.hp -= 1
+	if RAID.hp <= 0 then
+		RAID.hp = 0
+		raidFinish(true)
+	end
+end)
+Players.PlayerAdded:Connect(function(plr)
+	task.delay(8, function()
+		if RAID.active and plr.Parent then raidSend(plr) end
+	end)
+end)
+task.spawn(function()
+	local lastHp = -1
+	while true do
+		task.wait(0.25)
+		local t = now()
+		if RAID.active then
+			if RAID.hp ~= lastHp then
+				lastHp = RAID.hp
+				local shooters = {}
+				for uid in RAID.recent do table.insert(shooters, uid) end
+				RAID.recent = {}
+				RX.Raid:FireAllClients("hp", RAID.hp, RAID.max, shooters)
+			end
+			if t >= RAID.ends and RAID.active then raidFinish(false) end
+		else
+			lastHp = -1
+			if #Players:GetPlayers() > 0 then
+				if not RAID.warned and t >= RAID.next - G.Raid.warn then
+					RAID.warned = true
+					RX.Raid:FireAllClients("warn", RAID.next)
+				end
+				if t >= RAID.next then RAID.start() end
+			end
+		end
+	end
+end)
+
 -- автосохранение раз в 2 минуты и таблица лидеров раз в 1.5 минуты
 task.spawn(function()
 	task.wait(5)

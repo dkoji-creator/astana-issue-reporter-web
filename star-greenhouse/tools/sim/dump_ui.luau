@@ -429,6 +429,11 @@ do
 	end
 	frames(3, 0.2)
 end
+do
+	inv("Admin", "raid")
+	frames(30, 0.2)
+	dumpState("raid")
+end
 -- превью табло лидеров (SurfaceGui переносится в ScreenGui для рендера)
 do
 	local board = workspace.World:FindFirstChild("LeaderBoard", true)
