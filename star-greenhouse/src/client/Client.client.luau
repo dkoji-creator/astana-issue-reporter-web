@@ -1690,7 +1690,7 @@ if plr.UserId == ADMIN_ID then
 		toast(ok and (msg or "Готово") or "Не вышло", ok and "ok" or "bad")
 	end end
 	btn("+1M монет", T.gold, cmd("coins"))
-	btn("+1Qa монет", T.gold, cmd("coinsB"))
+	btn("Монеты x10", T.gold, cmd("coinsB", nil, "Монет стало в 10 раз больше"))
 	btn("Открыть все планеты", T.pink, cmd("planets"))
 	btn("Все семена x10", T.green, cmd("seeds"))
 	btn("Всё созрело", T.green, cmd("ripe"))

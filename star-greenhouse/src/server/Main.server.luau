@@ -1053,7 +1053,8 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if cmd == "coins" then
 		addCoins(plr, 1000000)
 	elseif cmd == "coinsB" then
-		addCoins(plr, 1e15) -- после подорожания планет 1 млрд мало для проверки Ядра
+		-- монеты x10 (минимум +1Qa): работает и при 7Dd на счету
+		addCoins(plr, math.max(1e15, d.coins * 9))
 	elseif cmd == "planets" then
 		d.earned = math.max(d.earned, G.PlanetUnlock[6])
 	elseif cmd == "contest" then
