@@ -406,6 +406,336 @@ do
 	end
 end
 
+------------------------------------------------------------------ питомцы: модели, следование за хозяином, окно
+-- модель питомца: список деталей со смещением от тела (анимацию крыльев и винта задаёт цикл ниже)
+function FX.buildPet(id, lvl, parent)
+	local m = Instance.new("Model")
+	m.Name = "Pet_" .. id
+	local k = 1 + ((lvl or 1) - 1) * 0.08
+	local parts = {}
+	local function add(name, shape, size, off, color, mat, tr, anim)
+		local p = make("Part", { Name = name, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+			Size = size * k, Color = color, Material = mat or Enum.Material.SmoothPlastic, Transparency = tr or 0 }, m)
+		if shape == "ball" then p.Shape = Enum.PartType.Ball
+		elseif shape == "ell" then make("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, p)
+		elseif shape == "cyl" then p.Shape = Enum.PartType.Cylinder end
+		table.insert(parts, { p = p, off = CFrame.new(off.Position * k) * (off - off.Position), anim = anim })
+		return p
+	end
+	local C = Color3.fromRGB
+	if id == "firefly" then
+		local body = add("Body", "ball", Vector3.new(0.9, 0.9, 0.9), CFrame.new(), C(255, 225, 90), Enum.Material.Neon)
+		add("Head", "ball", Vector3.new(0.55, 0.55, 0.55), CFrame.new(0, 0.15, -0.6), C(40, 34, 30))
+		add("WingL", "ell", Vector3.new(0.06, 0.5, 0.9), CFrame.new(-0.35, 0.4, 0) * CFrame.Angles(0, 0, 0.6), C(230, 240, 255), Enum.Material.Glass, 0.4, "wingL")
+		add("WingR", "ell", Vector3.new(0.06, 0.5, 0.9), CFrame.new(0.35, 0.4, 0) * CFrame.Angles(0, 0, -0.6), C(230, 240, 255), Enum.Material.Glass, 0.4, "wingR")
+		add("AntL", "block", Vector3.new(0.05, 0.4, 0.05), CFrame.new(-0.12, 0.45, -0.75) * CFrame.Angles(0.5, 0, 0.3), C(40, 34, 30))
+		add("AntR", "block", Vector3.new(0.05, 0.4, 0.05), CFrame.new(0.12, 0.45, -0.75) * CFrame.Angles(0.5, 0, -0.3), C(40, 34, 30))
+		make("PointLight", { Color = C(255, 220, 110), Range = 8 + lvl, Brightness = 1.2 }, body)
+	elseif id == "waterbot" then
+		local body = add("Body", "ell", Vector3.new(1.3, 0.85, 1.3), CFrame.new(), C(235, 240, 248), Enum.Material.SmoothPlastic)
+		add("Band", "cyl", Vector3.new(0.15, 1.36, 1.36), CFrame.Angles(0, 0, math.pi / 2), C(80, 200, 255), Enum.Material.Neon)
+		add("Eye", "ball", Vector3.new(0.38, 0.38, 0.38), CFrame.new(0, 0.05, -0.58), C(90, 220, 255), Enum.Material.Neon)
+		add("Mast", "block", Vector3.new(0.1, 0.35, 0.1), CFrame.new(0, 0.55, 0), C(120, 130, 150), Enum.Material.Metal)
+		add("Rotor", "cyl", Vector3.new(0.05, 1.6, 1.6), CFrame.new(0, 0.74, 0) * CFrame.Angles(0, 0, math.pi / 2), C(200, 230, 255), Enum.Material.Glass, 0.55, "rotor")
+		add("Nozzle", "cyl", Vector3.new(0.4, 0.22, 0.22), CFrame.new(0, -0.5, -0.2) * CFrame.Angles(0, 0, math.pi / 2), C(70, 140, 220), Enum.Material.Metal)
+		make("PointLight", { Color = C(110, 210, 255), Range = 6, Brightness = 0.8 }, body)
+	else
+		add("Body", "ell", Vector3.new(1.05, 1.3, 1), CFrame.new(), C(120, 90, 160))
+		add("Belly", "ell", Vector3.new(0.7, 0.9, 0.3), CFrame.new(0, -0.1, -0.4), C(220, 200, 240))
+		for _, sx in { -0.24, 0.24 } do
+			add("EyeW", "ball", Vector3.new(0.42, 0.42, 0.42), CFrame.new(sx, 0.32, -0.42), C(255, 255, 255))
+			add("EyeP", "ball", Vector3.new(0.2, 0.2, 0.2), CFrame.new(sx, 0.32, -0.6), C(255, 190, 60), Enum.Material.Neon)
+			add("Tuft", "block", Vector3.new(0.14, 0.32, 0.14), CFrame.new(sx * 1.3, 0.72, -0.1) * CFrame.Angles(0, 0, sx > 0 and -0.4 or 0.4), C(90, 64, 130))
+		end
+		add("Beak", "ball", Vector3.new(0.16, 0.16, 0.16), CFrame.new(0, 0.16, -0.55), C(255, 200, 80))
+		add("WingL", "ell", Vector3.new(0.2, 0.9, 0.6), CFrame.new(-0.55, -0.05, 0.05), C(100, 74, 140), nil, 0, "owlL")
+		add("WingR", "ell", Vector3.new(0.2, 0.9, 0.6), CFrame.new(0.55, -0.05, 0.05), C(100, 74, 140), nil, 0, "owlR")
+	end
+	m.PrimaryPart = parts[1].p
+	m.Parent = parent
+	return { model = m, parts = parts, id = id, lvl = lvl }
+end
+function FX.posePet(pet, base, t)
+	for _, e in pet.parts do
+		local a = CFrame.new()
+		if e.anim == "wingL" then a = CFrame.Angles(0, 0, math.sin(t * 28) * 0.7)
+		elseif e.anim == "wingR" then a = CFrame.Angles(0, 0, -math.sin(t * 28) * 0.7)
+		elseif e.anim == "rotor" then a = CFrame.Angles(t * 25, 0, 0)
+		elseif e.anim == "owlL" then a = CFrame.Angles(0, 0, math.sin(t * 6) * 0.35)
+		elseif e.anim == "owlR" then a = CFrame.Angles(0, 0, -math.sin(t * 6) * 0.35) end
+		e.p.CFrame = base * e.off * a
+	end
+end
+-- питомцы всех игроков летают за хозяевами
+do
+	local pets = {}
+	local override -- полёт моего питомца к грядке
+	RunService.RenderStepped:Connect(function(dt)
+		local t = os.clock()
+		local cam = workspace.CurrentCamera
+		local cp = cam and cam.CFrame.Position or Vector3.zero
+		for _, p in Players:GetPlayers() do
+			local id = p:GetAttribute("Pet") or ""
+			local lvl = p:GetAttribute("PetLvl") or 1
+			local root = p.Character and p.Character:FindFirstChild("HumanoidRootPart")
+			local e = pets[p]
+			if e and (e.id ~= id or e.lvl ~= lvl or not root) then
+				e.model:Destroy()
+				pets[p], e = nil, nil
+			end
+			if id ~= "" and root and (root.Position - cp).Magnitude < 320 then
+				if not e then
+					e = FX.buildPet(id, lvl, fxFolder)
+					e.pos = root.Position + Vector3.new(0, 3, 0)
+					pets[p] = e
+				end
+				local target = (root.CFrame * CFrame.new(2.6, 2.4 + math.sin(t * 2 + p.UserId) * 0.3, 2.2)).Position
+				if p == plr and override and t < override.untilT then target = override.pos end
+				e.pos = e.pos:Lerp(target, math.min(1, dt * (p == plr and override and 5 or 6)))
+				local look = root.CFrame.LookVector
+				FX.posePet(e, CFrame.lookAt(e.pos, e.pos + Vector3.new(look.X, 0, look.Z)), t)
+			elseif e then
+				e.model:Destroy()
+				pets[p] = nil
+			end
+		end
+		for p, e in pets do
+			if not p.Parent then e.model:Destroy() pets[p] = nil end
+		end
+	end)
+	remotes:WaitForChild("PetFx").OnClientEvent:Connect(function(kind, i)
+		if kind ~= "water" or not ST.plot then return end
+		local plot = plotsFolder:FindFirstChild("Plot" .. ST.plot)
+		local bed = plot and plot:FindFirstChild("Beds") and plot.Beds:FindFirstChild("Bed" .. i)
+		local soil = bed and bed:FindFirstChild("Soil")
+		if not soil then return end
+		override = { pos = soil.Position + Vector3.new(0, 3.5, 0), untilT = os.clock() + 1.3 }
+		task.delay(0.7, function()
+			FX.splash(soil.Position + Vector3.new(0, 1, 0), Color3.fromRGB(120, 200, 255), 30, 12)
+			playSfx("water", 1.15)
+		end)
+	end)
+end
+do
+	local f, body = mkWindow("pets", "Питомцы", "luck", T.cold, 0.92, 0.84)
+	local row = make("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, body)
+	listLayout(row, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
+	local spinners = {}
+	function hooks.pets()
+		clear(row)
+		table.clear(spinners)
+		local owned = (ST.pets and ST.pets.owned) or {}
+		local eq = (ST.pets and ST.pets.eq) or ""
+		for i, id in G.PetOrder do
+			local def = G.Pets[id]
+			local lvl = owned[id] or 0
+			local card = K.panel(row, { Size = UDim2.new(1 / 3, -8, 1, 0), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+			K.stroke(card, eq == id and T.green or def.color, eq == id and 2 or 1, false, 0.3)
+			local vp = make("ViewportFrame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0.42, 0), Ambient = Color3.fromRGB(200, 200, 220), LightColor = Color3.new(1, 1, 1) }, card)
+			local vcam = make("Camera", { FieldOfView = 30 }, vp)
+			vp.CurrentCamera = vcam
+			local pet = FX.buildPet(id, math.max(1, lvl), vp)
+			FX.posePet(pet, CFrame.new(), 0)
+			vcam.CFrame = CFrame.lookAt(Vector3.new(2.2, 1.2, -4.2), Vector3.new(0, 0.1, 0))
+			table.insert(spinners, pet)
+			K.text(card, def.name, { Position = UDim2.new(0, 8, 0.44, 0), Size = UDim2.new(1, -16, 0, 22), MaxText = 17, TextColor3 = def.color })
+			K.text(card, def.desc, { Position = UDim2.new(0, 8, 0.44, 22), Size = UDim2.new(1, -16, 0, 30), MaxText = 12, TextWrapped = true, TextColor3 = T.sub, Medium = true })
+			local stars = ""
+			for q = 1, G.PetMaxLevel do stars = stars .. (q <= lvl and "★" or "☆") end
+			K.text(card, stars .. "  " .. (lvl > 0 and G.petEffect(id, lvl) or G.petEffect(id, 1)), { Position = UDim2.new(0, 8, 0.44, 54), Size = UDim2.new(1, -16, 0, 18), MaxText = 12, TextColor3 = T.gold, Medium = true })
+			if lvl < G.PetMaxLevel then
+				local price = G.petPrice(id, lvl + 1, ST.planets or 1)
+				local b = coinButton(card, price, ST.coins >= price, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, -50), Size = UDim2.new(1, -16, 0, 34), MaxText = 15 })
+				local l = b:FindFirstChildOfClass("TextLabel")
+				b.Activated:Connect(function()
+					local ok, res = remotes.PetBuy:InvokeServer(id)
+					if ok then toast(def.name .. (lvl == 0 and ": теперь с тобой!" or (": уровень " .. res)), "rare") playSfx("unlock") else toast(res or "Не получилось", "bad") end
+				end)
+			else
+				K.text(card, "МАКС. УРОВЕНЬ", { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, -50), Size = UDim2.new(1, -16, 0, 30), MaxText = 15, TextColor3 = T.gold })
+			end
+			if lvl > 0 then
+				local on = eq == id
+				local eb = K.button(card, on and "С тобой" or "Взять с собой", on and T.green or T.cold, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, -8), Size = UDim2.new(1, -16, 0, 36), MaxText = 15 })
+				eb.Activated:Connect(function()
+					remotes.PetEquip:InvokeServer(on and "" or id)
+					playSfx("pop")
+				end)
+			end
+		end
+	end
+	RunService.RenderStepped:Connect(function()
+		if not f.Visible then return end
+		local t = os.clock()
+		for _, pet in spinners do
+			if pet.model.Parent then FX.posePet(pet, CFrame.Angles(0, t * 0.8, 0) * CFrame.new(0, math.sin(t * 2) * 0.1, 0), t) end
+		end
+	end)
+end
+
+------------------------------------------------------------------ окно: обмен плодами
+do
+	local f, body = mkWindow("trade", "Обмен плодами", "jar", T.gold, 0.94, 0.88)
+	local holder = make("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, body)
+	local myOffer = {}
+	local function fruitTitle(fr)
+		return plantName(fr.id) .. (#fr.m > 0 and (" · мутаций " .. #fr.m) or "")
+	end
+	local function fruitRow(parent, fr, order, on, onTap)
+		local b = make("TextButton", { Size = UDim2.new(1, -6, 0, 38), BackgroundColor3 = on and Color3.fromRGB(40, 70, 50) or T.panel2, Text = "", AutoButtonColor = false, LayoutOrder = order }, parent)
+		K.corner(b, UDim.new(0, 8))
+		K.stroke(b, #fr.m > 0 and G.Mut[G.rarestMut(fr.m)].color or rarityColor(fr.id), 1, false, 0.4)
+		K.text(b, fruitTitle(fr), { Position = UDim2.fromOffset(8, 1), Size = UDim2.new(1, -14, 0, 20), MaxText = 13, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = rarityColor(fr.id) })
+		K.text(b, ("%.2f кг · примерно %s монет"):format(fr.w, G.fmt(G.fruitValue(fr.id, fr.m, fr.w))), { Position = UDim2.fromOffset(8, 20), Size = UDim2.new(1, -14, 0, 15), MaxText = 11, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
+		if onTap then b.Activated:Connect(onTap) end
+	end
+	function hooks.trade()
+		clear(holder)
+		local tr = ST.trade
+		if not tr then
+			local sc = K.scroll(holder, {})
+			listLayout(sc, nil, 6)
+			label(sc, "С кем обменяться? Обмен плодами, оба нажимают «Готов»", { Size = UDim2.new(1, 0, 0, 24), MaxText = 15, TextColor3 = T.sub, LayoutOrder = 0 })
+			local n = 0
+			for _, p in Players:GetPlayers() do
+				if p ~= plr then
+					n += 1
+					local r = K.panel(sc, { Size = UDim2.new(1, -8, 0, 46), LayoutOrder = n, BackgroundColor3 = T.panel2 })
+					K.text(r, p.DisplayName, { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.6, 0, 1, 0), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left })
+					local b = K.button(r, "Предложить обмен", T.gold, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(190, 36), MaxText = 15 })
+					b.Activated:Connect(function()
+						local ok, err = remotes.TradeRequest:InvokeServer(p.UserId)
+						toast(ok and ("Запрос отправлен: " .. p.DisplayName) or (err or "Не получилось"), ok and "ok" or "bad")
+					end)
+				end
+			end
+			if n == 0 then label(sc, "На сервере пока никого нет: позови друга", { Size = UDim2.new(1, 0, 0, 36), MaxText = 16, LayoutOrder = 1 }) end
+			return
+		end
+		-- идёт обмен
+		myOffer = {}
+		for _, fr in tr.mine do table.insert(myOffer, fr.uid) end
+		local bag = K.scroll(holder, { Size = UDim2.new(0.4, -6, 1, -52) })
+		listLayout(bag, nil, 4)
+		label(bag, "Твоя сумка: нажми, чтобы предложить (до 6)", { Size = UDim2.new(1, 0, 0, 20), MaxText = 12, TextColor3 = T.sub, LayoutOrder = 0 })
+		for i, fr in ST.fruits do
+			if i > 80 then break end
+			local on = table.find(myOffer, fr.uid) ~= nil
+			fruitRow(bag, fr, i, on, function()
+				local k = table.find(myOffer, fr.uid)
+				if k then table.remove(myOffer, k) elseif #myOffer < 6 then table.insert(myOffer, fr.uid) end
+				remotes.TradeOffer:FireServer(myOffer)
+				playSfx("tap")
+			end)
+		end
+		local function side(x, title, list, ready, col)
+			local p = K.panel(holder, { Position = UDim2.new(x, 4, 0, 0), Size = UDim2.new(0.3, -6, 1, -52), BackgroundColor3 = T.panel2 })
+			K.stroke(p, ready and T.green or col, ready and 2 or 1, false, 0.3)
+			K.text(p, title .. (ready and "  ✓ готов" or ""), { Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 22), MaxText = 14, TextColor3 = ready and T.green or col })
+			local sc = K.scroll(p, { Position = UDim2.fromOffset(4, 30), Size = UDim2.new(1, -8, 1, -34) })
+			listLayout(sc, nil, 4)
+			for i, fr in list do fruitRow(sc, fr, i, false) end
+			if #list == 0 then label(sc, "пока пусто", { Size = UDim2.new(1, 0, 0, 24), MaxText = 13, TextColor3 = T.sub }) end
+		end
+		side(0.4, "Ты отдаёшь", tr.mine, tr.myReady, T.gold)
+		side(0.7, tr.partner .. " отдаёт", tr.theirs, tr.theirReady, T.cold)
+		local ready = K.button(holder, tr.myReady and "Ждём второго…" or "Готов", tr.myReady and T.panel or T.green, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0.4, 4, 1, 0), Size = UDim2.new(0.35, -8, 0, 44), MaxText = 18 })
+		ready.Activated:Connect(function() remotes.TradeReady:FireServer(not tr.myReady) playSfx("click") end)
+		local cancel = K.button(holder, "Отмена", T.red, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, 0, 1, 0), Size = UDim2.new(0.25, -4, 0, 44), MaxText = 18 })
+		cancel.Activated:Connect(function() remotes.TradeCancel:FireServer() end)
+		label(holder, "Изменения предложения сбрасывают «готов» у обоих", { Position = UDim2.new(0, 0, 1, -44), Size = UDim2.new(0.4, -6, 0, 44), MaxText = 12, TextColor3 = T.sub, TextWrapped = true })
+	end
+	-- всплывающий запрос
+	local pop
+	remotes:WaitForChild("Trade").OnClientEvent:Connect(function(data)
+		if data.state == "request" then
+			if pop then pop:Destroy() end
+			pop = K.panel(hud, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 150), Size = UDim2.fromOffset(380, 92), ZIndex = 30 })
+			K.stroke(pop, T.gold, 1.5, false, 0.2)
+			K.text(pop, data.from .. " хочет обменяться плодами", { Position = UDim2.fromOffset(10, 6), Size = UDim2.new(1, -20, 0, 24), MaxText = 16, ZIndex = 31 })
+			local yes = K.button(pop, "Принять", T.green, { Position = UDim2.new(0, 10, 1, -48), Size = UDim2.new(0.5, -15, 0, 40), MaxText = 17 })
+			local no = K.button(pop, "Отказать", T.panel2, { Position = UDim2.new(0.5, 5, 1, -48), Size = UDim2.new(0.5, -15, 0, 40), MaxText = 17 })
+			local p0 = pop
+			yes.Activated:Connect(function() remotes.TradeRespond:FireServer(true) p0:Destroy() end)
+			no.Activated:Connect(function() remotes.TradeRespond:FireServer(false) p0:Destroy() end)
+			playSfx("pop")
+			task.delay(25, function() if p0.Parent then p0:Destroy() end end)
+		elseif data.state == "open" then
+			ST.trade = data
+			if not windows.trade.Visible then openWindow("trade") else hooks.trade() end
+		else
+			ST.trade = nil
+			toast(data.text or "Обмен закрыт", data.state == "done" and "rare" or "bad", 4)
+			if data.state == "done" then playSfx("chest") end
+			if windows.trade.Visible then hooks.trade() end
+		end
+	end)
+	f:GetPropertyChangedSignal("Visible"):Connect(function()
+		if not f.Visible and ST.trade then remotes.TradeCancel:FireServer() end
+	end)
+end
+
+------------------------------------------------------------------ окно: конкурс «Лучший огород»
+do
+	local f, body = mkWindow("contest", "Конкурс огородов", "trophy", T.pink, 0.94, 0.86)
+	local timer = K.text(body, "", { Size = UDim2.new(1, 0, 0, 24), MaxText = 16, TextColor3 = T.pink, TextXAlignment = Enum.TextXAlignment.Left })
+	local sc = K.scroll(body, { Position = UDim2.fromOffset(0, 30), Size = UDim2.new(1, 0, 1, -30) })
+	listLayout(sc, nil, 6)
+	local voted
+	function hooks.contest()
+		clear(sc)
+		local c = ST.contest
+		local t = nowS()
+		if not c or t >= c.ends then
+			local left = G.Contest.period - t % G.Contest.period
+			timer.Text = "Следующий конкурс через " .. G.fmtTime(left)
+			label(sc, "Каждые 15 минут игроки выбирают самый красивый огород. Победитель получает корону над огородом, монеты и легендарное семя", { Size = UDim2.new(1, -8, 0, 44), MaxText = 14, TextWrapped = true, TextColor3 = T.sub, LayoutOrder = 0 })
+			if UI.lastWinner then label(sc, "Прошлый победитель: " .. UI.lastWinner, { Size = UDim2.new(1, -8, 0, 26), MaxText = 16, TextColor3 = T.gold, LayoutOrder = 1 }) end
+			return
+		end
+		timer.Text = ("Голосуй за самый красивый огород · осталось %d с"):format(math.ceil(c.ends - t))
+		for i, cand in c.cands do
+			local me = cand.id == plr.UserId
+			local r = K.panel(sc, { Size = UDim2.new(1, -8, 0, 54), LayoutOrder = i, BackgroundColor3 = voted == cand.id and Color3.fromRGB(70, 36, 80) or T.panel2 })
+			K.stroke(r, voted == cand.id and T.pink or T.line, voted == cand.id and 2 or 1, false, 0.3)
+			K.text(r, cand.name .. (me and " (ты)" or ""), { Position = UDim2.fromOffset(12, 3), Size = UDim2.new(0.45, 0, 0, 24), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = me and T.cold or T.text })
+			K.text(r, ("%s · растений %d · %s кг%s"):format(G.Planets[cand.planet].name, cand.plants, G.fmt(cand.kg), cand.best < 1 and (" · мутация " .. G.fmtOdds(cand.best)) or ""),
+				{ Position = UDim2.fromOffset(12, 28), Size = UDim2.new(0.55, 0, 0, 18), MaxText = 12, TextXAlignment = Enum.TextXAlignment.Left, TextColor3 = T.sub, Medium = true })
+			if not me or #c.cands == 1 then
+				local look = K.button(r, "Посмотреть", T.cold, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -150, 0.5, 0), Size = UDim2.fromOffset(130, 38), MaxText = 15 })
+				look.Activated:Connect(function()
+					if remotes.ContestView:InvokeServer(cand.id) then playSfx("whoosh", 1.1) K.close(f) end
+				end)
+				local vb = K.button(r, voted == cand.id and "Твой голос" or "Голосовать", voted == cand.id and T.pink or T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -8, 0.5, 0), Size = UDim2.fromOffset(134, 38), MaxText = 15 })
+				vb.Activated:Connect(function()
+					local ok, err = remotes.ContestVote:InvokeServer(cand.id)
+					if ok then voted = cand.id playSfx("coins") hooks.contest() else toast(err or "Не получилось", "bad") end
+				end)
+			end
+		end
+	end
+	remotes:WaitForChild("Contest").OnClientEvent:Connect(function(data)
+		if data.state == "vote" then
+			ST.contest = data
+			voted = nil
+			toast("Конкурс огородов! Голосуй за самый красивый огород", "rare", 5)
+			playSfx("unlock")
+			if not FX.busy then openWindow("contest") end
+		elseif data.state == "result" then
+			ST.contest = nil
+			if data.name then
+				UI.lastWinner = data.name
+				toast(("Лучший огород: %s (голосов: %d)"):format(data.name, data.votes or 0), "rare", 6)
+				playSfx(data.id == plr.UserId and "legendary" or "unlock")
+			else
+				toast("Конкурс огородов: никто не проголосовал", "info", 4)
+			end
+			if f.Visible then hooks.contest() end
+		end
+	end)
+	loop(1, function() if f.Visible then hooks.contest() end end)
+end
+
 ------------------------------------------------------------------ окно: мистический торговец
 do
 	local f, body = mkWindow("mystic", "Мистический торговец", "potion", T.purple, 0.92, 0.84)
@@ -932,32 +1262,50 @@ end
 
 ------------------------------------------------------------------ окно: подарок
 do
-	local f, body = mkWindow("daily", "Ежедневный подарок", "gift", T.orange, 0.62, 0.7)
-	local row = make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 90) }, body)
-	listLayout(row, Enum.FillDirection.Horizontal, 6)
+	local f, body = mkWindow("daily", "Награды за 7 дней", "gift", T.orange, 0.92, 0.8)
+	local row = make("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 150) }, body)
+	listLayout(row, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
+	local ICON = { coins = "coin", seed = "seed", cans = "water", grand = "gift" }
 	UI.dailyCards = {}
-	for i = 1, 7 do
+	for i, cal in G.Calendar do
 		local c = K.panel(row, { Size = UDim2.new(1 / 7, -6, 1, 0), LayoutOrder = i, BackgroundColor3 = T.panel2 })
-		K.text(c, "День " .. i, { Position = UDim2.fromOffset(2, 4), Size = UDim2.new(1, -4, 0, 18), MaxText = 14 })
-		K.icon(c, i == 7 and "gift" or "coin", { Position = UDim2.fromOffset(6, 24), Size = UDim2.new(1, -12, 0, 40) })
-		UI.dailyCards[i] = K.text(c, G.fmt(G.Daily.coins[i]), { Position = UDim2.new(0, 2, 1, -22), Size = UDim2.new(1, -4, 0, 18), MaxText = 14, TextColor3 = T.gold })
+		local st = K.stroke(c, T.line, 1, false, 0.5)
+		K.text(c, "День " .. i, { Position = UDim2.fromOffset(2, 4), Size = UDim2.new(1, -4, 0, 20), MaxText = 15, TextColor3 = i == 7 and T.gold or T.text })
+		local ic = K.icon(c, ICON[cal.kind], { Position = UDim2.new(0.5, -24, 0, 28), Size = UDim2.fromOffset(48, 48) })
+		K.text(c, cal.text, { Position = UDim2.new(0, 3, 0, 80), Size = UDim2.new(1, -6, 0, 44), MaxText = 12, TextWrapped = true, TextColor3 = T.sub, Medium = true })
+		local mark = K.text(c, "", { Position = UDim2.new(0, 2, 1, -24), Size = UDim2.new(1, -4, 0, 20), MaxText = 14, TextColor3 = T.green })
+		UI.dailyCards[i] = { card = c, stroke = st, mark = mark, icon = ic }
 	end
-	UI.dailyBtn = K.button(body, "Забрать", T.green, { Position = UDim2.new(0.1, 0, 0, 110), Size = UDim2.new(0.8, 0, 0, 50), MaxText = 24 })
-	UI.dailyNote = K.text(body, "Заходи каждый день: награда растёт, а множитель зависит от открытых планет", { Position = UDim2.new(0, 0, 0, 170), Size = UDim2.new(1, 0, 0, 40), MaxText = 15, TextColor3 = T.sub })
+	UI.dailyBtn = K.button(body, "Забрать", T.green, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 162), Size = UDim2.new(0.6, 0, 0, 46), MaxText = 22 })
+	UI.dailyNote = K.text(body, "Заходи каждый день подряд: награда растёт. Пропустишь день — серия начнётся сначала", { Position = UDim2.new(0, 0, 0, 214), Size = UDim2.new(1, 0, 0, 30), MaxText = 14, TextColor3 = T.sub, Medium = true })
 	UI.dailyBtn.Activated:Connect(function()
-		local ok, coins, seed, streak = remotes.Daily:InvokeServer()
+		local ok, text, day = remotes.Daily:InvokeServer()
 		if ok then
-			toast(("Подарок: +%s монет и 2 семени «%s»"):format(G.fmtInt(coins), plantName(seed)), "ok", 5)
+			toast(("День %d: %s"):format(day, text), "rare", 5)
+			playSfx("unlock")
 		else
-			toast(coins or "Уже получено", "bad")
+			toast(text or "Уже получено", "bad")
 		end
 	end)
 	function hooks.daily()
-		for i = 1, 7 do
-			K.recolor(UI.dailyCards[i].Parent, (ST.daily.can and i == (ST.daily.streak % 7 + 1)) and T.green or ((not ST.daily.can and i <= ST.daily.streak) and T.blue or T.panel2))
+		local nextDay = ST.daily.nextDay or 1
+		for i, e in UI.dailyCards do
+			local claimed = ST.daily.can and i < nextDay or (not ST.daily.can and i <= nextDay)
+			local today = ST.daily.can and i == nextDay
+			K.recolor(e.card, today and Color3.fromRGB(30, 70, 50) or (claimed and Color3.fromRGB(28, 40, 70) or T.panel2))
+			e.stroke.Color = today and T.green or (claimed and T.blue or T.line)
+			e.stroke.Thickness = today and 2 or 1
+			e.mark.Text = claimed and "получено" or (today and "сегодня" or "")
+			e.mark.TextColor3 = today and T.green or T.blue
 		end
+		local l = UI.dailyBtn:FindFirstChildOfClass("TextLabel")
+		if l then l.Text = ST.daily.can and ("Забрать награду дня " .. nextDay) or "Сегодня уже получено" end
 		K.recolor(UI.dailyBtn, ST.daily.can and T.green or T.panel)
 	end
+	-- при входе календарь открывается сам, если награда ждёт
+	task.delay(6, function()
+		if ST.daily and ST.daily.can and not FX.busy then openWindow("daily") end
+	end)
 end
 
 ------------------------------------------------------------------ окно: полёт на ракете
@@ -1035,6 +1383,9 @@ if plr.UserId == ADMIN_ID then
 	btn("Опыление сейчас", T.green, cmd("pollen", nil, "Пыльца скоро прилетит"))
 	btn("Витрина для ТикТока", T.gold, cmd("showcase", nil, "Огород заполнен гигантами"))
 	btn("Все донаты: разблокировать", T.pink, cmd("alldonate", nil, "Все донаты выданы"))
+	btn("Все питомцы: макс. уровень", T.cold, cmd("pets", nil, "Питомцы выданы"))
+	btn("Конкурс огородов сейчас", T.pink, cmd("contest", nil, "Голосование началось"))
+	btn("Закончить конкурс", T.panel2, cmd("contestEnd", nil, "Подсчёт голосов"))
 	btn("Мистический торговец сейчас", T.purple, cmd("mystic", nil, "Торговец появился на всех площадях"))
 	btn("Сброс перезарядок", T.cold, cmd("resetcd", nil, "Пушка, сундук и наживка готовы"))
 	btn("ТП: алхимия (Луна)", T.purple, cmd("tp", "alchemy"))
@@ -1061,7 +1412,7 @@ do
 	listLayout(col, nil, 4)
 	local defs = {
 		{ "shop", "shop", "Семена", T.green }, { "bag", "jar", "Сумка", T.gold }, { "upgrades", "upgrade", "Улучшить", T.cold },
-		{ "travel", "rocket", "Ракета", T.pink }, { "store", "coin", "Магазин", T.gold }, { "menu", "settings", "Ещё", T.purple },
+		{ "travel", "rocket", "Ракета", T.pink }, { "pets", "luck", "Питомцы", T.cold }, { "store", "coin", "Магазин", T.gold }, { "menu", "settings", "Ещё", T.purple },
 	}
 	UI.buttons = {}
 	for i, d in defs do
@@ -1186,17 +1537,17 @@ end
 
 ------------------------------------------------------------------ окно «Ещё»: всё второстепенное в одном месте
 do
-	local f, body = mkWindow("menu", "Ещё", "settings", T.purple, 0.6, 0.7)
-	make("UIGridLayout", { CellSize = UDim2.new(0.5, -6, 0, 64), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, body)
+	local f, body = mkWindow("menu", "Ещё", "settings", T.purple, 0.86, 0.8)
+	make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -6, 0, 54), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, body)
 	local items = { { "index", "atlas", "Атлас растений", T.purple }, { "market", "news", "Рынок", T.pink }, { "daily", "gift", "Подарок дня", T.orange },
-		{ "photo", "luck", "Фото-режим", T.cold }, { "settings", "settings", "Настройки", T.green } }
+		{ "photo", "luck", "Фото-режим", T.cold }, { "settings", "settings", "Настройки", T.green }, { "trade", "jar", "Обмен", T.gold }, { "contest", "trophy", "Конкурс огородов", T.pink } }
 	if plr.UserId == ADMIN_ID then table.insert(items, { "admin", "admin", "Админ", T.red }) end
 	for i, it in items do
 		local b = make("TextButton", { BackgroundColor3 = T.panel2, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, body)
 		K.corner(b, UDim.new(0, 12))
 		K.stroke(b, it[4], 1.2, false, 0.35)
-		K.icon(b, it[2], { Size = UDim2.fromOffset(40, 40), Position = UDim2.fromOffset(12, 12) })
-		K.text(b, it[3], { Position = UDim2.fromOffset(62, 0), Size = UDim2.new(1, -70, 1, 0), MaxText = 17, TextXAlignment = Enum.TextXAlignment.Left })
+		K.icon(b, it[2], { Size = UDim2.fromOffset(34, 34), Position = UDim2.fromOffset(10, 10) })
+		K.text(b, it[3], { Position = UDim2.fromOffset(52, 0), Size = UDim2.new(1, -58, 1, 0), MaxText = 15, TextXAlignment = Enum.TextXAlignment.Left, TextWrapped = true })
 		if it[1] == "daily" then
 			local badge = make("Frame", { Name = "Badge", Size = UDim2.fromOffset(12, 12), Position = UDim2.new(1, -16, 0, 6), BackgroundColor3 = T.gold, Visible = false }, b)
 			K.corner(badge, UDim.new(1, 0))
@@ -1372,6 +1723,7 @@ loop(0.5, function()
 		if dirty.can or dirty.cans or not UI.canInit then UI.canInit = true hooks.canpick() end
 		if windows.store.Visible and (dirty.coins or dirty.cans or dirty.perms) then hooks.store() end
 		if windows.alchemy.Visible and dirty.fruits then hooks.alchemy() end
+		if windows.pets.Visible and (dirty.pets or dirty.coins) then hooks.pets() end
 		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
 		if windows.bag.Visible and (dirty.fruits or dirty.coins) then hooks.bag() end
 		if windows.shop.Visible and (dirty.sold or dirty.bought or dirty.planets) then hooks.shop() end

@@ -50,6 +50,7 @@ function Stars.start(ctx)
 	folder.Name = "Stars"
 	folder.Parent = ctx.parent
 	local active = {}
+	local infos = {}
 
 	local function spawnOne()
 		local pos = ctx.pickSpot()
@@ -58,16 +59,29 @@ function Stars.start(ctx)
 		local m, hit = newStar(folder, pos + V3(0, 1.6, 0), meteor)
 		local landAt = m:GetAttribute("LandAt")
 		active[m] = landAt + G.Stars.glow
-		local taken = false
-		hit.Touched:Connect(function(part)
-			if taken or now() < landAt - 0.3 then return end
-			local plr = Players:GetPlayerFromCharacter(part.Parent)
-			if not plr then return end
-			taken = true
+		local info = { landAt = landAt, meteor = meteor, pos = pos, taken = false }
+		info.collect = function(plr)
+			if info.taken or now() < landAt - 0.3 then return false end
+			info.taken = true
 			active[m] = nil
+			infos[m] = nil
 			ctx.onCollect(plr, meteor, pos)
 			m:Destroy()
+			return true
+		end
+		infos[m] = info
+		hit.Touched:Connect(function(part)
+			local plr = Players:GetPlayerFromCharacter(part.Parent)
+			if plr then info.collect(plr) end
 		end)
+	end
+	-- питомец «Светлячок» собирает упавшие звёзды в радиусе
+	function Stars.tryCollect(plr, at, radius)
+		local n = 0
+		for m, info in infos do
+			if m.Parent and (info.pos - at).Magnitude <= radius and info.collect(plr) then n += 1 end
+		end
+		return n
 	end
 
 	task.spawn(function()
@@ -78,6 +92,7 @@ function Stars.start(ctx)
 			for m, dieAt in active do
 				if not m.Parent or t > dieAt then
 					active[m] = nil
+					infos[m] = nil
 					if m.Parent then m:Destroy() end
 				else
 					n += 1

@@ -220,7 +220,7 @@ local function dumpState(name)
 end
 dumpState("hud")
 local colFrame = hud:FindFirstChild("Buttons")
-local names = { "shop", "bag", "upgrades", "travel", "store", "menu" }
+local names = { "shop", "bag", "upgrades", "travel", "pets", "store", "menu" }
 local i = 0
 for _, b in colFrame:GetChildren() do
 	if b:IsA("TextButton") then
@@ -234,7 +234,36 @@ for _, b in colFrame:GetChildren() do
 end
 -- новые сцены: алхимия, пушка, телескоп
 do
-	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 6 then b.Activated:Fire() end end
+	inv("Admin", "contest")
+	frames(10, 0.2)
+	dumpState("contest")
+	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
+	frames(3, 0.2)
+end
+do
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then b.Activated:Fire() end end
+	frames(5, 0.2)
+	for _, d in pg.SpiritWindows:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "Обмен" and d.Parent:IsA("TextButton") then d.Parent.Activated:Fire() break end
+	end
+	frames(8, 0.2)
+	dumpState("trade")
+	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
+	frames(3, 0.2)
+end
+do
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then b.Activated:Fire() end end
+	frames(5, 0.2)
+	for _, d in pg.SpiritWindows:GetDescendants() do
+		if d:IsA("TextLabel") and d.Text == "Подарок дня" and d.Parent:IsA("TextButton") then d.Parent.Activated:Fire() break end
+	end
+	frames(8, 0.2)
+	dumpState("daily")
+	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
+	frames(3, 0.2)
+end
+do
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then b.Activated:Fire() end end
 	frames(5, 0.2)
 	for _, d in pg.SpiritWindows:GetDescendants() do
 		if d:IsA("TextLabel") and d.Text == "Настройки" and d.Parent:IsA("TextButton") then d.Parent.Activated:Fire() break end

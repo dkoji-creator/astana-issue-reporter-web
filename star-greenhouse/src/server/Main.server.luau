@@ -8,6 +8,7 @@ local RunService = game:GetService("RunService")
 local Shared = ReplicatedStorage:WaitForChild("Shared")
 local G = require(Shared:WaitForChild("Game"))
 local Map = require(script.Parent:WaitForChild("Map"))
+local StarsMod = require(script.Parent:WaitForChild("Stars"))
 
 local ADMIN_ID = 8432365972
 local STORE = DataStoreService:GetDataStore("StarGreenhouse_v1")
@@ -27,13 +28,13 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
 	RX[n] = e
 end
-for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic", "RaceStart", "RaceFinish", "TpTo" } do
+for _, n in { "Buy", "Sell", "Upgrade", "BuyDecor", "Daily", "Redeem", "Fav", "Top", "Admin", "State", "ClaimQuest", "Travel", "Home", "PollenDone", "BuyCan", "Brew", "CannonStart", "CannonEnd", "FishCast", "FishResult", "BuyMystic", "RaceStart", "RaceFinish", "TpTo", "PetBuy", "PetEquip", "TradeRequest", "ContestVote", "ContestView" } do
 	local f = Instance.new("RemoteFunction")
 	f.Name = n
 	f.Parent = remotes
@@ -58,7 +59,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1 }, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 },
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1 }, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 }, pets = { owned = {}, eq = "" },
 	}
 end
 
@@ -145,8 +146,9 @@ local function snapshot(plr)
 		coins = d.coins, earned = d.earned, seeds = d.seeds, fruits = d.fruits, upg = d.upg, decor = d.decor, idx = d.idx, mutSeen = d.mutSeen,
 		perms = d.perms, potion = d.potion, bedCount = d.bedCount, plot = s.plot, bagCap = BAG_CAP, stats = d.stats, sel = s.sel,
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
-		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {}, race = d.race,
+		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak,
+			nextDay = (d.daily.last == math.floor(now() / 86400) - 1) and (d.daily.streak % 7 + 1) or ((d.daily.last == math.floor(now() / 86400)) and d.daily.streak or 1) },
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {}, race = d.race, pets = d.pets,
 	}
 end
 local function push(plr, ...)
@@ -337,6 +339,7 @@ local function newBed(plr, d, plantId, regrow)
 	local ev, left = eventNow()
 	if ev and ev.grow then ready = t + flareRemaining(ready - t, left) end
 	local luck = G.upgradeValue("luck", d.upg.luck) * (G.PlanetLuck[d.planet or 1] or 1)
+	if d.pets.eq == "owl" and d.pets.owned.owl then luck *= G.petValue("owl", d.pets.owned.owl) end
 	if d.potion.uses > 0 then
 		luck *= d.potion.luck
 		d.potion.uses -= 1
@@ -683,18 +686,30 @@ RX.Daily.OnServerInvoke = function(plr)
 	d.daily.streak = (d.daily.last == day - 1) and (d.daily.streak % 7 + 1) or 1
 	d.daily.last = day
 	local pn = math.max(1, unlockedPlanets(d))
-	local coins = G.Daily.coins[d.daily.streak] * (1 + (pn - 1) * 2)
-	addCoins(plr, coins)
-	-- в подарок ещё и семя с самой дальней планеты
-	local pool = {}
-	for _, p in G.PlantList do
-		if p.rarity == "common" and G.PlanetIndex[p.planet] == pn then table.insert(pool, p.id) end
+	local cal = G.Calendar[d.daily.streak]
+	local rng = Random.new()
+	local text
+	if cal.kind == "coins" then
+		local coins = G.starReward(pn, false) * 60 * cal.mult
+		addCoins(plr, coins)
+		text = ("+%s монет"):format(G.fmt(coins))
+	elseif cal.kind == "seed" then
+		local id = G.pickSeed(cal.rank, pn, rng)
+		d.seeds[id] = (d.seeds[id] or 0) + cal.qty
+		if not S[plr].sel then S[plr].sel = id end
+		text = ("%s x%d"):format(G.Plants[id].name, cal.qty)
+	elseif cal.kind == "cans" then
+		d.cans["c" .. cal.tier] = (d.cans["c" .. cal.tier] or 0) + cal.qty
+		text = ("%s x%d"):format(G.Cans[cal.tier].name, cal.qty)
+	else
+		local id = G.pickSeed(5, pn, rng)
+		d.seeds[id] = (d.seeds[id] or 0) + 1
+		d.cans.c5 = (d.cans.c5 or 0) + 5
+		text = ("%s и 5 леек сверхновой"):format(G.Plants[id].name)
+		RX.Reveal:FireClient(plr, { id = id, m = {}, w = G.Plants[id].kg, head = "7 ДНЕЙ ПОДРЯД!", sub = "Легендарное семя и 5 леек сверхновой", color = Color3.fromRGB(255, 205, 70), sfx = "chest" })
 	end
-	local seed = pool[math.random(1, #pool)]
-	d.seeds[seed] = (d.seeds[seed] or 0) + 2
-	if not S[plr].sel then S[plr].sel = seed end
-	push(plr, "coins", "earned", "seeds", "daily", "sel", "planets")
-	return true, coins, seed, d.daily.streak
+	push(plr, "coins", "earned", "seeds", "daily", "sel", "planets", "cans")
+	return true, text, d.daily.streak
 end
 RX.Redeem.OnServerInvoke = function(plr, code)
 	local d = D[plr]
@@ -970,6 +985,8 @@ local function pollenTick(t)
 end
 
 local grant -- покупки за Robux (объявлено ниже)
+local applyPet -- питомец игрока (объявлено ниже)
+local CONTEST = {} -- конкурс огородов (функции ниже)
 RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 	if plr.UserId ~= ADMIN_ID then return false end
 	local d, s = D[plr], S[plr]
@@ -981,6 +998,15 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		addCoins(plr, 1000000000)
 	elseif cmd == "planets" then
 		d.earned = math.max(d.earned, G.PlanetUnlock[6])
+	elseif cmd == "contest" then
+		return CONTEST.start(true)
+	elseif cmd == "contestEnd" then
+		CONTEST.endNow()
+	elseif cmd == "pets" then
+		for _, id in G.PetOrder do d.pets.owned[id] = G.PetMaxLevel end
+		d.pets.eq = d.pets.eq ~= "" and d.pets.eq or "firefly"
+		applyPet(plr)
+		push(plr, "pets")
 	elseif cmd == "alldonate" then
 		for _, key in G.ProductOrder do
 			if G.Products[key] and grant then grant(plr, key) end
@@ -1175,6 +1201,268 @@ task.spawn(function()
 	end
 end)
 
+-- питомцы: покупка/улучшение, выбор; клиенты рисуют питомца по атрибутам игрока
+function applyPet(plr)
+	local d = D[plr]
+	if not d then return end
+	local eq = d.pets.eq or ""
+	plr:SetAttribute("Pet", eq)
+	plr:SetAttribute("PetLvl", eq ~= "" and (d.pets.owned[eq] or 0) or 0)
+end
+RX.PetBuy.OnServerInvoke = function(plr, id)
+	local d = D[plr]
+	if not d or type(id) ~= "string" or not G.Pets[id] then return false end
+	local lvl = d.pets.owned[id] or 0
+	if lvl >= G.PetMaxLevel then return false, "Максимальный уровень" end
+	local price = G.petPrice(id, lvl + 1, math.max(1, unlockedPlanets(d)))
+	if d.coins < price then return false, "Не хватает монет" end
+	d.coins -= price
+	d.pets.owned[id] = lvl + 1
+	if (d.pets.eq or "") == "" or d.pets.eq == id then d.pets.eq = id end
+	applyPet(plr)
+	push(plr, "coins", "pets")
+	return true, lvl + 1
+end
+RX.PetEquip.OnServerInvoke = function(plr, id)
+	local d = D[plr]
+	if not d or type(id) ~= "string" then return false end
+	if id ~= "" and not d.pets.owned[id] then return false end
+	d.pets.eq = id
+	applyPet(plr)
+	push(plr, "pets")
+	return true
+end
+-- работа питомцев: светлячок собирает звёзды, поливобот поливает грядки
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		local t = now()
+		for plr, d in D do
+			local s = S[plr]
+			local eq = d.pets.eq
+			local lvl = eq and d.pets.owned[eq]
+			local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+			if lvl and root and s then
+				if eq == "firefly" and StarsMod.tryCollect then
+					StarsMod.tryCollect(plr, root.Position, G.petValue("firefly", lvl))
+				elseif eq == "waterbot" and t >= (s.nextBot or 0) then
+					local plot = s.plot and Map.plots[s.plot]
+					if plot and (root.Position - plot.center).Magnitude < 90 then
+						s.nextBot = t + G.petValue("waterbot", lvl)
+						for i, b in d.beds do
+							if t < b.ready and (not b.wt or t - b.wt >= G.WaterCooldown) and i <= d.bedCount then
+								local pct = G.upgradeValue("water", d.upg.water) / 100
+								b.ready = t + (b.ready - t) * (1 - pct)
+								b.wt = t
+								refreshBed(plr, i)
+								questProgress(plr, "water", 1)
+								RX.PetFx:FireClient(plr, "water", i)
+								break
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+end)
+
+-- обмен плодами между игроками: запрос, предложения обеих сторон, «готов», обмен целиком на сервере
+local trades, tradeReq = {}, {}
+local TRADE_MAX = 6
+local function fruitView(d, uids)
+	local out = {}
+	for _, u in uids do
+		for _, f in d.fruits do
+			if f.uid == u then table.insert(out, { uid = f.uid, id = f.id, m = f.m, w = f.w }) break end
+		end
+	end
+	return out
+end
+local function tradeSend(T)
+	for _, p in { T.a, T.b } do
+		local o = p == T.a and T.b or T.a
+		if D[p] and D[o] then
+			RX.Trade:FireClient(p, { state = "open", partner = o.DisplayName, mine = fruitView(D[p], T.offer[p]), theirs = fruitView(D[o], T.offer[o]),
+				myReady = T.ready[p] == true, theirReady = T.ready[o] == true })
+		end
+	end
+end
+local function tradeEnd(T, why, okText)
+	trades[T.a], trades[T.b] = nil, nil
+	for _, p in { T.a, T.b } do
+		if p.Parent then RX.Trade:FireClient(p, { state = why, text = okText }) end
+	end
+end
+RX.TradeRequest.OnServerInvoke = function(plr, uid)
+	local target = type(uid) == "number" and Players:GetPlayerByUserId(uid)
+	if not target or target == plr or not D[target] then return false, "Игрок не найден" end
+	if trades[plr] or trades[target] then return false, "Игрок уже обменивается" end
+	tradeReq[target] = { from = plr, t = now() }
+	RX.Trade:FireClient(target, { state = "request", from = plr.DisplayName, fromId = plr.UserId })
+	return true
+end
+RX.TradeRespond.OnServerEvent:Connect(function(plr, accept)
+	local r = tradeReq[plr]
+	tradeReq[plr] = nil
+	if not r or not r.from.Parent or now() - r.t > 30 then return end
+	if not accept then
+		notify(r.from, plr.DisplayName .. " отказался от обмена", "bad")
+		return
+	end
+	if trades[plr] or trades[r.from] then return end
+	local T = { a = r.from, b = plr, offer = { [r.from] = {}, [plr] = {} }, ready = {} }
+	trades[r.from], trades[plr] = T, T
+	tradeSend(T)
+end)
+RX.TradeOffer.OnServerEvent:Connect(function(plr, uids)
+	local T = trades[plr]
+	local d = D[plr]
+	if not T or not d or type(uids) ~= "table" then return end
+	local clean, seen = {}, {}
+	for _, u in uids do
+		if type(u) == "number" and not seen[u] and #clean < TRADE_MAX then
+			for _, f in d.fruits do
+				if f.uid == u then table.insert(clean, u) seen[u] = true break end
+			end
+		end
+	end
+	T.offer[plr] = clean
+	T.ready = {}
+	tradeSend(T)
+end)
+RX.TradeReady.OnServerEvent:Connect(function(plr, flag)
+	local T = trades[plr]
+	if not T then return end
+	T.ready[plr] = flag == true
+	if not (T.ready[T.a] and T.ready[T.b]) then tradeSend(T) return end
+	local da, db = D[T.a], D[T.b]
+	if not da or not db then tradeEnd(T, "cancel", "Обмен отменён") return end
+	local function take(d, uids)
+		local want, got, keep = {}, {}, {}
+		for _, u in uids do want[u] = true end
+		for _, f in d.fruits do
+			if want[f.uid] then table.insert(got, f) else table.insert(keep, f) end
+		end
+		return got, keep
+	end
+	local ga, ka = take(da, T.offer[T.a])
+	local gb, kb = take(db, T.offer[T.b])
+	if #ga ~= #T.offer[T.a] or #gb ~= #T.offer[T.b] then tradeEnd(T, "cancel", "Плоды изменились, обмен отменён") return end
+	if #ka + #gb > BAG_CAP or #kb + #ga > BAG_CAP then tradeEnd(T, "cancel", "У кого-то полна сумка") return end
+	for _, f in gb do
+		da.uid += 1
+		table.insert(ka, { uid = da.uid, id = f.id, m = f.m, w = f.w, t = now() })
+	end
+	for _, f in ga do
+		db.uid += 1
+		table.insert(kb, { uid = db.uid, id = f.id, m = f.m, w = f.w, t = now() })
+	end
+	da.fruits, db.fruits = ka, kb
+	push(T.a, "fruits")
+	push(T.b, "fruits")
+	tradeEnd(T, "done", "Обмен завершён!")
+end)
+RX.TradeCancel.OnServerEvent:Connect(function(plr)
+	local T = trades[plr]
+	if T then tradeEnd(T, "cancel", plr.DisplayName .. " отменил обмен") end
+	tradeReq[plr] = nil
+end)
+Players.PlayerRemoving:Connect(function(plr)
+	local T = trades[plr]
+	if T then tradeEnd(T, "cancel", "Игрок вышел, обмен отменён") end
+	tradeReq[plr] = nil
+end)
+
+-- конкурс «Лучший огород»: голосование, корона над огородом победителя и награда
+local contest, crownPlot, lastContest = nil, nil, 0
+local function gardenStats(p)
+	local d, s = D[p], S[p]
+	local plants, kg, best = 0, 0, 1
+	for _, b in d.beds do
+		plants += 1
+		kg += b.w
+		if #b.m > 0 then best = math.min(best, G.mutChance(b.m)) end
+	end
+	return { id = p.UserId, name = p.DisplayName, planet = d.planet or 1, plants = plants, kg = math.floor(kg * 10) / 10, best = best, plot = s.plot }
+end
+local function contestStart(force)
+	local cands = {}
+	for p in D do
+		if S[p] and S[p].plot then table.insert(cands, gardenStats(p)) end
+	end
+	if #cands < 2 and not force then return false end
+	if #cands == 0 then return false end
+	contest = { ends = now() + G.Contest.vote, votes = {}, cands = cands, force = force }
+	lastContest = now()
+	RX.Contest:FireAllClients({ state = "vote", ends = contest.ends, cands = cands })
+	return true
+end
+local function contestFinish()
+	local c = contest
+	contest = nil
+	local count = {}
+	for _, uid in c.votes do count[uid] = (count[uid] or 0) + 1 end
+	local bestId, bestN = nil, 0
+	for _, cand in c.cands do
+		local n = count[cand.id] or 0
+		if n > bestN or (n == bestN and n > 0 and math.random() < 0.5) then bestId, bestN = cand.id, n end
+	end
+	if crownPlot then Map.setCrown(crownPlot, false) crownPlot = nil end
+	local winner = bestId and Players:GetPlayerByUserId(bestId)
+	if not winner or not D[winner] then
+		RX.Contest:FireAllClients({ state = "result", name = nil })
+		return
+	end
+	local s = S[winner]
+	if s.plot then
+		crownPlot = s.plot
+		Map.setCrown(s.plot, true)
+	end
+	local d = D[winner]
+	local pn = math.max(1, unlockedPlanets(d))
+	local coins = G.starReward(pn, false) * 150
+	addCoins(winner, coins)
+	local id = G.pickSeed(5, pn, Random.new())
+	d.seeds[id] = (d.seeds[id] or 0) + 1
+	push(winner, "seeds")
+	rewardReveal(winner, "ЛУЧШИЙ ОГОРОД!", id, ("Голосов: %d · +%s монет"):format(bestN, G.fmt(coins)), Color3.fromRGB(255, 205, 70), "chest")
+	RX.Contest:FireAllClients({ state = "result", name = winner.DisplayName, votes = bestN, id = winner.UserId })
+end
+RX.ContestVote.OnServerInvoke = function(plr, uid)
+	if not contest or now() >= contest.ends then return false, "Голосование закончилось" end
+	if uid == plr.UserId and not (contest.force and #contest.cands == 1) then return false, "За свой огород голосовать нельзя" end
+	for _, cand in contest.cands do
+		if cand.id == uid then
+			contest.votes[plr] = uid
+			return true
+		end
+	end
+	return false
+end
+RX.ContestView.OnServerInvoke = function(plr, uid)
+	local target = type(uid) == "number" and Players:GetPlayerByUserId(uid)
+	local s = target and S[target]
+	local plot = s and s.plot and Map.plots[s.plot]
+	local ch = plr.Character
+	if not plot or not ch or (S[plr] and S[plr].traveling) then return false end
+	ch:PivotTo(plot.entrance)
+	return true
+end
+CONTEST.start = contestStart
+CONTEST.endNow = function() if contest then contest.ends = now() end end
+task.spawn(function()
+	while true do
+		task.wait(1)
+		local t = now()
+		if contest then
+			if t >= contest.ends then contestFinish() end
+		elseif t % G.Contest.period < 2 and t - lastContest > 60 then
+			contestStart(false)
+		end
+	end
+end)
+
 -- гонка на Марсе: время считает сервер, клиент сообщает пройденные ворота
 RX.RaceStart.OnServerInvoke = function(plr)
 	local d, s = D[plr], S[plr]
@@ -1337,6 +1625,7 @@ local function onJoin(plr)
 	d.gardens[tostring(d.planet)] = nil
 	claimPlot(plr)
 	buildStashPlots(plr)
+	applyPet(plr)
 	-- что выросло, пока игрока не было
 	local ripe = 0
 	for _, b in d.beds do

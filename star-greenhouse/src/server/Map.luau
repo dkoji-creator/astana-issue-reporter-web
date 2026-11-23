@@ -541,6 +541,39 @@ local function holoSign(parent, pos, text, color, sub)
 	return p, t2
 end
 
+-- корона победителя конкурса над огородом
+function Map.setCrown(id, on: boolean)
+	local plot = Map.plots[id]
+	if not plot then return end
+	local old = plot.model:FindFirstChild("Crown")
+	if old then old:Destroy() end
+	if not on then return end
+	local m = Instance.new("Model")
+	m.Name = "Crown"
+	local pos = plot.center + V3(0, 24, 0)
+	local gold, gem = c(255, 205, 70), c(255, 90, 140)
+	ring(m, "CrownBand", pos, 3.2, 0, 0.9, 1.4, gold, Mat.Neon, 20, nil, { Transparency = 0 })
+	for k = 0, 4 do
+		local a = k / 5 * PI * 2
+		local p = pos + V3(cos(a) * 3.2, 1.6, sin(a) * 3.2)
+		ell(m, "CrownSpike", CF(p), V3(1, 3, 1), gold, Mat.Neon, { CanCollide = false })
+		ball(m, "CrownGem", p + V3(0, 1.8, 0), 0.8, gem, Mat.Neon)
+	end
+	local core = anchorPart(m, "CrownCore", CF(pos), V3(1, 1, 1))
+	light(core, gold, 40, 2)
+	emitter(core, { Color = ColorSequence.new(gold), Size = NumberSequence.new(0.5, 0), LightEmission = 1, Lifetime = NumberRange.new(1, 2), Rate = 20,
+		Speed = NumberRange.new(2, 5), SpreadAngle = Vector2.new(180, 180) })
+	local bb = Instance.new("BillboardGui")
+	bb.Size, bb.StudsOffset, bb.LightInfluence, bb.MaxDistance = UDim2.fromOffset(260, 40), V3(0, 5, 0), 0, 600
+	bb.Parent = core
+	local t = Instance.new("TextLabel")
+	t.Size, t.BackgroundTransparency, t.TextScaled, t.Font = UDim2.fromScale(1, 1), 1, true, Enum.Font.GothamBlack
+	t.Text, t.TextColor3, t.TextStrokeTransparency = "ЛУЧШИЙ ОГОРОД", gold, 0.3
+	t.Parent = bb
+	m:SetAttribute("Spin", 0.8)
+	m:SetAttribute("Pivot", pos)
+	m.Parent = plot.model
+end
 -- киоски площади: у каждого своя узнаваемая постройка и большая вывеска с иконкой. Перед киоска (-Z) смотрит в центр
 local function kioskSign(m, kcf, color, title, iconKey, y)
 	local board = part(m, "Sign", V3(12.5, 3.6, 0.5), kcf * CF(0, y, 2.4), c(14, 16, 30), Mat.SmoothPlastic, { CanCollide = false })

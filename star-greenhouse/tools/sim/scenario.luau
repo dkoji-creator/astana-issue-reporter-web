@@ -368,7 +368,7 @@ do
 	end
 	-- меню «Ещё»
 	local menuBtn
-	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 6 then menuBtn = b end end
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 7 then menuBtn = b end end
 	check(menuBtn ~= nil, "нет кнопки Ещё")
 	if menuBtn then
 		menuBtn.Activated:Fire()
@@ -675,6 +675,38 @@ do
 	check((snap.cans.c5 or 0) >= 10, "лейки сверхновой не выданы")
 end
 
+stage("питомцы")
+do
+	inv("Admin", "coinsB")
+	check(inv("PetBuy", "waterbot"), "покупка поливобота")
+	snap = inv("State")
+	check(snap.pets.owned.waterbot == 1 and snap.pets.eq == "waterbot", "поливобот не с игроком")
+	check(plr:GetAttribute("Pet") == "waterbot", "атрибут питомца")
+	check(inv("PetBuy", "waterbot"), "улучшение поливобота")
+	check(inv("State").pets.owned.waterbot == 2, "уровень питомца")
+	check(not inv("PetEquip", "owl"), "нельзя взять некупленного")
+	check(inv("PetBuy", "firefly"), "покупка светлячка")
+	check(inv("PetEquip", "firefly"), "взять светлячка")
+	frames(30, 0.1)
+	check(inv("Admin", "pets"), "админ: питомцы")
+	check(inv("State").pets.owned.owl == G.PetMaxLevel, "все питомцы")
+	check(not inv("PetBuy", "owl"), "выше максимума нельзя")
+	-- поливобот поливает грядку у огорода
+	inv("PetEquip", "waterbot")
+	inv("Admin", "tp", "x")
+	toBed(1)
+	fire("Select", "moon_01")
+	fire("Act", 1)
+	frames(5)
+	local s1 = plot.Beds.Bed1.Soil
+	frames(80, 0.5)
+	check(s1:GetAttribute("Wa") == true or s1:GetAttribute("Plant") == nil, "поливобот не полил")
+	-- окно питомцев
+	for _, b in hud.Buttons:GetChildren() do if b:IsA("TextButton") and b.LayoutOrder == 5 then b.Activated:Fire() end end
+	frames(10, 0.1)
+	for _, w in pg.SpiritWindows:GetChildren() do w.Visible = false end
+end
+
 stage("таблица лидеров")
 do
 	local top = inv("Top")
@@ -709,6 +741,62 @@ fire("Settings", 99, -4, "x")
 frames(3)
 snap = inv("State")
 check(snap.settings.m == 10 and snap.settings.s == 0 and snap.settings.h == 1, "настройки: проверка границ")
+
+stage("обмен плодами")
+do
+	snap = inv("State")
+	local mine = snap.fruits[1]
+	check(mine ~= nil, "для обмена нужен плод")
+	local p2 = SIM.makePlayer(1111, "Friend")
+	Players.PlayerAdded:Fire(p2)
+	frames(20)
+	SIM.makeCharacter(p2)
+	frames(20)
+	check(inv("TradeRequest", 1111), "запрос обмена")
+	check(not inv("TradeRequest", plr.UserId), "обмен с собой")
+	SIM.player = p2
+	fire("TradeRespond", true)
+	SIM.player = plr
+	frames(3)
+	if mine then
+		local n1 = #inv("State").fruits
+		fire("TradeOffer", { mine.uid })
+		fire("TradeReady", true)
+		SIM.player = p2
+		fire("TradeReady", true)
+		local s2 = inv("State")
+		SIM.player = plr
+		frames(3)
+		check(#inv("State").fruits == n1 - 1, "плод не ушёл")
+		check(#s2.fruits == 1 and s2.fruits[1].id == mine.id, "второй игрок не получил плод")
+	end
+	-- конкурс огородов: оба голосуют за огород друга (у второго огород есть)
+	check(inv("Admin", "contest"), "конкурс начался")
+	frames(5, 0.1)
+	check(not inv("ContestVote", plr.UserId), "за себя нельзя")
+	check(inv("ContestVote", 1111), "голос за друга")
+	SIM.player = p2
+	inv("ContestVote", plr.UserId)
+	SIM.player = plr
+	check(inv("ContestView", 1111), "посмотреть огород друга")
+	inv("Admin", "contestEnd")
+	frames(30, 0.1)
+	local crown = workspace.World.Plots:FindFirstChild("Crown", true)
+	check(crown ~= nil, "корона над огородом победителя")
+		-- отмена
+	check(inv("TradeRequest", 1111), "второй запрос")
+	SIM.player = p2
+	fire("TradeRespond", true)
+	SIM.player = plr
+	frames(2)
+	fire("TradeCancel")
+	frames(5, 0.1)
+	check(inv("TradeRequest", 1111), "после отмены можно снова")
+	SIM.player = p2
+	fire("TradeRespond", false)
+	SIM.player = plr
+	frames(5, 0.1)
+end
 
 stage("выход")
 Players.PlayerRemoving:Fire(plr)
