@@ -2696,6 +2696,53 @@ local function splash(pos, color, n, speed)
 end
 
 FX.splash, FX.floatText, FX.burst = splash, floatText, burst
+-- объёмная ударная волна: плоское светящееся кольцо расходится по земле и гаснет
+function FX.shock(pos, color, maxR, dur)
+	local s = Fx3D.part("Shock", 1, color, Enum.Material.Neon, 0.05)
+	if not s then return end
+	s.CFrame = CFrame.new(pos)
+	s.Parent = fxFolder
+	local t0 = os.clock()
+	local c
+	c = RunService.RenderStepped:Connect(function()
+		local q = (os.clock() - t0) / (dur or 0.8)
+		if q >= 1 or not s.Parent then
+			c:Disconnect()
+			s:Destroy()
+			return
+		end
+		local e = 1 - (1 - q) ^ 3
+		local r = 0.5 + (maxR or 8) * e
+		s.Size = Fx3D.Box.Shock * Vector3.new(r, 1, r)
+		s.Transparency = 0.05 + 0.95 * q
+	end)
+end
+-- объёмные кристаллы и звёзды разлетаются вверх и гаснут
+function FX.gemBurst(pos, color, n)
+	local rng = Random.new()
+	local light = color:Lerp(Color3.new(1, 1, 1), 0.35)
+	for i = 1, n or 6 do
+		local p = Fx3D.part(i % 2 == 0 and "Gem" or "Star", 0.18 + rng:NextNumber() * 0.18, i % 2 == 0 and color or light, Enum.Material.Neon, 0)
+		if p then
+			p.CFrame = CFrame.new(pos)
+			p.Parent = fxFolder
+			local dir = rng:NextUnitVector()
+			dir = Vector3.new(dir.X, math.abs(dir.Y) + 0.6, dir.Z).Unit
+			local sp, spin, t0 = rng:NextNumber(6, 12), rng:NextNumber(4, 9), os.clock()
+			local c
+			c = RunService.RenderStepped:Connect(function()
+				local q = os.clock() - t0
+				if q > 1.1 or not p.Parent then
+					c:Disconnect()
+					p:Destroy()
+					return
+				end
+				p.CFrame = CFrame.new(pos + dir * sp * q + Vector3.new(0, -7 * q * q, 0)) * CFrame.Angles(q * spin, q * spin * 0.6, 0)
+				p.Transparency = math.clamp((q - 0.6) / 0.5, 0, 1)
+			end)
+		end
+	end
+end
 
 remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts, kg)
 	local plot = ST.plot and plotsFolder:FindFirstChild("Plot" .. ST.plot)
@@ -2706,6 +2753,13 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 		local col = rar and G.Mut[rar].color or rarityColor(id)
 		local top = bed.Soil.Position + Vector3.new(0, 3, 0)
 		burst(top, col, 24 + (rar and 20 or 0))
+		-- редкий урожай: ударная волна по грядке и разлёт объёмных кристаллов
+		local tierH = rar and G.Mut[rar].tier or 0
+		if tierH >= 2 then
+			local glowH = PM.glowOf(G.Mut[rar])
+			FX.shock(bed.Soil.Position + Vector3.new(0, bed.Soil.Size.Y / 2 + 0.1, 0), glowH, 4 + tierH * 1.5, 0.7 + tierH * 0.08)
+			FX.gemBurst(top, glowH, 3 + tierH)
+		end
 		flyToPlayer(top, G.Plants[id].c1, 1.2)
 		local ws = ((kg or 1) / G.Plants[id].kg) ^ (1 / 3)
 		if ws >= 1.8 then
@@ -2809,7 +2863,11 @@ remotes:WaitForChild("Collected").OnClientEvent:Connect(function(coins, seed, po
 	if seed then text ..= ", семя «" .. plantName(seed) .. "»" end
 	toast(text, (meteor or seed) and "rare" or "ok", 3)
 	playSfx(meteor and "mutation" or "star", 0.95 + math.random() * 0.1)
-	if typeof(pos) == "Vector3" then burst(pos, meteor and Color3.fromRGB(255, 170, 90) or Color3.fromRGB(255, 232, 160), meteor and 40 or 18) end
+	if typeof(pos) == "Vector3" then
+		burst(pos, meteor and Color3.fromRGB(255, 170, 90) or Color3.fromRGB(255, 232, 160), meteor and 40 or 18)
+		FX.shock(pos - Vector3.new(0, 1.5, 0), meteor and Color3.fromRGB(255, 150, 80) or Color3.fromRGB(255, 225, 150), meteor and 9 or 5, meteor and 0.9 or 0.6)
+		if meteor then FX.gemBurst(pos, Color3.fromRGB(255, 150, 80), 6) end
+	end
 end)
 -- звезда летит с неба (ярко, со шлейфом), после падения светится и постепенно гаснет
 RunService.RenderStepped:Connect(function()
@@ -3861,6 +3919,11 @@ do
 		if FX.burst then
 			FX.burst(c, Color3.fromRGB(255, 200, 120), 120)
 			FX.burst(c, Color3.fromRGB(255, 90, 50), 80)
+		end
+		if FX.shock then
+			FX.shock(c, Color3.fromRGB(255, 220, 160), 70, 1.3)
+			task.delay(0.15, function() FX.shock(c, Color3.fromRGB(255, 120, 60), 100, 1.7) end)
+			FX.gemBurst(c, Color3.fromRGB(255, 170, 90), 14)
 		end
 		for _, p in R.model:GetChildren() do
 			if p:IsA("BasePart") and p ~= R.core then
