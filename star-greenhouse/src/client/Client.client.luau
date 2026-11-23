@@ -409,7 +409,48 @@ end
 ------------------------------------------------------------------ питомцы: модели, следование за хозяином, окно
 -- модель питомца: детали со смещением от тела и типом анимации (уши, крылья, колёса, хвост)
 local petFolder = make("Folder", { Name = "Pets" }, workspace)
+local PetLook = require(Shared:WaitForChild("Config"):WaitForChild("PetLook"))
+-- 3D-модель питомца из загруженных мешей (если есть); иначе фигуры ниже
+local function buildPetMesh(id, lvl, parent)
+	local root = ReplicatedStorage:FindFirstChild("PetMeshes")
+	local src = root and root:FindFirstChild(id)
+	if not src or #src:GetChildren() == 0 then return nil end
+	local look = PetLook[id] or {}
+	local sc = 0.8 * (1 + ((lvl or 1) - 1) * 0.07)
+	local m = Instance.new("Model")
+	m.Name = "Pet_" .. id
+	local parts = {}
+	local first
+	for _, t in src:GetChildren() do
+		if t:IsA("BasePart") then
+			local p = t:Clone()
+			local key = t.Name:gsub("%d+$", "")
+			local L = look[t.Name] or look[key]
+			if L then
+				p.Color = L[1]
+				p.Material = Enum.Material[L[2]] or Enum.Material.SmoothPlastic
+				if L[2] == "Glass" then p.Transparency = 0.15 end
+			end
+			p.Size = t.Size * sc
+			p.Anchored, p.CanCollide, p.CanQuery, p.CanTouch, p.CastShadow = true, false, false, false, false
+			p.Parent = m
+			local anim
+			if key == "Crystal" then anim = "crystal" elseif key == "Halo" then anim = "halo" end
+			local e = { p = p, off = CFrame.new(t.Position * sc) * (t.CFrame - t.Position), anim = anim, ph = tonumber(t.Name:match("%d+$")) or 0 }
+			table.insert(parts, e)
+			if key == "Fur" or (not first and key ~= "Crystal") then first = first or p end
+		end
+	end
+	if #parts == 0 then m:Destroy() return nil end
+	local glowCol = (look.Halo or look.Eye or { Color3.new(1, 1, 1) })[1]
+	make("PointLight", { Color = glowCol, Range = 9 + (lvl or 1), Brightness = 0.9 }, first or parts[1].p)
+	m.PrimaryPart = first or parts[1].p
+	m.Parent = parent
+	return { model = m, parts = parts, id = id, lvl = lvl, mesh = true }
+end
 function FX.buildPet(id, lvl, parent)
+	local meshPet = buildPetMesh(id, lvl, parent)
+	if meshPet then return meshPet end
 	local m = Instance.new("Model")
 	m.Name = "Pet_" .. id
 	local k = 1 + ((lvl or 1) - 1) * 0.07
@@ -580,7 +621,17 @@ function FX.posePet(pet, base, t)
 			elseif an == "tail" then a = CFrame.new(math.sin(t * 5 - e.ph * 0.7) * 0.08 * e.ph, 0, 0)
 			elseif an == "leg" then a = CFrame.Angles(math.sin(t * 8 + e.ph * 6) * 0.3, 0, 0)
 			elseif an == "dwingL" or an == "fwingL" then a = CFrame.Angles(0, 0, math.sin(t * (an == "dwingL" and 5 or 4)) * 0.45)
-			elseif an == "dwingR" or an == "fwingR" then a = CFrame.Angles(0, 0, -math.sin(t * (an == "dwingR" and 5 or 4)) * 0.45) end
+			elseif an == "dwingR" or an == "fwingR" then a = CFrame.Angles(0, 0, -math.sin(t * (an == "dwingR" and 5 or 4)) * 0.45)
+			elseif an == "halo" then a = CFrame.Angles(0, t * 0.8, 0)
+			elseif an == "crystal" then
+				-- кристаллы кружат вокруг питомца
+				local c0 = Vector3.new(0, e.off.Position.Y, 0)
+				local rel = e.off.Position - c0
+				local ang = t * 0.6 + e.ph
+				local rp = CFrame.Angles(0, ang, 0) * rel + c0 + Vector3.new(0, math.sin(t * 2 + e.ph) * 0.12, 0)
+				e.p.CFrame = base * CFrame.new(rp) * CFrame.Angles(t * 1.3 + e.ph, t, 0)
+				continue
+			end
 		end
 		e.p.CFrame = base * e.off * a
 	end
@@ -610,7 +661,7 @@ do
 					e.pos = root.Position + Vector3.new(0, 3, 0)
 					pets[p] = e
 				end
-				local target = (root.CFrame * CFrame.new(2.6, 2.4 + math.sin(t * 2 + p.UserId) * 0.3, 2.2)).Position
+				local target = (root.CFrame * CFrame.new(2.8, (e.mesh and -1.4 or 2.4) + math.sin(t * 2 + p.UserId) * 0.3, 2.2)).Position
 				if p == plr and override and t < override.untilT then target = override.pos end
 				e.pos = e.pos:Lerp(target, math.min(1, dt * (p == plr and override and 5 or 6)))
 				local look = root.CFrame.LookVector
@@ -658,7 +709,7 @@ do
 			vp.CurrentCamera = vcam
 			local pet = FX.buildPet(id, math.max(1, lvl), vp)
 			FX.posePet(pet, CFrame.new(), 0)
-			vcam.CFrame = CFrame.lookAt(Vector3.new(2.6, 1.6, -5), Vector3.new(0, 0.4, 0))
+			vcam.CFrame = pet.mesh and CFrame.lookAt(Vector3.new(3, 2.4, -6.2), Vector3.new(0, 1.2, 0.2)) or CFrame.lookAt(Vector3.new(2.6, 1.6, -5), Vector3.new(0, 0.4, 0))
 			table.insert(spinners, pet)
 			K.text(card, def.name, { Position = UDim2.new(0, 8, 0.36, 0), Size = UDim2.new(1, -16, 0, 22), MaxText = 17, TextColor3 = def.color })
 			K.text(card, def.desc, { Position = UDim2.new(0, 8, 0.36, 22), Size = UDim2.new(1, -16, 0, 30), MaxText = 12, TextWrapped = true, TextColor3 = T.sub, Medium = true })
@@ -2232,24 +2283,33 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 	toast(("%s%s, %.2f кг"):format(title ~= "" and (title .. " ") or "", name, kg or 0), title ~= "" and "rare" or "ok")
 	playSfx(title ~= "" and "harvestRare" or "harvest")
 end)
-remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance, pos)
-	toast(("%s нашёл «%s %s» (%s)!"):format(who, title, plant, G.fmtOdds(chance)), "rare", 7)
-	-- сверхредкая находка: столб света виден со всех планет, вспышка и баннер
-	if typeof(pos) == "Vector3" and chance <= 1 / 1000000 then
-		playSfx("legendary")
+-- редкие находки других игроков: строка в чате (свой сервер и другие сервера), без баннеров на экране
+local function chatLine(text)
+	local ok = pcall(function()
+		local TCS = game:GetService("TextChatService")
+		local chs = TCS:FindFirstChild("TextChannels")
+		local ch = chs and (chs:FindFirstChild("RBXGeneral") or chs:FindFirstChildWhichIsA("TextChannel"))
+		if not ch then error("нет канала") end
+		ch:DisplaySystemMessage(text)
+	end)
+	if not ok then
+		pcall(function()
+			game:GetService("StarterGui"):SetCore("ChatMakeSystemMessage", { Text = text:gsub("<[^>]+>", ""), Color = Color3.fromRGB(255, 210, 120) })
+		end)
+	end
+end
+FX.chatLine = chatLine
+remotes:WaitForChild("Announce").OnClientEvent:Connect(function(who, plant, title, chance, pos, otherServer)
+	local name = (title ~= "" and (title .. " ") or "") .. plant
+	chatLine(('<font color="#FFD27A">★ %s</font> нашёл <font color="#C9A0FF">«%s»</font> <font color="#9FD8FF">(%s)</font>%s'):format(
+		who, name, G.fmtOdds(chance), otherServer and ' <font color="#A0A8C0">· другой сервер</font>' or ""))
+	-- сверхредкая находка на этом сервере: только столб света в мире
+	if not otherServer and typeof(pos) == "Vector3" and chance <= 1 / 1000000 then
 		local col = Color3.fromRGB(255, 230, 150)
 		local beam = make("Part", { Name = "LegendBeam", Shape = Enum.PartType.Cylinder, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
-			Material = Enum.Material.Neon, Color = col, Transparency = 0.3, Size = Vector3.new(3000, 8, 8), CFrame = CFrame.new(pos + Vector3.new(0, 1500, 0)) * CFrame.Angles(0, 0, math.pi / 2) }, fxFolder)
-		make("PointLight", { Color = col, Range = 60, Brightness = 5 }, beam)
-		TweenService:Create(beam, TweenInfo.new(20), { Transparency = 1, Size = Vector3.new(3000, 2, 2) }):Play()
-		task.delay(20, function() beam:Destroy() end)
-		local gui = make("ScreenGui", { Name = "Legend", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 55 }, pg)
-		local flash = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0.1 }, gui)
-		TweenService:Create(flash, TweenInfo.new(1.2), { BackgroundTransparency = 1 }):Play()
-		local b = K.text(gui, title .. "!", { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.3), Size = UDim2.fromOffset(700, 60), MaxText = 48, TextColor3 = T.gold })
-		K.text(gui, who .. " · " .. plant .. " · " .. G.fmtOdds(chance), { AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.38), Size = UDim2.fromOffset(700, 30), MaxText = 22 })
-		K.pop(b)
-		task.delay(6, function() gui:Destroy() end)
+			Material = Enum.Material.Neon, Color = col, Transparency = 0.45, Size = Vector3.new(3000, 5, 5), CFrame = CFrame.new(pos + Vector3.new(0, 1500, 0)) * CFrame.Angles(0, 0, math.pi / 2) }, fxFolder)
+		TweenService:Create(beam, TweenInfo.new(15), { Transparency = 1, Size = Vector3.new(3000, 1, 1) }):Play()
+		task.delay(15, function() beam:Destroy() end)
 	end
 end)
 

@@ -13,12 +13,13 @@ local shared = folder("Shared", RS)
 mod("ModuleScript", "Game", shared, "shared/Game")
 mod("ModuleScript", "PlantModels", shared, "shared/PlantModels")
 local cfg = folder("Config", shared)
-for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantMeshes" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
+for _, n in { "Plants", "Mutations", "Icons", "Sky", "Planets", "Audio", "PlantMeshes", "PetMeshes", "PetLook" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
 local srv = folder("Server", game:GetService("ServerScriptService"))
 local mainScript = mod("Script", "Main", srv, "server/Main.server")
 mod("ModuleScript", "Map", srv, "server/Map")
 mod("ModuleScript", "WorldTerrain", srv, "server/WorldTerrain")
 mod("ModuleScript", "PlantLoader", srv, "server/PlantLoader")
+mod("ModuleScript", "PetLoader", srv, "server/PetLoader")
 mod("ModuleScript", "Stars", srv, "server/Stars")
 local sps = folder("StarterPlayerScripts", game:GetService("StarterPlayer"))
 local cl = folder("Client", sps)
@@ -42,6 +43,13 @@ do
 	local ins = game:GetService("InsertService")
 	rawset(ins.__p, "LoadAsset", function(self, id)
 		local m = Instance.new("Model")
+		for _, nm in { "rover__Fur", "rover__Halo", "rover__Crystal1", "rover__Eye" } do
+			local mp = Instance.new("MeshPart")
+			mp.Name = nm
+			mp.Size = Vector3.new(1, 1, 1)
+			mp.CFrame = CFrame.new(0, 1, 0)
+			mp.Parent = m
+		end
 		for _, pid in { "moon_01", "mars_01" } do
 			for _, role in { "F", "A", "L", "G", "R" } do
 				local nm = Instance.new("Model")

@@ -22,7 +22,12 @@ task.spawn(function()
 	Map.buildFlora()
 	print("PlantLoader: меши растений", n)
 end)
+task.spawn(function()
+	local PetLoader = require(script.Parent:WaitForChild("PetLoader"))
+	print("PetLoader: детали питомцев", PetLoader.run())
+end)
 
+local lastGlobalAnn = 0 -- рассылка редких находок на другие сервера не чаще раза в 5 с
 ------------------------------------------------------------------ ремоуты
 local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
@@ -486,6 +491,14 @@ local function harvestBed(plr, i, silent)
 	if chance <= 1 / 50000 then
 		local pl = s.plot and Map.plots[s.plot]
 		RX.Announce:FireAllClients(plr.DisplayName, plant.name, G.mutTitle(b.m), chance, pl and pl.beds[i] and pl.beds[i].pos)
+		-- и в чат всех других серверов игры
+		if now() - lastGlobalAnn >= 5 then
+			lastGlobalAnn = now()
+			local msg = { job = game.JobId, who = plr.DisplayName, plant = plant.name, title = G.mutTitle(b.m), chance = chance }
+			task.spawn(function()
+				pcall(function() game:GetService("MessagingService"):PublishAsync("SG_RareFind", msg) end)
+			end)
+		end
 	end
 	push(plr, "fruits", "idx", "mutSeen", "stats")
 	questProgress(plr, "harvest", 1)
@@ -1684,6 +1697,16 @@ Players.PlayerRemoving:Connect(function(plr)
 	D[plr], S[plr] = nil, nil
 end)
 for _, plr in Players:GetPlayers() do task.spawn(onJoin, plr) end
+task.spawn(function()
+	pcall(function()
+		game:GetService("MessagingService"):SubscribeAsync("SG_RareFind", function(m)
+			local d = m.Data
+			if type(d) == "table" and d.job ~= game.JobId and type(d.chance) == "number" then
+				RX.Announce:FireAllClients(tostring(d.who), tostring(d.plant), tostring(d.title or ""), d.chance, nil, true)
+			end
+		end)
+	end)
+end)
 -- автосохранение раз в 2 минуты и таблица лидеров раз в 1.5 минуты
 task.spawn(function()
 	task.wait(5)
