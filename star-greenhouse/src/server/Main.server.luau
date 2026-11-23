@@ -539,7 +539,20 @@ local function nearKiosk(plr, id)
 end
 RX.TpTo.OnServerInvoke = function(plr, id)
 	local d, s = D[plr], S[plr]
-	if not d or s.traveling or (id ~= "shop" and id ~= "sell" and id ~= "market" and id ~= "upgrades") then return false end
+	if not d or s.traveling then return false end
+	if id == "place" then
+		-- занятие этой планеты: алхимия, гонка, пушка, рыбалка, паркур, телескоп
+		local pi = d.planet or 1
+		local pos = Map.spots[G.PlanetPlaceSpot[pi]]
+		local ch = plr.Character
+		if not pos or not ch then return false end
+		local ctr = Map.planets[pi].center
+		local toC = (ctr - pos) * Vector3.new(1, 0, 1)
+		local target = G.PlanetPlaceSpot[pi] == "spiralStart" and pos + Vector3.new(0, 3, 0) or pos + (toC.Magnitude > 0.1 and toC.Unit * 8 or Vector3.zero) + Vector3.new(0, 4, 0)
+		ch:PivotTo(CFrame.lookAt(target, Vector3.new(pos.X, target.Y, pos.Z)))
+		return true
+	end
+	if id ~= "shop" and id ~= "sell" and id ~= "market" and id ~= "upgrades" then return false end
 	local pos = Map.spots[id .. (d.planet or 1)]
 	local front = Map.spots[id .. "Front" .. (d.planet or 1)]
 	local ch = plr.Character

@@ -562,6 +562,15 @@ function Inst.ScreenPointToRay(self, x, y) return { Origin = Vector3.new(0, 10, 
 function Inst.ViewportPointToRay(self, x, y) return { Origin = Vector3.new(0, 10, 0), Direction = Vector3.new(0, 0, -1) } end
 function Inst.WorldToScreenPoint(self, v) return Vector3.new(422, 195, 50), true end
 function Inst.WorldToViewportPoint(self, v) return Vector3.new(422, 231, 50), true end
+function Inst.IsDescendantOf(self, other)
+	local p = self.Parent
+	while p do
+		if p == other then return true end
+		p = p.Parent
+	end
+	return false
+end
+function Inst.IsAncestorOf(self, other) return other:IsDescendantOf(self) end
 function Inst.GetExtentsSize(self)
 	local _, size = self:GetBoundingBox()
 	return size

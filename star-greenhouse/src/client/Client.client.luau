@@ -232,7 +232,7 @@ remotes:WaitForChild("Notify").OnClientEvent:Connect(toast)
 
 -- монеты и прогресс планет
 do
-	local top = make("Frame", { Name = "Top", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(320, 108) }, hud)
+	local top = make("Frame", { Name = "Top", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 8), Size = UDim2.fromOffset(420, 108) }, hud)
 	local pill, lbl = K.pill(top, "coin", T.gold, 190)
 	pill.AnchorPoint = Vector2.new(0.5, 0)
 	pill.Position = UDim2.new(0.5, 0, 0, 0)
@@ -241,14 +241,15 @@ do
 	UI.planetFill = fill
 	UI.planetText = K.text(top, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 89), Size = UDim2.fromOffset(260, 15), MaxText = 12, TextColor3 = T.sub, Medium = true })
 	-- быстрый телепорт сверху: к огороду и к киоскам площади
-	local tpRow = make("Frame", { Name = "Teleports", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 43), Size = UDim2.fromOffset(312, 32) }, top)
-	listLayout(tpRow, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
-	for i, d in { { "home", "home", "Огород", T.gold }, { "shop", "seed", "Семена", T.green }, { "sell", "coin", "Продажа", T.gold } } do
-		local b = make("TextButton", { Name = "Tp_" .. d[1], Size = UDim2.fromOffset(100, 32), BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, tpRow)
+	local tpRow = make("Frame", { Name = "Teleports", BackgroundTransparency = 1, AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 43), Size = UDim2.fromOffset(420, 32) }, top)
+	listLayout(tpRow, Enum.FillDirection.Horizontal, 5, Enum.HorizontalAlignment.Center)
+	for i, d in { { "home", "home", "Огород", T.gold }, { "shop", "seed", "Семена", T.green }, { "sell", "coin", "Продажа", T.gold }, { "place", "rocket", "Занятие", T.pink } } do
+		local b = make("TextButton", { Name = "Tp_" .. d[1], Size = UDim2.fromOffset(98, 32), BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, tpRow)
 		K.corner(b, UDim.new(1, 0))
 		K.stroke(b, d[4], 1.2, false, 0.3)
 		K.icon(b, d[2], { Size = UDim2.fromOffset(22, 22), Position = UDim2.fromOffset(8, 5) })
-		K.text(b, d[3], { Position = UDim2.fromOffset(32, 0), Size = UDim2.new(1, -38, 1, 0), MaxText = 14, TextXAlignment = Enum.TextXAlignment.Left })
+		local lbl = K.text(b, d[3], { Position = UDim2.fromOffset(32, 0), Size = UDim2.new(1, -38, 1, 0), MaxText = 14, TextXAlignment = Enum.TextXAlignment.Left })
+		if d[1] == "place" then UI.placeLbl = lbl end
 		b.Activated:Connect(function()
 			K.bounce(b)
 			local ok = d[1] == "home" and remotes.Home:InvokeServer() or (d[1] ~= "home" and remotes.TpTo:InvokeServer(d[1]))
@@ -1351,6 +1352,7 @@ loop(0.5, function()
 		end
 		UI.hint.Text = h
 		UI.hintFrame.Visible = h ~= ""
+		if UI.placeLbl then UI.placeLbl.Text = G.PlanetPlace[ST.planet or 1] or "Занятие" end
 		local nearShop, nearSell = nearKiosk("shop"), nearKiosk("sell")
 		UI.shopTimer.Text = (nearShop and "" or "Купить можно у зелёного киоска «Семена» на площади (кнопка «Семена» сверху) · ") .. "обновление через " .. G.fmtTime(G.shopTimeLeft(t))
 		if windows.shop.Visible and nearShop ~= UI.wasNearShop then hooks.shop() end
@@ -2487,6 +2489,29 @@ function FX.cannon()
 	if not ok2 then toast(err or "Раунд не засчитан", "bad") end
 end
 
+-- ворота и ускорители видны только во время своей гонки (стартовая арка видна всегда)
+function FX.raceTrackVisible(on)
+	local track = world:FindFirstChild("RaceTrack", true)
+	if not track then return end
+	local finish = track:FindFirstChild("RaceGate" .. #G.Race.gates)
+	for _, d in track:GetDescendants() do
+		if not (finish and d:IsDescendantOf(finish)) then
+			if d:IsA("BasePart") then
+				d.LocalTransparencyModifier = on and 0 or 1
+			elseif d:IsA("BillboardGui") or d:IsA("PointLight") then
+				d.Enabled = on
+			end
+		end
+	end
+end
+task.spawn(function()
+	for _ = 1, 30 do
+		if world:FindFirstChild("RaceTrack", true) then break end
+		task.wait(1)
+	end
+	FX.raceTrackVisible(false)
+end)
+
 -- Марс: гонка в пыльной буре. 13 ворот по порядку, ускорители, луч к следующим воротам, время считает сервер
 function FX.race()
 	if FX.busy then return end
@@ -2507,6 +2532,7 @@ function FX.race()
 	local function gatePos(g) return g:GetPivot().Position end
 	local pads = {}
 	for _, d in track:GetChildren() do if d:IsA("BasePart") and d:GetAttribute("Boost") then table.insert(pads, d) end end
+	FX.raceTrackVisible(true)
 	local gui = make("ScreenGui", { Name = "RaceGui", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 40 }, pg)
 	local timeL = K.text(gui, "0.0", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 92), Size = UDim2.fromOffset(240, 44), MaxText = 38 })
 	local gateL = K.text(gui, "", { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0, 136), Size = UDim2.fromOffset(320, 24), MaxText = 18, TextColor3 = T.orange })
@@ -2602,9 +2628,10 @@ function FX.race()
 	task.delay(1.6, function() storm:Destroy() end)
 	for _, gg in gates do
 		for _, d in gg:GetDescendants() do
-			if d:IsA("BasePart") then d.LocalTransparencyModifier = 0 if d.Name == "GateGlow" or d.Name == "GateTop" then d.Color = Color3.fromRGB(255, 140, 60) end end
+			if d:IsA("BasePart") and (d.Name == "GateGlow" or d.Name == "GateTop") then d.Color = Color3.fromRGB(255, 140, 60) end
 		end
 	end
+	FX.raceTrackVisible(false)
 	local okR, res = remotes.RaceFinish:InvokeServer(info.token, finished and #gates or -1)
 	if finished and okR and res then
 		local m = G.Medals[res.medal]

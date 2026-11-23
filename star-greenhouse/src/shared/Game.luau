@@ -273,6 +273,8 @@ local function pickSeed(rank, planets, rng)
 end
 G.pickSeed = pickSeed
 
+G.PlanetPlace = { "Алхимия", "Гонка", "Пушка", "Рыбалка", "Паркур", "Телескоп" }
+G.PlanetPlaceSpot = { "alchemy", "raceStart", "cannon", "fishing", "spiralStart", "telescope" }
 G.PlanetFeature = { "Алхимия", "Гонка в пыльной буре", "Метеорная пушка", "Рыбалка в лаве", "Паркур к сундуку", "Телескоп и прыжок в бездну" }
 -- Луна: алхимия. Три плода в котёл, на выходе семя (часто реже исходных) и иногда эликсир удачи
 G.Alchemy = { radius = 40, slots = 3 }
@@ -414,6 +416,44 @@ function G.mysticStock(epoch: number, pi: number)
 	table.sort(out, function(a, b) return G.Rarity[G.Plants[a.id].rarity].rank > G.Rarity[G.Plants[b.id].rarity].rank end)
 	return out
 end
+
+-- питомцы-помощники: один питомец с тобой, уровни 1-5
+G.PetOrder = { "firefly", "waterbot", "owl" }
+G.Pets = {
+	firefly = { name = "Светлячок", desc = "Собирает упавшие звёзды рядом с тобой", price = 2500, color = rgb(255, 230, 110) },
+	waterbot = { name = "Поливобот", desc = "Сам поливает растущие грядки, пока ты у огорода", price = 6000, color = rgb(110, 210, 255) },
+	owl = { name = "Совёнок удачи", desc = "Мутации выпадают чаще", price = 15000, color = rgb(200, 150, 255) },
+}
+G.PetMaxLevel = 5
+function G.petPrice(id: string, level: number, planets: number): number
+	local mult = G.Planets[math.clamp(planets, 1, #G.Planets)].mult
+	return math.floor(G.Pets[id].price * 2.2 ^ (level - 1) * mult ^ 0.6)
+end
+function G.petValue(id: string, lvl: number): number
+	if id == "firefly" then return 14 + 6 * lvl end -- радиус сбора звёзд
+	if id == "waterbot" then return 26 - 3 * lvl end -- секунд между поливами
+	return 1 + 0.12 * lvl -- множитель удачи
+end
+function G.petEffect(id: string, lvl: number): string
+	local v = G.petValue(id, lvl)
+	if id == "firefly" then return ("собирает звёзды в радиусе %d"):format(v) end
+	if id == "waterbot" then return ("поливает грядку раз в %d с"):format(v) end
+	return ("удача мутаций x%.2f"):format(v)
+end
+
+-- календарь наград: 7 дней подряд, награда растёт; пропустил день — серия с начала
+G.Calendar = {
+	{ kind = "coins", mult = 1, text = "Монеты" },
+	{ kind = "seed", rank = 2, qty = 3, text = "3 необычных семени" },
+	{ kind = "cans", tier = 2, qty = 3, text = "3 медные лейки" },
+	{ kind = "coins", mult = 4, text = "Много монет" },
+	{ kind = "seed", rank = 4, qty = 1, text = "Эпическое семя" },
+	{ kind = "cans", tier = 4, qty = 3, text = "3 кометные лейки" },
+	{ kind = "grand", text = "Легендарное семя и 5 леек сверхновой" },
+}
+
+-- конкурс «Лучший огород»: раз в 15 минут голосование 75 секунд
+G.Contest = { period = 900, vote = 75 }
 
 -- Туманность: сундук на вершине спутниковой спирали
 G.Chest = { cooldown = 600 }

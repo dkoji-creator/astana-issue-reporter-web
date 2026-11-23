@@ -244,11 +244,12 @@ function Map.buildPlot(pi, j)
 	local level = hs[5]
 	local flat = CFrame.new(cf.X, level, cf.Z) * (cf - cf.Position)
 	local terr = workspace:FindFirstChildOfClass("Terrain")
+	-- ландшафт округляется блоками по 4 стада: землю делаем на 1.5 ниже, огород ставим на 2 выше уровня
 	if terr then
-		terr:FillBlock(flat * CF(0, 22, 4), V3(74, 44, 70), Mat.Air)
-		terr:FillBlock(flat * CF(0, -7, 4), V3(74, 14, 70), WT.Themes[pi].base)
+		terr:FillBlock(flat * CF(0, 22.5, 4), V3(74, 48, 70), Mat.Air)
+		terr:FillBlock(flat * CF(0, -8.5, 4), V3(74, 14, 70), WT.Themes[pi].base)
 	end
-	cf = cf + V3(0, (level + 0.6) - cf.Y, 0)
+	cf = cf + V3(0, (level + 2) - cf.Y, 0)
 	local P = Map.planets[pi]
 	if P.markers[j] then P.markers[j].Parent = nil end
 	local pm = Instance.new("Model")
@@ -261,6 +262,8 @@ function Map.buildPlot(pi, j)
 	local W2, D2 = 30, 25.5
 	-- космический пол: глянцевая тьма со звёздной пылью
 	part(pm, "Ground", V3(62, 5, 54), cf * CF(0, -2.35, 0), c(14, 14, 28), Mat.SmoothPlastic, { Reflectance = 0.18 })
+	-- каменный цоколь под полом: не видно щелей, если земля вокруг ниже
+	part(pm, "Plinth", V3(61.6, 9, 53.6), cf * CF(0, -9.3, 0), WT.Colors[WT.Themes[pi].base] or c(60, 56, 70), Mat.Slate)
 	-- светящийся пояс по бокам платформы: огород видно издалека
 	for _, sd in { { V3(0, -0.6, -27.05), V3(62.2, 0.35, 0.2) }, { V3(0, -0.6, 27.05), V3(62.2, 0.35, 0.2) }, { V3(-31.05, -0.6, 0), V3(0.2, 0.35, 54.2) }, { V3(31.05, -0.6, 0), V3(0.2, 0.35, 54.2) } } do
 		deco(pm, "SideGlow", sd[2], cf * CF(sd[1]), glow, Mat.Neon, { Transparency = 0.1 })
@@ -1492,12 +1495,14 @@ end
 
 -- Ио: лавовое озеро с каменным причалом для рыбалки
 FEATURE[4] = function(pi, f)
-	local lakeC, out = featureSpot(pi, 180, 138)
-	clearPad(pi, lakeC, 30, 34)
+	local lakeC, out = featureSpot(pi, 180, 134)
+	clearPad(pi, lakeC, 36, 70)
 	local m = Instance.new("Model")
 	m.Name = "LavaLake"
 	m.Parent = f
-	local y = lakeC.Y + 0.3
+	-- чаша над землёй: ландшафт округляется блоками по 4 стада и мог бы скрыть тонкую лаву
+	local y = lakeC.Y + 2.6
+	cyl(m, "LakeBowl", CF(lakeC.X, y - 1.6, lakeC.Z), 3.6, 15 * 2 + 5, c(48, 42, 46), Mat.Basalt)
 	local R = 15
 	local lava, crust, rock = c(255, 110, 30), c(70, 40, 34), c(52, 46, 50)
 	-- чаша: каменный бортик из глыб и тёмная корка по краю
@@ -1506,15 +1511,15 @@ FEATURE[4] = function(pi, f)
 		local a = k / 18 * PI * 2
 		local r = R + 1.6
 		local sz = rng:NextNumber(2.4, 4)
-		ell(m, "LakeRim", CF(lakeC.X + cos(a) * r, y + sz * 0.15, lakeC.Z + sin(a) * r) * A(0, rng:NextNumber(0, 6), 0), V3(sz * 1.5, sz * 0.8, sz * 1.2), rock, Mat.Basalt)
+		ell(m, "LakeRim", CF(lakeC.X + cos(a) * r, y + sz * 0.2, lakeC.Z + sin(a) * r) * A(0, rng:NextNumber(0, 6), 0), V3(sz * 1.6, sz * 0.9, sz * 1.3), rock, Mat.Basalt)
 	end
-	cyl(m, "LakeCrust", CF(lakeC.X, y - 0.2, lakeC.Z), 0.6, R * 2 + 2, crust, Mat.CrackedLava, { CanCollide = false })
-	local surf = cyl(m, "LakeLava", CF(lakeC.X, y + 0.05, lakeC.Z), 0.3, R * 2, lava, Mat.Neon, { CanCollide = false })
+	cyl(m, "LakeCrust", CF(lakeC.X, y + 0.05, lakeC.Z), 0.3, R * 2 + 2, crust, Mat.CrackedLava, { CanCollide = false })
+	local surf = cyl(m, "LakeLava", CF(lakeC.X, y + 0.25, lakeC.Z), 0.3, R * 2, lava, Mat.Neon, { CanCollide = false })
 	surf:SetAttribute("Pulse", 1)
 	for k = 1, 6 do
 		local a = rng:NextNumber(0, PI * 2)
 		local r = rng:NextNumber(2, R - 4)
-		ell(m, "LavaCrustIsle", CF(lakeC.X + cos(a) * r, y + 0.25, lakeC.Z + sin(a) * r) * A(0, a, 0), V3(rng:NextNumber(2, 4), 0.4, rng:NextNumber(1.5, 3)), crust, Mat.CrackedLava, { CanCollide = false })
+		ell(m, "LavaCrustIsle", CF(lakeC.X + cos(a) * r, y + 0.45, lakeC.Z + sin(a) * r) * A(0, a, 0), V3(rng:NextNumber(2, 4), 0.4, rng:NextNumber(1.5, 3)), crust, Mat.CrackedLava, { CanCollide = false })
 	end
 	local bub = anchorPart(m, "LakeBubbles", CF(lakeC.X, y + 0.5, lakeC.Z), V3(R * 1.6, 0.4, R * 1.6))
 	emitter(bub, { Color = ColorSequence.new(c(255, 200, 90), c(255, 80, 20)), Size = NumberSequence.new(0.6, 0), LightEmission = 1, Lifetime = NumberRange.new(0.8, 1.6),
@@ -1528,6 +1533,9 @@ FEATURE[4] = function(pi, f)
 	local pierStart = lakeC + inward * (R + 9)
 	local face = CFrame.lookAt(V3(pierStart.X, y + 1.2, pierStart.Z), V3(lakeC.X, y + 1.2, lakeC.Z))
 	part(m, "Pier", V3(6, 0.8, 16), face * CF(0, 0, -6), c(64, 56, 58), Mat.Slate)
+	for k = 1, 4 do
+		part(m, "PierStep", V3(6, 0.8, 2), face * CF(0, -k * 0.9, 1 + k * 1.8), c(64, 56, 58), Mat.Slate)
+	end
 	for side = -1, 1, 2 do
 		for q = 0, 2 do
 			cyl(m, "PierPost", face * CF(side * 2.6, -1.2, -1 - q * 5.5), 3.2, 0.8, c(40, 34, 36), Mat.Basalt)
@@ -1542,7 +1550,36 @@ FEATURE[4] = function(pi, f)
 	local trig = anchorPart(m, "FishPrompt", face * CF(0, 1.5, -10), V3(5, 3, 5))
 	local pr = prompt(trig, "Рыбачить", "Лавовое озеро", 12, "Game_fishing")
 	pr:SetAttribute("Game", "fishing")
-	local _, sub = holoSign(m, lakeC + V3(0, 16, 0), "ЛАВОВАЯ РЫБАЛКА", c(255, 160, 80), "лови огненных рыб и редкие семена")
+	local _, sub = holoSign(m, lakeC + V3(0, 18, 0), "ЛАВОВАЯ РЫБАЛКА", c(255, 160, 80), "лови огненных рыб и редкие семена")
+	sub.Parent.MaxDistance = 900
+	-- столб света над озером: видно со всей планеты
+	local beam = part(m, "LakeBeacon", V3(160, 2.2, 2.2), CF(lakeC.X, y + 80, lakeC.Z) * A(0, 0, PI / 2), c(255, 140, 50), Mat.Neon,
+		{ Shape = Enum.PartType.Cylinder, CanCollide = false, CastShadow = false, Transparency = 0.55 })
+	beam.CanQuery = false
+	-- дорожка фонарей от площади к причалу
+	local ctr = WT.Centers[pi]
+	local from = ctr + (lakeC - ctr) * V3(1, 0, 1).Unit * 32
+	local to = pierStart
+	local dir = (to - from) * V3(1, 0, 1)
+	local steps = math.floor(dir.Magnitude / 12)
+	for q = 1, steps do
+		local pp = from + dir * (q / (steps + 1))
+		local gy = Map.surfaceY(pp.X, pp.Z, pi)
+		local side = (q % 2 == 0) and 1 or -1
+		local off = dir.Unit:Cross(V3(0, 1, 0)) * 4 * side
+		local lp = V3(pp.X, gy, pp.Z) + off
+		seg(m, "PathLampPost", lp, lp + V3(0, 3.6, 0), 0.25, c(50, 42, 44), Mat.Metal)
+		local b = ball(m, "PathLamp", lp + V3(0, 3.9, 0), 0.7, c(255, 150, 70), Mat.Neon)
+		if q % 2 == 0 then light(b, c(255, 140, 60), 14, 0.8) end
+	end
+	-- указатель на площади
+	local sp = ctr + (lakeC - ctr) * V3(1, 0, 1).Unit * 31
+	local sgy = Map.surfaceY(sp.X, sp.Z, pi)
+	local scf = CFrame.lookAt(V3(sp.X, sgy, sp.Z), V3(lakeC.X, sgy, lakeC.Z)) * A(0, PI / 2, 0)
+	part(m, "SignpostPole", V3(0.4, 5, 0.4), scf * CF(0, 2.5, 0), c(60, 50, 50), Mat.Wood)
+	local arrow = part(m, "Signpost", V3(5, 1.2, 0.3), scf * CF(1.6, 4.4, 0), c(90, 50, 30), Mat.Wood, { CanCollide = false })
+	surfaceText(arrow, Enum.NormalId.Front, "РЫБАЛКА →", c(255, 190, 120), 30)
+	surfaceText(arrow, Enum.NormalId.Back, "← РЫБАЛКА", c(255, 190, 120), 30)
 	Map.spots.fishing = (face * CF(0, 1.5, -10)).Position
 	Map.spots.fishLake = V3(lakeC.X, y, lakeC.Z)
 	Map.spots.fishRod = (tip * CF(0, 6.5, -6)).Position

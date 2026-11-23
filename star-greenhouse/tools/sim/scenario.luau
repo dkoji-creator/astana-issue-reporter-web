@@ -234,6 +234,7 @@ local ok, total, count = inv("Sell", "all")
 check(ok and total > 0, "продажа не сработала")
 snap = inv("State")
 check(#snap.fruits == 0, "сумка не пуста после продажи")
+check(inv("TpTo", "place"), "телепорт к занятию планеты")
 
 stage("магазин")
 inv("Admin", "coins")
