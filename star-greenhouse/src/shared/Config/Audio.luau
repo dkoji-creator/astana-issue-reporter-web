@@ -32,7 +32,7 @@ return {
 		brew = "rbxassetid://108306323478967", -- Whoosh Magic Spell
 	},
 	-- громкость отдельных звуков (по умолчанию 1)
-	Gain = { meteor = 0.7, boom = 0.7, laser = 0.6, rocket = 0.9, legendary = 0.8, brew = 0.8, star = 0.7, harvestRare = 0.8 },
+	Gain = { meteor = 0.35, boom = 0.7, laser = 0.6, rocket = 0.9, legendary = 0.8, brew = 0.8, star = 0.7, harvestRare = 0.8 },
 	Custom = {
 		music = "rbxassetid://120589657844865", space = "rbxassetid://72330274258040",
 	},

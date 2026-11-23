@@ -2839,7 +2839,11 @@ remotes:WaitForChild("Strike").OnClientEvent:Connect(function(pos, mut, who)
 		Transparency = NumberSequence.new(0, 1), WidthScale = NumberSequence.new(1, 0) }, m)
 	make("PointLight", { Color = Color3.fromRGB(255, 170, 90), Range = 30, Brightness = 3 }, m)
 	local t0 = os.clock()
-	playSfx("meteor")
+	-- в дождь метеоры падают пачками: звук не чаще раза в 0.5 с, иначе сливается в гул
+	if os.clock() - (FX.lastMeteorSfx or 0) > 0.5 then
+		FX.lastMeteorSfx = os.clock()
+		playSfx("meteor")
+	end
 	local conn
 	conn = RunService.RenderStepped:Connect(function()
 		local k = math.clamp((os.clock() - t0) / 0.8, 0, 1)
