@@ -234,6 +234,29 @@ for _, b in colFrame:GetChildren() do
 end
 -- новые сцены: алхимия, пушка, телескоп
 do
+	inv("Admin", "pets")
+	for _, pid in G.PetOrder do
+		inv("PetEquip", pid)
+		frames(4, 0.1)
+		local holder = workspace:FindFirstChild("Pets")
+		local m = holder and holder:GetChildren()[1]
+		if m then
+			for _, p in m:GetDescendants() do
+				if p:IsA("BasePart") and p.Transparency < 0.97 then
+					local c = { p.CFrame:GetComponents() }
+					local t = {}
+					for i = 1, 12 do t[i] = ("%.3f"):format(c[i]) end
+					local mesh = p:FindFirstChildOfClass("SpecialMesh")
+					local shape = mesh and "Ball" or tostring(p.Shape):gsub("Enum.PartType.", "")
+					local col = p.Color
+					table.insert(SIM.log, ("P|%s|%s|%s|%.2f,%.2f,%.2f|%s|%d,%d,%d|%.2f|%s"):format(pid, p.Name, shape, p.Size.X, p.Size.Y, p.Size.Z, table.concat(t, ","),
+						math.floor(col.R * 255), math.floor(col.G * 255), math.floor(col.B * 255), p.Transparency, tostring(p.Material):gsub("Enum.Material.", "")))
+				end
+			end
+		end
+	end
+end
+do
 	inv("Admin", "contest")
 	frames(10, 0.2)
 	dumpState("contest")

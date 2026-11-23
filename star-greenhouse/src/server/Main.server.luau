@@ -72,6 +72,15 @@ local function mergeDefaults(d)
 	for k, v in base.stats do if d.stats[k] == nil then d.stats[k] = v end end
 	for k, v in base.cans do if d.cans[k] == nil then d.cans[k] = v end end
 	for k, v in base.cd do if d.cd[k] == nil then d.cd[k] = v end end
+	if d.pets then
+		for old, new in G.PetLegacy do
+			if d.pets.owned[old] then
+				d.pets.owned[new] = math.max(d.pets.owned[new] or 0, d.pets.owned[old])
+				d.pets.owned[old] = nil
+			end
+			if d.pets.eq == old then d.pets.eq = new end
+		end
+	end
 	return d
 end
 
@@ -332,6 +341,11 @@ end
 local function newBed(plr, d, plantId, regrow)
 	local plant = G.Plants[plantId]
 	local speed = G.upgradeValue("speed", d.upg.speed) * (d.perms.growth2x and 2 or 1)
+	do
+		local pe = d.pets.eq or ""
+		local pl = pe ~= "" and d.pets.owned[pe]
+		if pl then speed /= math.max(0.2, 1 - G.petGrow(pe, pl)) end
+	end
 	if G.PlanetIndex[plant.planet] == (d.planet or 1) then speed *= G.NativeBonus end
 	local base = plant.grow * (regrow and plant.regrow > 0 and plant.regrow or 1)
 	local t = now()
@@ -339,7 +353,9 @@ local function newBed(plr, d, plantId, regrow)
 	local ev, left = eventNow()
 	if ev and ev.grow then ready = t + flareRemaining(ready - t, left) end
 	local luck = G.upgradeValue("luck", d.upg.luck) * (G.PlanetLuck[d.planet or 1] or 1)
-	if d.pets.eq == "owl" and d.pets.owned.owl then luck *= G.petValue("owl", d.pets.owned.owl) end
+	local peq = d.pets.eq or ""
+	local plv = peq ~= "" and d.pets.owned[peq]
+	if plv then luck *= G.petLuck(peq, plv) end
 	if d.potion.uses > 0 then
 		luck *= d.potion.luck
 		d.potion.uses -= 1
@@ -513,10 +529,16 @@ local function sellFactor()
 	local ev = eventNow()
 	return ev and ev.sell or 1
 end
-local function fruitPrice(f)
+local function fruitPrice(f, d)
 	local plant = G.Plants[f.id]
 	local mm = G.marketMult(plant, G.marketEpoch(now()))
-	return G.fruitValue(f.id, f.m, f.w, mm, sellFactor())
+	local bonus = 1
+	if d then
+		local pe = d.pets.eq or ""
+		local pl = pe ~= "" and d.pets.owned[pe]
+		if pl then bonus += G.petSell(pe, pl) end
+	end
+	return G.fruitValue(f.id, f.m, f.w, mm, sellFactor() * bonus)
 end
 local function addCoins(plr, amount)
 	local d = D[plr]
@@ -552,7 +574,8 @@ RX.TpTo.OnServerInvoke = function(plr, id)
 		local ctr = Map.planets[pi].center
 		local toC = (ctr - pos) * Vector3.new(1, 0, 1)
 		local target = G.PlanetPlaceSpot[pi] == "spiralStart" and pos + Vector3.new(0, 3, 0) or pos + (toC.Magnitude > 0.1 and toC.Unit * 8 or Vector3.zero) + Vector3.new(0, 4, 0)
-		ch:PivotTo(CFrame.lookAt(target, Vector3.new(pos.X, target.Y, pos.Z)))
+		local flat = Vector3.new(pos.X, target.Y, pos.Z)
+		ch:PivotTo((flat - target).Magnitude > 0.5 and CFrame.lookAt(target, flat) or CFrame.new(target))
 		return true
 	end
 	if id ~= "shop" and id ~= "sell" and id ~= "market" and id ~= "upgrades" then return false end
@@ -573,7 +596,7 @@ RX.Sell.OnServerInvoke = function(plr, mode, uid)
 			if f.fav then
 				table.insert(keep, f)
 			else
-				total += fruitPrice(f)
+				total += fruitPrice(f, d)
 				count += 1
 			end
 		end
@@ -581,7 +604,7 @@ RX.Sell.OnServerInvoke = function(plr, mode, uid)
 	elseif mode == "one" then
 		for _, f in d.fruits do
 			if f.uid == uid and count == 0 then
-				total += fruitPrice(f)
+				total += fruitPrice(f, d)
 				count += 1
 			else
 				table.insert(keep, f)
@@ -1004,7 +1027,7 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		CONTEST.endNow()
 	elseif cmd == "pets" then
 		for _, id in G.PetOrder do d.pets.owned[id] = G.PetMaxLevel end
-		d.pets.eq = d.pets.eq ~= "" and d.pets.eq or "firefly"
+		d.pets.eq = d.pets.eq ~= "" and d.pets.eq or "bunny"
 		applyPet(plr)
 		push(plr, "pets")
 	elseif cmd == "alldonate" then
@@ -1214,6 +1237,7 @@ RX.PetBuy.OnServerInvoke = function(plr, id)
 	if not d or type(id) ~= "string" or not G.Pets[id] then return false end
 	local lvl = d.pets.owned[id] or 0
 	if lvl >= G.PetMaxLevel then return false, "Максимальный уровень" end
+	if G.Pets[id].planet > math.max(1, unlockedPlanets(d)) then return false, "Откроется вместе с планетой " .. G.Planets[G.Pets[id].planet].name end
 	local price = G.petPrice(id, lvl + 1, math.max(1, unlockedPlanets(d)))
 	if d.coins < price then return false, "Не хватает монет" end
 	d.coins -= price
@@ -1243,12 +1267,12 @@ task.spawn(function()
 			local lvl = eq and d.pets.owned[eq]
 			local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 			if lvl and root and s then
-				if eq == "firefly" and StarsMod.tryCollect then
-					StarsMod.tryCollect(plr, root.Position, G.petValue("firefly", lvl))
-				elseif eq == "waterbot" and t >= (s.nextBot or 0) then
+				local sr = G.petStars(eq, lvl)
+				if sr > 0 and StarsMod.tryCollect then StarsMod.tryCollect(plr, root.Position, sr) end
+				if G.petWater(eq, lvl) > 0 and t >= (s.nextBot or 0) then
 					local plot = s.plot and Map.plots[s.plot]
 					if plot and (root.Position - plot.center).Magnitude < 90 then
-						s.nextBot = t + G.petValue("waterbot", lvl)
+						s.nextBot = t + G.petWater(eq, lvl)
 						for i, b in d.beds do
 							if t < b.ready and (not b.wt or t - b.wt >= G.WaterCooldown) and i <= d.bedCount then
 								local pct = G.upgradeValue("water", d.upg.water) / 100

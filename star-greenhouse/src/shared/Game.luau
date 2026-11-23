@@ -417,28 +417,35 @@ function G.mysticStock(epoch: number, pi: number)
 	return out
 end
 
--- питомцы-помощники: один питомец с тобой, уровни 1-5
-G.PetOrder = { "firefly", "waterbot", "owl" }
+-- питомцы-помощники: по одному на каждую планету, с собой один, уровни 1-5.
+-- Питомец открывается вместе со своей планетой, цены растут очень сильно
+G.PetOrder = { "bunny", "rover", "penguin", "salamander", "dragon", "phoenix" }
 G.Pets = {
-	firefly = { name = "Светлячок", desc = "Собирает упавшие звёзды рядом с тобой", price = 2500, color = rgb(255, 230, 110) },
-	waterbot = { name = "Поливобот", desc = "Сам поливает растущие грядки, пока ты у огорода", price = 6000, color = rgb(110, 210, 255) },
-	owl = { name = "Совёнок удачи", desc = "Мутации выпадают чаще", price = 15000, color = rgb(200, 150, 255) },
+	bunny = { planet = 1, name = "Лунный кролик", desc = "Собирает упавшие звёзды рядом с тобой", price = 8000, color = rgb(220, 225, 245) },
+	rover = { planet = 2, name = "Марсоход-малыш", desc = "Сам поливает растущие грядки, пока ты у огорода", price = 250000, color = rgb(255, 140, 80) },
+	penguin = { planet = 3, name = "Ледяной пингвин", desc = "Растения, посаженные с ним, растут быстрее", price = 8e6, color = rgb(140, 210, 255) },
+	salamander = { planet = 4, name = "Огненная саламандра", desc = "Урожай продаётся дороже", price = 3e8, color = rgb(255, 120, 40) },
+	dragon = { planet = 5, name = "Туманный дракончик", desc = "Мутации выпадают чаще", price = 1.2e10, color = rgb(200, 120, 255) },
+	phoenix = { planet = 6, name = "Звёздный феникс", desc = "Удача, быстрый рост и сбор звёзд сразу", price = 5e11, color = rgb(255, 205, 90) },
 }
 G.PetMaxLevel = 5
-function G.petPrice(id: string, level: number, planets: number): number
-	local mult = G.Planets[math.clamp(planets, 1, #G.Planets)].mult
-	return math.floor(G.Pets[id].price * 2.2 ^ (level - 1) * mult ^ 0.6)
+G.PetLegacy = { firefly = "bunny", waterbot = "rover", owl = "dragon" }
+function G.petPrice(id: string, level: number, planets: number?): number
+	return math.floor(G.Pets[id].price * 3.5 ^ (level - 1))
 end
-function G.petValue(id: string, lvl: number): number
-	if id == "firefly" then return 14 + 6 * lvl end -- радиус сбора звёзд
-	if id == "waterbot" then return 26 - 3 * lvl end -- секунд между поливами
-	return 1 + 0.12 * lvl -- множитель удачи
-end
+-- значения способностей
+function G.petStars(id, lvl) if id == "bunny" then return 14 + 6 * lvl elseif id == "phoenix" then return 20 + 4 * lvl end return 0 end
+function G.petWater(id, lvl) if id == "rover" then return 26 - 3 * lvl end return 0 end
+function G.petGrow(id, lvl) if id == "penguin" then return 0.05 + 0.04 * lvl elseif id == "phoenix" then return 0.04 * lvl end return 0 end
+function G.petSell(id, lvl) if id == "salamander" then return 0.1 * lvl end return 0 end
+function G.petLuck(id, lvl) if id == "dragon" then return 1 + 0.15 * lvl elseif id == "phoenix" then return 1 + 0.2 * lvl end return 1 end
 function G.petEffect(id: string, lvl: number): string
-	local v = G.petValue(id, lvl)
-	if id == "firefly" then return ("собирает звёзды в радиусе %d"):format(v) end
-	if id == "waterbot" then return ("поливает грядку раз в %d с"):format(v) end
-	return ("удача мутаций x%.2f"):format(v)
+	if id == "bunny" then return ("звёзды в радиусе %d"):format(G.petStars(id, lvl)) end
+	if id == "rover" then return ("полив раз в %d с"):format(G.petWater(id, lvl)) end
+	if id == "penguin" then return ("рост быстрее на %d%%"):format(math.floor(G.petGrow(id, lvl) * 100)) end
+	if id == "salamander" then return ("продажа дороже на %d%%"):format(math.floor(G.petSell(id, lvl) * 100)) end
+	if id == "dragon" then return ("удача мутаций x%.2f"):format(G.petLuck(id, lvl)) end
+	return ("удача x%.1f, рост +%d%%, звёзды %d"):format(G.petLuck(id, lvl), math.floor(G.petGrow(id, lvl) * 100), G.petStars(id, lvl))
 end
 
 -- календарь наград: 7 дней подряд, награда растёт; пропустил день — серия с начала

@@ -407,49 +407,155 @@ do
 end
 
 ------------------------------------------------------------------ питомцы: модели, следование за хозяином, окно
--- модель питомца: список деталей со смещением от тела (анимацию крыльев и винта задаёт цикл ниже)
+-- модель питомца: детали со смещением от тела и типом анимации (уши, крылья, колёса, хвост)
+local petFolder = make("Folder", { Name = "Pets" }, workspace)
 function FX.buildPet(id, lvl, parent)
 	local m = Instance.new("Model")
 	m.Name = "Pet_" .. id
-	local k = 1 + ((lvl or 1) - 1) * 0.08
+	local k = 1 + ((lvl or 1) - 1) * 0.07
 	local parts = {}
-	local function add(name, shape, size, off, color, mat, tr, anim)
-		local p = make("Part", { Name = name, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
-			Size = size * k, Color = color, Material = mat or Enum.Material.SmoothPlastic, Transparency = tr or 0 }, m)
+	local C = Color3.fromRGB
+	local M = Enum.Material
+	local function add(name, shape, size, off, color, mat, tr, anim, ph)
+		local p = make(shape == "wedge" and "WedgePart" or "Part", { Name = name, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false,
+			Size = size * k, Color = color, Material = mat or M.SmoothPlastic, Transparency = tr or 0 }, m)
 		if shape == "ball" then p.Shape = Enum.PartType.Ball
 		elseif shape == "ell" then make("SpecialMesh", { MeshType = Enum.MeshType.Sphere }, p)
 		elseif shape == "cyl" then p.Shape = Enum.PartType.Cylinder end
-		table.insert(parts, { p = p, off = CFrame.new(off.Position * k) * (off - off.Position), anim = anim })
+		table.insert(parts, { p = p, off = CFrame.new(off.Position * k) * (off - off.Position), anim = anim, ph = ph or 0 })
 		return p
 	end
-	local C = Color3.fromRGB
-	if id == "firefly" then
-		local body = add("Body", "ball", Vector3.new(0.9, 0.9, 0.9), CFrame.new(), C(255, 225, 90), Enum.Material.Neon)
-		add("Head", "ball", Vector3.new(0.55, 0.55, 0.55), CFrame.new(0, 0.15, -0.6), C(40, 34, 30))
-		add("WingL", "ell", Vector3.new(0.06, 0.5, 0.9), CFrame.new(-0.35, 0.4, 0) * CFrame.Angles(0, 0, 0.6), C(230, 240, 255), Enum.Material.Glass, 0.4, "wingL")
-		add("WingR", "ell", Vector3.new(0.06, 0.5, 0.9), CFrame.new(0.35, 0.4, 0) * CFrame.Angles(0, 0, -0.6), C(230, 240, 255), Enum.Material.Glass, 0.4, "wingR")
-		add("AntL", "block", Vector3.new(0.05, 0.4, 0.05), CFrame.new(-0.12, 0.45, -0.75) * CFrame.Angles(0.5, 0, 0.3), C(40, 34, 30))
-		add("AntR", "block", Vector3.new(0.05, 0.4, 0.05), CFrame.new(0.12, 0.45, -0.75) * CFrame.Angles(0.5, 0, -0.3), C(40, 34, 30))
-		make("PointLight", { Color = C(255, 220, 110), Range = 8 + lvl, Brightness = 1.2 }, body)
-	elseif id == "waterbot" then
-		local body = add("Body", "ell", Vector3.new(1.3, 0.85, 1.3), CFrame.new(), C(235, 240, 248), Enum.Material.SmoothPlastic)
-		add("Band", "cyl", Vector3.new(0.15, 1.36, 1.36), CFrame.Angles(0, 0, math.pi / 2), C(80, 200, 255), Enum.Material.Neon)
-		add("Eye", "ball", Vector3.new(0.38, 0.38, 0.38), CFrame.new(0, 0.05, -0.58), C(90, 220, 255), Enum.Material.Neon)
-		add("Mast", "block", Vector3.new(0.1, 0.35, 0.1), CFrame.new(0, 0.55, 0), C(120, 130, 150), Enum.Material.Metal)
-		add("Rotor", "cyl", Vector3.new(0.05, 1.6, 1.6), CFrame.new(0, 0.74, 0) * CFrame.Angles(0, 0, math.pi / 2), C(200, 230, 255), Enum.Material.Glass, 0.55, "rotor")
-		add("Nozzle", "cyl", Vector3.new(0.4, 0.22, 0.22), CFrame.new(0, -0.5, -0.2) * CFrame.Angles(0, 0, math.pi / 2), C(70, 140, 220), Enum.Material.Metal)
-		make("PointLight", { Color = C(110, 210, 255), Range = 6, Brightness = 0.8 }, body)
-	else
-		add("Body", "ell", Vector3.new(1.05, 1.3, 1), CFrame.new(), C(120, 90, 160))
-		add("Belly", "ell", Vector3.new(0.7, 0.9, 0.3), CFrame.new(0, -0.1, -0.4), C(220, 200, 240))
-		for _, sx in { -0.24, 0.24 } do
-			add("EyeW", "ball", Vector3.new(0.42, 0.42, 0.42), CFrame.new(sx, 0.32, -0.42), C(255, 255, 255))
-			add("EyeP", "ball", Vector3.new(0.2, 0.2, 0.2), CFrame.new(sx, 0.32, -0.6), C(255, 190, 60), Enum.Material.Neon)
-			add("Tuft", "block", Vector3.new(0.14, 0.32, 0.14), CFrame.new(sx * 1.3, 0.72, -0.1) * CFrame.Angles(0, 0, sx > 0 and -0.4 or 0.4), C(90, 64, 130))
+	local function eyes(x, y, z, d, iris)
+		for _, sx in { -x, x } do
+			add("Eye", "ball", Vector3.new(d, d, d), CFrame.new(sx, y, z), C(20, 20, 28), M.SmoothPlastic)
+			add("EyeShine", "ball", Vector3.new(d * 0.35, d * 0.35, d * 0.35), CFrame.new(sx + d * 0.15, y + d * 0.18, z - d * 0.4), iris or C(255, 255, 255), M.Neon)
 		end
-		add("Beak", "ball", Vector3.new(0.16, 0.16, 0.16), CFrame.new(0, 0.16, -0.55), C(255, 200, 80))
-		add("WingL", "ell", Vector3.new(0.2, 0.9, 0.6), CFrame.new(-0.55, -0.05, 0.05), C(100, 74, 140), nil, 0, "owlL")
-		add("WingR", "ell", Vector3.new(0.2, 0.9, 0.6), CFrame.new(0.55, -0.05, 0.05), C(100, 74, 140), nil, 0, "owlR")
+	end
+	local function glow(part, color, range, br)
+		make("PointLight", { Color = color, Range = range, Brightness = br }, part)
+	end
+	local function sparkle(part, color, rate)
+		local a = make("Attachment", {}, part)
+		make("ParticleEmitter", { Color = ColorSequence.new(color), LightEmission = 1, Rate = rate, Lifetime = NumberRange.new(0.6, 1.2), Speed = NumberRange.new(0.3, 1),
+			SpreadAngle = Vector2.new(180, 180), Size = NumberSequence.new(0.16, 0), Transparency = NumberSequence.new(0.1, 1) }, a)
+	end
+	if id == "bunny" then
+		-- Луна: серебристый кролик со светящимся полумесяцем над головой
+		local silver, pink = C(232, 234, 245), C(255, 170, 200)
+		local body = add("Body", "ell", Vector3.new(1.1, 1, 1.3), CFrame.new(), silver)
+		add("Head", "ball", Vector3.new(0.9, 0.9, 0.9), CFrame.new(0, 0.55, -0.55), silver)
+		add("CheekL", "ball", Vector3.new(0.3, 0.3, 0.3), CFrame.new(-0.28, 0.42, -0.9), C(255, 200, 215))
+		add("CheekR", "ball", Vector3.new(0.3, 0.3, 0.3), CFrame.new(0.28, 0.42, -0.9), C(255, 200, 215))
+		add("Nose", "ball", Vector3.new(0.14, 0.12, 0.12), CFrame.new(0, 0.52, -1.0), pink)
+		eyes(0.2, 0.68, -0.92, 0.2)
+		add("EarL", "ell", Vector3.new(0.26, 1.1, 0.16), CFrame.new(-0.22, 1.35, -0.5) * CFrame.Angles(0, 0, 0.15), silver, nil, 0, "earL")
+		add("EarLIn", "ell", Vector3.new(0.14, 0.85, 0.06), CFrame.new(-0.22, 1.35, -0.58) * CFrame.Angles(0, 0, 0.15), pink, nil, 0, "earL")
+		add("EarR", "ell", Vector3.new(0.26, 1.1, 0.16), CFrame.new(0.22, 1.35, -0.5) * CFrame.Angles(0, 0, -0.15), silver, nil, 0, "earR")
+		add("EarRIn", "ell", Vector3.new(0.14, 0.85, 0.06), CFrame.new(0.22, 1.35, -0.58) * CFrame.Angles(0, 0, -0.15), pink, nil, 0, "earR")
+		add("Tail", "ball", Vector3.new(0.4, 0.4, 0.4), CFrame.new(0, 0.05, 0.68), C(255, 255, 255), nil, 0, "wag")
+		for _, sx in { -0.3, 0.3 } do add("Paw", "ell", Vector3.new(0.28, 0.2, 0.42), CFrame.new(sx, -0.45, -0.3), silver) end
+		for q = 0, 5 do
+			local a = math.rad(-70 + q * 28)
+			add("Moon", "ball", Vector3.new(0.22 - math.abs(q - 2.5) * 0.03, 0.22, 0.22), CFrame.new(math.cos(a) * 0.45, 2.3 + math.sin(a) * 0.45, -0.4), C(255, 240, 170), M.Neon, 0, "float")
+		end
+		glow(body, C(220, 230, 255), 9, 0.9)
+		sparkle(body, C(230, 235, 255), 4)
+	elseif id == "rover" then
+		-- Марс: маленький парящий марсоход с солнечными панелями, камерой и колёсами
+		local red, white, blue = C(220, 90, 50), C(235, 235, 240), C(40, 70, 150)
+		local body = add("Body", "block", Vector3.new(1.4, 0.55, 1.8), CFrame.new(), white, M.Metal)
+		add("Stripe", "block", Vector3.new(1.42, 0.18, 1.82), CFrame.new(0, 0.05, 0), red, M.SmoothPlastic)
+		add("PanelL", "block", Vector3.new(1.1, 0.06, 1.2), CFrame.new(-1.15, 0.3, 0) * CFrame.Angles(0, 0, 0.12), blue, M.Glass, 0, "panelL")
+		add("PanelR", "block", Vector3.new(1.1, 0.06, 1.2), CFrame.new(1.15, 0.3, 0) * CFrame.Angles(0, 0, -0.12), blue, M.Glass, 0, "panelR")
+		add("Mast", "cyl", Vector3.new(0.7, 0.12, 0.12), CFrame.new(0.3, 0.6, -0.5) * CFrame.Angles(0, 0, math.pi / 2), C(150, 150, 160), M.Metal)
+		add("CamHead", "block", Vector3.new(0.55, 0.32, 0.36), CFrame.new(0.3, 1.0, -0.55), white, M.Metal, 0, "swivel")
+		add("CamEye", "ball", Vector3.new(0.2, 0.2, 0.2), CFrame.new(0.3, 1.0, -0.75), C(90, 220, 255), M.Neon, 0, "swivel")
+		add("Antenna", "cyl", Vector3.new(0.9, 0.05, 0.05), CFrame.new(-0.45, 0.75, 0.55) * CFrame.Angles(0, 0, math.pi / 2), C(160, 160, 170), M.Metal)
+		add("AntennaTip", "ball", Vector3.new(0.16, 0.16, 0.16), CFrame.new(-0.45, 1.2, 0.55), C(255, 80, 60), M.Neon, 0, "blink")
+		for _, sx in { -0.78, 0.78 } do
+			for _, sz in { -0.65, 0, 0.65 } do
+				add("Wheel", "cyl", Vector3.new(0.2, 0.46, 0.46), CFrame.new(sx, -0.32, sz), C(60, 56, 54), M.SmoothPlastic, 0, "wheel")
+			end
+		end
+		local jet = add("Thruster", "cyl", Vector3.new(0.1, 0.9, 0.9), CFrame.new(0, -0.62, 0) * CFrame.Angles(0, 0, math.pi / 2), C(255, 150, 70), M.Neon, 0.3)
+		glow(jet, C(255, 140, 60), 8, 1)
+	elseif id == "penguin" then
+		-- Европа: пингвин в ледяной короне, с инеем вокруг
+		local black, white, orange = C(30, 34, 48), C(245, 248, 255), C(255, 170, 60)
+		local body = add("Body", "ell", Vector3.new(1.05, 1.4, 0.95), CFrame.new(), black)
+		add("Belly", "ell", Vector3.new(0.75, 1.1, 0.4), CFrame.new(0, -0.08, -0.33), white)
+		add("Head", "ball", Vector3.new(0.85, 0.85, 0.85), CFrame.new(0, 0.85, -0.05), black)
+		add("Face", "ell", Vector3.new(0.62, 0.5, 0.3), CFrame.new(0, 0.82, -0.36), white)
+		eyes(0.15, 0.92, -0.48, 0.16, C(160, 220, 255))
+		add("Beak", "ell", Vector3.new(0.22, 0.13, 0.3), CFrame.new(0, 0.76, -0.56), orange)
+		add("FlipL", "ell", Vector3.new(0.16, 0.8, 0.4), CFrame.new(-0.58, 0.05, 0) * CFrame.Angles(0, 0, 0.25), black, nil, 0, "flipL")
+		add("FlipR", "ell", Vector3.new(0.16, 0.8, 0.4), CFrame.new(0.58, 0.05, 0) * CFrame.Angles(0, 0, -0.25), black, nil, 0, "flipR")
+		for _, sx in { -0.22, 0.22 } do add("Foot", "ell", Vector3.new(0.3, 0.12, 0.42), CFrame.new(sx, -0.7, -0.15), orange) end
+		for q = 0, 4 do
+			local a = (q - 2) * 0.35
+			add("Crown", "ell", Vector3.new(0.14, 0.42 - math.abs(q - 2) * 0.08, 0.14), CFrame.new(math.sin(a) * 0.3, 1.38 - math.abs(q - 2) * 0.04, -0.05 + math.cos(a) * 0.05) * CFrame.Angles(0, 0, -a * 0.5), C(170, 225, 255), M.Glass, 0.15)
+		end
+		add("CrownGem", "ball", Vector3.new(0.14, 0.14, 0.14), CFrame.new(0, 1.3, -0.2), C(120, 220, 255), M.Neon)
+		glow(body, C(150, 220, 255), 8, 0.8)
+		sparkle(body, C(200, 240, 255), 6)
+	elseif id == "salamander" then
+		-- Ио: огненная саламандра с лавовыми пятнами и извивающимся хвостом
+		local skin, lava = C(120, 30, 20), C(255, 140, 40)
+		local body = add("Body", "ell", Vector3.new(0.75, 0.5, 1.2), CFrame.new(), skin)
+		add("Head", "ell", Vector3.new(0.7, 0.45, 0.7), CFrame.new(0, 0.08, -0.8), skin)
+		eyes(0.22, 0.25, -0.95, 0.18, C(255, 220, 90))
+		for q = 1, 5 do
+			add("Tail", "ell", Vector3.new(0.5 - q * 0.07, 0.36 - q * 0.04, 0.5), CFrame.new(0, -0.02, 0.45 + q * 0.38), skin, nil, 0, "tail", q)
+			add("TailSpot", "ball", Vector3.new(0.16, 0.16, 0.16), CFrame.new(0, 0.12 - q * 0.02, 0.45 + q * 0.38), lava, M.Neon, 0, "tail", q)
+		end
+		for q, z in { -0.3, 0.05, 0.35 } do add("Spot", "ball", Vector3.new(0.2, 0.2, 0.2), CFrame.new((q % 2 == 0) and 0.18 or -0.18, 0.2, z), lava, M.Neon) end
+		for _, sx in { -0.42, 0.42 } do
+			for _, sz in { -0.4, 0.35 } do add("Leg", "ell", Vector3.new(0.18, 0.16, 0.36), CFrame.new(sx, -0.22, sz) * CFrame.Angles(0, sx > 0 and 0.5 or -0.5, 0), skin, nil, 0, "leg", sz) end
+		end
+		add("Crest", "ell", Vector3.new(0.1, 0.3, 0.7), CFrame.new(0, 0.3, -0.1), lava, M.Neon)
+		glow(body, C(255, 130, 50), 10, 1.4)
+		local a = make("Attachment", {}, body)
+		make("ParticleEmitter", { Color = ColorSequence.new(C(255, 200, 90), C(255, 70, 20)), LightEmission = 1, Rate = 10, Lifetime = NumberRange.new(0.5, 1),
+			Speed = NumberRange.new(0.5, 1.5), SpreadAngle = Vector2.new(30, 30), EmissionDirection = Enum.NormalId.Top, Size = NumberSequence.new(0.2, 0) }, a)
+	elseif id == "dragon" then
+		-- Туманность: дракончик с крыльями, рожками и звёздной пылью
+		local purple, light = C(130, 70, 200), C(200, 160, 255)
+		local body = add("Body", "ell", Vector3.new(0.9, 0.85, 1.3), CFrame.new(), purple)
+		add("Belly", "ell", Vector3.new(0.6, 0.6, 1), CFrame.new(0, -0.15, -0.1), light)
+		add("Head", "ell", Vector3.new(0.85, 0.75, 0.85), CFrame.new(0, 0.55, -0.75), purple)
+		add("Snout", "ell", Vector3.new(0.5, 0.35, 0.45), CFrame.new(0, 0.42, -1.12), light)
+		eyes(0.22, 0.68, -1.08, 0.18, C(255, 230, 120))
+		add("HornL", "ell", Vector3.new(0.12, 0.45, 0.12), CFrame.new(-0.22, 1.0, -0.6) * CFrame.Angles(-0.4, 0, 0.3), C(255, 230, 170))
+		add("HornR", "ell", Vector3.new(0.12, 0.45, 0.12), CFrame.new(0.22, 1.0, -0.6) * CFrame.Angles(-0.4, 0, -0.3), C(255, 230, 170))
+		add("WingL", "ell", Vector3.new(1.4, 0.08, 0.9), CFrame.new(-0.95, 0.45, 0.05) * CFrame.Angles(0, 0, 0.35), C(170, 110, 255), M.Glass, 0.25, "dwingL")
+		add("WingR", "ell", Vector3.new(1.4, 0.08, 0.9), CFrame.new(0.95, 0.45, 0.05) * CFrame.Angles(0, 0, -0.35), C(170, 110, 255), M.Glass, 0.25, "dwingR")
+		for q = 1, 4 do add("Tail", "ell", Vector3.new(0.36 - q * 0.06, 0.32 - q * 0.05, 0.45), CFrame.new(0, 0.05 + q * 0.04, 0.6 + q * 0.34), purple, nil, 0, "tail", q) end
+		add("TailTip", "ball", Vector3.new(0.22, 0.22, 0.22), CFrame.new(0, 0.25, 2.05), C(120, 220, 255), M.Neon, 0, "tail", 5)
+		for q = 0, 2 do add("Spike", "ell", Vector3.new(0.08, 0.25, 0.2), CFrame.new(0, 0.48, -0.25 + q * 0.3), C(255, 230, 170)) end
+		glow(body, C(200, 140, 255), 10, 1.1)
+		sparkle(body, C(220, 180, 255), 8)
+	else
+		-- Ядро: звёздный феникс с огненными крыльями и длинными перьями хвоста
+		local gold, fire = C(255, 190, 70), C(255, 110, 40)
+		local body = add("Body", "ell", Vector3.new(0.85, 0.95, 1.2), CFrame.new(), gold, M.SmoothPlastic)
+		add("Chest", "ell", Vector3.new(0.6, 0.7, 0.5), CFrame.new(0, -0.05, -0.38), C(255, 230, 150), M.Neon)
+		add("Head", "ball", Vector3.new(0.65, 0.65, 0.65), CFrame.new(0, 0.75, -0.55), gold)
+		add("Beak", "ell", Vector3.new(0.16, 0.14, 0.34), CFrame.new(0, 0.68, -0.92), C(255, 240, 200))
+		eyes(0.17, 0.82, -0.78, 0.14, C(255, 255, 220))
+		for q = 0, 2 do add("Crest", "ell", Vector3.new(0.1, 0.55 - q * 0.1, 0.16), CFrame.new(0, 1.15 + q * 0.05, -0.45 + q * 0.18) * CFrame.Angles(0.5 + q * 0.3, 0, 0), fire, M.Neon) end
+		for _, sd in { { -1, "fwingL" }, { 1, "fwingR" } } do
+			for q = 0, 2 do
+				add("Wing", "ell", Vector3.new(1.5 - q * 0.3, 0.08, 0.6 - q * 0.1), CFrame.new(sd[1] * (0.95 - q * 0.05), 0.35 - q * 0.15, 0.05 + q * 0.12) * CFrame.Angles(0, 0, -sd[1] * (0.3 + q * 0.15)),
+					q == 0 and gold or (q == 1 and fire or C(255, 70, 40)), q == 0 and M.SmoothPlastic or M.Neon, 0.05, sd[2])
+			end
+		end
+		for q = -1, 1 do
+			add("TailFeather", "ell", Vector3.new(0.16, 0.08, 1.6), CFrame.new(q * 0.2, -0.1, 1.25) * CFrame.Angles(0.25, q * 0.25, 0), q == 0 and C(255, 230, 120) or fire, M.Neon, 0, "tail", q + 2)
+		end
+		glow(body, C(255, 190, 90), 14, 1.8)
+		local a = make("Attachment", {}, body)
+		make("ParticleEmitter", { Color = ColorSequence.new(C(255, 230, 140), C(255, 80, 30)), LightEmission = 1, Rate = 18, Lifetime = NumberRange.new(0.5, 1.1),
+			Speed = NumberRange.new(0.5, 2), SpreadAngle = Vector2.new(60, 60), EmissionDirection = Enum.NormalId.Back, Size = NumberSequence.new(0.3, 0) }, a)
 	end
 	m.PrimaryPart = parts[1].p
 	m.Parent = parent
@@ -458,11 +564,24 @@ end
 function FX.posePet(pet, base, t)
 	for _, e in pet.parts do
 		local a = CFrame.new()
-		if e.anim == "wingL" then a = CFrame.Angles(0, 0, math.sin(t * 28) * 0.7)
-		elseif e.anim == "wingR" then a = CFrame.Angles(0, 0, -math.sin(t * 28) * 0.7)
-		elseif e.anim == "rotor" then a = CFrame.Angles(t * 25, 0, 0)
-		elseif e.anim == "owlL" then a = CFrame.Angles(0, 0, math.sin(t * 6) * 0.35)
-		elseif e.anim == "owlR" then a = CFrame.Angles(0, 0, -math.sin(t * 6) * 0.35) end
+		local an = e.anim
+		if an then
+			if an == "earL" then a = CFrame.Angles(math.sin(t * 3) * 0.12, 0, math.sin(t * 2.2) * 0.1)
+			elseif an == "earR" then a = CFrame.Angles(math.sin(t * 3 + 1) * 0.12, 0, -math.sin(t * 2.4) * 0.1)
+			elseif an == "wag" then a = CFrame.new(math.sin(t * 8) * 0.05, 0, 0)
+			elseif an == "float" then a = CFrame.new(0, math.sin(t * 2) * 0.08, 0)
+			elseif an == "panelL" then a = CFrame.Angles(0, 0, math.sin(t * 1.5) * 0.06)
+			elseif an == "panelR" then a = CFrame.Angles(0, 0, -math.sin(t * 1.5) * 0.06)
+			elseif an == "swivel" then a = CFrame.Angles(0, math.sin(t * 0.9) * 0.5, 0)
+			elseif an == "wheel" then a = CFrame.Angles(t * 6, 0, 0)
+			elseif an == "blink" then a = CFrame.new() e.p.Transparency = (t % 1) < 0.5 and 0 or 0.8
+			elseif an == "flipL" then a = CFrame.Angles(0, 0, math.sin(t * 7) * 0.35)
+			elseif an == "flipR" then a = CFrame.Angles(0, 0, -math.sin(t * 7) * 0.35)
+			elseif an == "tail" then a = CFrame.new(math.sin(t * 5 - e.ph * 0.7) * 0.08 * e.ph, 0, 0)
+			elseif an == "leg" then a = CFrame.Angles(math.sin(t * 8 + e.ph * 6) * 0.3, 0, 0)
+			elseif an == "dwingL" or an == "fwingL" then a = CFrame.Angles(0, 0, math.sin(t * (an == "dwingL" and 5 or 4)) * 0.45)
+			elseif an == "dwingR" or an == "fwingR" then a = CFrame.Angles(0, 0, -math.sin(t * (an == "dwingR" and 5 or 4)) * 0.45) end
+		end
 		e.p.CFrame = base * e.off * a
 	end
 end
@@ -483,9 +602,11 @@ do
 				e.model:Destroy()
 				pets[p], e = nil, nil
 			end
-			if id ~= "" and root and (root.Position - cp).Magnitude < 320 then
+			local myRoot = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+			local ref = myRoot and myRoot.Position or cp
+			if id ~= "" and root and (p == plr or (root.Position - ref).Magnitude < 320) then
 				if not e then
-					e = FX.buildPet(id, lvl, fxFolder)
+					e = FX.buildPet(id, lvl, petFolder)
 					e.pos = root.Position + Vector3.new(0, 3, 0)
 					pets[p] = e
 				end
@@ -517,9 +638,9 @@ do
 	end)
 end
 do
-	local f, body = mkWindow("pets", "Питомцы", "luck", T.cold, 0.92, 0.84)
-	local row = make("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, body)
-	listLayout(row, Enum.FillDirection.Horizontal, 8, Enum.HorizontalAlignment.Center)
+	local f, body = mkWindow("pets", "Питомцы планет", "luck", T.cold, 0.94, 0.88)
+	local row = K.scroll(body, {})
+	make("UIGridLayout", { CellSize = UDim2.new(1 / 3, -8, 0, 252), CellPadding = UDim2.fromOffset(8, 8), SortOrder = Enum.SortOrder.LayoutOrder }, row)
 	local spinners = {}
 	function hooks.pets()
 		clear(row)
@@ -529,21 +650,24 @@ do
 		for i, id in G.PetOrder do
 			local def = G.Pets[id]
 			local lvl = owned[id] or 0
-			local card = K.panel(row, { Size = UDim2.new(1 / 3, -8, 1, 0), LayoutOrder = i, BackgroundColor3 = T.panel2 })
+			local card = K.panel(row, { LayoutOrder = i, BackgroundColor3 = T.panel2 })
+			local planetOpen = def.planet <= (ST.planets or 1)
 			K.stroke(card, eq == id and T.green or def.color, eq == id and 2 or 1, false, 0.3)
-			local vp = make("ViewportFrame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0.42, 0), Ambient = Color3.fromRGB(200, 200, 220), LightColor = Color3.new(1, 1, 1) }, card)
+			local vp = make("ViewportFrame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 0.35, 0), Ambient = Color3.fromRGB(200, 200, 220), LightColor = Color3.new(1, 1, 1) }, card)
 			local vcam = make("Camera", { FieldOfView = 30 }, vp)
 			vp.CurrentCamera = vcam
 			local pet = FX.buildPet(id, math.max(1, lvl), vp)
 			FX.posePet(pet, CFrame.new(), 0)
-			vcam.CFrame = CFrame.lookAt(Vector3.new(2.2, 1.2, -4.2), Vector3.new(0, 0.1, 0))
+			vcam.CFrame = CFrame.lookAt(Vector3.new(2.6, 1.6, -5), Vector3.new(0, 0.4, 0))
 			table.insert(spinners, pet)
-			K.text(card, def.name, { Position = UDim2.new(0, 8, 0.44, 0), Size = UDim2.new(1, -16, 0, 22), MaxText = 17, TextColor3 = def.color })
-			K.text(card, def.desc, { Position = UDim2.new(0, 8, 0.44, 22), Size = UDim2.new(1, -16, 0, 30), MaxText = 12, TextWrapped = true, TextColor3 = T.sub, Medium = true })
+			K.text(card, def.name, { Position = UDim2.new(0, 8, 0.36, 0), Size = UDim2.new(1, -16, 0, 22), MaxText = 17, TextColor3 = def.color })
+			K.text(card, def.desc, { Position = UDim2.new(0, 8, 0.36, 22), Size = UDim2.new(1, -16, 0, 30), MaxText = 12, TextWrapped = true, TextColor3 = T.sub, Medium = true })
 			local stars = ""
 			for q = 1, G.PetMaxLevel do stars = stars .. (q <= lvl and "★" or "☆") end
-			K.text(card, stars .. "  " .. (lvl > 0 and G.petEffect(id, lvl) or G.petEffect(id, 1)), { Position = UDim2.new(0, 8, 0.44, 54), Size = UDim2.new(1, -16, 0, 18), MaxText = 12, TextColor3 = T.gold, Medium = true })
-			if lvl < G.PetMaxLevel then
+			K.text(card, stars .. "  " .. (lvl > 0 and G.petEffect(id, lvl) or G.petEffect(id, 1)), { Position = UDim2.new(0, 8, 0.36, 54), Size = UDim2.new(1, -16, 0, 18), MaxText = 12, TextColor3 = T.gold, Medium = true })
+			if not planetOpen then
+				K.text(card, "Откроется на планете " .. G.Planets[def.planet].name, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, -50), Size = UDim2.new(1, -16, 0, 30), MaxText = 13, TextColor3 = T.sub })
+			elseif lvl < G.PetMaxLevel then
 				local price = G.petPrice(id, lvl + 1, ST.planets or 1)
 				local b = coinButton(card, price, ST.coins >= price, { AnchorPoint = Vector2.new(0, 1), Position = UDim2.new(0, 8, 1, -50), Size = UDim2.new(1, -16, 0, 34), MaxText = 15 })
 				local l = b:FindFirstChildOfClass("TextLabel")
