@@ -1756,7 +1756,7 @@ function applyGlobal(cmd, arg)
 	if cmd == "g_luck" or cmd == "g_gold" then
 		local key = cmd == "g_luck" and "luck" or "gold"
 		BOOST[key] = now() + G.Boosts[key].time
-		RX.Boost:FireAllClients(key, BOOST[key])
+		RX.Boost:FireAllClients(key, BOOST[key] - now())
 	elseif cmd == "g_seeds" then
 		for _, plr in Players:GetPlayers() do
 			local d = D[plr]
@@ -1796,7 +1796,7 @@ Players.PlayerAdded:Connect(function(plr)
 	task.delay(7, function()
 		if not plr.Parent then return end
 		for key, untilT in BOOST do
-			if now() < untilT then RX.Boost:FireClient(plr, key, untilT) end
+			if now() < untilT then RX.Boost:FireClient(plr, key, untilT - now()) end
 		end
 	end)
 end)
@@ -1810,7 +1810,7 @@ local function raidCenter(plr)
 	return Map.planets[pi] and Map.planets[pi].center or Vector3.zero
 end
 local function raidSend(plr)
-	RX.Raid:FireClient(plr, "start", RAID.hp, RAID.max, RAID.ends, raidCenter(plr))
+	RX.Raid:FireClient(plr, "start", RAID.hp, RAID.max, RAID.ends - now(), raidCenter(plr))
 end
 function RAID.start()
 	if RAID.active then return false end

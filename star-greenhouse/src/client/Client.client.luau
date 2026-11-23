@@ -3467,7 +3467,7 @@ do
 			toast("Через минуту к серверу прилетит Комета-пожиратель! Собьём её вместе", "rare", 6)
 			if FX.chatLine then FX.chatLine('<font color="#FF9A6A">☄ Через минуту прилетит Комета-пожиратель!</font> Тапай по ней, чтобы стрелять') end
 		elseif kind == "start" then
-			startRaid(a, b, c, typeof(d) == "Vector3" and d or Vector3.zero)
+			startRaid(a, b, nowS() + (tonumber(c) or 0), typeof(d) == "Vector3" and d or Vector3.zero)
 		elseif kind == "hp" and R then
 			R.hp, R.max = a, b
 			R.fill.Size = UDim2.fromScale(math.clamp(a / math.max(1, b), 0, 1), 1)
@@ -3520,7 +3520,8 @@ do
 	listLayout(holder, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
 	local chips = {}
 	local COL = { luck = T.purple, gold = T.gold }
-	remotes:WaitForChild("Boost").OnClientEvent:Connect(function(kind, untilT)
+	remotes:WaitForChild("Boost").OnClientEvent:Connect(function(kind, left)
+		local untilT = nowS() + (tonumber(left) or 0)
 		local def = G.Boosts[kind]
 		if not def then return end
 		local col = COL[kind] or T.gold
