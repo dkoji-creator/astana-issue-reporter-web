@@ -1223,7 +1223,7 @@ do
 		if not nearKiosk("sell") then goSell() return end
 		if not selUid then toast("Выбери плод", "bad") return end
 		local ok, total = remotes.Sell:InvokeServer("one", selUid)
-		if ok then toast("+" .. G.fmtInt(total) .. " монет", "ok") playSfx("coins") selUid = nil select(nil) end
+		if ok then toast("+" .. G.fmtInt(total) .. " монет", "ok") playSfx("coins") FX.coinFly(total) selUid = nil select(nil) end
 	end)
 	favBtn.Activated:Connect(function()
 		if selUid then remotes.Fav:InvokeServer(selUid) end
@@ -1231,7 +1231,7 @@ do
 	sellAll.Activated:Connect(function()
 		if not nearKiosk("sell") then goSell() return end
 		local ok, total, count = remotes.Sell:InvokeServer("all")
-		if ok then toast(("Продано %d шт.: +%s монет"):format(count, G.fmtInt(total)), "ok") playSfx("coins") else toast(total or "Нечего продавать", "bad") end
+		if ok then toast(("Продано %d шт.: +%s монет"):format(count, G.fmtInt(total)), "ok") playSfx("coins") FX.coinFly(total) else toast(total or "Нечего продавать", "bad") end
 	end)
 end
 
@@ -3646,6 +3646,83 @@ do
 			end
 		end
 	end)
+end
+-- титулы над головами и шлейфы игроков (строятся у каждого клиента локально)
+do
+	local RAINBOW = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 90, 120)), ColorSequenceKeypoint.new(0.25, Color3.fromRGB(255, 200, 90)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(110, 255, 160)), ColorSequenceKeypoint.new(0.75, Color3.fromRGB(110, 170, 255)), ColorSequenceKeypoint.new(1, Color3.fromRGB(210, 120, 255)) })
+	local TRAILS = {
+		star = ColorSequence.new(Color3.fromRGB(150, 230, 255), Color3.fromRGB(90, 140, 255)),
+		gold = ColorSequence.new(Color3.fromRGB(255, 240, 180), Color3.fromRGB(255, 170, 60)),
+		rainbow = RAINBOW,
+	}
+	loop(1, function()
+		for _, p in Players:GetPlayers() do
+			local ch = p.Character
+			local head = ch and ch:FindFirstChild("Head")
+			local root = ch and ch:FindFirstChild("HumanoidRootPart")
+			local title = p:GetAttribute("Title")
+			if head and title then
+				local tag = head:FindFirstChild("TitleTag")
+				if not tag then
+					tag = make("BillboardGui", { Name = "TitleTag", Size = UDim2.fromOffset(200, 22), StudsOffset = Vector3.new(0, 2.9, 0), MaxDistance = 90, LightInfluence = 0, AlwaysOnTop = false }, head)
+					K.text(tag, "", { Name = "L", Size = UDim2.fromScale(1, 1), MaxText = 15 })
+				end
+				local l = tag:FindFirstChildWhichIsA("TextLabel", true)
+				if l then
+					l.Text = "✦ " .. title .. " ✦"
+					local col = p:GetAttribute("TitleColor")
+					if typeof(col) == "Color3" then l.TextColor3 = col end
+				end
+			end
+			local kind = p:GetAttribute("Trail") or ""
+			if root and root:GetAttribute("TrailKind") ~= kind then
+				root:SetAttribute("TrailKind", kind)
+				for _, n in { "CosTrail", "CosA0", "CosA1", "CosSpark" } do
+					local o = root:FindFirstChild(n)
+					if o then o:Destroy() end
+				end
+				local seq = TRAILS[kind]
+				if seq then
+					local a0 = make("Attachment", { Name = "CosA0", Position = Vector3.new(0, 0.9, 0.4) }, root)
+					local a1 = make("Attachment", { Name = "CosA1", Position = Vector3.new(0, -1.1, 0.4) }, root)
+					make("Trail", { Name = "CosTrail", Attachment0 = a0, Attachment1 = a1, Color = seq, LightEmission = 1, LightInfluence = 0, Lifetime = kind == "rainbow" and 0.7 or 0.5,
+						Transparency = NumberSequence.new(0.25, 1), WidthScale = NumberSequence.new(1, 0), FaceCamera = true, MinLength = 0.05 }, root)
+					if kind ~= "star" then
+						make("ParticleEmitter", { Name = "CosSpark", Color = seq, LightEmission = 1, LightInfluence = 0, Rate = 6, Lifetime = NumberRange.new(0.6, 1),
+							Speed = NumberRange.new(0.3, 1), SpreadAngle = Vector2.new(180, 180), Size = NumberSequence.new(0.22, 0), Transparency = NumberSequence.new(0.1, 1) }, a1)
+					end
+				end
+			end
+		end
+	end)
+end
+-- монеты летят в счётчик при продаже
+function FX.coinFly(total)
+	if not UI.coins then return end
+	local cam = workspace.CurrentCamera
+	if not cam then return end
+	local sc = uiScale.Scale
+	local vs = cam.ViewportSize
+	local tp = (UI.coins.AbsolutePosition + UI.coins.AbsoluteSize / 2) / sc
+	local n = math.clamp(math.floor(math.log10(math.max(10, total or 10))), 5, 14)
+	for i = 1, n do
+		task.delay(i * 0.035, function()
+			local start = Vector2.new(vs.X / 2 + math.random(-60, 60), vs.Y * 0.58 + math.random(-30, 30)) / sc
+			local mid = start + Vector2.new(math.random(-90, 90), math.random(-90, -20))
+			local img = K.icon(hud, "coin", { AnchorPoint = Vector2.new(0.5, 0.5), Size = UDim2.fromOffset(24, 24), Position = UDim2.fromOffset(start.X, start.Y), ZIndex = 45 })
+			TweenService:Create(img, TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Position = UDim2.fromOffset(mid.X, mid.Y) }):Play()
+			task.delay(0.22, function()
+				TweenService:Create(img, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Position = UDim2.fromOffset(tp.X, tp.Y), Size = UDim2.fromOffset(14, 14) }):Play()
+				task.delay(0.46, function()
+					img:Destroy()
+					if i % 3 == 0 then playSfx("tap", 1.3 + math.random() * 0.3) end
+					if UI.coins.Parent then K.bounce(UI.coins.Parent) end
+				end)
+			end)
+		end)
+	end
 end
 remotes:WaitForChild("Event").OnClientEvent:Connect(function(id, left)
 	local ev

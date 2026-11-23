@@ -875,6 +875,16 @@ do
 	for _, g in pg:GetChildren() do if g.Name == "Reveal" then g:Destroy() end end
 end
 
+stage("титулы и шлейфы")
+do
+	frames(60, 0.2)
+	check(type(plr:GetAttribute("Title")) == "string", "нет титула у игрока")
+	local head = plr.Character and plr.Character:FindFirstChild("Head")
+	if head then check(head:FindFirstChild("TitleTag") ~= nil, "нет таблички титула над головой") end
+	local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
+	check(root and root:FindFirstChild("CosTrail") ~= nil, "нет шлейфа у создателя")
+end
+
 stage("выход")
 Players.PlayerRemoving:Fire(plr)
 frames(5)

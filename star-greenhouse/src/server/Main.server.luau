@@ -1818,6 +1818,45 @@ task.spawn(function()
 		end)
 	end)
 end)
+------------------------------------------------------------------ титулы над головой и шлейфы: видно, кто чего добился
+local function titleOf(plr, d)
+	local C3 = Color3.fromRGB
+	local best = d.stats.bestChance or 1
+	local planets = unlockedPlanets(d)
+	local lvl = d.pass and G.passLevel(d.pass.xp or 0) or 0
+	local raids = d.stats.raids or 0
+	local title, col
+	if plr.UserId == ADMIN_ID then title, col = "Создатель оранжереи", C3(255, 215, 120)
+	elseif best <= 1e-9 then title, col = "Повелитель сингулярности", C3(200, 150, 255)
+	elseif lvl >= 30 then title, col = "Звёздный странник", C3(255, 215, 120)
+	elseif raids >= 10 then title, col = "Гроза комет", C3(255, 140, 80)
+	elseif planets >= 6 then title, col = "Садовник Ядра", C3(255, 220, 150)
+	elseif best <= 1e-6 then title, col = "Мастер мутаций", C3(255, 130, 200)
+	elseif planets >= 5 then title, col = "Хранитель Туманности", C3(190, 140, 255)
+	elseif planets >= 4 then title, col = "Укротитель лавы", C3(255, 120, 60)
+	elseif planets >= 3 then title, col = "Ледяной фермер", C3(140, 220, 255)
+	elseif planets >= 2 then title, col = "Марсианский фермер", C3(255, 150, 90)
+	else title, col = "Лунный садовод", C3(190, 200, 225) end
+	local trail = ""
+	if plr.UserId == ADMIN_ID or lvl >= 30 or best <= 1e-9 then trail = "rainbow"
+	elseif lvl >= 20 then trail = "gold"
+	elseif lvl >= 10 or raids >= 5 then trail = "star" end
+	return title, col, trail
+end
+task.spawn(function()
+	while true do
+		for plr, d in D do
+			if plr.Parent then
+				local t, col, trail = titleOf(plr, d)
+				if plr:GetAttribute("Title") ~= t then plr:SetAttribute("Title", t) end
+				plr:SetAttribute("TitleColor", col)
+				if plr:GetAttribute("Trail") ~= trail then plr:SetAttribute("Trail", trail) end
+			end
+		end
+		task.wait(8)
+	end
+end)
+
 ------------------------------------------------------------------ админ-ивенты на всех серверах
 function applyGlobal(cmd, arg)
 	if cmd == "g_luck" or cmd == "g_gold" then
