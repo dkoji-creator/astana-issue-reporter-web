@@ -166,7 +166,7 @@ end
 
 -- модель для окна: без света и частиц; silhouette — чёрный силуэт для ещё не найденных
 -- модель для окон-превью: без частиц, света и служебных деталей (в ViewportFrame частицы и «силовое поле» рисуются квадратами)
-local VIEW_DROP = { Orbit = true, H = true, MutVolume = true, MutHaloSeg = true }
+local VIEW_DROP = { Orbit = true, H = true, MutVolume = true, MutHaloSeg = true, FxGem = true, FxRing = true, FxShock = true, FxHelix = true, FxShard = true, FxCrown = true }
 local function cardModel(id, muts, silhouette)
 	local m = PM.build(id, muts)
 	for _, d in m:GetDescendants() do
@@ -417,6 +417,7 @@ end
 ------------------------------------------------------------------ питомцы: модели, следование за хозяином, окно
 -- модель питомца: детали со смещением от тела и типом анимации (уши, крылья, колёса, хвост)
 local petFolder = make("Folder", { Name = "Pets" }, workspace)
+local Fx3D = require(Shared:WaitForChild("Fx3D"))
 local PetLook = require(Shared:WaitForChild("Config"):WaitForChild("PetLook"))
 -- 3D-модель питомца из загруженных мешей (если есть); иначе фигуры ниже
 -- в glb питомцы смотрят в -Z, а после импорта в Roblox оказываются развёрнуты: поворачиваем мордой вперёд
@@ -476,6 +477,28 @@ local function buildPetMesh(id, lvl, parent)
 		local a1 = make("Attachment", { Position = Vector3.new(0, -0.35, 0) }, core)
 		make("Trail", { Attachment0 = a0, Attachment1 = a1, Lifetime = 0.25 + tier * 0.1, LightEmission = 1, LightInfluence = 0, FaceCamera = true,
 			Color = ColorSequence.new(glowCol, Color3.new(1, 1, 1)), Transparency = NumberSequence.new(0.35, 1), WidthScale = NumberSequence.new(1, 0) }, core)
+	end
+	-- объёмная аура по цене питомца: кристаллы на орбите (2+), кольцо под лапами (4+), кольцо-орбита (5+), корона и спираль (6)
+	local light = glowCol:Lerp(Color3.new(1, 1, 1), 0.3)
+	local function fxp(anim, shape, scale, color, mat, tr, f)
+		local p = Fx3D.part(shape, scale, color, mat, tr)
+		if not p then return end
+		p.Name = "Fx" .. anim
+		p.Parent = m
+		table.insert(parts, { p = p, off = CFrame.new(), anim = anim, ph = f.ph or 0, fx = f })
+	end
+	if tier >= 2 then
+		local n = tier >= 5 and 4 or 2
+		for j = 1, n do
+			fxp("fxgem", "Gem", (0.1 + 0.015 * tier) * sc / 0.8, j % 2 == 0 and glowCol or light, Enum.Material.Neon, 0.05,
+				{ ph = j * 6.283 / n, r = (1.5 + 0.08 * tier) * sc / 0.8, h = 1.2 * sc / 0.8, s = 1.3 + 0.1 * tier })
+		end
+	end
+	if tier >= 4 then fxp("fxring", "Ring", 1.15 * sc / 0.8, glowCol, Enum.Material.Neon, 0.2, { h = 0.08, tilt = 0, s = 0.8 }) end
+	if tier >= 5 then fxp("fxring", "Ring", 1.45 * sc / 0.8, light, Enum.Material.Neon, 0.15, { h = 1.15 * sc / 0.8, tilt = 0.55, s = -1.1 }) end
+	if tier >= 6 then
+		fxp("fxcrown", "Crown", 0.42 * sc / 0.8, light, Enum.Material.Neon, 0.05, { h = 2.75 * sc / 0.8 })
+		fxp("fxhelix", "Helix", Vector3.new(1.05, 0.95, 1.05) * sc / 0.8, glowCol, Enum.Material.Neon, 0.5, { h = 1.2 * sc / 0.8 })
 	end
 	m.PrimaryPart = core
 	m.Parent = parent
@@ -656,6 +679,21 @@ function FX.posePet(pet, base, t)
 			elseif an == "dwingL" or an == "fwingL" then a = CFrame.Angles(0, 0, math.sin(t * (an == "dwingL" and 5 or 4)) * 0.45)
 			elseif an == "dwingR" or an == "fwingR" then a = CFrame.Angles(0, 0, -math.sin(t * (an == "dwingR" and 5 or 4)) * 0.45)
 			elseif an == "halo" then a = CFrame.Angles(0, t * 0.8, 0)
+			elseif an == "fxgem" then
+				local f = e.fx
+				local ang = t * f.s + e.ph
+				e.p.CFrame = base * CFrame.new(math.cos(ang) * f.r, f.h + math.sin(t * 1.6 + e.ph) * 0.2, math.sin(ang) * f.r) * CFrame.Angles(0, t * 2, 0.35)
+				continue
+			elseif an == "fxring" then
+				local f = e.fx
+				e.p.CFrame = base * CFrame.new(0, f.h, 0) * CFrame.Angles(f.tilt, 0, 0) * CFrame.Angles(0, t * f.s, 0)
+				continue
+			elseif an == "fxcrown" then
+				e.p.CFrame = base * CFrame.new(0, e.fx.h + math.sin(t * 1.5) * 0.08, 0) * CFrame.Angles(0, t * 0.6, 0)
+				continue
+			elseif an == "fxhelix" then
+				e.p.CFrame = base * CFrame.new(0, e.fx.h, 0) * CFrame.Angles(0, t * 1.4, 0)
+				continue
 			elseif an == "crystal" then
 				-- кристаллы кружат вокруг питомца
 				local c0 = Vector3.new(0, e.off.Position.Y, 0)

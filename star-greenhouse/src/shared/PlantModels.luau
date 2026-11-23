@@ -4,6 +4,8 @@
 local G = require(script.Parent:WaitForChild("Game"))
 local TEX = {}
 pcall(function() TEX = require(script.Parent:WaitForChild("Config"):WaitForChild("Particles")) end)
+local Fx3D
+pcall(function() Fx3D = require(script.Parent:WaitForChild("Fx3D")) end)
 
 local PM = {}
 local V3, CF, A = Vector3.new, CFrame.new, CFrame.Angles
@@ -669,8 +671,10 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 	local height = 3.5 * k
 	local width = 2.2 * k
 	local l = Instance.new("PointLight")
-	l.Color, l.Range, l.Brightness = glow, 6 + tier * 2.5, 0.45 + tier * 0.18
+	l.Color, l.Range, l.Brightness = glow, 6 + tier * 2.5, 0.5 + tier * 0.2
 	l.Parent = root
+	local light = isDark and Color3.fromRGB(190, 130, 255) or glow:Lerp(Color3.new(1, 1, 1), 0.3)
+	local dark = Color3.fromRGB(24, 10, 44)
 	-- невидимый объём размером с растение: из него летят частицы ауры (форма Box берёт размер детали)
 	local box = Instance.new("Part")
 	box.Name = "MutVolume"
@@ -687,51 +691,64 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 		e.Parent = parent
 		return e
 	end
-	local light = isDark and Color3.fromRGB(190, 130, 255) or glow:Lerp(Color3.new(1, 1, 1), 0.3)
+	-- объёмная деталь эффекта с параметрами анимации (их читает PM.animate)
+	local function fx(kind, shape, scale, color, mat, tr, attrs)
+		local p = Fx3D and Fx3D.part(shape, scale, color, mat, tr)
+		if not p then return nil end
+		p.Name = kind
+		for key, val in attrs do p:SetAttribute(key, val) end
+		p.CFrame = CF(0, attrs.H or height * 0.5, 0)
+		p.Parent = m
+		return p
+	end
 	-- 1+: мерцающие звёздочки по всему растению
 	emit({ Name = "MutSparkle", Texture = TEX.sparkle or "rbxasset://textures/particles/sparkles_main.dds", Color = ColorSequence.new(light, glow),
-		LightEmission = 1, Rate = 3 + tier * 3, Lifetime = NumberRange.new(0.8, 1.6), Speed = NumberRange.new(0.1, 0.5), SpreadAngle = Vector2.new(180, 180),
+		LightEmission = 1, Rate = 3 + tier * 2, Lifetime = NumberRange.new(0.8, 1.6), Speed = NumberRange.new(0.1, 0.5), SpreadAngle = Vector2.new(180, 180),
 		Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
-		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.35 + 0.08 * tier), NumberSequenceKeypoint.new(1, 0) }),
+		Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.3, 0.3 + 0.07 * tier), NumberSequenceKeypoint.new(1, 0) }),
 		Rotation = NumberRange.new(0, 90), RotSpeed = NumberRange.new(-40, 40), Transparency = NumberSequence.new(0.05, 0.4) })
-	-- 2+: мягкие светящиеся шарики плавают вокруг (настоящая аура, без «пластика»)
+	-- 2+: объёмные кристаллы на орбите и ударная волна по земле
 	if tier >= 2 then
+		local n = tier >= 6 and 6 or tier >= 4 and 4 or 2
+		for j = 1, n do
+			fx("FxGem", "Gem", (0.16 + 0.03 * tier) * k, j % 2 == 0 and glow or light, isDark and Material.Glass or Material.Neon, isDark and 0.2 or 0.05,
+				{ R = (1.15 + 0.12 * tier) * k, H = height * (0.35 + 0.4 * ((j - 1) / math.max(1, n - 1))), S = 0.9 + 0.08 * tier, P = j * 6.283 / n, Spin = 1.6 + j * 0.3 })
+		end
+		fx("FxShock", "Shock", width * 0.55, glow, Material.Neon, 0.4, { H = 0.12, Period = 2.6 - tier * 0.15, Max = (1.2 + 0.15 * tier) * k })
 		emit({ Name = "MutOrbs", Texture = TEX.glow or SMOKE, Color = ColorSequence.new(glow), LightEmission = isDark and 0.3 or 1,
-			Rate = 2 + tier * 2.5, Lifetime = NumberRange.new(2, 3.5), Speed = NumberRange.new(0.2, 0.7), SpreadAngle = Vector2.new(180, 180),
+			Rate = 1.5 + tier * 1.5, Lifetime = NumberRange.new(2, 3.5), Speed = NumberRange.new(0.2, 0.7), SpreadAngle = Vector2.new(180, 180),
 			Acceleration = V3(0, 0.25, 0), Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
-			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.5 + 0.18 * tier), NumberSequenceKeypoint.new(1, 0) }),
-			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, isDark and 0.35 or 0.55), NumberSequenceKeypoint.new(1, 1) }) })
-		-- расходящиеся круги света по земле
-		local ground = Instance.new("Attachment")
-		ground.Name = "MutGround"
-		ground.Position = V3(0, 0.15, 0)
-		ground.Parent = root
-		emit({ Name = "MutRipple", Parent = ground, Texture = TEX.ripple or SMOKE, Color = ColorSequence.new(glow), LightEmission = 1,
-			Rate = 0.35 + tier * 0.12, Lifetime = NumberRange.new(2.4), Speed = NumberRange.new(0.01), EmissionDirection = Enum.NormalId.Top,
-			Orientation = Enum.ParticleOrientation.VelocityPerpendicular,
-			Size = NumberSequence.new(width * 0.25, width * (1 + tier * 0.12)),
-			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.15, 0.25), NumberSequenceKeypoint.new(1, 1) }) })
-		-- мягкое пятно света под растением
-		emit({ Name = "MutPool", Parent = ground, Texture = TEX.glow or SMOKE, Color = ColorSequence.new(glow), LightEmission = 1,
-			Rate = 1.2, Lifetime = NumberRange.new(2.5), Speed = NumberRange.new(0.01), EmissionDirection = Enum.NormalId.Top,
-			Orientation = Enum.ParticleOrientation.VelocityPerpendicular, Size = NumberSequence.new(width * 1.4),
-			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.5, isDark and 0.5 or 0.72), NumberSequenceKeypoint.new(1, 1) }) })
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.45 + 0.15 * tier), NumberSequenceKeypoint.new(1, 0) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, isDark and 0.4 or 0.6), NumberSequenceKeypoint.new(1, 1) }) })
+	end
+	-- 3+: гироскоп из светящихся колец вокруг растения (4+: два кольца, 6: три)
+	if tier >= 3 then
+		local rings = tier >= 6 and 3 or tier >= 4 and 2 or 1
+		for j = 1, rings do
+			fx("FxRing", (tier >= 5 and j == 1) and "RingBold" or "Ring", (1.05 + 0.1 * tier + j * 0.24) * k, isDark and Color3.fromRGB(150, 90, 255) or (j == 2 and light or glow), Material.Neon, j == 1 and 0.1 or 0.25,
+				{ H = height * (0.45 + 0.08 * j), Tilt = 0.35 + j * 0.42, S = (j % 2 == 0 and -1 or 1) * (0.6 + 0.15 * j), P = j * 1.9 })
+		end
 	end
 	-- 4+: огоньки поднимаются над растением тонкой струйкой
 	if tier >= 4 then
 		emit({ Name = "MutRise", Texture = TEX.sparkle or SMOKE, Color = ColorSequence.new(glow, light), LightEmission = 1,
-			Rate = 4 + tier * 2, Lifetime = NumberRange.new(1.8, 2.6), Speed = NumberRange.new(1.2, 2.4), SpreadAngle = Vector2.new(15, 15),
+			Rate = 3 + tier * 1.5, Lifetime = NumberRange.new(1.8, 2.6), Speed = NumberRange.new(1.2, 2.4), SpreadAngle = Vector2.new(15, 15),
 			EmissionDirection = Enum.NormalId.Top, Shape = Enum.ParticleEmitterShape.Disc, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
 			Size = NumberSequence.new(0.3 + 0.05 * tier, 0), Transparency = NumberSequence.new(0, 1), RotSpeed = NumberRange.new(-90, 90) })
 	end
-	-- 5+: маленькие кометы с хвостами вокруг растения
+	-- 5+: энергетическая спираль, осколки по спирали вверх и кометы с хвостами
 	if tier >= 5 then
-		local n = tier == 5 and 3 or 4
+		fx("FxHelix", "Helix", V3(1.5 * k, height * 0.5, 1.5 * k), light, Material.Neon, 0.45, { H = height * 0.55, S = 1.2 })
+		for j = 1, 5 do
+			fx("FxShard", "Shard", 0.32 * k, isDark and dark or glow, isDark and Material.Glass or Material.Glass, 0.15,
+				{ R = 1.7 * k, S = 0.7, P = j * 6.283 / 5, Rise = height * 1.2, Spin = 2 })
+		end
+		local n = tier == 5 and 2 or 3
 		for j = 1, n do
 			local o = ball(m, "Orbit", V3(0, 0, 0), 0.22 * k, light, Material.Neon)
 			o.CastShadow = false
-			o:SetAttribute("R", (1.3 + (j % 2) * 0.4) * k)
-			o:SetAttribute("H", height * (0.25 + 0.15 * j))
+			o:SetAttribute("R", (1.5 + (j % 2) * 0.4) * k)
+			o:SetAttribute("H", height * (0.25 + 0.2 * j))
 			o:SetAttribute("S", 1.1 + 0.25 * j)
 			o:SetAttribute("P", j * 6.283 / n)
 			local a0 = Instance.new("Attachment")
@@ -751,32 +768,19 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 			tr.Parent = o
 		end
 	end
-	-- 6: закрученные светящиеся мазки и тонкий вращающийся ореол
+	-- 6: корона-ореол над растением и закрученные мазки
 	if tier >= 6 then
+		fx("FxCrown", "Crown", 0.7 * k, isDark and Color3.fromRGB(190, 130, 255) or light, Material.Neon, 0.05, { H = height * 1.12, S = 0.5 })
 		emit({ Name = "MutWisp", Texture = TEX.wisp or SMOKE, Color = ColorSequence.new(glow, light), LightEmission = isDark and 0.4 or 1,
-			Rate = 6, Lifetime = NumberRange.new(1.4, 2.2), Speed = NumberRange.new(0.3, 0.8), SpreadAngle = Vector2.new(180, 180),
+			Rate = 4, Lifetime = NumberRange.new(1.4, 2.2), Speed = NumberRange.new(0.3, 0.8), SpreadAngle = Vector2.new(180, 180),
 			Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
 			Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-120, 120),
-			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(0.5, 1.4 * k), NumberSequenceKeypoint.new(1, 0.3) }),
-			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.4, 0.45), NumberSequenceKeypoint.new(1, 1) }) })
-		local R, n = 0.8 * k, 24
-		for j = 1, n do
-			local a = j / n * math.pi * 2
-			local sp = Instance.new("Part")
-			sp.Name = "MutHaloSeg"
-			sp.Size = V3(0.07 * k, 0.07 * k, 2 * math.pi * R / n * 1.05)
-			sp.Color, sp.Material, sp.Transparency = light, Material.Neon, 0.2
-			sp.Anchored, sp.CanCollide, sp.CanQuery, sp.CanTouch, sp.CastShadow = true, false, false, false, false
-			sp:SetAttribute("A", a)
-			sp:SetAttribute("R", R)
-			sp:SetAttribute("H", height * 1.1)
-			sp.CFrame = CF(math.cos(a) * R, height * 1.1, math.sin(a) * R) * CFrame.Angles(0, -a, 0)
-			sp.Parent = m
-		end
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.4), NumberSequenceKeypoint.new(0.5, 1.3 * k), NumberSequenceKeypoint.new(1, 0.3) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.4, 0.5), NumberSequenceKeypoint.new(1, 1) }) })
 	end
 end
 
--- вращение «орбит» вокруг растения (вызывает клиент для ближних моделей)
+-- анимация объёмной ауры (клиент вызывает для ближних моделей): кольца-гироскоп, кристаллы на орбите, спираль, осколки, волна
 function PM.animate(m, t: number)
 	local root = m.PrimaryPart
 	if not root then return end
@@ -784,11 +788,34 @@ function PM.animate(m, t: number)
 	local okS, sc = pcall(function() return m:GetScale() end)
 	if not okS or type(sc) ~= "number" then sc = 1 end
 	for _, p in m:GetChildren() do
-		if p.Name == "MutHaloSeg" then
-			local a = p:GetAttribute("A") + t * 0.6
+		local nm = p.Name
+		if nm == "FxGem" then
+			local a = t * p:GetAttribute("S") + p:GetAttribute("P")
 			local r = p:GetAttribute("R") * sc
-			p.CFrame = rc * CF(0, p:GetAttribute("H") * sc + math.sin(t * 1.5) * 0.15, 0) * CFrame.Angles(0.18 * math.sin(t * 0.8), 0, 0) * CF(math.cos(a) * r, 0, math.sin(a) * r) * CFrame.Angles(0, -a, 0)
-		elseif p.Name == "Orbit" then
+			local h = p:GetAttribute("H") * sc + math.sin(t * 1.4 + p:GetAttribute("P")) * 0.25 * sc
+			p.CFrame = rc * CF(cos(a) * r, h, sin(a) * r) * A(0, t * p:GetAttribute("Spin"), 0.35)
+		elseif nm == "FxRing" then
+			p.CFrame = rc * CF(0, p:GetAttribute("H") * sc, 0) * A(0, t * p:GetAttribute("S") + p:GetAttribute("P"), 0) * A(p:GetAttribute("Tilt"), 0, 0) * A(0, t * 0.8, 0)
+		elseif nm == "FxShock" then
+			local per = math.max(0.8, p:GetAttribute("Period"))
+			local q = (t % per) / per
+			local r = p:GetAttribute("Max") * sc * (0.25 + 0.75 * q)
+			local box = Fx3D and Fx3D.Box.Shock or V3(2, 0.06, 2)
+			p.Size = V3(box.X * r, box.Y, box.Z * r)
+			p.Transparency = 0.25 + 0.75 * q
+			p.CFrame = rc * CF(0, p:GetAttribute("H") * sc, 0)
+		elseif nm == "FxHelix" then
+			p.CFrame = rc * CF(0, p:GetAttribute("H") * sc, 0) * A(0, t * p:GetAttribute("S"), 0)
+		elseif nm == "FxShard" then
+			local per = 3.2
+			local q = ((t * p:GetAttribute("S") + p:GetAttribute("P") / 6.283 * per) % per) / per
+			local a = q * 6.283 * 1.5 + p:GetAttribute("P")
+			local r = p:GetAttribute("R") * sc * (1 - 0.45 * q)
+			p.CFrame = rc * CF(cos(a) * r, p:GetAttribute("Rise") * sc * q, sin(a) * r) * A(0.4, t * p:GetAttribute("Spin"), 0)
+			p.Transparency = 0.15 + 0.85 * math.max(0, (q - 0.7) / 0.3)
+		elseif nm == "FxCrown" then
+			p.CFrame = rc * CF(0, p:GetAttribute("H") * sc + math.sin(t * 1.5) * 0.15 * sc, 0) * A(0.12 * math.sin(t * 0.8), t * p:GetAttribute("S"), 0)
+		elseif nm == "Orbit" then
 			local a = t * p:GetAttribute("S") + p:GetAttribute("P")
 			local r = p:GetAttribute("R") * sc
 			p.CFrame = rc * CF(cos(a) * r, p:GetAttribute("H") * sc + sin(a * 1.7) * 0.15, sin(a) * r)

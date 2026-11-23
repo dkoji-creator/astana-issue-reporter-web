@@ -6,6 +6,7 @@ local RS = game:GetService("ReplicatedStorage")
 local shared = folder("Shared", RS)
 mod("ModuleScript", "Game", shared, "shared/Game")
 mod("ModuleScript", "PlantModels", shared, "shared/PlantModels")
+mod("ModuleScript", "Fx3D", shared, "shared/Fx3D")
 local cfg = folder("Config", shared)
 for _, n in { "Plants", "Mutations", "Icons", "Sky" } do mod("ModuleScript", n, cfg, "shared/Config/" .. n) end
 local cache = {}

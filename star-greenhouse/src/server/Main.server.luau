@@ -26,6 +26,10 @@ task.spawn(function()
 	local PetLoader = require(script.Parent:WaitForChild("PetLoader"))
 	print("PetLoader: детали питомцев", PetLoader.run())
 end)
+task.spawn(function()
+	local FxLoader = require(script.Parent:WaitForChild("FxLoader"))
+	print("FxLoader: формы эффектов", FxLoader.run())
+end)
 
 local lastGlobalAnn = 0 -- рассылка редких находок на другие сервера не чаще раза в 5 с
 ------------------------------------------------------------------ ремоуты
