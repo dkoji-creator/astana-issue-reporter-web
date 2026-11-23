@@ -2221,7 +2221,9 @@ local function refreshEntry(soil)
 		cache[soil] = e
 	end
 	-- чем тяжелее плод, тем больше растение (900 кг — огромное)
-	local wscale = math.clamp(((soil:GetAttribute("Kg") or plant.kg) / plant.kg) ^ (1 / 3), 0.8, 7)
+	-- вместе с размером от редкой мутации растение не больше ~7 раз (иначе закроет весь огород)
+	local mutSize = PM.sizeOf(mutList(soil:GetAttribute("Muts")))
+	local wscale = math.clamp(((soil:GetAttribute("Kg") or plant.kg) / plant.kg) ^ (1 / 3), 0.8, math.max(1, 7 / mutSize))
 	e.wscale = wscale
 	local s = kind == "sprout" and (0.55 + 0.45 * prog / 0.15) or (0.3 + 0.7 * ((prog - 0.15) / 0.85) ^ 0.7) * wscale
 	if math.abs((e.scale or 0) - s) > 0.01 then
