@@ -1,6 +1,9 @@
-"""Загружает art/planets/{gas,earth,moon}.png как Image-ассеты и пишет src/shared/Config/Planets.luau."""
-import json, subprocess, sys, time
+"""Загружает art/planets/<имя>.png как Image-ассеты и пишет src/shared/Config/Planets.luau.
+python3 tools/upload_planets.py <userId> [имя ...]   (без имён: все; уже загруженные id сохраняются)"""
+import json, re, subprocess, sys, time
 USER = sys.argv[1]
+NAMES = ("gas", "earth", "moon", "sun", "blackhole")
+want = sys.argv[2:] or list(NAMES)
 
 
 def curl(args):
@@ -13,7 +16,10 @@ def curl(args):
 
 
 ids = {}
-for name in ("gas", "earth", "moon"):
+CFG = "src/shared/Config/Planets.luau"
+for m in re.finditer(r'(\w+) = "rbxassetid://(\d+)"', open(CFG, encoding="utf8").read()):
+    ids[m.group(1)] = m.group(2)
+for name in want:
     req = json.dumps({"assetType": "Image", "displayName": "StarGreenhouse planet " + name, "description": "Backdrop planet",
                       "creationContext": {"creator": {"userId": USER}}})
     op = curl(["-X", "POST", "https://apis.roblox.com/assets/v1/assets", "-F", f"request={req};type=application/json",
@@ -30,7 +36,7 @@ for name in ("gas", "earth", "moon"):
         time.sleep(1.5)
     print(name, ids.get(name))
 lines = ["-- Планеты фона (art/planets, Image-ассеты). Создано tools/upload_planets.py", "return {"]
-for k in ("gas", "earth", "moon"):
+for k in NAMES:
     if k in ids:
         lines.append(f'\t{k} = "rbxassetid://{ids[k]}",')
 lines.append("}")

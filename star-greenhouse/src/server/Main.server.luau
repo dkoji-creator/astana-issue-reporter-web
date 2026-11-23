@@ -33,7 +33,7 @@ local remotes = Instance.new("Folder")
 remotes.Name = "Remotes"
 remotes.Parent = ReplicatedStorage
 local RX = {}
-for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
+for _, n in { "Sync", "Notify", "Reveal", "Stock", "Event", "Announce", "Act", "Select", "Harvest", "Collected", "Strike", "Pollen", "Skydive", "SelectCan", "Settings", "PetFx", "Slots", "Trade", "TradeRespond", "TradeOffer", "TradeReady", "TradeCancel", "Contest" } do
 	local e = Instance.new("RemoteEvent")
 	e.Name = n
 	e.Parent = remotes
@@ -64,7 +64,7 @@ local function newProfile()
 		daily = { last = 0, streak = 0 }, potion = { luck = 1, uses = 0 },
 		firstPlant = false, receipts = {}, redeemed = {},
 		stats = { harvests = 0, sold = 0, bestChance = 1, stars = 0, brews = 0, meteors = 0, chests = 0 }, weekBest = { w = 0, kg = 0 }, lastSeen = now(),
-		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1, c = 1 }, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 }, pets = { owned = {}, eq = "" },
+		q = {}, planet = 1, cans = { c1 = 3, c2 = 0, c3 = 0, c4 = 0, c5 = 0 }, cd = { cannon = 0, chest = 0, race = 0 }, gardens = {}, bonusBeds = 0, settings = { m = 6, s = 8, h = 1, t = 1, c = 1, a = 1 }, slots = {}, bait = { n = 10, t = 0 }, race = { best = 0, runs = 0 }, pets = { owned = {}, eq = "" },
 	}
 end
 
@@ -77,6 +77,8 @@ local function mergeDefaults(d)
 	for k, v in base.stats do if d.stats[k] == nil then d.stats[k] = v end end
 	for k, v in base.cans do if d.cans[k] == nil then d.cans[k] = v end end
 	for k, v in base.cd do if d.cd[k] == nil then d.cd[k] = v end end
+	-- трасса гонки стала длиннее (планеты x1.3): старые рекорды не сравнимы
+	if (d.race.track or 1) < 2 then d.race.best, d.race.track = 0, 2 end
 	if d.pets then
 		for old, new in G.PetLegacy do
 			if d.pets.owned[old] then
@@ -162,7 +164,7 @@ local function snapshot(plr)
 		bought = s.bought and s.bought.epoch == epoch and s.bought.n or {},
 		daily = { can = d.daily.last ~= math.floor(now() / 86400), streak = d.daily.streak,
 			nextDay = (d.daily.last == math.floor(now() / 86400) - 1) and (d.daily.streak % 7 + 1) or ((d.daily.last == math.floor(now() / 86400)) and d.daily.streak or 1) },
-		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {}, race = d.race, pets = d.pets,
+		planets = unlockedPlanets(d), sold = soldNow.epoch == epoch and soldNow.sold or {}, q = d.q, planet = d.planet or 1, cans = d.cans, can = s.can or 0, cd = d.cd, gsum = gardenSummary(d), settings = d.settings, bait = d.bait, mystic = s.mystic or {}, race = d.race, pets = d.pets, slots = d.slots,
 	}
 end
 local function push(plr, ...)
@@ -804,7 +806,7 @@ local function lbRefresh()
 	LB.rich = lbTop(DataStoreService:GetOrderedDataStore("SG_Rich"), function(v) return 10 ^ (v / 1e6) end)
 	LB.rare = lbTop(DataStoreService:GetOrderedDataStore("SG_Rare"), function(v) return 10 ^ (-v / 1e6) end)
 	LB.heavy = lbTop(DataStoreService:GetOrderedDataStore("StarGreenhouse_Heavy_" .. weekKey()), function(v) return v / 100 end)
-	LB.race = lbTop(DataStoreService:GetOrderedDataStore("SG_MarsRace"), function(v) return v / 1000 end, true)
+	LB.race = lbTop(DataStoreService:GetOrderedDataStore("SG_MarsRace2"), function(v) return v / 1000 end, true)
 	LB.at = now()
 	for _, b in Map.leaderBoards do
 		lbFill(b.rich, LB.rich, G.fmt)
@@ -923,11 +925,22 @@ RX.SelectCan.OnServerEvent:Connect(function(plr, tier)
 		push(plr, "can")
 	end
 end)
-RX.Settings.OnServerEvent:Connect(function(plr, m, sv, h, tk, ch)
+RX.Settings.OnServerEvent:Connect(function(plr, m, sv, h, tk, ch, au)
 	local d = D[plr]
 	if not d then return end
 	local function n(v, def) return math.clamp(math.floor(tonumber(v) or def), 0, 10) end
-	d.settings = { m = n(m, 6), s = n(sv, 8), h = (h == 0) and 0 or 1, t = (tk == 2) and 2 or 1, c = (ch == 0) and 0 or 1 }
+	d.settings = { m = n(m, 6), s = n(sv, 8), h = (h == 0) and 0 or 1, t = (tk == 2) and 2 or 1, c = (ch == 0) and 0 or 1, a = (au == 0) and 0 or 1 }
+end)
+-- 7 слотов семян внизу экрана: игрок сам ставит туда семена из сумки
+RX.Slots.OnServerEvent:Connect(function(plr, list)
+	local d = D[plr]
+	if not d or type(list) ~= "table" then return end
+	local out = {}
+	for i = 1, G.SeedSlots do
+		local id = list[i]
+		out[i] = (type(id) == "string" and G.Plants[id]) and id or ""
+	end
+	d.slots = out
 end)
 RX.BuyCan.OnServerInvoke = function(plr, tier, qty)
 	local d = D[plr]
@@ -1525,7 +1538,7 @@ RX.RaceFinish.OnServerInvoke = function(plr, token, passed)
 		d.race.best = el
 		if s.canSave then
 			task.spawn(function()
-				pcall(function() DataStoreService:GetOrderedDataStore("SG_MarsRace"):SetAsync(tostring(plr.UserId), math.floor(el * 1000)) end)
+				pcall(function() DataStoreService:GetOrderedDataStore("SG_MarsRace2"):SetAsync(tostring(plr.UserId), math.floor(el * 1000)) end)
 			end)
 		end
 	end
@@ -1812,7 +1825,7 @@ task.spawn(function()
 		end
 		-- авто-сбор
 		for plr, d in D do
-			if d.perms.auto then
+			if d.perms.auto and (d.settings and d.settings.a) ~= 0 then
 				for i, b in d.beds do
 					if t >= b.ready then harvestBed(plr, i, true) end
 				end

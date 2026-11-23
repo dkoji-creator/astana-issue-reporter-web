@@ -13,7 +13,7 @@ local WT = require(script.Parent:WaitForChild("WorldTerrain"))
 
 local Map = {}
 Map.SlotsPerPlanet = 8
-Map.PlotRing = 100
+Map.PlotRing = 130
 Map.MaxBeds = 30
 Map.BedCols, Map.BedStep = 6, 9.6
 Map.planets = {}
@@ -921,8 +921,9 @@ local function buildHub(pi, parent)
 		local mid = ctr + dirv * ((r0 + r1) / 2)
 		local wcf = CFrame.lookAt(V3(mid.X, ctr.Y + 0.2, mid.Z), V3(mid.X, ctr.Y + 0.2, mid.Z) - dirv)
 		part(f, "Walkway", V3(7, 0.4, len), wcf, PLAZA[pi]:Lerp(c(60, 60, 70), 0.35), Mat.Cobblestone)
+		-- фонари у входа на участок (не в середине дорожки: на Туманности там спираль паркура)
 		for _, s in { -1, 1 } do
-			local pos = (wcf * CF(s * 4.6, 0, 0)).Position
+			local pos = (wcf * CF(s * 4.6, 0, len / 2 - 3)).Position
 			seg(f, "Pole", pos, pos + V3(0, 4.6, 0), 0.22, COL.plate, Mat.Metal)
 			local b = ball(f, "Bulb", pos + V3(0, 4.9, 0), 0.6, COL.warm, Mat.Neon)
 			if s == 1 then light(b, COL.warm, 16, 0.6) end
@@ -979,6 +980,8 @@ local function free(pi, x, z)
 	local dx, dz = x - ctr.X, z - ctr.Z
 	local r = math.sqrt(dx * dx + dz * dz)
 	if r < 44 or r > WT.PlayRadius - 4 then return false end
+	-- Туманность: под спиралью паркура и рядом с ней пусто, ничего не мешает прыжкам
+	if pi == 5 and r < 64 then return false end
 	for j = 1, Map.SlotsPerPlanet do
 		local cf = slotCF(pi, j)
 		local lp = cf:PointToObjectSpace(V3(x, ctr.Y, z))
@@ -987,7 +990,7 @@ local function free(pi, x, z)
 		local ang = select(2, slotCF(pi, j))
 		local along = dx * cos(ang) + dz * sin(ang)
 		local across = math.abs(-dx * sin(ang) + dz * cos(ang))
-		if along > 20 and along < 75 and across < 7 then return false end
+		if along > 20 and along < Map.PlotRing - 24 and across < 7 then return false end
 	end
 	return true
 end
@@ -1006,14 +1009,14 @@ function Map.buildFlora()
 			if p.planet == pid then table.insert(mine, p.id) end
 		end
 		local placed, tries = 0, 0
-		while placed < 26 and tries < 400 do
+		while placed < 58 and tries < 900 do
 			tries += 1
 			local a = rng:NextNumber(0, PI * 2)
 			local r = rng:NextNumber(34, WT.PlayRadius - 6)
 			local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
 			if free(pi, x, z) then
 				local id = mine[rng:NextInteger(1, #mine)]
-				bigPlant(fl, id, V3(x, WT.groundY(x, z, pi), z), rng:NextNumber(2.2, 5.5), rng:NextNumber(0, PI * 2))
+				bigPlant(fl, id, V3(x, WT.groundY(x, z, pi), z), rng:NextNumber(1.5, 3.2), rng:NextNumber(0, PI * 2))
 				placed += 1
 			end
 		end
@@ -1025,8 +1028,8 @@ local function buildRocks(pi, parent)
 	local rng = Random.new(900 + pi)
 	local col = WT.Colors[WT.Themes[pi].rim] or c(80, 76, 94)
 	local n = 0
-	for _ = 1, 200 do
-		if n >= 26 then break end
+	for _ = 1, 400 do
+		if n >= 52 then break end
 		local a = rng:NextNumber(0, PI * 2)
 		local r = rng:NextNumber(34, WT.PlayRadius - 4)
 		local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
@@ -1050,6 +1053,115 @@ local function buildBarrier(pi, parent)
 	end
 end
 
+------------------------------------------------------------------ природа планет: кристаллы, скальные шпили, светящиеся стебли
+-- палитра каждой планеты: стекло кристалла, свечение внутри, камень шпилей, жилы, стебли
+local NATURE = {
+	{ glass = c(196, 212, 255), core = c(150, 190, 255), rock = c(96, 96, 112), vein = c(170, 200, 255), stalk = c(200, 220, 255), stalks = true },
+	{ glass = c(255, 130, 90), core = c(255, 170, 80), rock = c(70, 40, 36), vein = c(255, 120, 60), stalk = c(255, 160, 90), stalks = false },
+	{ glass = c(170, 225, 255), core = c(110, 230, 255), rock = c(120, 160, 196), vein = c(140, 240, 255), stalk = c(160, 240, 255), stalks = false },
+	{ glass = c(46, 30, 40), core = c(255, 110, 40), rock = c(36, 32, 38), vein = c(255, 120, 40), stalk = c(255, 140, 60), stalks = false },
+	{ glass = c(200, 140, 255), core = c(255, 130, 220), rock = c(60, 48, 80), vein = c(190, 140, 255), stalk = c(140, 255, 220), stalks = true },
+	{ glass = c(255, 232, 180), core = c(255, 210, 130), rock = c(150, 132, 104), vein = c(255, 220, 150), stalk = c(255, 230, 170), stalks = true },
+}
+-- кристалл: призма с заострённой верхушкой (два клина) и светящейся сердцевиной
+local function crystal(parent, base, h, w, tilt, yaw, n)
+	local cf = CF(base) * A(0, yaw, 0) * A(tilt, 0, 0)
+	part(parent, "Crystal", V3(w, h, w), cf * CF(0, h / 2, 0), n.glass, Mat.Glass, { Transparency = 0.25, Reflectance = 0.15, CanCollide = h > 6 })
+	local cap = cf * CF(0, h + w * 0.45, 0)
+	for _, side in { 1, -1 } do
+		local wp = Instance.new("WedgePart")
+		wp.Name = "CrystalTip"
+		wp.Size = V3(w, w * 0.9, w / 2)
+		wp.CFrame = cap * A(0, side == 1 and 0 or PI, 0) * CF(0, 0, w / 4)
+		wp.Color, wp.Material, wp.Transparency, wp.Reflectance = n.glass, Mat.Glass, 0.25, 0.15
+		wp.Anchored, wp.CanCollide, wp.CastShadow, wp.CanTouch = true, false, false, false
+		wp.Parent = parent
+	end
+	return deco(parent, "CrystalCore", V3(w * 0.32, h * 0.8, w * 0.32), cf * CF(0, h * 0.45, 0), n.core, Mat.Neon, { Transparency = 0.15 })
+end
+local function crystalCluster(parent, pos, s, rng, n)
+	local m = Instance.new("Model")
+	m.Name = "CrystalCluster"
+	m.Parent = parent
+	local k = rng:NextInteger(3, 6)
+	local core
+	for i = 1, k do
+		local yaw = i / k * PI * 2 + rng:NextNumber(-0.3, 0.3)
+		local big = i == 1
+		local h = (big and rng:NextNumber(5, 8) or rng:NextNumber(2, 5)) * s
+		local w = h * rng:NextNumber(0.22, 0.32)
+		local off = big and V3() or V3(cos(yaw), 0, sin(yaw)) * w * 0.9
+		local cc = crystal(m, pos + off - V3(0, 0.4, 0), h, w, big and rng:NextNumber(-0.1, 0.1) or rng:NextNumber(0.25, 0.6), yaw, n)
+		core = core or cc
+	end
+	ell(m, "CrystalBase", CF(pos - V3(0, 0.2, 0)) * A(0, rng:NextNumber(0, 6), 0), V3(4.5 * s, 1.6 * s, 3.8 * s), n.rock, Mat.Slate, { CanCollide = false })
+	local glow = Instance.new("PointLight")
+	glow.Color, glow.Range, glow.Brightness, glow.Shadows = n.core, 10 + 4 * s, 0.9, false
+	glow.Parent = core
+end
+-- скальный шпиль из нескольких сужающихся блоков со светящимися жилами
+local function spire(parent, pos, h, rng, n)
+	local m = Instance.new("Model")
+	m.Name = "RockSpire"
+	m.Parent = parent
+	local segs = rng:NextInteger(3, 5)
+	local y, w = 0, h * 0.32
+	local yaw = rng:NextNumber(0, PI * 2)
+	local lean = V3(rng:NextNumber(-0.06, 0.06), 0, rng:NextNumber(-0.06, 0.06))
+	for i = 1, segs do
+		local sh = h / segs * rng:NextNumber(0.85, 1.15)
+		local cf = CF(pos + V3(0, y + sh / 2, 0) + lean * y * 3) * A(rng:NextNumber(-0.06, 0.06), yaw + i * 0.35, rng:NextNumber(-0.06, 0.06))
+		part(m, "Spire", V3(w, sh, w * 0.85), cf, n.rock:Lerp(c(20, 20, 26), i * 0.05), Mat.Slate)
+		if i % 2 == 0 then
+			deco(m, "SpireVein", V3(w * 1.02, 0.22, w * 0.87), cf * CF(0, sh * 0.2, 0), n.vein, Mat.Neon, { Transparency = 0.2 })
+		end
+		y += sh * 0.92
+		w *= 0.74
+	end
+end
+-- светящиеся стебли: тонкие изогнутые стволы с огоньком на конце
+local function stalks(parent, pos, rng, n)
+	local m = Instance.new("Model")
+	m.Name = "GlowStalks"
+	m.Parent = parent
+	for _ = 1, rng:NextInteger(3, 6) do
+		local a = rng:NextNumber(0, PI * 2)
+		local p0 = pos + V3(cos(a), 0, sin(a)) * rng:NextNumber(0, 1.6)
+		local h = rng:NextNumber(4, 9)
+		local bend = V3(cos(a), 0, sin(a)) * rng:NextNumber(0.8, 2)
+		local p1 = p0 + V3(0, h * 0.55, 0) + bend * 0.3
+		local p2 = p0 + V3(0, h, 0) + bend
+		seg(m, "Stalk", p0, p1, 0.22, n.rock:Lerp(n.stalk, 0.25), Mat.SmoothPlastic)
+		seg(m, "Stalk", p1, p2, 0.16, n.rock:Lerp(n.stalk, 0.35), Mat.SmoothPlastic)
+		ball(m, "StalkLight", p2, rng:NextNumber(0.5, 0.9), n.stalk, Mat.Neon)
+	end
+end
+local function buildNature(pi, parent)
+	local ctr = WT.Centers[pi]
+	local n = NATURE[pi]
+	local rng = Random.new(7300 + pi)
+	local placed = { crystal = 0, spire = 0, stalk = 0 }
+	local want = { crystal = 18, spire = 12, stalk = n.stalks and 14 or 0 }
+	for _ = 1, 900 do
+		local kind = placed.crystal < want.crystal and "crystal" or placed.spire < want.spire and "spire" or placed.stalk < want.stalk and "stalk" or nil
+		if not kind then break end
+		local a = rng:NextNumber(0, PI * 2)
+		local r = rng:NextNumber(50, WT.PlayRadius - 8)
+		local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
+		if free(pi, x, z) then
+			local y = WT.groundY(x, z, pi)
+			if kind == "crystal" then
+				crystalCluster(parent, V3(x, y, z), rng:NextNumber(0.7, 1.5), rng, n)
+			elseif kind == "spire" then
+				spire(parent, V3(x, y - 0.5, z), rng:NextNumber(9, 20), rng, n)
+			else
+				stalks(parent, V3(x, y, z), rng, n)
+			end
+			placed[kind] += 1
+		end
+	end
+end
+
 function Map.padCF(pi)
 	local ctr = WT.Centers[pi]
 	return CF(ctr + V3(0, 3, 12)) * A(0, PI, 0)
@@ -1058,6 +1170,7 @@ Map.planetAt = WT.planetAt
 
 ------------------------------------------------------------------ чудо каждой планеты: чем дальше планета, тем зрелищнее
 local function spot(pi, deg, r)
+	r *= WT.Scale
 	local ctr = WT.Centers[pi]
 	local a = math.rad(deg)
 	local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
@@ -1137,7 +1250,7 @@ LANDMARK[3] = function(pi, f)
 	local ctr = WT.Centers[pi]
 	for k = 0, 30 do
 		local a = k / 30 * PI * 2
-		local r = 120
+		local r = 120 * WT.Scale
 		local h = 40 + math.sin(k * 0.8) * 12
 		local col = c(90, 255, 190):Lerp(c(150, 120, 255), (math.sin(k * 0.5) + 1) / 2)
 		deco(f, "SkyAurora", V3(26, h, 0.2), CFrame.lookAt(ctr + V3(cos(a) * r, 70 + h / 2, sin(a) * r), ctr + V3(0, 70 + h / 2, 0)) * A(0, PI / 2, 0), col, Mat.Neon, { Transparency = 0.84 })
@@ -1219,7 +1332,7 @@ LANDMARK[5] = function(pi, f)
 	local rng = Random.new(55)
 	for k = 1, 5 do
 		local a = k / 5 * PI * 2 + 0.3
-		local r = rng:NextNumber(60, 140)
+		local r = rng:NextNumber(60, 140) * WT.Scale
 		local p = ctr + V3(cos(a) * r, rng:NextNumber(30, 55), sin(a) * r)
 		local isl = Instance.new("Model")
 		isl.Name = "FloatIsland"
@@ -1235,7 +1348,7 @@ LANDMARK[5] = function(pi, f)
 	end
 	for k = 1, 9 do
 		local a = rng:NextNumber(0, PI * 2)
-		local p = ctr + V3(cos(a) * rng:NextNumber(120, 220), rng:NextNumber(10, 90), sin(a) * rng:NextNumber(120, 220))
+		local p = ctr + V3(cos(a) * rng:NextNumber(150, 290), rng:NextNumber(10, 90), sin(a) * rng:NextNumber(150, 290))
 		ball(f, "NebulaCloud", p, rng:NextNumber(20, 45), ({ c(220, 110, 255), c(110, 200, 255), c(255, 120, 190) })[k % 3 + 1], Mat.Neon, { Transparency = 0.9 })
 	end
 	local orbP = spot(pi, 200, 138)
@@ -1266,12 +1379,21 @@ LANDMARK[6] = function(pi, f)
 	-- звезда-солнце рядом с планетой
 	local ctr = WT.Centers[pi]
 	local sun = ctr + V3(-380, 180, 260)
-	ball(f, "Star", sun, 150, c(255, 220, 140), Mat.Neon)
-	ball(f, "StarCorona", sun, 200, c(255, 180, 90), Mat.Neon, { Transparency = 0.82 })
-	ball(f, "StarCorona2", sun, 280, c(255, 150, 70), Mat.Neon, { Transparency = 0.92 })
-	local sp = anchorPart(f, "StarFlares", CF(sun), V3(140, 140, 140))
-	emitter(sp, { Color = ColorSequence.new(c(255, 200, 110)), Size = NumberSequence.new(16, 0), LightEmission = 1, Lifetime = NumberRange.new(3, 5), Rate = 20,
-		Speed = NumberRange.new(20, 40), SpreadAngle = Vector2.new(180, 180) })
+	-- звезда — картинка с мягкой короной, всегда повёрнута к игроку (вложенные прозрачные шары давали резкие кольца)
+	local sp = anchorPart(f, "Star", CF(sun), V3(4, 4, 4))
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "StarGlow"
+	bb.Size = UDim2.new(520, 0, 520, 0)
+	bb.LightInfluence = 0
+	bb.Brightness = 1.6
+	bb.AlwaysOnTop = false
+	pcall(function() bb.MaxDistance = 1000000 end)
+	bb.Parent = sp
+	local im = Instance.new("ImageLabel")
+	im.BackgroundTransparency = 1
+	im.Size = UDim2.fromScale(1, 1)
+	im.Image = PlanetImg.sun or ""
+	im.Parent = bb
 	-- кольца вокруг планеты
 	for ri, R in { 205, 230 } do
 		local tilt = A(0.22 * ri, 0.3, 0.1)
@@ -1288,6 +1410,7 @@ end
 Map.spots = {}
 local FEATURE = {}
 local function featureSpot(pi, deg, r)
+	r *= WT.Scale
 	local ctr = WT.Centers[pi]
 	local a = math.rad(deg)
 	local x, z = ctr.X + cos(a) * r, ctr.Z + sin(a) * r
@@ -1754,9 +1877,9 @@ FEATURE[6] = function(pi, f)
 end
 
 ------------------------------------------------------------------ фон
-local function billboard(parent, name, image, pos, size)
+local function billboard(parent, name, image, pos, size, faceTo)
 	-- картинка планеты на невидимой плоскости, повёрнутой к центру станции (SurfaceGui не зависит от прозрачности детали)
-	local p = part(parent, name, V3(size, size, 0.2), CFrame.lookAt(pos, V3(0, 0, 0)), c(255, 255, 255), Mat.SmoothPlastic,
+	local p = part(parent, name, V3(size, size, 0.2), CFrame.lookAt(pos, faceTo or V3(0, 0, 0)), c(255, 255, 255), Mat.SmoothPlastic,
 		{ Transparency = 1, CanCollide = false, CanQuery = false, CastShadow = false })
 	local gui = Instance.new("SurfaceGui")
 	gui.Face = Enum.NormalId.Front
@@ -1777,6 +1900,11 @@ end
 local function buildBackdrop(parent)
 	billboard(parent, "GasGiant", PlanetImg.gas, V3(5200, 1800, -6400), 6400)
 	billboard(parent, "BlueWorld", PlanetImg.earth, V3(-6200, 900, -3000), 1800)
+	-- чёрная дыра высоко над краем карты: видна, если поднять камеру, с любой планеты
+	if PlanetImg.blackhole then
+		local bh = billboard(parent, "BlackHole", PlanetImg.blackhole, V3(300, 3600, -2600), 2600, V3(0, 700, 0))
+		bh:SetAttribute("BlackHole", true)
+	end
 	local rng = Random.new(404)
 	local fl = Instance.new("Folder")
 	fl.Name = "Drift"
@@ -1823,9 +1951,15 @@ local function buildLighting()
 	bloom.Intensity, bloom.Size, bloom.Threshold = 0.22, 22, 2.2
 	bloom.Parent = Lighting
 	local cc = Instance.new("ColorCorrectionEffect")
-	cc.Contrast, cc.Saturation, cc.Brightness = 0.08, 0.06, 0
+	cc.Contrast, cc.Saturation, cc.Brightness = 0.12, -0.04, 0
 	cc.TintColor = c(245, 240, 255)
 	cc.Parent = Lighting
+	-- лёгкая космическая дымка: глубина и кинематографичность вместо «пластика»
+	local atm = Instance.new("Atmosphere")
+	atm.Density, atm.Offset = 0.1, 0
+	atm.Color, atm.Decay = c(96, 86, 150), c(40, 30, 80)
+	atm.Glare, atm.Haze = 0.15, 0.6
+	atm.Parent = Lighting
 	local rays = Instance.new("SunRaysEffect")
 	rays.Intensity, rays.Spread = 0.03, 0.5
 	rays.Parent = Lighting
@@ -1864,6 +1998,7 @@ function Map.build()
 		rocks.Name = "Rocks"
 		rocks.Parent = pf
 		buildRocks(pi, rocks)
+		buildNature(pi, rocks)
 		-- стен по краю нет: с островов можно прыгать (падающих ловит сервер)
 	end
 	local bg = Instance.new("Folder")

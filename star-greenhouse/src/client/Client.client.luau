@@ -26,7 +26,7 @@ local Audio = require(Shared:WaitForChild("Config"):WaitForChild("Audio"))
 local FX = {} -- эффекты (заполняются ниже, вызываются раньше)
 -- игрок у киоска своей планеты (продажа и покупка семян только там)
 local sfx = {}
-local AUDIO = { m = 6, s = 8, h = 1, t = 1, c = 1 } -- t: 1 = классика, 2 = космос -- громкость музыки и звуков (0-10), подсказки вкл/выкл; приходят с сервера
+local AUDIO = { m = 6, s = 8, h = 1, t = 1, c = 1, a = 1 } -- t: 1 = классика, 2 = космос -- громкость музыки и звуков (0-10), подсказки вкл/выкл; приходят с сервера
 local sfxGroup = make("SoundGroup", { Name = "Sfx", Volume = 0.8 }, SoundService)
 local musicGroup = make("SoundGroup", { Name = "Music", Volume = 0.36 }, SoundService)
 local function applyAudio()
@@ -445,10 +445,33 @@ local function buildPetMesh(id, lvl, parent)
 	end
 	if #parts == 0 then m:Destroy() return nil end
 	local glowCol = (look.Halo or look.Eye or { Color3.new(1, 1, 1) })[1]
-	make("PointLight", { Color = glowCol, Range = 9 + (lvl or 1), Brightness = 0.9 }, first or parts[1].p)
-	m.PrimaryPart = first or parts[1].p
+	local core = first or parts[1].p
+	-- аура растёт с ценой питомца: 1 — лёгкое свечение, 6 — облако искр, шлейф и кольцо света
+	local tier = table.find(G.PetOrder, id) or 1
+	make("PointLight", { Color = glowCol, Range = 8 + tier * 2.5 + (lvl or 1), Brightness = 0.7 + tier * 0.2 }, core)
+	local aura = make("Attachment", { Name = "Aura", Position = Vector3.new(0, 0, 0) }, core)
+	make("ParticleEmitter", { Name = "Sparks", Color = ColorSequence.new(glowCol, Color3.new(1, 1, 1)), LightEmission = 1, LightInfluence = 0,
+		Rate = 2 + tier * tier * 1.6, Lifetime = NumberRange.new(0.6, 0.9 + tier * 0.15), Speed = NumberRange.new(0.2, 0.4 + tier * 0.25),
+		SpreadAngle = Vector2.new(180, 180), Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.05 + tier * 0.03), NumberSequenceKeypoint.new(1, 0) }),
+		Transparency = NumberSequence.new(0.1, 1), Texture = "rbxasset://textures/particles/sparkles_main.dds", ZOffset = 1 }, aura)
+	if tier >= 3 then
+		-- мягкое облако цвета питомца
+		make("ParticleEmitter", { Name = "Glow", Color = ColorSequence.new(glowCol), LightEmission = 1, LightInfluence = 0,
+			Rate = 3 + tier, Lifetime = NumberRange.new(0.8, 1.2), Speed = NumberRange.new(0, 0.1), Rotation = NumberRange.new(0, 360), RotSpeed = NumberRange.new(-30, 30),
+			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.6 + tier * 0.25), NumberSequenceKeypoint.new(1, 1.2 + tier * 0.35) }),
+			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.93), NumberSequenceKeypoint.new(0.4, 0.86), NumberSequenceKeypoint.new(1, 1) }),
+			Texture = "rbxasset://textures/particles/smoke_main.dds", LockedToPart = true }, aura)
+	end
+	if tier >= 4 then
+		-- шлейф в полёте
+		local a0 = make("Attachment", { Position = Vector3.new(0, 0.35, 0) }, core)
+		local a1 = make("Attachment", { Position = Vector3.new(0, -0.35, 0) }, core)
+		make("Trail", { Attachment0 = a0, Attachment1 = a1, Lifetime = 0.25 + tier * 0.1, LightEmission = 1, LightInfluence = 0, FaceCamera = true,
+			Color = ColorSequence.new(glowCol, Color3.new(1, 1, 1)), Transparency = NumberSequence.new(0.35, 1), WidthScale = NumberSequence.new(1, 0) }, core)
+	end
+	m.PrimaryPart = core
 	m.Parent = parent
-	return { model = m, parts = parts, id = id, lvl = lvl, mesh = true }
+	return { model = m, parts = parts, id = id, lvl = lvl, mesh = true, tier = tier }
 end
 function FX.buildPet(id, lvl, parent)
 	local meshPet = buildPetMesh(id, lvl, parent)
@@ -663,11 +686,41 @@ do
 					e.pos = root.Position + Vector3.new(0, 3, 0)
 					pets[p] = e
 				end
-				local target = (root.CFrame * CFrame.new(2.8, (e.mesh and -1.4 or 2.4) + math.sin(t * 2 + p.UserId) * 0.3, 2.2)).Position
+				local tier = e.tier or 1
+				local bob = math.sin(t * 2 + p.UserId) * 0.3
+				local target
+				local moving = root.AssemblyLinearVelocity.Magnitude > 3
+				if tier >= 3 and not moving then
+					-- дорогие питомцы сами летают кругами вокруг хозяина, чем дороже — тем шире, выше и быстрее
+					local ang = t * (0.7 + tier * 0.12) + p.UserId
+					local R = 3.2 + tier * 0.35
+					local h = (e.mesh and -1.2 or 2.4) + (tier - 2) * 0.45 + math.sin(t * 1.6 + p.UserId) * (0.4 + tier * 0.1)
+					target = root.Position + Vector3.new(math.cos(ang) * R, h, math.sin(ang) * R)
+				else
+					target = (root.CFrame * CFrame.new(2.8, (e.mesh and -1.4 or 2.4) + (tier >= 3 and (tier - 2) * 0.45 or 0) + bob, 2.2)).Position
+				end
 				if p == plr and override and t < override.untilT then target = override.pos end
-				e.pos = e.pos:Lerp(target, math.min(1, dt * (p == plr and override and 5 or 6)))
-				local look = root.CFrame.LookVector
-				FX.posePet(e, CFrame.lookAt(e.pos, e.pos + Vector3.new(look.X, 0, look.Z)), t)
+				local prev = e.pos
+				e.pos = e.pos:Lerp(target, math.min(1, dt * (p == plr and override and 5 or (tier >= 3 and 4 or 6))))
+				-- смотрит туда, куда летит; стоит на месте — туда же, куда хозяин
+				local vel = (e.pos - prev) / math.max(dt, 1e-3)
+				local flat = Vector3.new(vel.X, 0, vel.Z)
+				local dir = flat.Magnitude > 1.5 and flat.Unit or Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z).Unit
+				e.dir = e.dir and e.dir:Lerp(dir, math.min(1, dt * 6)) or dir
+				if e.dir.Magnitude < 0.05 then e.dir = dir end
+				local base = CFrame.lookAt(e.pos, e.pos + e.dir)
+				local orbiting = tier >= 3 and not moving and not (p == plr and override and t < override.untilT)
+				if orbiting then
+					-- наклон в вираже (к хозяину), у самых дорогих ещё и кувырок раз в несколько секунд; вращение вокруг центра тела
+					local mid = CFrame.new(0, e.mesh and 1 or 0, 0)
+					local roll = 0
+					if tier >= 5 then
+						local cyc = (t + p.UserId % 7) % (tier == 6 and 4.5 or 6)
+						if cyc < 0.8 then roll = (1 - math.cos(cyc / 0.8 * math.pi)) * math.pi end
+					end
+					base = base * mid * CFrame.Angles(0, 0, -(0.18 + tier * 0.04)) * CFrame.Angles(0, 0, -roll) * mid:Inverse()
+				end
+				FX.posePet(e, base, t)
 			elseif e then
 				e.model:Destroy()
 				pets[p] = nil
@@ -987,7 +1040,14 @@ end
 
 ------------------------------------------------------------------ окно: сумка и продажа
 do
-	local f, body = mkWindow("bag", "Сумка урожая", "jar", T.gold, 0.92, 0.84)
+	local f, bagBody = mkWindow("bag", "Сумка", "jar", T.gold, 0.92, 0.84)
+	-- две вкладки: семена (можно ставить в 7 слотов внизу) и собранный урожай
+	UI.bagTab = UI.bagTab or "seeds"
+	local tabSeeds, tabSeedsL = K.button(bagBody, "Семена", T.green, { Size = UDim2.new(0.5, -4, 0, 36), MaxText = 18 })
+	local tabFruits, tabFruitsL = K.button(bagBody, "Урожай", T.gold, { Position = UDim2.new(0.5, 4, 0, 0), Size = UDim2.new(0.5, -4, 0, 36), MaxText = 18 })
+	local body = make("Frame", { Name = "Harvest", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42) }, bagBody)
+	local seedPane = make("Frame", { Name = "SeedsPane", BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 42), Size = UDim2.new(1, 0, 1, -42) }, bagBody)
+	UI.bagSeedPane = seedPane
 	local left = K.scroll(body, { Size = UDim2.new(0.55, -6, 1, -50) })
 	listLayout(left, nil, 4)
 	local right = K.panel(body, { Position = UDim2.new(0.55, 4, 0, 0), Size = UDim2.new(0.45, -4, 1, -50), BackgroundColor3 = T.panel2 })
@@ -1021,7 +1081,7 @@ do
 		info3.Text = "Цена сейчас: " .. G.fmtInt(priceOf(fr)) .. " монет"
 		info.TextColor3 = #fr.m > 0 and G.Mut[G.rarestMut(fr.m)].color or T.text
 	end
-	function hooks.bag()
+	local function fruitsTab()
 		clear(left)
 		local list = table.clone(ST.fruits)
 		table.sort(list, function(a, b)
@@ -1058,6 +1118,92 @@ do
 		for _, fr in list do if fr.uid == selUid then cur = fr end end
 		if not cur and selUid then select(nil) end
 	end
+	-- вкладка «Семена»
+	local sLeft = K.scroll(seedPane, { Size = UDim2.new(0.55, -6, 1, 0) })
+	local sGrid = make("UIGridLayout", { CellSize = UDim2.fromOffset(88, 108), CellPadding = UDim2.fromOffset(6, 6), SortOrder = Enum.SortOrder.LayoutOrder }, sLeft)
+	local sRight = K.panel(seedPane, { Position = UDim2.new(0.55, 4, 0, 0), Size = UDim2.new(0.45, -4, 1, 0), BackgroundColor3 = T.panel2 })
+	local sVp = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(6, 6), Size = UDim2.new(1, -12, 1, -176) }, sRight)
+	local sName = K.text(sRight, "Выбери семя слева", { Position = UDim2.new(0, 6, 1, -166), Size = UDim2.new(1, -12, 0, 22), MaxText = 17 })
+	local sInfo = K.text(sRight, "", { Position = UDim2.new(0, 6, 1, -142), Size = UDim2.new(1, -12, 0, 16), MaxText = 13, TextColor3 = T.sub, Medium = true })
+	K.text(sRight, "Поставить в слот:", { Position = UDim2.new(0, 6, 1, -120), Size = UDim2.new(1, -12, 0, 18), MaxText = 14, TextColor3 = T.gold })
+	local slotRow = make("Frame", { BackgroundTransparency = 1, Position = UDim2.new(0, 6, 1, -98), Size = UDim2.new(1, -12, 0, 40) }, sRight)
+	listLayout(slotRow, Enum.FillDirection.Horizontal, 4, Enum.HorizontalAlignment.Center)
+	local unslot = K.button(sRight, "Убрать из слотов", T.panel, { Position = UDim2.new(0, 8, 1, -50), Size = UDim2.new(1, -16, 0, 38), MaxText = 15 })
+	local selSeed
+	local sPrev
+	local function seedsTab()
+		clear(sLeft)
+		clear(slotRow)
+		local ids = {}
+		for id, n in ST.seeds do if n > 0 then table.insert(ids, id) end end
+		table.sort(ids, function(a, b) return G.Plants[a].index < G.Plants[b].index end)
+		if selSeed and not ST.seeds[selSeed] then selSeed = nil end
+		selSeed = selSeed or ids[1]
+		local slots = FX.seedSlots()
+		for i, id in ids do
+			local p = G.Plants[id]
+			local inSlot = table.find(slots, id)
+			local card = make("TextButton", { BackgroundColor3 = id == selSeed and T.blue or T.panel2, Text = "", AutoButtonColor = false, LayoutOrder = i }, sLeft)
+			K.corner(card, UDim.new(0, 10))
+			K.stroke(card, id == selSeed and T.gold or rarityColor(id), id == selSeed and 1.6 or 1, false, 0.35)
+			local h = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(4, 2), Size = UDim2.new(1, -8, 0, 64) }, card)
+			modelView(h, id, nil, false)
+			K.text(card, "x" .. ST.seeds[id], { Position = UDim2.new(1, -34, 0, 2), Size = UDim2.fromOffset(32, 16), MaxText = 13, TextColor3 = T.gold })
+			if inSlot then K.text(card, tostring(inSlot), { Position = UDim2.fromOffset(4, 2), Size = UDim2.fromOffset(18, 18), MaxText = 13, TextColor3 = T.green }) end
+			K.text(card, p.name, { Position = UDim2.new(0, 3, 0, 68), Size = UDim2.new(1, -6, 0, 36), MaxText = 11, TextColor3 = rarityColor(id), TextWrapped = true, Medium = true })
+			card.Activated:Connect(function()
+				selSeed = id
+				seedsTab()
+			end)
+		end
+		if #ids == 0 then label(sLeft, "Семян нет. Купи их в киоске «Семена»", { Size = UDim2.new(1, 0, 0, 40), MaxText = 16 }) end
+		if sPrev then sPrev:Destroy() sPrev = nil end
+		if selSeed then
+			sPrev = modelView(sVp, selSeed, nil, false)
+			local p = G.Plants[selSeed]
+			sName.Text = p.name
+			sName.TextColor3 = rarityColor(selSeed)
+			local where = table.find(slots, selSeed)
+			sInfo.Text = ("Семян: %d · %s%s"):format(ST.seeds[selSeed] or 0, G.Rarity[p.rarity].name, where and (" · слот " .. where) or "")
+		else
+			sName.Text, sInfo.Text = "Выбери семя слева", ""
+		end
+		for i = 1, G.SeedSlots do
+			local id = slots[i]
+			local filled = id ~= "" and G.Plants[id]
+			local b = make("TextButton", { Size = UDim2.fromOffset(32, 38), BackgroundColor3 = (selSeed and id == selSeed) and T.green or (filled and T.panel or T.panel2), Text = "", AutoButtonColor = false, LayoutOrder = i }, slotRow)
+			K.corner(b, UDim.new(0, 8))
+			K.stroke(b, filled and rarityColor(id) or T.sub, 1, false, 0.4)
+			K.text(b, tostring(i), { Size = UDim2.fromScale(1, 1), MaxText = 16, TextColor3 = filled and T.text or T.sub })
+			b.Activated:Connect(function()
+				if not selSeed then return end
+				local cur = FX.seedSlots()
+				local was = table.find(cur, selSeed)
+				if was then cur[was] = "" end
+				cur[i] = selSeed
+				FX.setSeedSlots(cur)
+				playSfx("tap")
+				seedsTab()
+			end)
+		end
+	end
+	unslot.Activated:Connect(function()
+		if not selSeed then return end
+		local cur = FX.seedSlots()
+		local was = table.find(cur, selSeed)
+		if was then cur[was] = "" FX.setSeedSlots(cur, true) end
+		seedsTab()
+	end)
+	function hooks.bag()
+		local seeds = UI.bagTab == "seeds"
+		seedPane.Visible, body.Visible = seeds, not seeds
+		K.recolor(tabSeeds, seeds and T.green or T.panel)
+		K.recolor(tabFruits, seeds and T.panel or T.gold)
+		if seeds then seedsTab() else fruitsTab() end
+	end
+	tabSeeds.Activated:Connect(function() UI.bagTab = "seeds" hooks.bag() end)
+	tabFruits.Activated:Connect(function() UI.bagTab = "fruits" hooks.bag() end)
+
 	local function goSell()
 		if remotes.TpTo:InvokeServer("sell") then
 			playSfx("whoosh", 1.1)
@@ -1605,12 +1751,11 @@ do
 		UI.buttons[d[1]] = b
 	end
 	-- панель семян
-	local bar = make("Frame", { Name = "Seeds", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.fromOffset(470, 80), BackgroundTransparency = 1 }, hud)
-	local scroll = make("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0, Size = UDim2.fromScale(1, 1), CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.X,
-		ScrollingDirection = Enum.ScrollingDirection.X, ScrollBarThickness = 4 }, bar)
+	local bar = make("Frame", { Name = "Seeds", AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 1, -8), Size = UDim2.fromOffset(G.SeedSlots * 64 + (G.SeedSlots - 1) * 6, 80), BackgroundTransparency = 1 }, hud)
+	local scroll = make("Frame", { Name = "Slots", BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1) }, bar)
 	listLayout(scroll, Enum.FillDirection.Horizontal, 6, Enum.HorizontalAlignment.Center)
 	UI.seedBar = scroll
-	local canBtn = make("TextButton", { Name = "CanPick", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(0.5, -244, 1, -10), Size = UDim2.fromOffset(78, 74),
+	local canBtn = make("TextButton", { Name = "CanPick", AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(0.5, -250, 1, -10), Size = UDim2.fromOffset(78, 74),
 		BackgroundColor3 = T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false }, hud)
 	K.corner(canBtn, UDim.new(0, 12))
 	local canStroke = K.stroke(canBtn, T.cold, 1.2, false, 0.3)
@@ -1639,21 +1784,70 @@ do
 			end
 		end
 	end)
+	-- 7 слотов семян: игрок сам выбирает, какие семена держать под рукой (ставятся из сумки)
+	local known -- семена, которые уже видели: новые сами встают в свободный слот, убранные вручную не возвращаются
+	function FX.seedSlots()
+		local out = {}
+		local src = type(ST.slots) == "table" and ST.slots or {}
+		for i = 1, G.SeedSlots do
+			local id = src[i]
+			out[i] = (type(id) == "string" and G.Plants[id]) and id or ""
+		end
+		return out
+	end
+	function FX.setSeedSlots(list, quiet)
+		ST.slots = list
+		remotes.Slots:FireServer(list)
+		hooks.seedbar()
+		if not quiet then toast("Слоты семян обновлены", "ok", 1.5) end
+	end
 	function hooks.seedbar()
 		clear(scroll)
+		local slots = FX.seedSlots()
+		local changed = false
 		local ids = {}
-		for id in ST.seeds do table.insert(ids, id) end
+		for id, n in ST.seeds do if n > 0 then table.insert(ids, id) end end
 		table.sort(ids, function(a, b) return G.Plants[a].index < G.Plants[b].index end)
-		for i, id in ids do
-			local p = G.Plants[id]
-			local card = make("TextButton", { Size = UDim2.fromOffset(64, 76), BackgroundColor3 = id == ST.sel and T.panel2 or T.panel, BackgroundTransparency = 0.1, Text = "", AutoButtonColor = false, LayoutOrder = i }, scroll)
+		local synced = ST.slots ~= nil
+		local firstFill = synced and not known
+		if synced then known = known or {} end
+		for _, id in (synced and ids or {}) do
+			if (firstFill and not table.find(slots, id) and #(ST.slots or {}) == 0) or (not firstFill and not known[id] and not table.find(slots, id)) then
+				local free = table.find(slots, "")
+				if free then slots[free] = id changed = true end
+			end
+			known[id] = true
+		end
+		if changed then
+			ST.slots = slots
+			remotes.Slots:FireServer(slots)
+		end
+		for i = 1, G.SeedSlots do
+			local id = slots[i]
+			local p = id ~= "" and G.Plants[id]
+			local n = p and (ST.seeds[id] or 0) or 0
+			local card = make("TextButton", { Size = UDim2.fromOffset(64, 76), BackgroundColor3 = (p and id == ST.sel) and T.panel2 or T.panel, BackgroundTransparency = p and 0.1 or 0.45,
+				Text = "", AutoButtonColor = false, LayoutOrder = i }, scroll)
 			K.corner(card, UDim.new(0, 10))
-			K.stroke(card, id == ST.sel and T.gold or rarityColor(id), id == ST.sel and 1.6 or 1, false, id == ST.sel and 0 or 0.45)
-			local h = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(3, 2), Size = UDim2.new(1, -6, 0, 46) }, card)
-			modelView(h, id, nil, false)
-			K.text(card, "x" .. ST.seeds[id], { Position = UDim2.new(1, -26, 0, 2), Size = UDim2.fromOffset(24, 14), MaxText = 12, TextColor3 = T.gold })
-			K.text(card, p.name, { Position = UDim2.new(0, 2, 0, 50), Size = UDim2.new(1, -4, 0, 22), MaxText = 10, TextColor3 = rarityColor(id), TextWrapped = true, Medium = true })
+			K.text(card, tostring(i), { Position = UDim2.fromOffset(4, 2), Size = UDim2.fromOffset(14, 14), MaxText = 11, TextColor3 = T.sub })
+			if p then
+				K.stroke(card, id == ST.sel and T.gold or rarityColor(id), id == ST.sel and 1.6 or 1, false, id == ST.sel and 0 or 0.45)
+				local h = make("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(3, 2), Size = UDim2.new(1, -6, 0, 46) }, card)
+				modelView(h, id, nil, n == 0)
+				K.text(card, "x" .. n, { Position = UDim2.new(1, -26, 0, 2), Size = UDim2.fromOffset(24, 14), MaxText = 12, TextColor3 = n > 0 and T.gold or T.sub })
+				K.text(card, p.name, { Position = UDim2.new(0, 2, 0, 50), Size = UDim2.new(1, -4, 0, 22), MaxText = 10, TextColor3 = n > 0 and rarityColor(id) or T.sub, TextWrapped = true, Medium = true })
+			else
+				K.stroke(card, T.sub, 1, false, 0.6)
+				K.text(card, "+", { Position = UDim2.fromOffset(0, 8), Size = UDim2.new(1, 0, 0, 40), MaxText = 30, TextColor3 = T.sub })
+				K.text(card, "пусто", { Position = UDim2.new(0, 2, 0, 50), Size = UDim2.new(1, -4, 0, 22), MaxText = 10, TextColor3 = T.sub, Medium = true })
+			end
 			card.Activated:Connect(function()
+				if not p then
+					UI.bagTab = "seeds"
+					if not windows.bag.Visible then openWindow("bag") else hooks.bag() end
+					return
+				end
+				if n <= 0 then toast("Семена «" .. p.name .. "» закончились. Купи ещё в киоске «Семена»", "bad") return end
 				ST.sel = id
 				remotes.Select:FireServer(id)
 				hooks.seedbar()
@@ -1745,11 +1939,12 @@ end
 
 ------------------------------------------------------------------ окно: настройки (громкость, подсказки)
 do
-	local f, body = mkWindow("settings", "Настройки", "settings", T.green, 0.7, 0.74)
+	local f, sbody = mkWindow("settings", "Настройки", "settings", T.green, 0.7, 0.8)
+	local body = K.scroll(sbody, {})
 	listLayout(body, nil, 5)
 	local rows = {}
 	local function send()
-		remotes.Settings:FireServer(AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t, AUDIO.c)
+		remotes.Settings:FireServer(AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t, AUDIO.c, AUDIO.a)
 	end
 	local function stepper(order, title, key, onChange)
 		local r = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = order, BackgroundColor3 = T.panel2 })
@@ -1820,6 +2015,23 @@ do
 	end)
 	rows.c = showC
 	showC()
+	-- авто-сбор (виден, только когда куплен)
+	local ar = K.panel(body, { Size = UDim2.new(1, 0, 0, 48), LayoutOrder = 6, BackgroundColor3 = T.panel2, Visible = false })
+	K.text(ar, "Авто-сбор урожая", { Position = UDim2.fromOffset(12, 0), Size = UDim2.new(0.6, 0, 1, 0), MaxText = 18, TextXAlignment = Enum.TextXAlignment.Left })
+	local ab, al = K.button(ar, "", T.green, { AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, -10, 0.5, 0), Size = UDim2.fromOffset(120, 38), MaxText = 18 })
+	local function showA()
+		ar.Visible = (ST.perms and ST.perms.auto) and true or false
+		al.Text = AUDIO.a == 1 and "Вкл" or "Выкл"
+		K.recolor(ab, AUDIO.a == 1 and T.green or T.panel)
+	end
+	ab.Activated:Connect(function()
+		AUDIO.a = 1 - AUDIO.a
+		showA()
+		send()
+		toast(AUDIO.a == 1 and "Авто-сбор включён" or "Авто-сбор выключен: собирай плоды сам", "info", 2)
+	end)
+	rows.a = showA
+	showA()
 	function hooks.settings()
 		for _, fn in rows do fn() end
 	end
@@ -1906,7 +2118,7 @@ loop(0.5, function()
 		-- обновления окон
 		if dirty.settings and ST.settings then
 			local oldT = AUDIO.t
-			AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t, AUDIO.c = ST.settings.m or 6, ST.settings.s or 8, ST.settings.h or 1, ST.settings.t or 1, ST.settings.c or 1
+			AUDIO.m, AUDIO.s, AUDIO.h, AUDIO.t, AUDIO.c, AUDIO.a = ST.settings.m or 6, ST.settings.s or 8, ST.settings.h or 1, ST.settings.t or 1, ST.settings.c or 1, ST.settings.a or 1
 			applyAudio()
 			if oldT ~= AUDIO.t and FX.setTrack then FX.setTrack(AUDIO.t) end
 			if windows.settings.Visible then hooks.settings() end
@@ -1917,7 +2129,7 @@ loop(0.5, function()
 		if windows.alchemy.Visible and dirty.fruits then hooks.alchemy() end
 		if windows.pets.Visible and (dirty.pets or dirty.coins) then hooks.pets() end
 		if dirty.q or not UI.questsInit then UI.questsInit = true hooks.quests() end
-		if windows.bag.Visible and (dirty.fruits or dirty.coins) then hooks.bag() end
+		if windows.bag.Visible and (dirty.fruits or dirty.coins or dirty.seeds) then hooks.bag() end
 		if windows.shop.Visible and (dirty.sold or dirty.bought or dirty.planets) then hooks.shop() end
 		-- открыта новая планета: праздник
 		if UI.lastPlanets and (ST.planets or 1) > UI.lastPlanets then

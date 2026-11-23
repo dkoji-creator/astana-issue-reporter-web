@@ -1,8 +1,9 @@
 -- Рельеф: шесть парящих планет-островов, у каждой свой грунт. Острова висят на разной высоте и видны друг с друга.
 -- groundY(x, z, planet) повторяет операции заливки и даёт высоту поверхности, чтобы ставить объекты точно на землю.
 local WT = {}
-WT.IslandRadius = 168
-WT.PlayRadius = 156
+WT.Scale = 1.3 -- планеты увеличены в 1.3 раза (площадь в центре прежняя)
+WT.IslandRadius = 218
+WT.PlayRadius = 203
 WT.ops = {} -- [планета] = список операций
 
 local V3 = Vector3.new
@@ -34,7 +35,7 @@ WT.Colors = {
 	[Mat.Glacier] = rgb(150, 200, 236), [Mat.Snow] = rgb(228, 236, 246), [Mat.Ice] = rgb(116, 166, 220),
 	[Mat.Basalt] = rgb(44, 40, 46), [Mat.CrackedLava] = rgb(255, 120, 40), [Mat.Asphalt] = rgb(64, 54, 52),
 	[Mat.Grass] = rgb(64, 128, 122), [Mat.LeafyGrass] = rgb(104, 92, 168), [Mat.Mud] = rgb(62, 50, 66),
-	[Mat.Limestone] = rgb(212, 178, 104), [Mat.Pavement] = rgb(232, 212, 164), [Mat.Cobblestone] = rgb(170, 140, 92),
+	[Mat.Limestone] = rgb(150, 128, 98), [Mat.Pavement] = rgb(184, 166, 132), [Mat.Cobblestone] = rgb(122, 104, 80),
 	[Mat.Ground] = rgb(74, 54, 44),
 }
 
@@ -102,35 +103,35 @@ local function buildIsland(pi)
 	if t then
 		t:FillCylinder(CFrame.new(c.X, c.Y - 13, c.Z), 26, R, th.base)
 		-- низ острова: сужающиеся слои скалы
-		local layers = { { 150, 20, -36 }, { 118, 20, -54 }, { 84, 20, -72 }, { 50, 18, -89 }, { 22, 16, -104 } }
+		local layers = { { 196, 22, -37 }, { 160, 22, -57 }, { 122, 22, -78 }, { 84, 20, -98 }, { 48, 18, -116 }, { 20, 16, -130 } }
 		for _, L in layers do
 			t:FillCylinder(CFrame.new(c.X, c.Y + L[3], c.Z), L[2], L[1], Mat.Rock)
 		end
 	end
 	-- неровный низ: глыбы по краям слоёв
-	for i = 1, 30 do
+	for i = 1, 44 do
 		local a = rng:NextNumber(0, math.pi * 2)
-		local depth = rng:NextNumber(20, 95)
-		local r = math.max(16, 150 - depth * 1.35)
+		local depth = rng:NextNumber(20, 120)
+		local r = math.max(16, 196 - depth * 1.45)
 		local x, z = polar(c, r, a)
 		local t2 = terrain()
 		if t2 then t2:FillBall(V3(x, c.Y - depth, z), rng:NextNumber(14, 26), Mat.Rock) end
 	end
 	-- холмы по краю: естественная кромка, но космос и другие планеты видны
-	for i = 1, 40 do
-		local a = i / 40 * math.pi * 2 + rng:NextNumber(-0.05, 0.05)
+	for i = 1, 54 do
+		local a = i / 54 * math.pi * 2 + rng:NextNumber(-0.05, 0.05)
 		local x, z = polar(c, rng:NextNumber(R - 22, R - 4), a)
 		local rad = rng:NextNumber(8, 18)
 		fill(pi, x, c.Y - rad * 0.45, z, rad, th.rim)
 	end
-	for i = 1, 6 do
+	for i = 1, 9 do
 		local a = rng:NextNumber(0, math.pi * 2)
 		local x, z = polar(c, rng:NextNumber(R - 30, R - 14), a)
 		local rad = rng:NextNumber(16, 26)
 		fill(pi, x, c.Y - rad * 0.2, z, rad, th.rim)
 	end
 	-- пятна грунта
-	for i = 1, 46 do
+	for i = 1, 80 do
 		local x, z = polar(c, rng:NextNumber(30, R - 10), rng:NextNumber(0, math.pi * 2))
 		WT.patch(x, c.Y, z, rng:NextNumber(5, 15), th.patch[i % 2 + 1])
 	end
@@ -138,7 +139,7 @@ local function buildIsland(pi)
 	if th.craters then
 		for i = 1, 6 do
 			local a = (i - 0.5) / 6 * math.pi * 2 + rng:NextNumber(-0.2, 0.2)
-			local x, z = polar(c, rng:NextNumber(130, 145), a)
+			local x, z = polar(c, rng:NextNumber(170, 190), a)
 			local rad = rng:NextNumber(6, 10)
 			for k = 1, 8 do
 				local ka = k / 8 * math.pi * 2

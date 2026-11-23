@@ -157,6 +157,7 @@ end
 
 ------------------------------------------------------------------ магазин семян: новый ассортимент каждые 5 минут
 G.ShopPeriod = 180
+G.SeedSlots = 7 -- слоты семян внизу экрана
 function G.shopEpoch(t: number): number return math.floor(t / G.ShopPeriod) end
 function G.shopTimeLeft(t: number): number return G.ShopPeriod - t % G.ShopPeriod end
 local PLANET_CHANCE = { 1, 0.9, 0.8, 0.7, 0.6, 0.5 }
@@ -318,8 +319,8 @@ end
 
 -- Марс: гонка в пыльной буре. Ворота по порядку (угол от площади, расстояние), финиш у старта
 G.Race = {
-	gates = { { 45, 62 }, { 45, 154 }, { 90, 154 }, { 90, 62 }, { 135, 62 }, { 135, 154 }, { 180, 154 }, { 180, 62 }, { 225, 62 }, { 270, 62 }, { 270, 154 }, { 315, 154 }, { 315, 62 }, { 0, 60 } },
-	start = { 0, 60 }, gold = 45, silver = 56, bronze = 70, limit = 150, minTime = 24, cooldown = 90, radius = 25, gateRadius = 9,
+	gates = { { 45, 62 }, { 45, 182 }, { 90, 182 }, { 90, 62 }, { 135, 62 }, { 135, 182 }, { 180, 182 }, { 180, 62 }, { 225, 62 }, { 270, 62 }, { 270, 182 }, { 315, 182 }, { 315, 62 }, { 0, 60 } },
+	start = { 0, 60 }, gold = 56, silver = 70, bronze = 88, limit = 190, minTime = 30, cooldown = 90, radius = 25, gateRadius = 9,
 	boost = 40, boostTime = 2.5,
 }
 G.Medals = {
