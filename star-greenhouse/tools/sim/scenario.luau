@@ -780,7 +780,9 @@ do
 		local s2 = inv("State")
 		SIM.player = plr
 		frames(3)
-		check(#inv("State").fruits == n1 - 1, "плод не ушёл")
+		local still = false
+		for _, fr in inv("State").fruits do if fr.uid == mine.uid then still = true end end
+		check(not still, "плод не ушёл")
 		check(#s2.fruits == 1 and s2.fruits[1].id == mine.id, "второй игрок не получил плод")
 	end
 	-- конкурс огородов: оба голосуют за огород друга (у второго огород есть)
