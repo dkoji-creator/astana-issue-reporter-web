@@ -27,6 +27,7 @@ local sps = folder("StarterPlayerScripts", game:GetService("StarterPlayer"))
 local cl = folder("Client", sps)
 local clientScript = mod("LocalScript", "Client", cl, "client/Client.client")
 mod("ModuleScript", "UIKit", cl, "client/UIKit")
+mod("ModuleScript", "Cinema", cl, "client/Cinema")
 
 local cache = {}
 require = function(m)

@@ -1757,9 +1757,11 @@ if plr.UserId == ADMIN_ID then
 	btn("Быстрый бег вкл/выкл", T.blue, cmd("speed"))
 	btn("Опыление сейчас", T.green, cmd("pollen", nil, "Пыльца скоро прилетит"))
 	btn("Витрина для ТикТока", T.gold, cmd("showcase", nil, "Огород заполнен гигантами с высшими мутациями"))
-	btn("Сцена: легендарная находка", T.pink, function()
+	btn("Ролик находки: следующая планета", T.pink, function()
 		for _, w in windows do if w.Visible then K.close(w) end end
-		remotes.Admin:InvokeServer("revealShow")
+		UI.showPlanet = (UI.showPlanet or 0) % #G.Planets + 1
+		toast("Ролик находки: " .. G.Planets[UI.showPlanet].name, "info", 2)
+		remotes.Admin:InvokeServer("revealShow", UI.showPlanet)
 	end)
 	btn("Кино-облёт огорода", T.cold, function()
 		for _, w in windows do if w.Visible then K.close(w) end end
@@ -3482,230 +3484,12 @@ local function canCinema(info)
 	local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 	return cam ~= nil and root ~= nil and cam.CameraType == Enum.CameraType.Custom and pg:FindFirstChild("Photo") == nil
 end
+-- ролик находки: режиссёрская сцена из нескольких планов (модуль Cinema)
+local Cinema = require(script.Parent:WaitForChild("Cinema"))
 local function playCinematic(info)
-	local cam = workspace.CurrentCamera
-	local ch = plr.Character
-	local root = ch and ch:FindFirstChild("HumanoidRootPart")
-	if not cam or not root then return end
 	local TEXc = {}
 	pcall(function() TEXc = require(ReplicatedStorage.Shared.Config.Particles) end)
-	local rarest = G.rarestMut(info.m)
-	local mt = rarest and G.Mut[rarest]
-	local glow = mt and PM.glowOf(mt) or T.gold
-	local light = glow:Lerp(Color3.new(1, 1, 1), 0.35)
-	local level = info.chance <= 1e-12 and 3 or info.chance <= 1e-9 and 2 or 1
-	local label = ({ "ЛЕГЕНДАРНАЯ НАХОДКА", "НЕВЕРОЯТНАЯ НАХОДКА", "КОСМИЧЕСКАЯ НАХОДКА" })[level]
-	-- место сцены: перед игроком, на земле
-	local look = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
-	look = look.Magnitude > 0.1 and look.Unit or Vector3.new(0, 0, -1)
-	local P = root.Position + look * 10
-	do
-		local ok, hit = pcall(function()
-			local params = RaycastParams.new()
-			params.FilterType = Enum.RaycastFilterType.Exclude
-			params.FilterDescendantsInstances = { ch, fxFolder, petFolder }
-			return workspace:Raycast(P + Vector3.new(0, 25, 0), Vector3.new(0, -80, 0), params)
-		end)
-		P = (ok and hit) and hit.Position or (root.Position - Vector3.new(0, 2.8, 0) + look * 10)
-	end
-	-- спрятать интерфейс, затемнить мир
-	local hidden = {}
-	for _, g in pg:GetChildren() do
-		if g:IsA("ScreenGui") and g.Enabled and g.Name ~= "Cinema" then
-			g.Enabled = false
-			table.insert(hidden, g)
-		end
-	end
-	local scene = make("Folder", { Name = "CinemaScene" }, workspace)
-	local cc = make("ColorCorrectionEffect", { Name = "CinemaCC" }, cam)
-	TweenService:Create(cc, TweenInfo.new(1), { Brightness = -0.18, Saturation = -0.35, Contrast = 0.15 }):Play()
-	local oldFov = cam.FieldOfView
-	cam.CameraType = Enum.CameraType.Scriptable
-	local gui = make("ScreenGui", { Name = "Cinema", ResetOnSpawn = false, IgnoreGuiInset = true, DisplayOrder = 75 }, pg)
-	local top = make("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, Size = UDim2.new(1, 0, 0, 0) }, gui)
-	local bot = make("Frame", { BackgroundColor3 = Color3.new(0, 0, 0), BorderSizePixel = 0, AnchorPoint = Vector2.new(0, 1), Position = UDim2.fromScale(0, 1), Size = UDim2.new(1, 0, 0, 0) }, gui)
-	TweenService:Create(top, TweenInfo.new(0.6), { Size = UDim2.fromScale(1, 0.1) }):Play()
-	TweenService:Create(bot, TweenInfo.new(0.6), { Size = UDim2.fromScale(1, 0.1) }):Play()
-	local function neon(name, size, cf, color, tr)
-		return make("Part", { Name = name, Anchored = true, CanCollide = false, CanQuery = false, CanTouch = false, CastShadow = false, Material = Enum.Material.Neon,
-			Color = color, Size = size, CFrame = cf, Transparency = tr or 0 }, scene)
-	end
-	-- луч с неба
-	local beam = neon("SkyBeam", Vector3.new(700, 0.3, 0.3), CFrame.new(P + Vector3.new(0, 350, 0)) * CFrame.Angles(0, 0, math.pi / 2), light, 0.2)
-	make("PointLight", { Color = glow, Range = 40, Brightness = 2 }, beam)
-	TweenService:Create(beam, TweenInfo.new(3.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), { Size = Vector3.new(700, 5, 5) }):Play()
-	-- воронка частиц, затягивающихся в точку
-	local core = neon("Core", Vector3.new(0.6, 0.6, 0.6), CFrame.new(P + Vector3.new(0, 2.5, 0)), light, 0)
-	core.Shape = Enum.PartType.Ball
-	local att = make("Attachment", {}, core)
-	local vortex = make("ParticleEmitter", { Texture = TEXc.glow or "rbxasset://textures/particles/sparkles_main.dds", Color = ColorSequence.new(light, glow), LightEmission = 1, LightInfluence = 0,
-		Rate = 80, Lifetime = NumberRange.new(0.6, 0.9), Speed = NumberRange.new(10, 16), Size = NumberSequence.new(0.6, 0.1), Transparency = NumberSequence.new(0.1, 1),
-		Shape = Enum.ParticleEmitterShape.Sphere, ShapeStyle = Enum.ParticleEmitterShapeStyle.Surface, ShapeInOut = Enum.ParticleEmitterShapeInOut.Inward }, att)
-	-- кольца энергии сжимаются к центру
-	local rings = {}
-	for j = 1, 5 do
-		local r = Fx3D.ring(14, j % 2 == 0 and glow or light, j == 1, 0.1)
-		if r then
-			r.Parent = scene
-			table.insert(rings, { p = r, tilt = j * 0.62, spin = (j % 2 == 0 and -1 or 1) * (1.5 + j * 0.3), ph = j })
-		end
-	end
-	-- растение-трофей поднимается из земли
-	local plant = PM.build(info.id, info.m)
-	plant:PivotTo(CFrame.new(P))
-	plant:ScaleTo(0.05)
-	plant.Parent = scene
-	local finalScale = 1.6
-	playSfx("whoosh", 0.55)
-	task.delay(1.1, function() playSfx("mutation", 0.9) end)
-	local t0 = os.clock()
-	local exploded = false
-	local done = false
-	local grow0
-	local stars = {}
-	local shocks = {}
-	local function explode()
-		exploded = true
-		playSfx("boom", 0.7)
-		playSfx("legendary")
-		vortex.Enabled = false
-		for _, r in rings do r.p:Destroy() end
-		table.clear(rings)
-		local fl = make("Frame", { Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(1, 1, 1), BackgroundTransparency = 0, ZIndex = 50 }, gui)
-		TweenService:Create(fl, TweenInfo.new(0.9), { BackgroundTransparency = 1 }):Play()
-		TweenService:Create(cc, TweenInfo.new(1.4), { Brightness = 0.02, Saturation = 0.25, Contrast = 0.1 }):Play()
-		TweenService:Create(beam, TweenInfo.new(0.25), { Size = Vector3.new(700, 16, 16) }):Play()
-		task.delay(0.3, function() TweenService:Create(beam, TweenInfo.new(1.6), { Size = Vector3.new(700, 0.5, 0.5), Transparency = 1 }):Play() end)
-		if FX.burst then
-			FX.burst(P + Vector3.new(0, 2, 0), light, 140)
-			FX.burst(P + Vector3.new(0, 2, 0), glow, 90)
-		end
-		make("PointLight", { Color = glow, Range = 60, Brightness = 6 }, core)
-		for j = 1, 3 do
-			local s = Fx3D.part("Shock", 1, j == 2 and light or glow, Enum.Material.Neon, 0.05)
-			if s then
-				s.CFrame = CFrame.new(P + Vector3.new(0, 0.3 + j * 0.15, 0))
-				s.Parent = scene
-				table.insert(shocks, { p = s, t0 = os.clock() + (j - 1) * 0.12, dur = 0.9 + j * 0.35, max = 30 + j * 22 })
-			end
-		end
-		local rng = Random.new()
-		for j = 1, 18 do
-			local st = Fx3D.part(j % 3 == 0 and "Gem" or "Star", 0.35 + rng:NextNumber() * 0.4, j % 2 == 0 and light or glow, Enum.Material.Neon, 0)
-			if st then
-				st.CFrame = CFrame.new(P + Vector3.new(0, 2.5, 0))
-				st.Parent = scene
-				local dir = rng:NextUnitVector()
-				dir = Vector3.new(dir.X, math.abs(dir.Y) * 0.8 + 0.2, dir.Z).Unit
-				table.insert(stars, { p = st, dir = dir, sp = rng:NextNumber(18, 34), spin = rng:NextNumber(4, 9), t0 = os.clock() })
-			end
-		end
-		grow0 = os.clock()
-		cam.FieldOfView = oldFov + 14
-		TweenService:Create(cam, TweenInfo.new(0.8, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { FieldOfView = oldFov - 6 }):Play()
-	end
-	local conn = RunService.RenderStepped:Connect(function()
-		local t = os.clock() - t0
-		-- камера: низкий ракурс, медленный облёт, тряска перед взрывом
-		local a = 0.9 + t * (exploded and 0.22 or 0.12)
-		local r = exploded and 15 or (19 - math.min(t, 3.2) * 1.4)
-		local h = exploded and 6 or (3.5 + math.min(t, 3.2) * 0.6)
-		local shake = (not exploded) and math.min(1, t / 3.2) ^ 2 * 0.35 or 0
-		local jitter = shake > 0 and Vector3.new(math.random() - 0.5, math.random() - 0.5, math.random() - 0.5) * shake or Vector3.zero
-		local focus = P + Vector3.new(0, exploded and 3.5 or 2.5, 0)
-		cam.CFrame = CFrame.lookAt(P + Vector3.new(math.cos(a) * r, h, math.sin(a) * r) + jitter, focus)
-		-- кольца сжимаются и ускоряются
-		if not exploded then
-			local q = math.clamp(t / 3.2, 0, 1)
-			local rr = 14 - 12.2 * q ^ 1.6
-			for _, e in rings do
-				local box = Fx3D.Box[e.p.Name == "RingBold" and "RingBold" or "Ring"] or Vector3.new(2.07, 0.07, 2.07)
-				e.p.Size = box * rr
-				e.p.CFrame = CFrame.new(P + Vector3.new(0, 2.5, 0)) * CFrame.Angles(0, t * e.spin * (1 + q * 3) + e.ph, 0) * CFrame.Angles(e.tilt, 0, 0)
-			end
-			core.Size = Vector3.one * (0.6 + q * 2.2)
-			if t >= 3.2 then explode() end
-		else
-			-- растение вырастает с отскоком
-			if grow0 then
-				local g = math.clamp((os.clock() - grow0) / 0.7, 0, 1)
-				local c1, c3 = 1.70158, 2.70158
-				local back = 1 + c3 * (g - 1) ^ 3 + c1 * (g - 1) ^ 2
-				plant:ScaleTo(math.max(0.05, finalScale * back))
-				core.Transparency = g
-			end
-			PM.animate(plant, t)
-		end
-		for i = #shocks, 1, -1 do
-			local s = shocks[i]
-			local q = (os.clock() - s.t0) / s.dur
-			if q >= 0 then
-				if q >= 1 then
-					s.p:Destroy()
-					table.remove(shocks, i)
-				else
-					local e2 = 1 - (1 - q) ^ 3
-					s.p.Size = Fx3D.Box.Shock * Vector3.new(1 + s.max * e2, 1, 1 + s.max * e2)
-					s.p.Transparency = 0.05 + 0.95 * q
-				end
-			end
-		end
-		for i = #stars, 1, -1 do
-			local s = stars[i]
-			local q = os.clock() - s.t0
-			if q > 1.5 then
-				s.p:Destroy()
-				table.remove(stars, i)
-			else
-				local pos = P + Vector3.new(0, 2.5, 0) + s.dir * s.sp * (1 - math.exp(-q * 2.2)) + Vector3.new(0, -4 * q * q, 0)
-				s.p.CFrame = CFrame.new(pos) * CFrame.Angles(q * s.spin, q * s.spin * 0.7, 0)
-				s.p.Transparency = math.clamp((q - 0.9) / 0.6, 0, 1)
-			end
-		end
-	end)
-	-- 2D: надпись с шансом, конфетти, кнопка
-	task.wait(3.25)
-	local lab = K.text(gui, label, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.11, 6), Size = UDim2.new(0.8, 0, 0, 30), MaxText = 26, TextColor3 = light, ZIndex = 20 })
-	local odds = K.text(gui, "ШАНС " .. G.fmtOdds(info.chance), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.11, 36), Size = UDim2.new(0.9, 0, 0, 64), MaxText = 60, TextColor3 = T.gold, ZIndex = 20 })
-	K.gradient(odds, Color3.fromRGB(255, 245, 200), Color3.fromRGB(255, 170, 60), 90)
-	local title = G.mutTitle(info.m)
-	K.text(gui, (title ~= "" and (title .. " ") or "") .. plantName(info.id), { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.9, -58), Size = UDim2.new(0.9, 0, 0, 34), MaxText = 30, TextColor3 = T.text, ZIndex = 20 })
-	K.text(gui, ("Вес %.2f кг"):format(info.w or 0), { AnchorPoint = Vector2.new(0.5, 1), Position = UDim2.new(0.5, 0, 0.9, -32), Size = UDim2.new(0.6, 0, 0, 24), MaxText = 18, TextColor3 = T.sub, ZIndex = 20 })
-	for _, o in { lab, odds } do K.pop(o) end
-	-- конфетти
-	local cols = { glow, light, T.gold, T.pink, T.cold, Color3.new(1, 1, 1) }
-	for i = 1, 70 do
-		task.delay(i * 0.02, function()
-			if not gui.Parent then return end
-			local c = make("Frame", { BorderSizePixel = 0, BackgroundColor3 = cols[math.random(1, #cols)], Size = UDim2.fromOffset(math.random(6, 11), math.random(10, 18)),
-				Position = UDim2.new(math.random(), 0, -0.05, 0), Rotation = math.random(0, 360), ZIndex = 30 }, gui)
-			TweenService:Create(c, TweenInfo.new(math.random(18, 30) / 10, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-				{ Position = UDim2.new(c.Position.X.Scale + (math.random() - 0.5) * 0.3, 0, 1.08, 0), Rotation = c.Rotation + math.random(-540, 540) }):Play()
-			task.delay(3.2, function() c:Destroy() end)
-		end)
-	end
-	local okB
-	task.delay(1.5, function()
-		if not gui.Parent then return end
-		okB = K.button(gui, "Круто!", T.green, { AnchorPoint = Vector2.new(1, 1), Position = UDim2.new(1, -16, 0.9, -8), Size = UDim2.fromOffset(150, 44), MaxText = 20, ZIndex = 40 })
-		okB.Activated:Connect(function() done = true end)
-		K.pop(okB)
-	end)
-	local tEnd = os.clock() + 14
-	while not done and os.clock() < tEnd do task.wait(0.1) end
-	conn:Disconnect()
-	TweenService:Create(top, TweenInfo.new(0.35), { Size = UDim2.new(1, 0, 0, 0) }):Play()
-	TweenService:Create(bot, TweenInfo.new(0.35), { Size = UDim2.new(1, 0, 0, 0) }):Play()
-	TweenService:Create(cc, TweenInfo.new(0.35), { Brightness = 0, Saturation = 0, Contrast = 0 }):Play()
-	task.wait(0.4)
-	gui:Destroy()
-	cc:Destroy()
-	scene:Destroy()
-	cam.FieldOfView = oldFov
-	cam.CameraType = Enum.CameraType.Custom
-	local hum = ch and ch:FindFirstChildOfClass("Humanoid")
-	if hum then cam.CameraSubject = hum end
-	for _, g in hidden do if g.Parent then g.Enabled = true end end
+	Cinema.play({ plr = plr, pg = pg, PM = PM, G = G, Fx3D = Fx3D, K = K, T = T, TEX = TEXc, playSfx = playSfx, FX = FX, fxFolder = fxFolder, petFolder = petFolder }, info)
 end
 remotes:WaitForChild("Reveal").OnClientEvent:Connect(function(info)
 	table.insert(revealQueue, info)

@@ -1228,10 +1228,15 @@ RX.Admin.OnServerInvoke = function(plr, cmd, arg)
 		refreshAllBeds(plr)
 	elseif cmd == "revealShow" then
 		-- для роликов: показать полную сцену сверхредкой находки только себе (данные не меняются)
+		-- arg: номер планеты (ролик в её стиле); трава — легендарная или мифическая этой планеты
+		local pid = type(arg) == "number" and G.Planets[arg] and G.Planets[arg].id
 		local pool = {}
-		for _, p in G.PlantList do if p.rarity == "mythic" then table.insert(pool, p.id) end end
+		for _, p in G.PlantList do
+			if (p.rarity == "mythic" or p.rarity == "legendary" or p.rarity == "epic") and (not pid or p.planet == pid) then table.insert(pool, p.id) end
+		end
 		local id = pool[math.random(1, #pool)]
-		local m = { "singularity", ({ "supernova", "galactic", "plasma" })[math.random(1, 3)] }
+		local extra = { "supernova", "galactic", "plasma", "electric", "rainbow", "lava", "frost", "golden", "blackhole" }
+		local m = { "singularity", extra[math.random(1, #extra)] }
 		local chance = G.mutChance(m)
 		local pl = s.plot and Map.plots[s.plot]
 		local pos = pl and pl.beds[1] and pl.beds[1].pos or (plr.Character and plr.Character:GetPivot().Position)
