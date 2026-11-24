@@ -670,9 +670,11 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 	local root = m.PrimaryPart
 	local height = 3.5 * k
 	local width = 2.2 * k
-	local l = Instance.new("PointLight")
-	l.Color, l.Range, l.Brightness = glow, 6 + tier * 2.5, 0.5 + tier * 0.2
-	l.Parent = root
+	if tier >= 4 then
+		local l = Instance.new("PointLight")
+		l.Color, l.Range, l.Brightness = glow, 5 + tier * 1.5, 0.3 + tier * 0.08
+		l.Parent = root
+	end
 	local light = isDark and Color3.fromRGB(190, 130, 255) or glow:Lerp(Color3.new(1, 1, 1), 0.3)
 	local dark = Color3.fromRGB(24, 10, 44)
 	-- невидимый объём размером с растение: из него летят частицы ауры (форма Box берёт размер детали)
@@ -709,23 +711,23 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 		Rotation = NumberRange.new(0, 90), RotSpeed = NumberRange.new(-40, 40), Transparency = NumberSequence.new(0.05, 0.4) })
 	-- 2+: объёмные кристаллы на орбите и ударная волна по земле
 	if tier >= 2 then
-		local n = tier >= 6 and 6 or tier >= 4 and 4 or 2
+		local n = tier >= 4 and 4 or 2
 		for j = 1, n do
-			fx("FxGem", "Gem", (0.16 + 0.03 * tier) * k, j % 2 == 0 and glow or light, isDark and Material.Glass or Material.Neon, isDark and 0.2 or 0.05,
+			fx("FxGem", "Gem", (0.15 + 0.025 * tier) * k, j % 2 == 0 and glow or light, isDark and Material.Glass or Material.Neon, isDark and 0.2 or 0.15,
 				{ R = (1.15 + 0.12 * tier) * k, H = height * (0.35 + 0.4 * ((j - 1) / math.max(1, n - 1))), S = 0.9 + 0.08 * tier, P = j * 6.283 / n, Spin = 1.6 + j * 0.3 })
 		end
-		fx("FxShock", "Shock", width * 0.55, glow, Material.Neon, 0.4, { H = 0.12, Period = 2.6 - tier * 0.15, Max = (1.2 + 0.15 * tier) * k })
+		fx("FxShock", "Shock", width * 0.55, glow, Material.Neon, 0.55, { H = 0.12, Period = 2.6 - tier * 0.15, Max = (1.2 + 0.15 * tier) * k })
 		emit({ Name = "MutOrbs", Texture = TEX.glow or SMOKE, Color = ColorSequence.new(glow), LightEmission = isDark and 0.3 or 1,
-			Rate = 1.5 + tier * 1.5, Lifetime = NumberRange.new(2, 3.5), Speed = NumberRange.new(0.2, 0.7), SpreadAngle = Vector2.new(180, 180),
+			Rate = 1 + tier, Lifetime = NumberRange.new(2, 3.5), Speed = NumberRange.new(0.2, 0.7), SpreadAngle = Vector2.new(180, 180),
 			Acceleration = V3(0, 0.25, 0), Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,
 			Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0), NumberSequenceKeypoint.new(0.25, 0.45 + 0.15 * tier), NumberSequenceKeypoint.new(1, 0) }),
 			Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1), NumberSequenceKeypoint.new(0.3, isDark and 0.4 or 0.6), NumberSequenceKeypoint.new(1, 1) }) })
 	end
 	-- 3+: гироскоп из светящихся колец вокруг растения (4+: два кольца, 6: три)
 	if tier >= 3 then
-		local rings = tier >= 6 and 3 or tier >= 4 and 2 or 1
+		local rings = tier >= 4 and 2 or 1
 		for j = 1, rings do
-			fx("FxRing", (tier >= 5 and j == 1) and "RingBold" or "Ring", (1.05 + 0.1 * tier + j * 0.24) * k, isDark and Color3.fromRGB(150, 90, 255) or (j == 2 and light or glow), Material.Neon, j == 1 and 0.1 or 0.25,
+			fx("FxRing", (tier >= 5 and j == 1) and "RingBold" or "Ring", (1.05 + 0.1 * tier + j * 0.24) * k, isDark and Color3.fromRGB(150, 90, 255) or (j == 2 and light or glow), Material.Neon, j == 1 and 0.3 or 0.45,
 				{ H = height * (0.45 + 0.08 * j), Tilt = 0.35 + j * 0.42, S = (j % 2 == 0 and -1 or 1) * (0.6 + 0.15 * j), P = j * 1.9 })
 		end
 	end
@@ -738,10 +740,10 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 	end
 	-- 5+: энергетическая спираль, осколки по спирали вверх и кометы с хвостами
 	if tier >= 5 then
-		fx("FxHelix", "Helix", V3(1.5 * k, height * 0.5, 1.5 * k), light, Material.Neon, 0.45, { H = height * 0.55, S = 1.2 })
-		for j = 1, 5 do
+		fx("FxHelix", "Helix", V3(1.5 * k, height * 0.5, 1.5 * k), light, Material.Neon, 0.6, { H = height * 0.55, S = 1.2 })
+		for j = 1, 3 do
 			fx("FxShard", "Shard", 0.32 * k, isDark and dark or glow, isDark and Material.Glass or Material.Glass, 0.15,
-				{ R = 1.7 * k, S = 0.7, P = j * 6.283 / 5, Rise = height * 1.2, Spin = 2 })
+				{ R = 1.7 * k, S = 0.7, P = j * 6.283 / 3, Rise = height * 1.2, Spin = 2 })
 		end
 		local n = tier == 5 and 2 or 3
 		for j = 1, n do
@@ -770,7 +772,7 @@ function PM.applyMutations(m, plant, muts, rarest, k)
 	end
 	-- 6: корона-ореол над растением и закрученные мазки
 	if tier >= 6 then
-		fx("FxCrown", "Crown", 0.7 * k, isDark and Color3.fromRGB(190, 130, 255) or light, Material.Neon, 0.05, { H = height * 1.12, S = 0.5 })
+		fx("FxCrown", "Crown", 0.7 * k, isDark and Color3.fromRGB(190, 130, 255) or light, Material.Neon, 0.25, { H = height * 1.12, S = 0.5 })
 		emit({ Name = "MutWisp", Texture = TEX.wisp or SMOKE, Color = ColorSequence.new(glow, light), LightEmission = isDark and 0.4 or 1,
 			Rate = 4, Lifetime = NumberRange.new(1.4, 2.2), Speed = NumberRange.new(0.3, 0.8), SpreadAngle = Vector2.new(180, 180),
 			Shape = Enum.ParticleEmitterShape.Box, ShapeStyle = Enum.ParticleEmitterShapeStyle.Volume,

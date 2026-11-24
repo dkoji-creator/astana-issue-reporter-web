@@ -735,7 +735,8 @@ do
 				local tier = e.tier or 1
 				local bob = math.sin(t * 2 + p.UserId) * 0.3
 				local target
-				local moving = root.AssemblyLinearVelocity.Magnitude > 3
+				local vel = root.AssemblyLinearVelocity
+				local moving = vel ~= nil and vel.Magnitude > 3
 				if tier >= 3 and not moving then
 					-- дорогие питомцы сами летают кругами вокруг хозяина, чем дороже — тем шире, выше и быстрее
 					local ang = t * (0.7 + tier * 0.12) + p.UserId
@@ -907,7 +908,7 @@ do
 		local function side(x, title, list, ready, col)
 			local p = K.panel(holder, { Position = UDim2.new(x, 4, 0, 0), Size = UDim2.new(0.3, -6, 1, -52), BackgroundColor3 = T.panel2 })
 			K.stroke(p, ready and T.green or col, ready and 2 or 1, false, 0.3)
-			K.text(p, title .. (ready and "  ✓ готов" or ""), { Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 22), MaxText = 14, TextColor3 = ready and T.green or col })
+			K.text(p, title .. (ready and "  · готов" or ""), { Position = UDim2.fromOffset(8, 4), Size = UDim2.new(1, -16, 0, 22), MaxText = 14, TextColor3 = ready and T.green or col })
 			local sc = K.scroll(p, { Position = UDim2.fromOffset(4, 30), Size = UDim2.new(1, -8, 1, -34) })
 			listLayout(sc, nil, 4)
 			for i, fr in list do fruitRow(sc, fr, i, false) end
@@ -2698,6 +2699,52 @@ local function splash(pos, color, n, speed)
 end
 
 FX.splash, FX.floatText, FX.burst = splash, floatText, burst
+-- вернуть обычную камеру за текущим персонажем (он мог смениться, пока камера была занята)
+function FX.restoreCamera(fov)
+	local cam = workspace.CurrentCamera
+	if not cam then return end
+	if fov then cam.FieldOfView = fov end
+	cam.CameraType = Enum.CameraType.Custom
+	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	if hum then
+		cam.CameraSubject = hum
+		hum.CameraOffset = Vector3.zero
+	end
+end
+-- подсказки взаимодействия (кнопки «Собрать» и т.п.) прячутся, пока идёт сцена; счётчик на случай вложенных сцен
+local promptHide, promptMax = 0, nil
+function FX.hidePrompts(on)
+	local PPS = game:GetService("ProximityPromptService")
+	pcall(function()
+		if on then
+			if promptHide == 0 then promptMax = PPS.MaxPromptsVisible end
+			promptHide += 1
+			PPS.MaxPromptsVisible = 0
+		else
+			promptHide = math.max(0, promptHide - 1)
+			if promptHide == 0 and promptMax then PPS.MaxPromptsVisible = promptMax end
+		end
+	end)
+end
+-- тряска камеры через смещение камеры персонажа: не сдвигает саму камеру (раньше толчки копились и камера «уезжала»)
+function FX.shake(amount, duration)
+	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	if not hum then return end
+	FX.shakeToken = (FX.shakeToken or 0) + 1
+	local token = FX.shakeToken
+	local t0 = os.clock()
+	local c
+	c = RunService.RenderStepped:Connect(function()
+		local q = (os.clock() - t0) / math.max(0.05, duration)
+		if q >= 1 or token ~= FX.shakeToken or not hum.Parent then
+			c:Disconnect()
+			if hum.Parent and token == FX.shakeToken then hum.CameraOffset = Vector3.zero end
+			return
+		end
+		local k = amount * (1 - q)
+		hum.CameraOffset = Vector3.new((math.random() - 0.5) * k, (math.random() - 0.5) * k, (math.random() - 0.5) * k * 0.5)
+	end)
+end
 -- объёмная ударная волна: плоское светящееся кольцо расходится по земле и гаснет
 function FX.shock(pos, color, maxR, dur)
 	local s = Fx3D.part("Shock", 1, color, Enum.Material.Neon, 0.05)
@@ -2767,13 +2814,7 @@ remotes:WaitForChild("Harvest").OnClientEvent:Connect(function(bedIdx, id, muts,
 		if ws >= 1.8 then
 			floatText(top + Vector3.new(0, 4, 0), ("ГИГАНТ! %.1f кг"):format(kg), T.gold, 34)
 			burst(top, T.gold, 70)
-			local cam = workspace.CurrentCamera
-			task.spawn(function()
-				for i = 1, 12 do
-					if cam then cam.CFrame = cam.CFrame * CFrame.new((math.random() - 0.5) * 0.6, (math.random() - 0.5) * 0.6, 0) end
-					task.wait(0.03)
-				end
-			end)
+			FX.shake(0.6, 0.4)
 		else
 			floatText(top + Vector3.new(0, 2, 0), ("+%.2f кг"):format(kg or 0), col, 24)
 		end
@@ -3029,8 +3070,7 @@ function playLaunch(target)
 	playSfx("unlock")
 	task.wait(0.4)
 	rk:Destroy()
-	cam.CameraType = Enum.CameraType.Custom
-	if ch:FindFirstChild("Humanoid") then cam.CameraSubject = ch.Humanoid end
+	FX.restoreCamera()
 	gui:Destroy()
 	hud.Enabled = true
 	toast("Добро пожаловать на планету " .. G.Planets[target].name .. "! Огород ждёт тебя (кнопка «Домой»)", "rare", 5)
@@ -3234,6 +3274,7 @@ function FX.photoMode(startMode)
 		end
 	end
 	pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, false) end)
+	FX.hidePrompts(true)
 	-- эффекты кадра живут в камере: видны только этому игроку
 	local fx = Instance.new("Folder")
 	fx.Name = "PhotoFx"
@@ -3396,8 +3437,8 @@ function FX.photoMode(startMode)
 		fx:Destroy()
 		for _, g in hidden do g.Enabled = true end
 		pcall(function() game:GetService("StarterGui"):SetCoreGuiEnabled(Enum.CoreGuiType.All, true) end)
-		cam.CameraType = Enum.CameraType.Custom
-		if ch:FindFirstChild("Humanoid") then cam.CameraSubject = ch.Humanoid end
+		FX.hidePrompts(false)
+		FX.restoreCamera()
 	end
 	exitB.Activated:Connect(close)
 	FX.closePhoto = close
@@ -3478,8 +3519,10 @@ local function playReveal(info)
 	gui:Destroy()
 end
 ------------------------------------------------------------------ сверхредкая находка: кинематографичная 3D-сцена вокруг растения-трофея
+local lastCinema = -1e9
 local function canCinema(info)
 	if info.head or type(info.chance) ~= "number" or info.chance > 1 / 1000000 then return false end
+	if os.clock() - lastCinema < 40 then return false end
 	local cam = workspace.CurrentCamera
 	local root = plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 	return cam ~= nil and root ~= nil and cam.CameraType == Enum.CameraType.Custom and pg:FindFirstChild("Photo") == nil
@@ -3500,11 +3543,11 @@ remotes:WaitForChild("Reveal").OnClientEvent:Connect(function(info)
 			local info = table.remove(revealQueue, 1)
 			-- сверхредкое (1 к миллиону и реже) — кинематографичная 3D-сцена, остальное — карточка
 			if canCinema(info) then
+				lastCinema = os.clock()
 				local ok, err = pcall(playCinematic, info)
 				if not ok then
 					warn("cinematic", err)
-					local cam = workspace.CurrentCamera
-					if cam then cam.CameraType = Enum.CameraType.Custom end
+					FX.restoreCamera()
 					for _, g in pg:GetChildren() do if g.Name == "Cinema" then g:Destroy() end end
 					for _, g in { "StarHUD", "SpiritWindows" } do local gg = pg:FindFirstChild(g) if gg then gg.Enabled = true end end
 					playReveal(info)
@@ -3739,7 +3782,7 @@ do
 	remotes:WaitForChild("Raid").OnClientEvent:Connect(function(kind, a, b, c, d)
 		if kind == "warn" then
 			toast("Через минуту прилетит Комета-пожиратель! Не собьёте — сожжёт четверть урожая", "rare", 6)
-			if FX.chatLine then FX.chatLine('<font color="#FF9A6A">☄ Через минуту прилетит Комета-пожиратель!</font> Тапай по ней, чтобы стрелять') end
+			if FX.chatLine then FX.chatLine('<font color="#FF9A6A">★ Через минуту прилетит Комета-пожиратель!</font> Тапай по ней, чтобы стрелять') end
 		elseif kind == "start" then
 			startRaid(a, b, nowS() + (tonumber(c) or 0), typeof(d) == "Vector3" and d or Vector3.zero)
 		elseif kind == "hp" and R then
@@ -3763,7 +3806,7 @@ do
 				resultPanel(a or {}, b)
 				if b then playSfx("coins") end
 			end)
-			if FX.chatLine and a and a[1] then FX.chatLine(('<font color="#FFD27A">☄ Сервер сбил Комету-пожирателя!</font> Лучший стрелок: %s'):format(a[1].name)) end
+			if FX.chatLine and a and a[1] then FX.chatLine(('<font color="#FFD27A">★ Сервер сбил Комету-пожирателя!</font> Лучший стрелок: %s'):format(a[1].name)) end
 		elseif kind == "fail" then
 			local burnt = typeof(a) == "table" and a or {}
 			-- цель удара: свой огород, если он на этой планете, иначе площадь
@@ -3784,16 +3827,13 @@ do
 			playSfx("rocket", 0.5)
 			-- пике: комета разгоняется и падает, камера трясётся всё сильнее
 			local s0 = os.clock()
+			FX.shake(0.5, 1.6)
 			local fc
 			fc = RunService.RenderStepped:Connect(function()
 				local q = math.clamp((os.clock() - s0) / 1.6, 0, 1)
 				if m.Parent then m:PivotTo(CFrame.new(p0:Lerp(target + Vector3.new(0, 3, 0), q ^ 2.2)) * CFrame.Angles(q * 4, q * 6, 0)) end
-				local cam = workspace.CurrentCamera
-				if cam and cam.CameraType == Enum.CameraType.Custom then
-					local k = q * 0.5
-					cam.CFrame = cam.CFrame * CFrame.new((math.random() - 0.5) * k, (math.random() - 0.5) * k, 0)
-				end
 				if q >= 1 then
+					FX.shake(1.4, 1.0)
 					fc:Disconnect()
 					m:Destroy()
 					-- удар: вспышка, ударные волны, кратер, огонь
@@ -3949,7 +3989,7 @@ do
 				end
 				local l = tag:FindFirstChildWhichIsA("TextLabel", true)
 				if l then
-					l.Text = "✦ " .. title .. " ✦"
+					l.Text = title
 					local col = p:GetAttribute("TitleColor")
 					if typeof(col) == "Color3" then l.TextColor3 = col end
 				end
@@ -4095,6 +4135,7 @@ function FX.scene(name)
 	local cam = workspace.CurrentCamera
 	local fov0 = cam.FieldOfView
 	cam.CameraType = Enum.CameraType.Scriptable
+	FX.hidePrompts(true)
 	local hum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
 	local ws0 = hum and hum.WalkSpeed
 	if hum then hum.WalkSpeed = 0 end
@@ -4102,12 +4143,9 @@ function FX.scene(name)
 		if not gui.Parent then return end
 		gui:Destroy()
 		for _, g in hidden do g.Enabled = true end
-		cam.FieldOfView = fov0
-		cam.CameraType = Enum.CameraType.Custom
-		if hum then
-			hum.WalkSpeed = ws0
-			cam.CameraSubject = hum
-		end
+		if hum and hum.Parent then hum.WalkSpeed = ws0 end
+		FX.hidePrompts(false)
+		FX.restoreCamera(fov0)
 	end
 	return gui, cam, close
 end

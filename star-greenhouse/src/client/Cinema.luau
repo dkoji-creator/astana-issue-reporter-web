@@ -384,27 +384,31 @@ function Cinema.play(ctx, info)
 	local light = glow:Lerp(Color3.new(1, 1, 1), 0.35)
 	local chance = info.chance or 1
 	local label = chance <= 1e-12 and "КОСМИЧЕСКАЯ НАХОДКА" or chance <= 1e-9 and "НЕВЕРОЯТНАЯ НАХОДКА" or "ЛЕГЕНДАРНАЯ НАХОДКА"
-	-- точки сцены: персонаж, перед ним место рождения травы
+	-- ролик снимается на чистой сцене высоко в небе: соседние растения, таблички и постройки не мешают кадру
 	local fwd = V3(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
 	fwd = fwd.Magnitude > 0.1 and fwd.Unit or V3(0, 0, -1)
 	local right = fwd:Cross(V3(0, 1, 0))
-	local function ground(pos)
-		local ok, hit = pcall(function()
-			local params = RaycastParams.new()
-			params.FilterType = Enum.RaycastFilterType.Exclude
-			params.FilterDescendantsInstances = { ch, ctx.fxFolder, ctx.petFolder }
-			return workspace:Raycast(pos + V3(0, 20, 0), V3(0, -70, 0), params)
-		end)
-		return (ok and hit) and hit.Position or (pos - V3(0, 3, 0))
-	end
-	local feet = ground(root.Position)
-	local P = ground(root.Position + fwd * 9)
-	-- персонаж смотрит на место призыва и не двигается во время ролика
-	pcall(function() root.CFrame = CFrame.lookAt(root.Position, V3(P.X, root.Position.Y, P.Z)) end)
+	local hipToFeet = 3
+	pcall(function()
+		if hum and hum.RigType == Enum.HumanoidRigType.R15 then hipToFeet = hum.HipHeight + root.Size.Y / 2 end
+	end)
+	local stageC = root.Position + V3(0, 650, 0) + right * 260
+	local feet = stageC + V3(0, 0.5, 0)
+	local P = feet + fwd * 9
+	-- настоящий персонаж стоит на месте, пока идёт ролик
 	local oldWalk, oldJump = hum and hum.WalkSpeed, hum and hum.JumpPower
 	if hum then
 		hum.WalkSpeed = 0
 		pcall(function() hum.JumpPower = 0 end)
+	end
+	-- подсказки взаимодействия и таблички над объектами прячутся на время ролика
+	if ctx.FX.hidePrompts then ctx.FX.hidePrompts(true) end
+	local boards = {}
+	for _, d in workspace:GetDescendants() do
+		if d:IsA("BillboardGui") and d.Enabled then
+			d.Enabled = false
+			table.insert(boards, d)
+		end
 	end
 	-- интерфейс прячется, мир темнеет, кинорамка
 	local hidden = {}
@@ -415,6 +419,86 @@ function Cinema.play(ctx, info)
 		end
 	end
 	local S = newScene(ctx)
+	-- пол сцены: тёмный глянцевый диск с кольцами цвета планеты и парящие камни вокруг
+	S.part({ Name = "StageFloor", Shape = Enum.PartType.Cylinder, Material = Enum.Material.SmoothPlastic, Color = C3(16, 14, 26), Reflectance = 0.25,
+		Size = V3(1, 64, 64), CFrame = CF(stageC) * ANG(0, 0, math.pi / 2) })
+	for j, r in { 7, 15, 24, 31.5 } do
+		local ring = S.fx("Ring", r, j % 2 == 0 and th.light or th.col, NEON, 0.55)
+		if ring then ring.CFrame = CF(stageC + V3(0, 0.52, 0)) end
+	end
+	local rng = Random.new(77)
+	for j = 1, 10 do
+		local a = j / 10 * math.pi * 2 + rng:NextNumber(-0.2, 0.2)
+		local d = rng:NextNumber(40, 60)
+		local s = rng:NextNumber(3, 8)
+		S.part({ Name = "StageRock", Material = Enum.Material.Slate, Color = th.col:Lerp(C3(30, 28, 40), 0.75), Size = V3(s * 1.4, s, s * 1.2),
+			CFrame = CF(stageC + V3(math.cos(a) * d, rng:NextNumber(-6, 14), math.sin(a) * d)) * ANG(rng:NextNumber(0, 6), rng:NextNumber(0, 6), 0) })
+	end
+	local stageLight = S.part({ Transparency = 1, Size = V3(0.2, 0.2, 0.2), CFrame = CF(stageC + V3(0, 12, 0) + fwd * 4) })
+	local pl = Instance.new("PointLight")
+	pl.Color, pl.Range, pl.Brightness = th.light, 60, 1.6
+	pl.Parent = stageLight
+	S.emitter(stageC + V3(0, 10, 0), { Texture = ctx.TEX.sparkle or "", Color = ColorSequence.new(th.light), LightEmission = 1, Rate = 25, Lifetime = NumberRange.new(4, 7),
+		Speed = NumberRange.new(0.2, 0.6), SpreadAngle = Vector2.new(180, 180), Shape = Enum.ParticleEmitterShape.Box, Size = NumberSequence.new(0.25, 0), Transparency = NumberSequence.new(0.2, 1) }, V3(70, 30, 70))
+	-- копия персонажа (живой персонаж остаётся в огороде)
+	local actor, aHum, aRoot
+	pcall(function()
+		local was = ch.Archivable
+		ch.Archivable = true
+		actor = ch:Clone()
+		ch.Archivable = was
+	end)
+	if actor then
+		for _, d in actor:GetDescendants() do
+			if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("BillboardGui") or d:IsA("Sound") then
+				d:Destroy()
+			elseif d:IsA("BasePart") then
+				d.Anchored, d.CanCollide, d.CanQuery, d.CanTouch = false, false, false, false
+				d.LocalTransparencyModifier = 0
+			end
+		end
+		actor.Name = "CinemaActor"
+		aHum = actor:FindFirstChildOfClass("Humanoid")
+		aRoot = actor:FindFirstChild("HumanoidRootPart")
+		if aHum then
+			pcall(function()
+				aHum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+				aHum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+			end)
+		end
+		if aRoot then
+			aRoot.Anchored = true
+			actor:PivotTo(CFrame.lookAt(feet + V3(0, hipToFeet, 0), P + V3(0, hipToFeet, 0)))
+			actor.Parent = S.folder
+		else
+			actor:Destroy()
+			actor = nil
+		end
+	end
+	-- анимации копии: покой, жест «смотри», радость (R15 и R6)
+	local animator = aHum and (aHum:FindFirstChildOfClass("Animator") or Instance.new("Animator", aHum))
+	local r15 = aHum and aHum.RigType == Enum.HumanoidRigType.R15
+	local ANIM = r15 and { idle = 507766388, point = 507770453, cheer = 507770677 } or { idle = 180435571, point = 128853357, cheer = 129423030 }
+	local tracks = {}
+	local function playAnim(key, looped)
+		if not animator then return end
+		pcall(function()
+			for _, tr in tracks do tr:Stop(0.25) end
+			local a = Instance.new("Animation")
+			a.AnimationId = "rbxassetid://" .. ANIM[key]
+			local tr = animator:LoadAnimation(a)
+			tr.Looped = looped
+			tr:Play(0.25)
+			table.insert(tracks, tr)
+		end)
+	end
+	playAnim("idle", true)
+	-- питомец игрока рядом с копией
+	local stagePet
+	local petId = plr:GetAttribute("Pet") or ""
+	if petId ~= "" and ctx.FX.buildPet then
+		pcall(function() stagePet = ctx.FX.buildPet(petId, plr:GetAttribute("PetLvl") or 1, S.folder) end)
+	end
 	local cc = Instance.new("ColorCorrectionEffect")
 	cc.Name = "CinemaCC"
 	cc.Parent = cam
@@ -445,9 +529,10 @@ function Cinema.play(ctx, info)
 	local function cut(t0, dur, fromPos, toPos, lookFrom, lookTo, fov)
 		S.at(t0, function() shot = { t0 = S.t, dur = dur, a = fromPos, b = toPos, la = lookFrom, lb = lookTo, fov = fov or oldFov } end)
 	end
-	local mid = (root.Position + P) / 2
+	local aPos = feet + V3(0, hipToFeet, 0)
+	local mid = (aPos + P) / 2
 	-- 1. призыв: из-за спины персонажа
-	cut(0, 1.7, root.Position - fwd * 10 + right * 4 + V3(0, 3.5, 0), root.Position - fwd * 7 + right * 3 + V3(0, 2.8, 0), mid + V3(0, 2, 0), P + V3(0, 2, 0), oldFov)
+	cut(0, 1.7, aPos - fwd * 10 + right * 4 + V3(0, 3.5, 0), aPos - fwd * 7 + right * 3 + V3(0, 2.8, 0), mid + V3(0, 2, 0), P + V3(0, 2, 0), oldFov)
 	-- 2. рождение: крупно сбоку, медленный облёт
 	cut(1.7, 1.9, P + right * 9 + fwd * 3 + V3(0, 3, 0), P + right * 7 - fwd * 2 + V3(0, 2.2, 0), P + V3(0, 2, 0), P + V3(0, 2.4, 0), oldFov - 8)
 	-- 3. взрыв: снизу вверх, замедленно
@@ -470,7 +555,8 @@ function Cinema.play(ctx, info)
 	S.at(0.15, function()
 		ctx.playSfx("brew", 0.9)
 		magicCircle(S, ctx, feet, th)
-		if hum then pcall(function() hum:PlayEmote("point") end) end
+		playAnim("point", false)
+		task.delay(1.6, function() if not S.done then playAnim("idle", true) end end)
 	end)
 	-- 2. рождение по теме планеты
 	local intro = INTRO[plant0 and plant0.planet or "moon"] or INTRO.moon
@@ -482,7 +568,7 @@ function Cinema.play(ctx, info)
 	plant:ScaleTo(0.05)
 	plant.Parent = S.folder
 	local motion = MOTION[plant0 and plant0.form or ""] or "grow"
-	local pre, final = 0.75, 1.6
+	local pre, final = 0.9, 2.0
 	local plantCF = CF(P)
 	local scale = 0.05
 	local yaw = 0
@@ -534,7 +620,7 @@ function Cinema.play(ctx, info)
 	S.at(4.25, function() S.speed = 1 end)
 	-- 4. герой: персонаж радуется, надпись с шансом, конфетти
 	S.at(4.4, function()
-		if hum then pcall(function() hum:PlayEmote("cheer") end) end
+		playAnim("cheer", true)
 		local lab = K.text(gui, label, { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.1, 6), Size = UDim2.new(0.8, 0, 0, 30), MaxText = 26, TextColor3 = light, ZIndex = 20 })
 		local odds = K.text(gui, "ШАНС " .. G.fmtOdds(chance), { AnchorPoint = Vector2.new(0.5, 0), Position = UDim2.new(0.5, 0, 0.1, 36), Size = UDim2.new(0.9, 0, 0, 64), MaxText = 60, TextColor3 = T.gold, ZIndex = 20 })
 		K.gradient(odds, C3(255, 245, 200), C3(255, 170, 60), 90)
@@ -580,6 +666,10 @@ function Cinema.play(ctx, info)
 	-- кадр за кадром
 	local conn = RunService.RenderStepped:Connect(function(dt)
 		S.step(math.min(dt, 0.1))
+		if stagePet and ctx.FX.posePet then
+			local pp = feet + right * 3 - fwd * 0.8 + V3(0, (stagePet.mesh and 1.6 or 5) + math.sin(S.t * 2) * 0.3, 0)
+			pcall(ctx.FX.posePet, stagePet, CFrame.lookAt(pp, pp + fwd), S.t)
+		end
 		if plant.Parent then
 			plant:PivotTo(plantCF * ANG(0, yaw, 0))
 			pcall(function() plant:ScaleTo(math.max(0.05, scale)) end)
@@ -599,12 +689,15 @@ function Cinema.play(ctx, info)
 	S.folder:Destroy()
 	cam.FieldOfView = oldFov
 	cam.CameraType = Enum.CameraType.Custom
-	if hum then
-		cam.CameraSubject = hum
+	if hum and hum.Parent then
 		hum.WalkSpeed = oldWalk or 16
 		pcall(function() hum.JumpPower = oldJump or 50 end)
 	end
+	local nowHum = plr.Character and plr.Character:FindFirstChildOfClass("Humanoid")
+	if nowHum then cam.CameraSubject = nowHum end
 	for _, g in hidden do if g.Parent then g.Enabled = true end end
+	for _, b in boards do if b.Parent then b.Enabled = true end end
+	if ctx.FX.hidePrompts then ctx.FX.hidePrompts(false) end
 end
 
 return Cinema

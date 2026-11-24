@@ -1722,8 +1722,8 @@ FEATURE[4] = function(pi, f)
 	local scf = CFrame.lookAt(V3(sp.X, sgy, sp.Z), V3(lakeC.X, sgy, lakeC.Z)) * A(0, PI / 2, 0)
 	part(m, "SignpostPole", V3(0.4, 5, 0.4), scf * CF(0, 2.5, 0), c(60, 50, 50), Mat.Wood)
 	local arrow = part(m, "Signpost", V3(5, 1.2, 0.3), scf * CF(1.6, 4.4, 0), c(90, 50, 30), Mat.Wood, { CanCollide = false })
-	surfaceText(arrow, Enum.NormalId.Front, "РЫБАЛКА →", c(255, 190, 120), 30)
-	surfaceText(arrow, Enum.NormalId.Back, "← РЫБАЛКА", c(255, 190, 120), 30)
+	surfaceText(arrow, Enum.NormalId.Front, "РЫБАЛКА »", c(255, 190, 120), 30)
+	surfaceText(arrow, Enum.NormalId.Back, "« РЫБАЛКА", c(255, 190, 120), 30)
 	Map.spots.fishing = (face * CF(0, 1.5, -10)).Position
 	Map.spots.fishLake = V3(lakeC.X, y, lakeC.Z)
 	Map.spots.fishRod = (tip * CF(0, 6.5, -6)).Position
